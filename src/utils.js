@@ -91,3 +91,15 @@ export function pruneInPlace(arr, keep) {
 export function fmt(n) {
   return Math.round(n).toLocaleString('ru-RU');
 }
+
+/**
+ * Автоопределение адреса онлайн-сервера.
+ * На HTTPS-хостинге предполагается WebSocket-прокси на том же домене
+ * (wss://host/ws). Локально (http) — ws://hostname:8123.
+ */
+export function defaultServerUrl() {
+  if (typeof location === 'undefined') return 'ws://localhost:8123';
+  const { protocol, host, hostname } = location;
+  if (protocol === 'https:' || protocol === 'wss:') return `wss://${host}/ws`;
+  return `ws://${hostname}:8123`;
+}

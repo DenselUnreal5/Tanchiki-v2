@@ -13,7 +13,7 @@ import { ACHIEVEMENTS } from './achievements.js';
 import { dailySelection } from './daily.js';
 import { ALL_COSMETICS, COSMETICS_BY_TYPE } from './cosmetics.js';
 import { STAT_KEYS } from './profile.js';
-import { shuffled } from './utils.js';
+import { defaultServerUrl, shuffled } from './utils.js';
 
 /** Сколько вариантов показывать при повышении уровня. */
 const PERK_CHOICES = 3;
@@ -82,6 +82,11 @@ export class Ui {
 
     this.#bindMenu();
     this.#bindButtons();
+
+    const onlineUrl = document.getElementById('online-url');
+    if (onlineUrl && (!onlineUrl.value || onlineUrl.value === 'ws://localhost:8123')) {
+      onlineUrl.value = defaultServerUrl();
+    }
   }
 
   // ------------------------------------------------------------------ меню
@@ -153,7 +158,7 @@ export class Ui {
       }
     });
     on('btn-online', () => {
-      const url = (document.getElementById('online-url')?.value || 'ws://localhost:8123').trim();
+      const url = (document.getElementById('online-url')?.value || defaultServerUrl()).trim();
       this.h.onOnline(url);
     });
     this.soundOn = true;
