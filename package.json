@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Тянчики — top-down танковый шутер на canvas. Чистых зависимостей нет, сборка не нужна.",
   "scripts": {
+    "start": "node server/game.js",
     "serve": "python -m http.server 8000",
     "test": "node tests/smoke.test.js && node tests/online.test.js"
   }

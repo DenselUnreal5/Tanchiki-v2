@@ -17,6 +17,9 @@
 // ============================================================================
 
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { extname, join, normalize, resolve, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { attachWebSocket } from './ws.js';
 import { World } from '../src/world.js';
 import { Player } from '../src/player.js';
@@ -26,6 +29,46 @@ import { generateLevel } from '../src/map.js';
 const PORT = Number(process.env.PORT || 8123);
 const TICK_MS = 1000 / 60;
 const SNAP_EVERY = 3; // ~20 Гц
+const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url))); // корень проекта
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8',
+  '.map': 'application/json',
+};
+
+/** Раздаёт статические файлы игры. Безопасно от path traversal. */
+async function serveStatic(req, res) {
+  let urlPath;
+  try {
+    urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  } catch {
+    urlPath = '/';
+  }
+  if (urlPath === '/' || urlPath === '') urlPath = '/index.html';
+  const filePath = normalize(join(ROOT, urlPath));
+  if (!filePath.startsWith(ROOT + sep) && filePath !== ROOT) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+  try {
+    const data = await readFile(filePath);
+    res.writeHead(200, { 'Content-Type': MIME[extname(filePath)] || 'application/octet-stream' });
+    res.end(data);
+  } catch {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('404 Not Found');
+  }
+}
 
 /** Заглушка звука — сервер ничего не проигрывает. */
 const silentAudio = {
@@ -55,8 +98,12 @@ export class OnlineServer {
     this.tickTimer = null;
     this.snapAccum = 0;
     this.http = createServer((req, res) => {
-      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('Танчики онлайн-сервер: порт ' + this.port);
+      if (req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('ok');
+        return;
+      }
+      serveStatic(req, res);
     });
     this.http.listen(this.port, () => {
       console.log(`[server] онлайн-сервер слушает ws://localhost:${this.port}`);
@@ -361,6 +408,6 @@ function round3(v) {
 }
 
 // `node server/game.js` — запуск.
-if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, '/')) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   new OnlineServer();
 }
