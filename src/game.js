@@ -21,6 +21,7 @@ import { Profile } from './profile.js';
 import { getAchievement } from './achievements.js';
 import { perkName, perkIcon, getPerk } from './perks.js';
 import { MenuScene } from './menuscene.js';
+import { t, dn } from './i18n.js';
 
 /** Состояния игры. */
 const S = {
@@ -73,7 +74,7 @@ export class Game {
       onGarageChanged: () => this.ui.refreshProfile(this.profile),
       onOnline: (url) => this.startOnline(url),
       onDailyClaimed: ({ reward }) => {
-        this.hud.addFeed(`Задание выполнено: +${reward} 🪙`, '#ffd700');
+        this.hud.addFeed(t('feed.dailyDone', { n: reward }, `Задание выполнено: +${reward} 🪙`), '#ffd700');
         this.audio.play('pickup');
         this.ui.refreshProfile(this.profile);
       },
@@ -122,7 +123,7 @@ export class Game {
       'border-top:4px solid #cc4444;box-sizing:border-box';
     box.innerHTML =
       `<div><div style="font-size:18px;font-weight:700;color:#ff8888;margin-bottom:10px">` +
-      `Игра остановилась из-за ошибки</div><div style="color:#ffdddd">` +
+      `${t('fatal.title', null, 'Игра остановилась из-за ошибки')}</div><div style="color:#ffdddd">` +
       `${String(error?.stack || error)}</div></div>`;
     document.body.appendChild(box);
   }
@@ -193,26 +194,26 @@ export class Game {
   #bindProfileEvents() {
     this.profile.on('levelup', ({ levels }) => {
       const lvl = levels[levels.length - 1];
-      this.hud.addFeed(`Уровень профиля ${lvl}!`, '#ffee55');
+      this.hud.addFeed(t('feed.profileLevel', { n: lvl }, `Уровень профиля ${lvl}!`), '#ffee55');
       this.audio.play('levelup');
       this.ui.refreshProfile(this.profile);
     });
     this.profile.on('unlock', ({ ids, reason }) => {
       for (const id of ids) {
-        const label = reason === 'challenge' ? 'Челлендж выполнен' : 'Новый перк';
-        this.hud.addFeed(`${label}: ${perkIcon(id)} ${perkName(id)}`, '#ff66ff');
+        const label = reason === 'challenge' ? t('feed.challengeDone', null, 'Челлендж выполнен') : t('feed.newPerk', null, 'Новый перк');
+        this.hud.addFeed(`${label}: ${perkIcon(id)} ${dn(getPerk(id), 'name', 'perk')}`, '#ff66ff');
       }
-      this.hud.banner(`Открыт перк: ${ids.map((id) => perkName(id)).join(', ')}`, '#ff88ff');
+      this.hud.banner(t('feed.perkUnlocked', { names: ids.map((id) => dn(getPerk(id), 'name', 'perk')).join(', ') }, `Открыт перк: ${ids.map((id) => perkName(id)).join(', ')}`), '#ff88ff');
       this.audio.play('unlock');
       this.ui.refreshProfile(this.profile);
     });
     this.profile.on('achievement', ({ ids, reward }) => {
       const names = ids.map((id) => {
         const a = getAchievement(id);
-        return a ? `${a.icon} ${a.name}` : id;
+        return a ? `${a.icon} ${dn(a, 'name', 'ach')}` : id;
       });
-      this.hud.addFeed(`Достижение: ${names.join(', ')}`, '#ffd700');
-      this.hud.banner(`Достижение! +${reward} 🪙`, '#ffd700');
+      this.hud.addFeed(t('feed.achievement', { names: names.join(', ') }, `Достижение: ${names.join(', ')}`), '#ffd700');
+      this.hud.banner(t('feed.achievementReward', { n: reward }, `Достижение! +${reward} 🪙`), '#ffd700');
       this.audio.play('unlock');
       this.ui.refreshProfile(this.profile);
     });
@@ -236,7 +237,7 @@ export class Game {
     this.players = [
       new Player({
         index: 0,
-        name: 'Игрок 1',
+        name: t('player1', null, 'Игрок 1'),
         colorKey: s.color1 ?? 'p1',
         scheme: new MouseAimScheme(this.input, !hotseat),
       }),
@@ -245,7 +246,7 @@ export class Game {
       this.players.push(
         new Player({
           index: 1,
-          name: 'Игрок 2',
+          name: t('player2', null, 'Игрок 2'),
           colorKey: s.color2 ?? 'p2',
           scheme: new KeyboardAimScheme(this.input),
         }),
@@ -281,12 +282,12 @@ export class Game {
     this.hud.show();
     this.hud.addFeed(
       s.mode === 'ffa'
-        ? 'Каждый за себя: наберите фраги первым'
+        ? t('feed.start.ffa', null, 'Каждый за себя: наберите фраги первым')
         : s.mode === 'koth'
-          ? 'Царь горы: переживите всех на тонущей карте'
+          ? t('feed.start.koth', null, 'Царь горы: переживите всех на тонущей карте')
           : s.mode === 'defense'
-            ? 'Оборона: удерживайте базу от волн врагов'
-            : 'Захват флага: везите чужие флаги на свою базу',
+            ? t('feed.start.defense', null, 'Оборона: удерживайте базу от волн врагов')
+            : t('feed.start.ctf', null, 'Захват флага: везите чужие флаги на свою базу'),
       '#88ff88',
     );
 
@@ -334,7 +335,7 @@ export class Game {
     // Локальный игрок с мышью; схема используется только для чтения команд.
     const local = new Player({
       index: world.localIndex,
-      name: player?.name ?? 'Вы',
+      name: player?.name ?? t('net.you', null, 'Вы'),
       colorKey: world.localIndex === 0 ? 'p1' : 'p2',
       scheme: new MouseAimScheme(this.input, false),
     });
@@ -349,7 +350,7 @@ export class Game {
     this.hud.build(this.players);
     this.hud.show();
     for (const p of this.players) p.updateCamera();
-    this.hud.addFeed('Подключено к серверу. Играем!', '#88ff88');
+    this.hud.addFeed(t('feed.connected', null, 'Подключено к серверу. Играем!'), '#88ff88');
   }
 
   /** Каждый кадр в онлайне: отправляем команду, обновляем камеру. */
@@ -414,7 +415,7 @@ export class Game {
 
     world.on('kill', ({ victim, killer, suicide }) => {
       if (suicide || !killer) {
-        this.hud.addFeed(`${victim.name} уничтожен`, '#888888');
+        this.hud.addFeed(t('feed.killSuicide', { name: victim.name }, `${victim.name} уничтожен`), '#888888');
         return;
       }
       const color = killer.owner ? '#88ff88' : victim.owner ? '#ff6666' : '#bbbbbb';
@@ -423,7 +424,7 @@ export class Game {
 
     world.on('playerDied', ({ player }) => {
       this.profile.bumpStat('timesDied', 1);
-      this.hud.addFeed(`${player.name}: танк уничтожен`, '#cc4444');
+      this.hud.addFeed(t('feed.youDied', { name: player.name }, `${player.name}: танк уничтожен`), '#cc4444');
     });
 
     world.on('playerDamage', ({ amount }) => {
@@ -440,7 +441,7 @@ export class Game {
       if (kind === 'kill') this.profile.bumpDaily('kills', 1);
       if (kind === 'capture') this.profile.bumpDaily('captures', 1);
       if (kind === 'win') this.profile.bumpDaily('wins', 1);
-      this.hud.addFeed(`+${amount} 🪙 ${rewardLabel(kind, name)}`, '#ffd54a');
+      this.hud.addFeed(`${t('feed.reward', { n: amount, label: rewardLabel(kind, name) }, `+${amount} 🪙 ${rewardLabel(kind, name)}`)}`, '#ffd54a');
     });
 
     world.on('stat', ({ key, value, mode }) => {
@@ -451,17 +452,17 @@ export class Game {
     });
 
     world.on('botPerk', ({ tank, perk }) => {
-      this.hud.addFeed(`${tank.name} получил: ${perk.icon} ${perk.name}`, '#ffaa44');
+      this.hud.addFeed(t('feed.botPerk', { name: tank.name, icon: perk.icon, perk: dn(perk, 'name', 'botperk') }, `${tank.name} получил: ${perk.icon} ${perk.name}`), '#ffaa44');
     });
 
     world.on('sessionLevelUp', ({ player, levels }) => {
       this.audio.play('levelup');
-      this.hud.addFeed(`${player.name}: уровень ${player.sessionLevel}!`, '#ffee55');
+      this.hud.addFeed(t('feed.sessionLevel', { name: player.name, n: player.sessionLevel }, `${player.name}: уровень ${player.sessionLevel}!`), '#ffee55');
       void levels;
     });
 
     world.on('flag', ({ type, tank }) => {
-      if (type === 'captured' && tank?.owner) this.hud.banner('Флаг захвачен!', '#ffee55', 90);
+      if (type === 'captured' && tank?.owner) this.hud.banner(t('feed.flagCaptured', null, 'Флаг захвачен!'), '#ffee55', 90);
     });
 
     world.on('finish', (result) => this.#onFinish(result));
@@ -503,7 +504,7 @@ export class Game {
     if (perkId) {
       player.equipPerk(perkId);
       const perk = getPerk(perkId);
-      this.hud.addFeed(`${player.name} взял ${perk.icon} ${perk.name}`, '#ffee55');
+      this.hud.addFeed(t('feed.perkTook', { name: player.name, icon: perk.icon, perk: dn(perk, 'name', 'perk') }, `${player.name} взял ${perk.icon} ${perk.name}`), '#ffee55');
     }
     player.pendingLevelUps = Math.max(0, player.pendingLevelUps - 1);
     this.#processPerkQueue();
@@ -554,8 +555,8 @@ export class Game {
 
 /** Текстовое пояснение награды для фида. */
 function rewardLabel(kind, name) {
-  if (kind === 'kill') return `за убийство (${name})`;
-  if (kind === 'capture') return `за захват флага (${name})`;
-  if (kind === 'win') return 'за победу';
-  return 'награда';
+  if (kind === 'kill') return t('reward.kill', { name }, `за убийство (${name})`);
+  if (kind === 'capture') return t('reward.capture', { name }, `за захват флага (${name})`);
+  if (kind === 'win') return t('reward.win', null, 'за победу');
+  return t('reward.other', null, 'награда');
 }

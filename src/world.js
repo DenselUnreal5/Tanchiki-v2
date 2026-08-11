@@ -61,6 +61,7 @@ import { pickEnemyType, getEnemyType } from './enemyTypes.js';
 import { WEAPONS, getWeapon } from './weapons.js';
 import { WeatherSystem } from './weather.js';
 import { mulberry32, dist, dist2, pruneInPlace, choice } from './utils.js';
+import { t, dn, botNames } from './i18n.js';
 
 const BOT_NAMES = [
   'Рыжий', 'Серый', 'Чёрный', 'Белый', 'Тигр', 'Ястреб', 'Волк', 'Медведь',
@@ -197,8 +198,9 @@ export class World {
 
   // ------------------------------------------------------------------ создание
   #uniqueBotName(type = null) {
-    const free = BOT_NAMES.filter((n) => !this.usedNames.has(n));
-    const name = free.length ? choice(this.rng, free) : `Бот-${this.usedNames.size + 1}`;
+    const list = botNames() ?? BOT_NAMES;
+    const free = list.filter((n) => !this.usedNames.has(n));
+    const name = free.length ? choice(this.rng, free) : t('bot.fallback', { n: this.usedNames.size + 1 }, `Бот-${this.usedNames.size + 1}`);
     this.usedNames.add(name);
     return type?.boss ? `«${name}»` : name;
   }
@@ -315,7 +317,7 @@ export class World {
     if (type.boss) {
       this.particles.burst(tank.x, tank.y, ['#e74c3c', '#ffaa33'], 24, 3, 6, 20, 30, this.rng);
       this.emit('feed', {
-        text: `${type.icon} ${tank.name} — БОСС на поле боя!`,
+        text: t('feed.boss', { icon: type.icon, name: tank.name }, `${type.icon} ${tank.name} — БОСС на поле боя!`),
         color: '#e74c3c',
       });
     }
@@ -391,7 +393,7 @@ export class World {
     }
     if (n === DEFENSE_BOSS_WAVE) this.#spawnBoss();
     this.emit('feed', {
-      text: `🌊 Волна ${n} из ${MODES.defense.waves}: ${size} врагов`,
+      text: t('feed.wave', { cur: n, total: MODES.defense.waves, n: size }, `🌊 Волна ${n} из ${MODES.defense.waves}: ${size} врагов`),
       color: '#ff8833',
     });
   }
@@ -425,9 +427,9 @@ export class World {
     // Режим проигран — база уничтожена.
     if (this.base.hp <= 0) {
       this.#finish({
-        winnerName: 'Орда',
+        winnerName: t('winner.horde', null, 'Орда'),
         winnerPlayerIndex: null,
-        reason: 'База уничтожена — оборона пала',
+        reason: t('reason.defenseBase', null, 'База уничтожена — оборона пала'),
       });
       return;
     }
@@ -449,10 +451,10 @@ export class World {
     if (this.#aliveEnemyCount() === 0) {
       if (this.wave >= MODES.defense.waves) {
         this.#finish({
-          winnerName: 'Защитники',
+          winnerName: t('winner.defenders', null, 'Защитники'),
           winnerPlayerIndex: this.players[0]?.index ?? 0,
           winnerTeam: 'player',
-          reason: `Все ${MODES.defense.waves} волн отбиты — оборона устояла`,
+          reason: t('reason.defenseWon', { n: MODES.defense.waves }, `Все ${MODES.defense.waves} волн отбиты — оборона устояла`),
         });
       } else {
         this.waveState = 'delay';
@@ -489,7 +491,7 @@ export class World {
     }
     this.airstrikeCooldown = AIRSTRIKE_COOLDOWN;
     this.audio.play('airstrike');
-    this.emit('feed', { text: `✈ Авиаудар по ${enemies.length} целям!`, color: '#ffaa33' });
+    this.emit('feed', { text: t('feed.airstrike', { n: enemies.length }, `✈ Авиаудар по ${enemies.length} целям!`), color: '#ffaa33' });
     return true;
   }
 
@@ -585,13 +587,13 @@ export class World {
           tank.owner.equipPerk(drop.perkId);
           this.audio.play('pickup');
           this.emit('damageNumber', { x: tank.x, y: tank.y - 26, text: perk.icon, color: '#ff88ff' });
-          this.emit('feed', { text: `${tank.name} подобрал перк ${perk.icon} ${perk.name}`, color: '#ff88ff' });
+          this.emit('feed', { text: t('feed.perkPicked', { name: tank.name, icon: perk.icon, perk: dn(perk, 'name', 'perk') }, `${tank.name} подобрал перк ${perk.icon} ${perk.name}`), color: '#ff88ff' });
         } else {
           // Бот тоже подбирает, пока не упрётся в лимит перков.
           if (tank.perkIds.length < BOT_MAX_PERKS && !tank.perkIds.includes(drop.perkId)) {
             tank.perkIds.push(drop.perkId);
             tank.recompute();
-            this.emit('feed', { text: `${tank.name} подобрал перк ${perk.icon} ${perk.name}`, color: '#ffaa44' });
+            this.emit('feed', { text: t('feed.perkPicked', { name: tank.name, icon: perk.icon, perk: dn(perk, 'name', 'botperk') }, `${tank.name} подобрал перк ${perk.icon} ${perk.name}`), color: '#ffaa44' });
           }
         }
         drop.active = false;
@@ -666,7 +668,7 @@ export class World {
       tank.baseMaxHP = Math.round(this.difficulty.enemyHP * hpMult * this.ramp);
       tank.recompute();
     }
-    this.emit('feed', { text: 'Враги стали сильнее!', color: '#ff8833' });
+    this.emit('feed', { text: t('feed.ramp', null, 'Враги стали сильнее!'), color: '#ff8833' });
   }
 
   // ------------------------------------------------------------------ урон
@@ -785,7 +787,7 @@ export class World {
       this.emit('globalXP', { amount: XP_PER_KILL * 3, player });
       player.score += SCORE_PER_KILL * 3;
       this.emit('feed', {
-        text: `${player.name} уничтожил БОССА! +${bossReward} 🪙`,
+        text: t('feed.bossKilled', { name: player.name, n: bossReward }, `${player.name} уничтожил БОССА! +${bossReward} 🪙`),
         color: '#e74c3c',
       });
     }
@@ -900,10 +902,10 @@ export class World {
         this.audio.play('pickup');
         this.emit('damageNumber', { x: tank.x, y: tank.y - 24, text: `+${gained}`, color: '#44ff44' });
         if (tank.owner) {
-          this.emit('feed', { text: `${tank.owner.name}: аптечка +${gained} HP`, color: '#44ff44' });
+          this.emit('feed', { text: t('feed.medkit', { name: tank.owner.name, n: gained }, `${tank.owner.name}: аптечка +${gained} HP`), color: '#44ff44' });
           this.emit('stat', { key: 'healthPacksCollected', value: 1, mode: 'add' });
         } else {
-          this.emit('feed', { text: `${tank.name}: аптечка +${gained} HP`, color: '#44ff44' });
+          this.emit('feed', { text: t('feed.medkit', { name: tank.name, n: gained }, `${tank.name}: аптечка +${gained} HP`), color: '#44ff44' });
         }
         break;
       }
@@ -928,8 +930,8 @@ export class World {
         pickup.active = false;
         this.audio.play('pickup');
         this.particles.burst(tank.x, tank.y, [weapon.color, '#ffffff'], 10, 2, 4, 14, 22, this.rng);
-        this.emit('damageNumber', { x: tank.x, y: tank.y - 26, text: `${weapon.icon} ${weapon.name}!`, color: weapon.color });
-        this.emit('feed', { text: `${tank.owner.name}: ${weapon.icon} ${weapon.name}!`, color: weapon.color });
+        this.emit('damageNumber', { x: tank.x, y: tank.y - 26, text: `${weapon.icon} ${dn(weapon, 'name', 'weapon')}!`, color: weapon.color });
+        this.emit('feed', { text: t('feed.weapon', { name: tank.owner.name, icon: weapon.icon, weapon: dn(weapon, 'name', 'weapon') }, `${tank.owner.name}: ${weapon.icon} ${weapon.name}!`), color: weapon.color });
         break;
       }
     }
@@ -952,7 +954,7 @@ export class World {
             this.audio.play('flag');
             this.emit('flag', { type: 'returned', flag, tank });
             this.emit('feed', {
-              text: `${tank.name} вернул свой флаг`,
+              text: t('feed.flagReturned', { name: tank.name }, `${tank.name} вернул свой флаг`),
               color: flag.team === 'player' ? COLORS.flagPlayer : COLORS.flagEnemy,
             });
           }
@@ -962,7 +964,7 @@ export class World {
           this.audio.play('flag');
           this.emit('flag', { type: 'taken', flag, tank });
           this.emit('feed', {
-            text: `${tank.name} забрал флаг`,
+            text: t('feed.flagTaken', { name: tank.name }, `${tank.name} забрал флаг`),
             color: tank.owner ? '#ffee55' : '#ff8833',
           });
         }
@@ -1028,7 +1030,7 @@ export class World {
       );
       this.emit('flag', { type: 'captured', flag, tank: carrier });
       this.emit('feed', {
-        text: `${carrier.name} захватил флаг! ${this.teamScore.player}:${this.teamScore.enemy}`,
+        text: t('feed.flagCapturedWorld', { name: carrier.name, a: this.teamScore.player, b: this.teamScore.enemy }, `${carrier.name} захватил флаг! ${this.teamScore.player}:${this.teamScore.enemy}`),
         color: '#ffee55',
       });
       break; // за тик засчитываем один захват — иначе можно «сдвоить» победу
@@ -1068,9 +1070,9 @@ export class World {
       const humansLeft = this.players.some((p) => p.tank?.alive);
       if (!humansLeft) {
         this.#finish({
-          winnerName: alive.length ? alive[0].name : 'Никто',
+          winnerName: alive.length ? alive[0].name : t('winner.nobody', null, 'Никто'),
           winnerPlayerIndex: null,
-          reason: 'Все игроки уничтожены',
+          reason: t('reason.allDead', null, 'Все игроки уничтожены'),
         });
         return;
       }
@@ -1080,7 +1082,7 @@ export class World {
         this.#finish({
           winnerName: winner.name,
           winnerPlayerIndex: winner.owner ? winner.owner.index : null,
-          reason: `${winner.name} остался последним`,
+          reason: t('reason.lastStanding', { name: winner.name }, `${winner.name} остался последним`),
         });
         return;
       }
@@ -1092,7 +1094,7 @@ export class World {
         this.#finish({
           winnerName: best.name,
           winnerPlayerIndex: best.owner ? best.owner.index : null,
-          reason: 'Время вышло — побеждает сильнейший',
+          reason: t('reason.kothTimeout', null, 'Время вышло — побеждает сильнейший'),
         });
       }
       return;
@@ -1108,7 +1110,7 @@ export class World {
       this.#finish({
         winnerName: leader.name,
         winnerPlayerIndex: leader.owner ? leader.owner.index : null,
-        reason: `${leader.name} первым набрал ${leader.kills} фрагов`,
+        reason: t('reason.ffaLimit', { name: leader.name, n: leader.kills }, `${leader.name} первым набрал ${leader.kills} фрагов`),
       });
       return;
     }
@@ -1117,11 +1119,12 @@ export class World {
     const team = this.teamScore.player >= limit ? 'player' : this.teamScore.enemy >= limit ? 'enemy' : null;
     if (!team) return;
     const winnerHuman = this.players.find((p) => p.tank?.team === team);
+    const teamName = team === 'player' ? t('team.allies', null, 'Свои') : t('team.enemies', null, 'Враги');
     this.#finish({
-      winnerName: team === 'player' ? 'Команда «Свои»' : 'Команда «Враги»',
+      winnerName: team === 'player' ? t('winner.teamAllies', null, 'Команда «Свои»') : t('winner.teamEnemies', null, 'Команда «Враги»'),
       winnerPlayerIndex: winnerHuman ? winnerHuman.index : null,
       winnerTeam: team,
-      reason: `${team === 'player' ? 'Свои' : 'Враги'} захватили ${limit} флагов`,
+      reason: t('reason.ctfLimit', { team: teamName, n: limit }, `${teamName} захватили ${limit} флагов`),
     });
   }
 

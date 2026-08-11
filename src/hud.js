@@ -7,7 +7,8 @@
 // ============================================================================
 
 import { MODES, TEAM_COLORS, TICK_HZ } from './config.js';
-import { perkIcon, perkName, anyPerkIcon } from './perks.js';
+import { perkIcon, perkName, anyPerkIcon, getPerk } from './perks.js';
+import { t, dn } from './i18n.js';
 
 const FEED_LIFE = 300; // тиков
 const FEED_MAX = 6;
@@ -150,51 +151,71 @@ export class Hud {
       panel.shieldFill.style.width = `${shieldRatio * 100}%`;
       panel.shieldFill.style.display = tank.shieldHP > 0 ? 'block' : 'none';
       panel.hpText.textContent =
-        `${Math.ceil(tank.hp)} / ${tank.maxHP} HP` + (tank.shieldHP > 0 ? ` +${Math.ceil(tank.shieldHP)} щит` : '');
+        `${Math.ceil(tank.hp)} / ${tank.maxHP} HP` + (tank.shieldHP > 0 ? t('hud.shield', { n: Math.ceil(tank.shieldHP) }, ` +${Math.ceil(tank.shieldHP)} щит`) : '');
 
-      panel.score.textContent = `Счёт ${player.score}`;
+      panel.score.textContent = t('hud.score', { n: player.score }, `Счёт ${player.score}`);
 
       const progress = world.progressFor(player);
       if (world.mode === 'defense') {
         const baseHp = world.base ? Math.ceil(world.base.hp) : 0;
         const left = progress.current;
-        const state = world.waveState === 'delay' ? '…' : `${left} в поле`;
+        const state = world.waveState === 'delay' ? '…' : t('hud.left', { n: left }, `${left} в поле`);
         // Только первый игрок владеет авиаударом — индикатор у него же.
         let strike = '';
         if (player.index === 0) {
           strike =
             world.airstrikeCooldown > 0
-              ? `  ✈ ${Math.ceil(world.airstrikeCooldown / TICK_HZ)}с`
-              : '  ✈ ГОТОВ (F)';
+              ? t('hud.strikeCd', { n: Math.ceil(world.airstrikeCooldown / TICK_HZ) }, `  ✈ ${Math.ceil(world.airstrikeCooldown / TICK_HZ)}с`)
+              : t('hud.strikeReady', null, '  ✈ ГОТОВ (F)');
         }
         panel.objective.textContent =
-          `Волна ${world.wave} / ${MODES.defense.waves}   🏰 ${baseHp} HP   (${state})${strike}`;
+          t('hud.wave', {
+            cur: world.wave,
+            total: MODES.defense.waves,
+            hp: baseHp,
+            state,
+          }, `Волна ${world.wave} / ${MODES.defense.waves}   🏰 ${baseHp} HP   (${state})`) + strike;
       } else if (world.mode === 'koth') {
         const left = Math.max(0, world.timeLimit - world.tick);
         const sec = Math.ceil(left / 60);
         panel.objective.textContent =
-          `Выживших ${progress.current} / ${progress.total}   ⏱ ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+          t('hud.alive', {
+            cur: progress.current,
+            total: progress.total,
+            time: `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`,
+          }, `Выживших ${progress.current} / ${progress.total}   ⏱ ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`);
       } else if (world.mode === 'ffa') {
-        panel.objective.textContent = `Фраги ${progress.current} / ${progress.target}   ✝ ${player.deaths}`;
+        panel.objective.textContent =
+          t('hud.frags', { cur: progress.current, target: progress.target, deaths: player.deaths },
+            `Фраги ${progress.current} / ${progress.target}   ✝ ${player.deaths}`);
       } else {
         panel.objective.textContent =
-          `Флаги ${world.teamScore.player} : ${world.teamScore.enemy}` +
-          ` (до ${MODES.ctf.capLimit})` +
-          (tank.carryingFlag ? '  ⚑ у вас флаг!' : '');
+          t('hud.flags', {
+            a: world.teamScore.player,
+            b: world.teamScore.enemy,
+            limit: MODES.ctf.capLimit,
+          }, `Флаги ${world.teamScore.player} : ${world.teamScore.enemy} (до ${MODES.ctf.capLimit})`) +
+          (tank.carryingFlag ? t('hud.flagYou', null, '  ⚑ у вас флаг!') : '');
       }
 
       // Индикатор погоды и времени суток.
       const w = world.weather;
       if (w) {
         const icon = WEATHER_ICONS[w.condition] ?? '🌤';
-        panel.weather.textContent = `${icon} ${w.timeName}`;
+        panel.weather.textContent = `${icon} ${t('time.' + w.timeKey, null, w.timeName)}`;
       }
 
       const need = player.xpToNextLevel();
       panel.xpFill.style.width = `${Math.min(100, (player.sessionXP / need) * 100)}%`;
       panel.xpLabel.textContent =
-        `Ур. ${player.sessionLevel} · ${player.sessionXP}/${need} XP` +
-        `   |   Профиль ${profile.globalLevel} · ${profile.globalXP}/${profile.xpToNextLevel()}`;
+        t('hud.xp', {
+          lvl: player.sessionLevel,
+          xp: player.sessionXP,
+          need,
+          plvl: profile.globalLevel,
+          pxp: profile.globalXP,
+          pneed: profile.xpToNextLevel(),
+        }, `Ур. ${player.sessionLevel} · ${player.sessionXP}/${need} XP   |   Профиль ${profile.globalLevel} · ${profile.globalXP}/${profile.xpToNextLevel()}`);
 
       // Перки перерисовываем только при изменении набора.
       const key = player.perkIds.join(',');
@@ -204,7 +225,8 @@ export class Hud {
         for (const id of player.perkIds) {
           const slot = document.createElement('div');
           slot.className = 'perk-slot';
-          slot.textContent = `${perkIcon(id)} ${perkName(id)}`;
+          const perk = getPerk(id);
+          slot.textContent = `${perkIcon(id)} ${perk ? dn(perk, 'name', 'perk') : perkName(id)}`;
           panel.perks.appendChild(slot);
         }
       }
@@ -284,15 +306,16 @@ export class Hud {
     const target = world.mode === 'ffa' ? MODES.ffa.fragLimit : MODES.ctf.capLimit;
     const head =
       world.mode === 'defense'
-        ? `Оборона — волна ${world.wave} из ${MODES.defense.waves}`
+        ? t('sb.defense', { cur: world.wave, total: MODES.defense.waves }, `Оборона — волна ${world.wave} из ${MODES.defense.waves}`)
         : world.mode === 'koth'
-          ? 'Царь горы — побеждает последний выживший'
+          ? t('sb.koth', null, 'Царь горы — побеждает последний выживший')
           : world.mode === 'ffa'
-            ? `Каждый за себя — до ${target} фрагов`
-            : `Захват флага — Свои ${world.teamScore.player} : ${world.teamScore.enemy} Враги (до ${target})`;
+            ? t('sb.ffa', { target }, `Каждый за себя — до ${target} фрагов`)
+            : t('sb.ctf', { a: world.teamScore.player, b: world.teamScore.enemy, target },
+                `Захват флага — Свои ${world.teamScore.player} : ${world.teamScore.enemy} Враги (до ${target})`);
 
     let html = `<div class="sb-title">${head}</div>`;
-    html += '<table><thead><tr><th>#</th><th>Танк</th><th>Фраги</th><th>Смерти</th><th>Перки</th></tr></thead><tbody>';
+    html += `<table><thead><tr><th>${t('go.table.rank', null, '#')}</th><th>${t('go.table.tank', null, 'Танк')}</th><th>${t('go.table.kills', null, 'Фраги')}</th><th>${t('go.table.deaths', null, 'Смерти')}</th><th>${t('sb.perks', null, 'Перки')}</th></tr></thead><tbody>`;
     rows.forEach((r, i) => {
       const palette = TEAM_COLORS[r.colorKey] ?? TEAM_COLORS.neutral;
       const cls = r.isHuman ? ' class="human"' : '';
@@ -302,7 +325,7 @@ export class Hud {
         `<td>${r.kills}</td><td>${r.deaths}</td>` +
         `<td class="sb-perks">${r.perks.map(anyPerkIcon).join(' ')}</td></tr>`;
     });
-    html += '</tbody></table><div class="sb-hint">Tab — скрыть</div>';
+    html += `</tbody></table><div class="sb-hint">${t('sb.hint', null, 'Tab — скрыть')}</div>`;
     this.scoreboardEl.innerHTML = html;
   }
 }

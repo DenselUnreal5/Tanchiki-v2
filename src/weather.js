@@ -99,6 +99,16 @@ export class WeatherSystem {
     return 'вечер';
   }
 
+  /** Ключ времени суток для перевода (i18n). */
+  get timeKey() {
+    const p = this.phase;
+    if (p < 0.125 || p >= 0.875) return 'night';
+    if (p < 0.25) return 'dawn';
+    if (p < 0.5) return 'day';
+    if (p < 0.75) return 'dusk';
+    return 'evening';
+  }
+
   #duration() {
     const d = WEATHER_MIN + this.rng() * (WEATHER_MAX - WEATHER_MIN);
     return Math.round(d);

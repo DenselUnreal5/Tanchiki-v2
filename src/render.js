@@ -19,6 +19,7 @@ import {
 import { perkIcon } from './perks.js';
 import { COSMETIC_TRACKS, COSMETIC_TURRETS } from './cosmetics.js';
 import { getWeapon } from './weapons.js';
+import { t } from './i18n.js';
 
 /** Детерминированный 0..1 из двух целых — для дождя/тумана без состояния. */
 function hash01(i, salt) {
@@ -172,7 +173,7 @@ export class Renderer {
       ctx.textAlign = 'center';
       const secs = Math.ceil(player.tank.respawnTimer / 60);
       ctx.fillText(
-        `Возрождение через ${Math.max(0, secs)}...`,
+        t('render.respawn', { n: Math.max(0, secs) }, `Возрождение через ${Math.max(0, secs)}...`),
         vp.x + vp.w / 2,
         vp.y + vp.h / 2,
       );
@@ -600,7 +601,8 @@ export class Renderer {
         ctx.fillStyle = 'rgba(255,255,255,0.8)';
         ctx.font = '10px "Segoe UI", Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`${Math.ceil(flag.returnTimer / 60)}с`, flag.x, flag.y + 24);
+        ctx.fillStyle = '#ffcc66';
+        ctx.fillText(`${Math.ceil(flag.returnTimer / 60)}${t('hud.sec', null, 'с')}`, flag.x, flag.y + 24);
       }
     }
   }

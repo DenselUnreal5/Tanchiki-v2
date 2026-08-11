@@ -30,7 +30,7 @@
       <div id="menu-info" class="menu-info"></div>
 
       <button id="btn-select-mode" class="btn-secondary menu-mode-btn">
-        <span>⚙️ Выбрать режим</span>
+        <span data-i18n="menu.selectMode">⚙️ Выбрать режим</span>
         <span class="caret">▾</span>
       </button>
 
@@ -38,34 +38,34 @@
         <div class="menu-settings-inner">
           <div class="menu-blocks">
         <div class="menu-block">
-          <label>Тип игры</label>
+          <label data-i18n="menu.gametype">Тип игры</label>
           <div class="btn-group" id="group-gametype">
-            <button class="toggle active" data-gametype="single">1 игрок</button>
-            <button class="toggle" data-gametype="hotseat">Горячий стул</button>
+            <button class="toggle active" data-gametype="single" data-i18n="gametype.single">1 игрок</button>
+            <button class="toggle" data-gametype="hotseat" data-i18n="gametype.hotseat">Горячий стул</button>
           </div>
         </div>
 
         <div class="menu-block">
-          <label>Режим</label>
+          <label data-i18n="menu.mode">Режим</label>
           <div class="btn-group" id="group-mode">
-            <button class="toggle active" data-mode="ffa">Каждый за себя</button>
-            <button class="toggle" data-mode="ctf">Захват флага</button>
-            <button class="toggle" data-mode="koth">Царь горы</button>
-            <button class="toggle" data-mode="defense">Оборона</button>
+            <button class="toggle active" data-mode="ffa" data-i18n="mode.ffa">Каждый за себя</button>
+            <button class="toggle" data-mode="ctf" data-i18n="mode.ctf">Захват флага</button>
+            <button class="toggle" data-mode="koth" data-i18n="mode.koth">Царь горы</button>
+            <button class="toggle" data-mode="defense" data-i18n="mode.defense">Оборона</button>
           </div>
         </div>
 
         <div class="menu-block">
-          <label>Сложность</label>
+          <label data-i18n="menu.diff">Сложность</label>
           <div class="btn-group" id="group-diff">
-            <button class="toggle" data-diff="easy">Легко</button>
-            <button class="toggle active" data-diff="medium">Средне</button>
-            <button class="toggle" data-diff="hard">Сложно</button>
+            <button class="toggle" data-diff="easy" data-i18n="diff.easy">Легко</button>
+            <button class="toggle active" data-diff="medium" data-i18n="diff.medium">Средне</button>
+            <button class="toggle" data-diff="hard" data-i18n="diff.hard">Сложно</button>
           </div>
         </div>
 
         <div class="menu-block">
-          <label>Уровень</label>
+          <label data-i18n="menu.level">Уровень</label>
           <div class="btn-group" id="group-level">
             <button class="toggle active" data-level="1">1</button>
             <button class="toggle" data-level="2">2</button>
@@ -77,50 +77,51 @@
         </div>
 
         <div class="menu-block">
-          <label>Цвет танка 1</label>
+          <label data-i18n="menu.color1">Цвет танка 1</label>
           <div class="btn-group" id="group-color1">
-            <button class="toggle active" data-color="p1" title="Зелёный" style="background:#3f7d3f">P1</button>
-            <button class="toggle" data-color="p2" title="Синий" style="background:#2f6a9c">P2</button>
-            <button class="toggle" data-color="p3" title="Оранжевый" style="background:#9c5a2f">P3</button>
-            <button class="toggle" data-color="p4" title="Фиолетовый" style="background:#7a3f8c">P4</button>
-            <button class="toggle" data-color="p5" title="Бирюзовый" style="background:#3f8c8c">P5</button>
-            <button class="toggle" data-color="p6" title="Оливковый" style="background:#8c8c3f">P6</button>
+            <button class="toggle active" data-color="p1" data-i18n-title="skin.p1" title="Зелёный" style="background:#3f7d3f">P1</button>
+            <button class="toggle" data-color="p2" data-i18n-title="skin.p2" title="Синий" style="background:#2f6a9c">P2</button>
+            <button class="toggle" data-color="p3" data-i18n-title="skin.p3" title="Оранжевый" style="background:#9c5a2f">P3</button>
+            <button class="toggle" data-color="p4" data-i18n-title="skin.p4" title="Фиолетовый" style="background:#7a3f8c">P4</button>
+            <button class="toggle" data-color="p5" data-i18n-title="skin.p5" title="Бирюзовый" style="background:#3f8c8c">P5</button>
+            <button class="toggle" data-color="p6" data-i18n-title="skin.p6" title="Оливковый" style="background:#8c8c3f">P6</button>
           </div>
         </div>
 
         <div class="menu-block">
-          <label>Цвет танка 2</label>
+          <label data-i18n="menu.color2">Цвет танка 2</label>
           <div class="btn-group" id="group-color2">
-            <button class="toggle active" data-color="p2" title="Синий" style="background:#2f6a9c">P2</button>
-            <button class="toggle" data-color="p1" title="Зелёный" style="background:#3f7d3f">P1</button>
-            <button class="toggle" data-color="p3" title="Оранжевый" style="background:#9c5a2f">P3</button>
-            <button class="toggle" data-color="p4" title="Фиолетовый" style="background:#7a3f8c">P4</button>
-            <button class="toggle" data-color="p5" title="Бирюзовый" style="background:#3f8c8c">P5</button>
-            <button class="toggle" data-color="p6" title="Оливковый" style="background:#8c8c3f">P6</button>
+            <button class="toggle active" data-color="p2" data-i18n-title="skin.p2" title="Синий" style="background:#2f6a9c">P2</button>
+            <button class="toggle" data-color="p1" data-i18n-title="skin.p1" title="Зелёный" style="background:#3f7d3f">P1</button>
+            <button class="toggle" data-color="p3" data-i18n-title="skin.p3" title="Оранжевый" style="background:#9c5a2f">P3</button>
+            <button class="toggle" data-color="p4" data-i18n-title="skin.p4" title="Фиолетовый" style="background:#7a3f8c">P4</button>
+            <button class="toggle" data-color="p5" data-i18n-title="skin.p5" title="Бирюзовый" style="background:#3f8c8c">P5</button>
+            <button class="toggle" data-color="p6" data-i18n-title="skin.p6" title="Оливковый" style="background:#8c8c3f">P6</button>
           </div>
         </div>
           </div>
         </div>
       </div>
 
-      <button id="btn-start" class="btn-primary">ИГРАТЬ</button>
+      <button id="btn-start" class="btn-primary" data-i18n="menu.start">ИГРАТЬ</button>
 
       <div class="menu-online">
-        <input id="online-url" type="text" value="ws://localhost:8123" placeholder="ws://адрес:порт"
+        <input id="online-url" type="text" value="ws://localhost:8123" data-i18n-ph="menu.onlinePh" placeholder="ws://адрес:порт"
                autocomplete="off" spellcheck="false">
-        <button id="btn-online" class="btn-secondary">🌐 Играть онлайн</button>
+        <button id="btn-online" class="btn-secondary" data-i18n="menu.online">🌐 Играть онлайн</button>
       </div>
 
       <div id="menu-hints" class="hints"></div>
 
       <div class="menu-footer">
-        <button id="btn-garage" class="btn-secondary">🔧 Гараж</button>
-        <button id="btn-gallery" class="btn-secondary">Галерея перков</button>
-        <button id="btn-achievements" class="btn-secondary">🏅 Достижения</button>
-        <button id="btn-daily" class="btn-secondary">📅 Задания</button>
-        <button id="btn-stats" class="btn-secondary">Статистика</button>
-        <button id="btn-sound" class="btn-secondary">🔊 Звук</button>
-        <button id="btn-reset" class="btn-secondary danger">Сбросить прогресс</button>
+        <button id="btn-garage" class="btn-secondary" data-i18n="menu.garage">🔧 Гараж</button>
+        <button id="btn-gallery" class="btn-secondary" data-i18n="menu.gallery">Галерея перков</button>
+        <button id="btn-achievements" class="btn-secondary" data-i18n="menu.achievements">🏅 Достижения</button>
+        <button id="btn-daily" class="btn-secondary" data-i18n="menu.daily">📅 Задания</button>
+        <button id="btn-stats" class="btn-secondary" data-i18n="menu.stats">Статистика</button>
+        <button id="btn-sound" class="btn-secondary" data-i18n="menu.sound.on">🔊 Звук</button>
+        <button id="btn-lang" class="btn-secondary"></button>
+        <button id="btn-reset" class="btn-secondary danger" data-i18n="menu.reset">Сбросить прогресс</button>
       </div>
     </div>
   </section>
@@ -128,17 +129,17 @@
   <!-- ============================== ПАУЗА ============================== -->
   <section id="pause" class="overlay">
     <div class="panel panel-narrow">
-      <h2>ПАУЗА</h2>
-      <button id="btn-resume" class="btn-primary">Продолжить</button>
-      <button id="btn-pause-gallery" class="btn-secondary wide">Галерея перков</button>
-      <button id="btn-pause-menu" class="btn-secondary wide">Главное меню</button>
+      <h2 data-i18n="pause.title">ПАУЗА</h2>
+      <button id="btn-resume" class="btn-primary" data-i18n="pause.resume">Продолжить</button>
+      <button id="btn-pause-gallery" class="btn-secondary wide" data-i18n="pause.gallery">Галерея перков</button>
+      <button id="btn-pause-menu" class="btn-secondary wide" data-i18n="pause.menu">Главное меню</button>
     </div>
   </section>
 
   <!-- ============================== ВЫБОР ПЕРКА ============================== -->
   <section id="perk-select" class="overlay dim">
     <div class="panel panel-perk">
-      <h2 class="accent">УРОВЕНЬ ПОВЫШЕН</h2>
+      <h2 class="accent" data-i18n="perk.title">УРОВЕНЬ ПОВЫШЕН</h2>
       <div id="perk-body"></div>
     </div>
   </section>
@@ -146,11 +147,11 @@
   <!-- ============================== ИТОГИ ============================== -->
   <section id="gameover" class="overlay dim">
     <div class="panel panel-result">
-      <h2 id="go-title">ПОРАЖЕНИЕ</h2>
+      <h2 id="go-title" data-i18n="go.defeat">ПОРАЖЕНИЕ</h2>
       <div id="go-body"></div>
       <div class="result-actions">
-        <button id="btn-restart" class="btn-primary">Ещё раз</button>
-        <button id="btn-tomenu" class="btn-secondary">В меню</button>
+        <button id="btn-restart" class="btn-primary" data-i18n="go.replay">Ещё раз</button>
+        <button id="btn-tomenu" class="btn-secondary" data-i18n="go.menu">В меню</button>
       </div>
     </div>
   </section>
@@ -158,50 +159,50 @@
   <!-- ============================== ГАЛЕРЕЯ ============================== -->
   <section id="gallery" class="overlay dim scrollable">
     <div class="panel panel-gallery">
-      <h2>Галерея перков</h2>
+      <h2 data-i18n="gallery.title">Галерея перков</h2>
       <div id="gallery-sub" class="subtitle"></div>
       <div id="gallery-body"></div>
-      <button id="btn-gallery-close" class="btn-secondary">Закрыть</button>
+      <button id="btn-gallery-close" class="btn-secondary" data-i18n="btn.close">Закрыть</button>
     </div>
   </section>
 
   <!-- ============================== ГАРАЖ ============================== -->
   <section id="garage" class="overlay dim scrollable">
     <div class="panel panel-garage">
-      <h2>🔧 Гараж</h2>
+      <h2 data-i18n="garage.title">🔧 Гараж</h2>
       <div id="garage-sub" class="subtitle"></div>
       <div id="garage-body"></div>
-      <button id="btn-garage-close" class="btn-secondary">Закрыть</button>
+      <button id="btn-garage-close" class="btn-secondary" data-i18n="btn.close">Закрыть</button>
     </div>
   </section>
 
   <!-- ============================== СТАТИСТИКА ============================== -->
   <section id="stats" class="overlay dim scrollable">
     <div class="panel panel-stats">
-      <h2>Статистика</h2>
+      <h2 data-i18n="stats.title">Статистика</h2>
       <div id="stats-sub" class="subtitle"></div>
       <div id="stats-body"></div>
-      <button id="btn-stats-close" class="btn-secondary">Закрыть</button>
+      <button id="btn-stats-close" class="btn-secondary" data-i18n="btn.close">Закрыть</button>
     </div>
   </section>
 
   <!-- ============================== ДОСТИЖЕНИЯ ============================== -->
   <section id="achievements" class="overlay dim scrollable">
     <div class="panel panel-gallery">
-      <h2>🏅 Достижения</h2>
+      <h2 data-i18n="achievements.title">🏅 Достижения</h2>
       <div id="achievements-sub" class="subtitle"></div>
       <div id="achievements-body"></div>
-      <button id="btn-achievements-close" class="btn-secondary">Закрыть</button>
+      <button id="btn-achievements-close" class="btn-secondary" data-i18n="btn.close">Закрыть</button>
     </div>
   </section>
 
   <!-- ============================== ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ============================== -->
   <section id="daily" class="overlay dim scrollable">
     <div class="panel panel-gallery">
-      <h2>📅 Ежедневные задания</h2>
+      <h2 data-i18n="daily.title">📅 Ежедневные задания</h2>
       <div id="daily-sub" class="subtitle"></div>
       <div id="daily-body"></div>
-      <button id="btn-daily-close" class="btn-secondary">Закрыть</button>
+      <button id="btn-daily-close" class="btn-secondary" data-i18n="btn.close">Закрыть</button>
     </div>
   </section>
 

@@ -14,6 +14,7 @@ import { dailySelection } from './daily.js';
 import { ALL_COSMETICS, COSMETICS_BY_TYPE } from './cosmetics.js';
 import { STAT_KEYS } from './profile.js';
 import { defaultServerUrl, shuffled } from './utils.js';
+import { t, dn, getLang, setLang, applyStatic } from './i18n.js';
 
 /** Сколько вариантов показывать при повышении уровня. */
 const PERK_CHOICES = 3;
@@ -82,11 +83,20 @@ export class Ui {
 
     this.#bindMenu();
     this.#bindButtons();
+    applyStatic();
+    this.#refreshLangBtn();
 
     const onlineUrl = document.getElementById('online-url');
     if (onlineUrl && (!onlineUrl.value || onlineUrl.value === 'ws://localhost:8123')) {
       onlineUrl.value = defaultServerUrl();
     }
+  }
+
+  /** Подпись кнопки переключения языка: показывает целевой язык. */
+  #refreshLangBtn() {
+    const btn = document.getElementById('btn-lang');
+    if (!btn) return;
+    btn.textContent = getLang() === 'ru' ? t('menu.lang.ru', null, '🌐 English') : t('menu.lang.en', null, '🌐 Русский');
   }
 
   // ------------------------------------------------------------------ меню
@@ -152,8 +162,9 @@ export class Ui {
       this.h.onSoundToggle(this.soundOn);
       this.#refreshSoundBtn();
     });
+    on('btn-lang', () => this.switchLanguage());
     on('btn-reset', () => {
-      if (window.confirm('Сбросить весь прогресс профиля? Открытые перки будут потеряны.')) {
+      if (window.confirm(t('confirm.reset', null, 'Сбросить весь прогресс профиля? Открытые перки будут потеряны.'))) {
         this.h.onResetProgress();
       }
     });
@@ -165,26 +176,48 @@ export class Ui {
     this.#refreshSoundBtn();
   }
 
+  /** Переключение языка: применяет переводы и перерисовывает открытые экраны. */
+  switchLanguage() {
+    setLang(getLang() === 'ru' ? 'en' : 'ru');
+    applyStatic();
+    this.#refreshLangBtn();
+    this.#refreshSoundBtn();
+    this.#refreshHints();
+    if (this.el.menuInfo) this.#refreshMenuInfo(this.lastProfile);
+    if (this.isGalleryOpen) this.openGallery();
+    if (this.isGarageOpen) this.openGarage();
+    if (this.isStatsOpen) this.openStats();
+    if (this.isAchievementsOpen) this.openAchievements();
+    if (this.isDailyOpen) this.openDaily();
+    if (this.lastGameOver) {
+      const { result, world, profile, hotseat } = this.lastGameOver;
+      this.showGameOver(result, world, profile, hotseat);
+    }
+  }
+
   #refreshSoundBtn() {
-    if (this.el.soundBtn) this.el.soundBtn.textContent = this.soundOn ? '🔊 Звук' : '🔇 Звук';
+    if (this.el.soundBtn) this.el.soundBtn.textContent = this.soundOn ? t('menu.sound.on', null, '🔊 Звук') : t('menu.sound.off', null, '🔇 Звук');
   }
 
   /** Подсказки по управлению зависят от выбранного типа игры. */
   #refreshHints() {
     if (!this.el.hints) return;
     const p1 = [
-      '<b>Игрок 1:</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> движение',
-      '<kbd>мышь</kbd> прицел',
-      '<kbd>ЛКМ</kbd> выстрел',
-      '<kbd>E</kbd> мина',
+      `<b>${t('player1', null, 'Игрок 1')}:</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ${t('hint.p1.move', null, 'движение')}`,
+      `<kbd>${t('hint.p1.aim', null, 'мышь')}</kbd> ${t('hint.p1.aim2', null, 'прицел')}`,
+      `<kbd>ЛКМ</kbd> ${t('hint.p1.fire', null, 'выстрел')}`,
+      `<kbd>E</kbd> ${t('hint.p1.mine', null, 'мина')}`,
     ];
     const p2 = [
-      '<b>Игрок 2:</b> <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> движение',
-      '<kbd>&lt;</kbd> <kbd>&gt;</kbd> башня',
-      '<kbd>Пр. Shift</kbd> выстрел',
-      '<kbd>Num .</kbd> мина',
+      `<b>${t('player2', null, 'Игрок 2')}:</b> <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> ${t('hint.p1.move', null, 'движение')}`,
+      `<kbd>&lt;</kbd> <kbd>&gt;</kbd> ${t('hint.p2.turret', null, 'башня')}`,
+      `<kbd>Пр. Shift</kbd> ${t('hint.p1.fire', null, 'выстрел')}`,
+      `<kbd>Num .</kbd> ${t('hint.p1.mine', null, 'мина')}`,
     ];
-    const common = ['<kbd>P</kbd>/<kbd>Esc</kbd> пауза', '<kbd>Tab</kbd> табло'];
+    const common = [
+      `<kbd>P</kbd>/<kbd>Esc</kbd> ${t('hint.pause', null, 'пауза')}`,
+      `<kbd>Tab</kbd> ${t('hint.scoreboard', null, 'табло')}`,
+    ];
     const rows = [p1.join(' &nbsp;·&nbsp; ')];
     if (this.settings.gameType === 'hotseat') rows.push(p2.join(' &nbsp;·&nbsp; '));
     rows.push(common.join(' &nbsp;·&nbsp; '));
@@ -203,10 +236,10 @@ export class Ui {
     const need = profile.xpToNextLevel();
     const pct = Math.min(100, (profile.globalXP / need) * 100);
     this.el.menuInfo.innerHTML =
-      `Профиль: уровень <b>${profile.globalLevel}</b> &nbsp;·&nbsp; ` +
+      `${t('menu.profile', null, 'Профиль: уровень')} <b>${profile.globalLevel}</b> &nbsp;·&nbsp; ` +
       `${profile.globalXP} / ${need} XP &nbsp;·&nbsp; ` +
-      `перков открыто <b>${profile.unlocked.size}</b> из ${PERKS.length}` +
-      ` &nbsp;·&nbsp; монет <b>${profile.money} 🪙</b>` +
+      `${t('menu.perks', null, 'перков открыто')} <b>${profile.unlocked.size}</b> из ${PERKS.length}` +
+      ` &nbsp;·&nbsp; ${t('menu.coins', null, 'монет')} <b>${profile.money} 🪙</b>` +
       `<div class="menu-progress"><div style="width:${pct}%"></div></div>`;
   }
 
@@ -251,10 +284,10 @@ export class Ui {
     const head = document.createElement('div');
     head.className = 'perk-head';
     head.innerHTML =
-      `<div class="perk-who">${escapeHtml(player.name)} — уровень ${player.sessionLevel}</div>` +
-      `<div class="perk-sub">Профиль ${profile.globalLevel} &nbsp;·&nbsp; ` +
-      `экипировано ${player.perkIds.length}/${MAX_EQUIPPED_PERKS}` +
-      (queueLeft > 0 ? ` &nbsp;·&nbsp; ещё выборов: ${queueLeft}` : '') +
+      `<div class="perk-who">${escapeHtml(player.name)} — ${t('perk.level', null, 'уровень')} ${player.sessionLevel}</div>` +
+      `<div class="perk-sub">${t('perk.profile', null, 'Профиль')} ${profile.globalLevel} &nbsp;·&nbsp; ` +
+      `${t('perk.equipped', null, 'экипировано')} ${player.perkIds.length}/${MAX_EQUIPPED_PERKS}` +
+      (queueLeft > 0 ? ` &nbsp;·&nbsp; ${t('perk.left', { n: queueLeft }, 'ещё выборов: {n}')}` : '') +
       `</div>`;
     body.appendChild(head);
 
@@ -263,8 +296,8 @@ export class Ui {
       empty.className = 'perk-empty';
       empty.textContent =
         available.length === 0
-          ? 'Пока нет открытых перков. Набирайте опыт профиля — они откроются.'
-          : 'Все доступные перки уже экипированы.';
+          ? t('perk.empty.none', null, 'Пока нет открытых перков. Набирайте опыт профиля — они откроются.')
+          : t('perk.empty.all', null, 'Все доступные перки уже экипированы.');
       body.appendChild(empty);
     } else {
       const grid = document.createElement('div');
@@ -275,8 +308,8 @@ export class Ui {
         card.className = 'perk-card';
         card.innerHTML =
           `<div class="perk-icon">${perk.icon}</div>` +
-          `<div class="perk-name">${escapeHtml(perk.name)}</div>` +
-          `<div class="perk-desc">${escapeHtml(perk.desc)}</div>`;
+          `<div class="perk-name">${escapeHtml(dn(perk, 'name', 'perk'))}</div>` +
+          `<div class="perk-desc">${escapeHtml(dn(perk, 'desc', 'perk'))}</div>`;
         card.addEventListener('click', () => this.h.onPerkChosen(player, id));
         grid.appendChild(card);
       }
@@ -287,7 +320,7 @@ export class Ui {
     if (player.perkIds.length > 0) {
       const wrap = document.createElement('div');
       wrap.className = 'perk-equipped';
-      wrap.innerHTML = '<div class="perk-eq-label">Экипировано (нажмите, чтобы снять)</div>';
+      wrap.innerHTML = `<div class="perk-eq-label">${t('perk.eq.label', null, 'Экипировано (нажмите, чтобы снять)')}</div>`;
       const row = document.createElement('div');
       row.className = 'perk-eq-row';
       for (const id of [...player.perkIds]) {
@@ -295,7 +328,7 @@ export class Ui {
         if (!perk) continue;
         const chip = document.createElement('button');
         chip.className = 'perk-chip';
-        chip.innerHTML = `<span>${perk.icon}</span> ${escapeHtml(perk.name)} <span class="x">✕</span>`;
+        chip.innerHTML = `<span>${perk.icon}</span> ${escapeHtml(dn(perk, 'name', 'perk'))} <span class="x">✕</span>`;
         chip.addEventListener('click', () => {
           player.unequipPerk(id);
           this.showPerkSelect(player, profile, queueLeft, rng);
@@ -308,7 +341,7 @@ export class Ui {
 
     const skip = document.createElement('button');
     skip.className = 'btn-secondary perk-skip';
-    skip.textContent = 'Продолжить без выбора';
+    skip.textContent = t('perk.skip', null, 'Продолжить без выбора');
     skip.addEventListener('click', () => this.h.onPerkChosen(player, null));
     body.appendChild(skip);
 
@@ -326,7 +359,7 @@ export class Ui {
     if (!p) return;
 
     this.el.gallerySub.textContent =
-      `Уровень профиля ${p.globalLevel} · открыто ${p.unlocked.size} из ${PERKS.length}`;
+      t('gallery.sub', { lvl: p.globalLevel, n: p.unlocked.size, total: PERKS.length }, `Уровень профиля ${p.globalLevel} · открыто ${p.unlocked.size} из ${PERKS.length}`);
 
     const body = this.el.galleryBody;
     body.innerHTML = '';
@@ -338,7 +371,7 @@ export class Ui {
       const title = document.createElement('div');
       title.className = 'gallery-section';
       title.style.color = cat.color;
-      title.textContent = cat.name;
+      title.textContent = t('cat.' + cat.id, null, cat.name);
       body.appendChild(title);
 
       const grid = document.createElement('div');
@@ -359,24 +392,25 @@ export class Ui {
     let badge = '';
     let extra = '';
     if (unlocked) {
-      badge = '<div class="gc-badge">Открыт</div>';
+      badge = `<div class="gc-badge">${t('gallery.open', null, 'Открыт')}</div>`;
     } else if (perk.challenge) {
       const pr = profile.challengeProgress(perk.id);
       const pct = Math.min(100, (pr.current / pr.need) * 100);
+      const task = t('perk.' + perk.id + '.challenge', null, pr.desc);
       extra =
-        `<div class="gc-task">${escapeHtml(pr.desc)}</div>` +
+        `<div class="gc-task">${escapeHtml(task)}</div>` +
         `<div class="gc-progress">${pr.current} / ${pr.need}</div>` +
         `<div class="gc-bar"><div style="width:${pct}%"></div></div>`;
     } else {
       const lvl = unlockLevelOf(perk.id);
-      extra = `<div class="gc-task">Откроется на уровне профиля ${lvl ?? '?'}</div>`;
+      extra = `<div class="gc-task">${t('gallery.unlockAt', { lvl: lvl ?? '?' }, `Откроется на уровне профиля ${lvl ?? '?'}`)}</div>`;
     }
 
     card.innerHTML =
       badge +
       `<div class="gc-icon">${perk.icon}</div>` +
-      `<div class="gc-name">${escapeHtml(perk.name)}</div>` +
-      `<div class="gc-desc">${escapeHtml(perk.desc)}</div>` +
+      `<div class="gc-name">${escapeHtml(dn(perk, 'name', 'perk'))}</div>` +
+      `<div class="gc-desc">${escapeHtml(dn(perk, 'desc', 'perk'))}</div>` +
       extra;
     return card;
   }
@@ -397,7 +431,7 @@ export class Ui {
     if (!p) return;
 
     this.el.garageSub.innerHTML =
-      `Монеты: <b>${p.money}</b> 🪙 · Улучшения танка действуют на обоих игроков в партии`;
+      t('garage.sub', { money: p.money }, `Монеты: <b>${p.money}</b> 🪙 · Улучшения танка действуют на обоих игроков в партии`);
 
     const body = this.el.garageBody;
     body.innerHTML = '';
@@ -409,7 +443,7 @@ export class Ui {
       const title = document.createElement('div');
       title.className = 'gallery-section';
       title.style.color = cat.color;
-      title.textContent = cat.name;
+      title.textContent = t('cat.' + cat.id, null, cat.name);
       body.appendChild(title);
 
       const grid = document.createElement('div');
@@ -422,15 +456,15 @@ export class Ui {
     const cosTitle = document.createElement('div');
     cosTitle.className = 'gallery-section';
     cosTitle.style.color = '#ff88dd';
-    cosTitle.textContent = 'Косметика';
+    cosTitle.textContent = t('garage.cosmetics', null, 'Косметика');
     body.appendChild(cosTitle);
 
     for (const [type, items] of Object.entries(COSMETICS_BY_TYPE)) {
       const typeNames = { hull: 'Корпус', track: 'Гусеницы', turret: 'Башня' };
-      const t = document.createElement('div');
-      t.className = 'gallery-subsection';
-      t.textContent = typeNames[type] ?? type;
-      body.appendChild(t);
+      const t2 = document.createElement('div');
+      t2.className = 'gallery-subsection';
+      t2.textContent = t('cos.' + type, null, typeNames[type] ?? type);
+      body.appendChild(t2);
 
       const grid = document.createElement('div');
       grid.className = 'upgrade-grid';
@@ -454,16 +488,16 @@ export class Ui {
     card.innerHTML =
       `<div class="up-icon">${c.icon}</div>` +
       `<div class="up-info">` +
-      `<div class="up-name">${escapeHtml(c.name)}</div>` +
-      `<div class="up-desc">${owned ? (equipped ? 'Надето' : 'Куплено') : `Цена: ${c.price} 🪙`}</div>` +
+      `<div class="up-name">${escapeHtml(dn(c, 'name', 'cos.' + type))}</div>` +
+      `<div class="up-desc">${owned ? (equipped ? t('cos.equipped', null, 'Надето') : t('cos.owned', null, 'Куплено')) : t('cos.price', { price: c.price }, `Цена: ${c.price} 🪙`)}</div>` +
       `</div>` +
       `<div class="up-buy">` +
       (owned
         ? `<button class="btn-small" data-equip="${c.id}" ${equipped ? 'disabled' : ''}>` +
-          (equipped ? 'Надето' : 'Надеть') +
+          (equipped ? t('cos.equipped', null, 'Надето') : t('cos.equip', null, 'Надеть')) +
           `</button>`
         : `<button class="btn-small" data-buy="${c.id}" ${canBuy ? '' : 'disabled'}>` +
-          `Купить · ${c.price} 🪙</button>`) +
+          t('cos.buy', { price: c.price }, `Купить · ${c.price} 🪙`) + `</button>`) +
       `</div>`;
 
     card.querySelector('[data-buy]')?.addEventListener('click', () => {
@@ -494,15 +528,15 @@ export class Ui {
     card.innerHTML =
       `<div class="up-icon">${up.icon}</div>` +
       `<div class="up-info">` +
-      `<div class="up-name">${escapeHtml(up.name)}</div>` +
-      `<div class="up-desc">${escapeHtml(up.desc)}</div>` +
+      `<div class="up-name">${escapeHtml(dn(up, 'name', 'upg'))}</div>` +
+      `<div class="up-desc">${escapeHtml(dn(up, 'desc', 'upg'))}</div>` +
       `<div class="up-bar">${upgradeBar(up.maxLevel, level)}</div>` +
       `</div>` +
       `<div class="up-buy">` +
       (maxed
-        ? `<span class="up-max">МАКС</span>`
+        ? `<span class="up-max">${t('upg.max', null, 'МАКС')}</span>`
         : `<button class="btn-small" data-buy="${up.id}" ${canBuy ? '' : 'disabled'}>` +
-          `Улучшить · ${cost} 🪙</button>`) +
+          t('upg.buy', { price: cost }, `Улучшить · ${cost} 🪙`) + `</button>`) +
       `</div>`;
 
     card.querySelector('[data-buy]')?.addEventListener('click', () => {
@@ -529,9 +563,16 @@ export class Ui {
     const p = this.lastProfile;
     if (!p) return;
 
-    this.el.statsSub.textContent =
-      `Уровень профиля <b>${p.globalLevel}</b> · ${p.globalXP} / ${p.xpToNextLevel()} XP · ` +
-      `перков ${p.unlocked.size}/${PERKS.length} · монет <b>${p.money}</b> 🪙`;
+    this.el.statsSub.innerHTML =
+      t('stats.sub', {
+        lvl: p.globalLevel,
+        xp: p.globalXP,
+        need: p.xpToNextLevel(),
+        n: p.unlocked.size,
+        total: PERKS.length,
+        money: p.money,
+      }, `Уровень профиля <b>${p.globalLevel}</b> · ${p.globalXP} / ${p.xpToNextLevel()} XP · ` +
+        `перков ${p.unlocked.size}/${PERKS.length} · монет <b>${p.money}</b> 🪙`);
 
     const body = this.el.statsBody;
     body.innerHTML = '';
@@ -539,7 +580,7 @@ export class Ui {
     const table = document.createElement('table');
     table.className = 'stats-table';
     for (const key of STAT_KEYS) {
-      const label = STAT_LABELS[key] ?? key;
+      const label = t('stat.' + key, null, STAT_LABELS[key] ?? key);
       const row = document.createElement('tr');
       const nameCell = document.createElement('td');
       nameCell.textContent = label;
@@ -572,7 +613,8 @@ export class Ui {
     const unlocked = ACHIEVEMENTS.filter((a) => p.achievements.has(a.id));
     const totalReward = unlocked.reduce((s, a) => s + a.reward, 0);
     this.el.achievementsSub.innerHTML =
-      `Открыто <b>${unlocked.length}</b> из ${ACHIEVEMENTS.length} · награда всего <b>${totalReward} 🪙</b>`;
+      t('achievements.sub', { n: unlocked.length, total: ACHIEVEMENTS.length, reward: totalReward },
+        `Открыто <b>${unlocked.length}</b> из ${ACHIEVEMENTS.length} · награда всего <b>${totalReward} 🪙</b>`);
 
     const body = this.el.achievementsBody;
     body.innerHTML = '';
@@ -587,8 +629,8 @@ export class Ui {
       card.className = 'gallery-card ' + (done ? 'unlocked' : 'locked');
       card.innerHTML =
         `<div class="gc-icon">${a.icon}</div>` +
-        `<div class="gc-name">${escapeHtml(a.name)}</div>` +
-        `<div class="gc-desc">${escapeHtml(a.desc)}</div>` +
+        `<div class="gc-name">${escapeHtml(dn(a, 'name', 'ach'))}</div>` +
+        `<div class="gc-desc">${escapeHtml(dn(a, 'desc', 'ach'))}</div>` +
         (done
           ? `<div class="gc-badge">${a.reward} 🪙</div>`
           : `<div class="gc-progress">${Math.min(cur, a.need)} / ${a.need}</div>` +
@@ -617,7 +659,9 @@ export class Ui {
     const quests = dailySelection();
     let done = 0;
     for (const q of quests) if (p.dailyProgress(q.id).claimed) done++;
-    this.el.dailySub.innerHTML = `Награды сбрасываются в полночь · выполнено <b>${done}</b> из ${quests.length}`;
+    this.el.dailySub.innerHTML =
+      t('daily.sub', { done, total: quests.length },
+        `Награды сбрасываются в полночь · выполнено <b>${done}</b> из ${quests.length}`);
 
     const body = this.el.dailyBody;
     body.innerHTML = '';
@@ -627,14 +671,14 @@ export class Ui {
       const card = document.createElement('div');
       card.className = 'daily-card' + (pr.claimed ? ' claimed' : pr.current >= pr.need ? ' done' : '');
       const btn = pr.claimed
-        ? `<span class="daily-ok">Получено ✓</span>`
+        ? `<span class="daily-ok">${t('daily.claimed', null, 'Получено ✓')}</span>`
         : `<button class="btn-small" data-claim="${q.id}" ${pr.current >= pr.need ? '' : 'disabled'}>` +
-          `Забрать · ${q.reward} 🪙</button>`;
+          t('daily.claim', { reward: q.reward }, `Забрать · ${q.reward} 🪙`) + `</button>`;
       card.innerHTML =
         `<div class="gc-icon">${q.icon}</div>` +
         `<div class="up-info">` +
-        `<div class="up-name">${escapeHtml(q.name)}</div>` +
-        `<div class="up-desc">${escapeHtml(q.desc)}</div>` +
+        `<div class="up-name">${escapeHtml(dn(q, 'name', 'daily'))}</div>` +
+        `<div class="up-desc">${escapeHtml(dn(q, 'desc', 'daily'))}</div>` +
         `<div class="gc-progress">${pr.current} / ${pr.need}</div>` +
         `<div class="gc-bar"><div style="width:${pct}%"></div></div>` +
         `</div>` +
@@ -669,59 +713,68 @@ export class Ui {
    */
   showGameOver(result, world, profile, hotseat) {
     const win = result.victory;
+    this.lastGameOver = { result, world, profile, hotseat };
     this.el.gameover.classList.add('visible');
     this.el.gameover.classList.toggle('victory', win);
 
     if (hotseat && result.winnerPlayerIndex !== null) {
       const winner = world.players[result.winnerPlayerIndex];
-      this.el.goTitle.textContent = `ПОБЕДИЛ ${winner ? winner.name.toUpperCase() : 'ИГРОК'}`;
+      this.el.goTitle.textContent = t('go.won', { name: winner ? winner.name.toUpperCase() : t('go.player', null, 'ИГРОК') }, `ПОБЕДИЛ ${winner ? winner.name.toUpperCase() : 'ИГРОК'}`);
     } else {
-      this.el.goTitle.textContent = win ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ';
+      this.el.goTitle.textContent = win ? t('go.victory', null, 'ПОБЕДА!') : t('go.defeat', null, 'ПОРАЖЕНИЕ');
     }
 
     const diff = DIFFICULTY[world.difficultyKey];
-    const modeName = MODES[world.mode]?.name ?? (world.mode === 'ffa' ? MODES.ffa.name : MODES.ctf.name);
+    const modeName = t('mode.' + world.mode, null, MODES[world.mode]?.name ?? (world.mode === 'ffa' ? MODES.ffa.name : MODES.ctf.name));
 
     let html = `<div class="go-reason">${escapeHtml(result.reason)}</div>`;
-    html += `<div class="go-meta">${modeName} · ${diff.name} · уровень ${formatLevel(world)}</div>`;
+    html += `<div class="go-meta">${t('go.meta', {
+      mode: modeName,
+      diff: t('diff.' + world.difficultyKey, null, diff.name),
+      lvl: formatLevel(world),
+    }, `${modeName} · ${diff.name} · уровень ${formatLevel(world)}`)}</div>`;
 
     html += '<div class="go-players">';
     for (const player of world.players) {
       html +=
         `<div class="go-player">` +
         `<div class="go-pname">${escapeHtml(player.name)}</div>` +
-        `<div>Фраги: <b>${player.kills}</b> &nbsp; Смерти: <b>${player.deaths}</b></div>` +
-        (world.mode === 'ctf' ? `<div>Захваты флага: <b>${player.captures}</b></div>` : '') +
-        `<div>Счёт: <b>${player.score}</b></div>` +
-        `<div>Урона нанесено: <b>${Math.round(player.damageDealt)}</b></div>` +
-        `<div>Уровень в партии: <b>${player.sessionLevel}</b></div>` +
+        `<div>${t('go.frags', { n: player.kills }, 'Фраги: {n}')} &nbsp; ${t('go.deaths', { n: player.deaths }, 'Смерти: {n}')}</div>` +
+        (world.mode === 'ctf' ? `<div>${t('go.captures', { n: player.captures }, 'Захваты флага: {n}')}</div>` : '') +
+        `<div>${t('go.score', { n: player.score }, 'Счёт: {n}')}</div>` +
+        `<div>${t('go.damage', { n: Math.round(player.damageDealt) }, 'Урона нанесено: {n}')}</div>` +
+        `<div>${t('go.sessionLevel', { n: player.sessionLevel }, 'Уровень в партии: {n}')}</div>` +
         `<div class="go-perks">${player.perkIds.map((id) => perkIcon(id)).join(' ') || '—'}</div>` +
         `</div>`;
     }
     html += '</div>';
 
     html +=
-      `<div class="go-profile">Профиль: уровень <b>${profile.globalLevel}</b>, ` +
-      `${profile.globalXP}/${profile.xpToNextLevel()} XP, ` +
-      `перков ${profile.unlocked.size}/${PERKS.length}</div>`;
+      `<div class="go-profile">${t('go.profile', {
+        lvl: profile.globalLevel,
+        xp: profile.globalXP,
+        need: profile.xpToNextLevel(),
+        n: profile.unlocked.size,
+        total: PERKS.length,
+      }, `Профиль: уровень ${profile.globalLevel}, ${profile.globalXP}/${profile.xpToNextLevel()} XP, перков ${profile.unlocked.size}/${PERKS.length}`)}</div>`;
 
     // Награда за партию.
     const rw = result.rewards;
     if (rw) {
       const total = rw.kills + rw.captures + rw.wins;
       const parts = [];
-      if (rw.kills) parts.push(`убийства ${rw.kills}`);
-      if (rw.captures) parts.push(`флаги ${rw.captures}`);
-      if (rw.wins) parts.push(`победа ${rw.wins}`);
+      if (rw.kills) parts.push(t('go.reward.kills', { n: rw.kills }, `убийства ${rw.kills}`));
+      if (rw.captures) parts.push(t('go.reward.captures', { n: rw.captures }, `флаги ${rw.captures}`));
+      if (rw.wins) parts.push(t('go.reward.wins', { n: rw.wins }, `победа ${rw.wins}`));
       html +=
-        `<div class="go-rewards">Награда: <b>+${total} 🪙</b>` +
+        `<div class="go-rewards">${t('go.reward', { total }, 'Награда: +{total} 🪙')}` +
         (parts.length ? ` <span class="go-rewards-sub">(${parts.join(' + ')})</span>` : '') +
         `</div>`;
     }
 
     // Итоговая таблица.
     const rows = world.scoreboard().slice(0, 8);
-    html += '<table class="go-table"><thead><tr><th>#</th><th>Танк</th><th>Фраги</th><th>Смерти</th></tr></thead><tbody>';
+    html += `<table class="go-table"><thead><tr><th>${t('go.table.rank', null, '#')}</th><th>${t('go.table.tank', null, 'Танк')}</th><th>${t('go.table.kills', null, 'Фраги')}</th><th>${t('go.table.deaths', null, 'Смерти')}</th></tr></thead><tbody>`;
     rows.forEach((r, i) => {
       html +=
         `<tr${r.isHuman ? ' class="human"' : ''}><td>${i + 1}</td>` +
@@ -744,7 +797,7 @@ export class Ui {
 
 function formatLevel(world) {
   const lvl = world.level.requestedLevel;
-  return lvl === 'random' ? 'случайный' : String(lvl ?? 1);
+  return lvl === 'random' ? t('go.randomLevel', null, 'случайный') : String(lvl ?? 1);
 }
 
 /** Оборачивает произвольный генератор в функцию, ожидаемую shuffled(). */

@@ -12,6 +12,7 @@ import { GameMap } from './map.js';
 import { WeatherSystem } from './weather.js';
 import { ParticleSystem } from './entities.js';
 import { MODES } from './config.js';
+import { t } from './i18n.js';
 
 /**
  * @param {object} opts
@@ -40,11 +41,11 @@ export class OnlineMatch {
     this.ready = false;
 
     this.ws = new WebSocket(url);
-    this.ws.onopen = () => this.#send({ t: 'hello', name: 'Игрок' });
+    this.ws.onopen = () => this.#send({ t: 'hello', name: t('net.player', null, 'Игрок') });
     this.ws.onmessage = (e) => this.#handleMessage(e.data);
-    this.ws.onerror = () => onError?.('Соединение потеряно');
+    this.ws.onerror = () => onError?.(t('net.lost', null, 'Соединение потеряно'));
     this.ws.onclose = () => {
-      if (!this.ready) onError?.('Сервер недоступен: ' + url);
+      if (!this.ready) onError?.(t('net.unreachable', { url }, `Сервер недоступен: ${url}`));
     };
   }
 
@@ -102,7 +103,7 @@ export class OnlineMatch {
     const myTank = this.world.tanks.find((t) => t.ownerIndex === msg.index) ?? null;
     this.player = {
       index: msg.index,
-      name: msg.myName ?? 'Вы',
+      name: msg.myName ?? t('net.you', null, 'Вы'),
       tank: myTank,
     };
     this.ready = true;
