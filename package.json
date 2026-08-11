@@ -1,0 +1,11 @@
+{
+  "name": "tanchiki-v2",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Тянчики — top-down танковый шутер на canvas. Чистых зависимостей нет, сборка не нужна.",
+  "scripts": {
+    "serve": "python -m http.server 8000",
+    "test": "node tests/smoke.test.js && node tests/online.test.js"
+  }
+}

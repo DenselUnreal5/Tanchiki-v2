@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Тянчики — Battle Tanks</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="game-canvas" tabindex="-1"></canvas>
+
+<!-- HUD наполняется из hud.js: по панели на каждого игрока -->
+<div id="hud"></div>
+
+<div id="overlays">
+
+  <!-- ============================== ГЛАВНОЕ МЕНЮ ============================== -->
+  <section id="menu" class="overlay menu-overlay">
+    <!-- Анимированный фон: дождь, молнии, скала с танком, горящие остовы -->
+    <canvas id="menu-scene"></canvas>
+
+    <div class="menu-title">
+      <h1>ТЯНЧИКИ</h1>
+      <div class="subtitle">Battle Tanks</div>
+    </div>
+
+    <div class="menu-left">
+      <div id="menu-info" class="menu-info"></div>
+
+      <button id="btn-select-mode" class="btn-secondary menu-mode-btn">
+        <span>⚙️ Выбрать режим</span>
+        <span class="caret">▾</span>
+      </button>
+
+      <div id="menu-settings" class="menu-settings">
+        <div class="menu-settings-inner">
+          <div class="menu-blocks">
+        <div class="menu-block">
+          <label>Тип игры</label>
+          <div class="btn-group" id="group-gametype">
+            <button class="toggle active" data-gametype="single">1 игрок</button>
+            <button class="toggle" data-gametype="hotseat">Горячий стул</button>
+          </div>
+        </div>
+
+        <div class="menu-block">
+          <label>Режим</label>
+          <div class="btn-group" id="group-mode">
+            <button class="toggle active" data-mode="ffa">Каждый за себя</button>
+            <button class="toggle" data-mode="ctf">Захват флага</button>
+            <button class="toggle" data-mode="koth">Царь горы</button>
+            <button class="toggle" data-mode="defense">Оборона</button>
+          </div>
+        </div>
+
+        <div class="menu-block">
+          <label>Сложность</label>
+          <div class="btn-group" id="group-diff">
+            <button class="toggle" data-diff="easy">Легко</button>
+            <button class="toggle active" data-diff="medium">Средне</button>
+            <button class="toggle" data-diff="hard">Сложно</button>
+          </div>
+        </div>
+
+        <div class="menu-block">
+          <label>Уровень</label>
+          <div class="btn-group" id="group-level">
+            <button class="toggle active" data-level="1">1</button>
+            <button class="toggle" data-level="2">2</button>
+            <button class="toggle" data-level="3">3</button>
+            <button class="toggle" data-level="4">4</button>
+            <button class="toggle" data-level="5">5</button>
+            <button class="toggle" data-level="random">?</button>
+          </div>
+        </div>
+
+        <div class="menu-block">
+          <label>Цвет танка 1</label>
+          <div class="btn-group" id="group-color1">
+            <button class="toggle active" data-color="p1" title="Зелёный" style="background:#3f7d3f">P1</button>
+            <button class="toggle" data-color="p2" title="Синий" style="background:#2f6a9c">P2</button>
+            <button class="toggle" data-color="p3" title="Оранжевый" style="background:#9c5a2f">P3</button>
+            <button class="toggle" data-color="p4" title="Фиолетовый" style="background:#7a3f8c">P4</button>
+            <button class="toggle" data-color="p5" title="Бирюзовый" style="background:#3f8c8c">P5</button>
+            <button class="toggle" data-color="p6" title="Оливковый" style="background:#8c8c3f">P6</button>
+          </div>
+        </div>
+
+        <div class="menu-block">
+          <label>Цвет танка 2</label>
+          <div class="btn-group" id="group-color2">
+            <button class="toggle active" data-color="p2" title="Синий" style="background:#2f6a9c">P2</button>
+            <button class="toggle" data-color="p1" title="Зелёный" style="background:#3f7d3f">P1</button>
+            <button class="toggle" data-color="p3" title="Оранжевый" style="background:#9c5a2f">P3</button>
+            <button class="toggle" data-color="p4" title="Фиолетовый" style="background:#7a3f8c">P4</button>
+            <button class="toggle" data-color="p5" title="Бирюзовый" style="background:#3f8c8c">P5</button>
+            <button class="toggle" data-color="p6" title="Оливковый" style="background:#8c8c3f">P6</button>
+          </div>
+        </div>
+          </div>
+        </div>
+      </div>
+
+      <button id="btn-start" class="btn-primary">ИГРАТЬ</button>
+
+      <div class="menu-online">
+        <input id="online-url" type="text" value="ws://localhost:8123" placeholder="ws://адрес:порт"
+               autocomplete="off" spellcheck="false">
+        <button id="btn-online" class="btn-secondary">🌐 Играть онлайн</button>
+      </div>
+
+      <div id="menu-hints" class="hints"></div>
+
+      <div class="menu-footer">
+        <button id="btn-garage" class="btn-secondary">🔧 Гараж</button>
+        <button id="btn-gallery" class="btn-secondary">Галерея перков</button>
+        <button id="btn-achievements" class="btn-secondary">🏅 Достижения</button>
+        <button id="btn-daily" class="btn-secondary">📅 Задания</button>
+        <button id="btn-stats" class="btn-secondary">Статистика</button>
+        <button id="btn-sound" class="btn-secondary">🔊 Звук</button>
+        <button id="btn-reset" class="btn-secondary danger">Сбросить прогресс</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== ПАУЗА ============================== -->
+  <section id="pause" class="overlay">
+    <div class="panel panel-narrow">
+      <h2>ПАУЗА</h2>
+      <button id="btn-resume" class="btn-primary">Продолжить</button>
+      <button id="btn-pause-gallery" class="btn-secondary wide">Галерея перков</button>
+      <button id="btn-pause-menu" class="btn-secondary wide">Главное меню</button>
+    </div>
+  </section>
+
+  <!-- ============================== ВЫБОР ПЕРКА ============================== -->
+  <section id="perk-select" class="overlay dim">
+    <div class="panel panel-perk">
+      <h2 class="accent">УРОВЕНЬ ПОВЫШЕН</h2>
+      <div id="perk-body"></div>
+    </div>
+  </section>
+
+  <!-- ============================== ИТОГИ ============================== -->
+  <section id="gameover" class="overlay dim">
+    <div class="panel panel-result">
+      <h2 id="go-title">ПОРАЖЕНИЕ</h2>
+      <div id="go-body"></div>
+      <div class="result-actions">
+        <button id="btn-restart" class="btn-primary">Ещё раз</button>
+        <button id="btn-tomenu" class="btn-secondary">В меню</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== ГАЛЕРЕЯ ============================== -->
+  <section id="gallery" class="overlay dim scrollable">
+    <div class="panel panel-gallery">
+      <h2>Галерея перков</h2>
+      <div id="gallery-sub" class="subtitle"></div>
+      <div id="gallery-body"></div>
+      <button id="btn-gallery-close" class="btn-secondary">Закрыть</button>
+    </div>
+  </section>
+
+  <!-- ============================== ГАРАЖ ============================== -->
+  <section id="garage" class="overlay dim scrollable">
+    <div class="panel panel-garage">
+      <h2>🔧 Гараж</h2>
+      <div id="garage-sub" class="subtitle"></div>
+      <div id="garage-body"></div>
+      <button id="btn-garage-close" class="btn-secondary">Закрыть</button>
+    </div>
+  </section>
+
+  <!-- ============================== СТАТИСТИКА ============================== -->
+  <section id="stats" class="overlay dim scrollable">
+    <div class="panel panel-stats">
+      <h2>Статистика</h2>
+      <div id="stats-sub" class="subtitle"></div>
+      <div id="stats-body"></div>
+      <button id="btn-stats-close" class="btn-secondary">Закрыть</button>
+    </div>
+  </section>
+
+  <!-- ============================== ДОСТИЖЕНИЯ ============================== -->
+  <section id="achievements" class="overlay dim scrollable">
+    <div class="panel panel-gallery">
+      <h2>🏅 Достижения</h2>
+      <div id="achievements-sub" class="subtitle"></div>
+      <div id="achievements-body"></div>
+      <button id="btn-achievements-close" class="btn-secondary">Закрыть</button>
+    </div>
+  </section>
+
+  <!-- ============================== ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ============================== -->
+  <section id="daily" class="overlay dim scrollable">
+    <div class="panel panel-gallery">
+      <h2>📅 Ежедневные задания</h2>
+      <div id="daily-sub" class="subtitle"></div>
+      <div id="daily-body"></div>
+      <button id="btn-daily-close" class="btn-secondary">Закрыть</button>
+    </div>
+  </section>
+
+</div>
+
+<script type="module" src="src/main.js"></script>
+
+<script>
+// ============================================================================
+// Страж (обычный, НЕ модуль): если через пару секунд игра так и не стартовала —
+// показываем понятное сообщение вместо чёрного экрана.
+//
+// Главный сценарий: страницу открыли двойным кликом по index.html (file://).
+// Браузер по политике CORS полностью блокирует ES-модули, поэтому src/main.js
+// не выполняется вообще, и без этого блока экран был бы просто чёрным.
+// ============================================================================
+(function () {
+  var timer = setTimeout(showIfStuck, 2600);
+  var done = false;
+
+  window.addEventListener('load', function () {
+    // Даём модульному скрипту мгновение на инициализацию, затем снимаем страж.
+    setTimeout(function () {
+      if (window.__tanchiki) clearTimeout(timer);
+    }, 0);
+  });
+
+  function showIfStuck() {
+    if (done) return;
+    done = true;
+    var box = document.createElement('div');
+    box.style.cssText =
+      'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
+      'background:#0a0a0a;color:#ff6666;font:14px/1.7 "Segoe UI",Tahoma,Arial,sans-serif;' +
+      'padding:28px;text-align:center;white-space:pre-wrap;z-index:999998;' +
+      'border-top:4px solid #cc4444;' +
+      'flex-direction:column;box-sizing:border-box';
+    var title = document.createElement('div');
+    title.style.cssText = 'font-size:18px;font-weight:700;color:#ff8888;margin-bottom:12px';
+    title.textContent = 'Игра не запустилась';
+    var body = document.createElement('div');
+    body.style.color = '#ffdddd';
+    body.textContent =
+      'Скорее всего эту страницу открыли напрямую из проводника (file://), ' +
+      'а браузер блокирует ES-модули.\n\n' +
+      'Запустите двойным кликом по start.cmd — он поднимет локальный сервер и откроет игру.';
+    var codeHint = document.createElement('div');
+    codeHint.style.cssText =
+      'margin-top:12px;color:#88cfff;font:12px/1.8 monospace;background:rgba(0,0,0,0.4);' +
+      'padding:10px 16px;border-radius:8px;border:1px solid #333';
+    codeHint.textContent = 'вручную:\n  cd <папка игры>\n  python -m http.server 8000\n  открой http://localhost:8000/';
+    box.appendChild(title);
+    box.appendChild(body);
+    box.appendChild(codeHint);
+    document.body.appendChild(box);
+  }
+})();
+</script>
+</body>
+</html>

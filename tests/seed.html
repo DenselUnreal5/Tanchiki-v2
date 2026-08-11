@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="UTF-8"><title>seed</title></head>
+<body>
+<pre id="r">...</pre>
+<script>
+// Пишем в localStorage профиль, как будто в неё уже играли —
+// теперь обновление страницы должно вести себя как «рефреш после партии».
+const profile = {
+  schema: 2,
+  globalLevel: 6,
+  globalXP: 120,
+  unlocked: ['rapid_fire', 'heavy_armor', 'sprinter', 'double_shot', 'regen', 'quick_reload', 'evasion'],
+  stats: {
+    ramKills: 1,
+    bricksDestroyed: 20,
+    waterEntries: 9,
+    treesDriven: 12,
+    healthPacksCollected: 32,
+    gamesWon: 4,
+    gamesPlayed: 9,
+    timesDied: 14,
+    totalKills: 40,
+    rapidKills: 6,
+    cleanStreak: 3,
+    damageInGame: 5100,
+  },
+};
+try {
+  localStorage.setItem('tanchiki_v2_profile', JSON.stringify(profile));
+  document.getElementById('r').textContent = 'записано: ' + localStorage.getItem('tanchiki_v2_profile').length + ' байт';
+} catch (e) {
+  document.getElementById('r').textContent = 'ошибка: ' + e;
+}
+</script>
+</body>
+</html>

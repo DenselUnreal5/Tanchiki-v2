@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Тянчики — снимок экрана</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<script type="module">
+// Вспомогательная страница для снятия скриншотов headless-браузером.
+// ?scene=menu | single | hotseat | perk | gameover
+const params = new URLSearchParams(location.search);
+const scene = params.get('scene') ?? 'single';
+
+const indexHtml = await (await fetch('../index.html')).text();
+const parsed = new DOMParser().parseFromString(indexHtml, 'text/html');
+for (const node of [...parsed.body.children]) {
+  if (node.tagName === 'SCRIPT') continue;
+  document.body.appendChild(document.importNode(node, true));
+}
+
+const { Game } = await import('../src/game.js');
+const game = new Game();
+window.__game = game;
+
+// Запускаем настоящий цикл кадров. Без него канвас остаётся пустым:
+// headless-браузер перед снимком меняет размер окна, это пересоздаёт буфер
+// канваса и стирает нарисованное, а перерисовать было бы некому.
+game.run();
+
+// Выбор перка в автоматическом сценарии закрываем сами.
+setInterval(() => {
+  if (game.state !== 'perk') return;
+  const card = document.querySelector('#perk-body .perk-card');
+  if (card) card.click();
+  else document.querySelector('#perk-body .perk-skip')?.click();
+}, 50);
+
+if (scene !== 'menu') {
+  if (scene === 'hotseat') {
+    document.querySelector('#group-gametype button[data-gametype="hotseat"]').click();
+    document.querySelector('#group-mode button[data-mode="ctf"]').click();
+  }
+  document.getElementById('btn-start').click();
+
+  if (scene === 'perk') {
+    // Оставляем экран выбора перка открытым — он и нужен на снимке.
+  } else if (scene === 'gameover') {
+    setTimeout(() => {
+      const bot = game.world?.tanks.find((x) => x.isBot);
+      if (bot) bot.kills = 20;
+    }, 1500);
+  }
+}
+document.title = 'ready';
+</script>
+</body>
+</html>
