@@ -2,5 +2,7 @@
 .godot/
 .import/
 export.cfg
-export_presets.cfg
 *.translation
+
+# Готовые сборки: экспортируются командой из README, в репозиторий не идут.
+build/
