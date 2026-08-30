@@ -56,6 +56,9 @@ func _ready() -> void:
 	# разрушения и разносим несколько до обломков.
 	await _damage_shot()
 
+	# Активные способности: индикатор в HUD и карточка выбора перка.
+	await _ability_shot()
+
 	# Река и мосты: камеру ставим на переправу, иначе её можно не увидеть.
 	await _bridge_shot()
 
@@ -86,6 +89,49 @@ func _match_shot(mode: String, game_type: String, name: String) -> void:
 	await _frames(60)
 	print("    кадр: %.2f мс (эффекты %d)"
 		% [float(Time.get_ticks_usec() - t0) / 1000.0 / 60.0, Sets.fx_quality])
+	game.to_menu()
+	await _frames(5)
+
+## Снимки активной способности: индикатор в HUD во время действия и экран
+## выбора перка с активными карточками.
+func _ability_shot() -> void:
+	game.ui.settings["mode"] = "ffa"
+	game.ui.settings["game_type"] = "single"
+	game.ui.settings["level"] = 1
+	game.start_match()
+	var guard := 0
+	while game.state == "perk" and guard < 20:
+		guard += 1
+		game._on_perk_chosen(game.perk_player, "")
+	await _frames(10)
+
+	var p = game.players[0]
+	p.perk_ids.append("nitro")
+	p.tank.recompute()
+	p.tank.use_ability(game.world)
+	await _frames(6)
+	await _save("ability_hud")
+
+	# Ищем расклад, где в тройке есть активный перк: подменять игроку весь
+	# набор нельзя — строка «экипировано» раздувается и ломает вёрстку,
+	# то есть снимок показал бы не экран игры, а артефакт теста.
+	var found := false
+	for attempt in 80:
+		game.ui.show_perk_select(p, 0, Rng.new(attempt))
+		for id in game.ui.last_perk_choices:
+			if Perks.is_active_perk(String(id)):
+				found = true
+				break
+		if found:
+			print("  выбор перка: расклад %d, карточки %s"
+				% [attempt, str(game.ui.last_perk_choices)])
+			break
+	if not found:
+		print("  ОШИБКА: активный перк не выпал ни в одном раскладе")
+	await _frames(12)
+	await _save("perk_select")
+	game.ui.hide_perk_select()
+
 	game.to_menu()
 	await _frames(5)
 

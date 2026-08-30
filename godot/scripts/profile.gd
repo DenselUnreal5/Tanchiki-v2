@@ -32,6 +32,10 @@ const STAT_KEYS := [
 	"damageInGame",   # лучший урон за одну партию
 	"longKills",      # убийства с дистанции ≥ 400 px
 	"lowHpKills",     # убийства при HP ≤ 40%
+	"sniperKills",    # убийства с дистанции ≥ 800 px
+	"bridgeKills",    # убийства, сделанные стоя на мосту
+	"concreteDestroyed",  # снесённые бетонные и железные постройки
+	"abilityUses",    # срабатывания активной способности
 ]
 
 ## Статистики-рекорды: обновляются по максимуму, а не суммированием.
@@ -53,6 +57,10 @@ const STAT_LABELS := {
 	"damageInGame": "Лучший урон за партию",
 	"longKills": "Убийства с 400 px",
 	"lowHpKills": "Убийства при HP ≤ 40%",
+	"sniperKills": "Убийства с 800 px",
+	"bridgeKills": "Убийства на мосту",
+	"concreteDestroyed": "Снесено бетона и железа",
+	"abilityUses": "Способностей применено",
 }
 
 var global_level := 1
@@ -101,7 +109,7 @@ func _apply(data: Dictionary) -> void:
 	global_level = clampi(int(data.get("globalLevel", 1)), 1, 999)
 	global_xp = maxi(0, int(data.get("globalXP", 0)))
 	var known_perks := {}
-	for p in Perks.LIST:
+	for p in Perks.all():
 		known_perks[p["id"]] = true
 	for id in data.get("unlocked", []):
 		if known_perks.has(id):
@@ -239,7 +247,7 @@ func check_achievements() -> Array:
 ## Проверяет все челленджи и открывает выполненные.
 func check_challenges() -> Array:
 	var newly := []
-	for perk in Perks.LIST:
+	for perk in Perks.all():
 		if not perk.has("challenge") or unlocked.has(perk["id"]):
 			continue
 		var ch: Dictionary = perk["challenge"]
@@ -422,7 +430,7 @@ func is_unlocked(id: String) -> bool:
 ## Перки, доступные для выбора при повышении уровня в партии.
 func available_perk_ids() -> Array:
 	var out := []
-	for p in Perks.LIST:
+	for p in Perks.all():
 		if unlocked.has(p["id"]):
 			out.append(p["id"])
 	return out

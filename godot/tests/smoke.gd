@@ -21,6 +21,10 @@ const CASES := [
 	{"mode": "ctf", "game_type": "single", "difficulty": "medium", "autopilot": true, "ticks": 20000},
 	{"mode": "koth", "game_type": "single", "difficulty": "easy"},
 	{"mode": "defense", "game_type": "single", "difficulty": "medium", "autopilot": true, "ticks": 14000},
+	# Отдельный прогон под активные способности: перк выдаётся принудительно,
+	# потому что автопилот перков не выбирает.
+	{"mode": "ffa", "game_type": "single", "difficulty": "medium", "ticks": 3600,
+		"autopilot": true, "perk": "shockwave"},
 ]
 
 ## Схема управления «как бот»: подставляется вместо мыши и клавиатуры.
@@ -35,7 +39,11 @@ class Autopilot:
 
 	func apply(tank: Tank, player, world) -> void:
 		brain.update(tank, world)
-		# Игрок, который пользуется своей способностью, — часть расчёта баланса.
+		# Способность жмётся сразу, как только откатилась. В обычных
+		# случаях автопилот перков не берёт вовсе (см. _dismiss_perk_dialogs),
+		# поэтому срабатывает это только в случае с выданным перком.
+		if tank.ability_id != "" and tank.ability_cd <= 0:
+			tank.use_ability(world)
 		if use_airstrike and world.airstrike_cooldown <= 0:
 			world.trigger_airstrike(player)
 
@@ -65,6 +73,12 @@ func _run_case(case: Dictionary) -> int:
 	if bool(case.get("autopilot", false)):
 		for p in game.players:
 			p.scheme = Autopilot.new(game.world.rng, case["mode"] == "defense")
+	var forced_perk := String(case.get("perk", ""))
+	if forced_perk != "":
+		for p in game.players:
+			p.perk_ids.append(forced_perk)
+			if p.tank != null:
+				p.tank.recompute()
 
 	var world: World = game.world
 	if world == null:
@@ -74,6 +88,13 @@ func _run_case(case: Dictionary) -> int:
 	# Режимные счётчики: как часто дерутся за флаг и сколько врагов приходит.
 	# Словарь, а не два int: лямбда захватывает локальные переменные по
 	# значению, и увеличение обычного счётчика внутри неё пропало бы.
+	# Счётчик способностей: лямбда захватывает переменные по значению,
+	# поэтому копится он в словаре, а не в int.
+	var ability_stats := {"uses": 0}
+	world.stat.connect(func(key: String, value: int, _kind: String):
+		if key == "abilityUses":
+			ability_stats["uses"] += value)
+
 	var flag_stats := {"taken": 0, "returned": 0}
 	world.flag_event.connect(func(type: String, _flag, _tank):
 		if type == "taken":
@@ -204,7 +225,7 @@ func _run_case(case: Dictionary) -> int:
 				int(Cfg.MODES["defense"]["base_hp"]),
 				world.tanks.size() - game.players.size(), kills, float(ticks) / 60.0])
 	else:
-		print("    убийств: %d" % kills)
+		print("    убийств: %d, способность применена %d раз" % [kills, int(ability_stats["uses"])])
 	if world.finished_flag:
 		print("    итог: %s — %s" % [world.result["winner_name"], world.result["reason"]])
 

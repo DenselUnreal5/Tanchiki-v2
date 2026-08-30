@@ -13,7 +13,8 @@ extends RefCounted
 ## Общая структура команды управления танком.
 static func empty_command() -> Dictionary:
 	return {"mx": 0.0, "my": 0.0, "ax": 0.0, "ay": 0.0,
-		"fire": false, "mine": false, "dash": false, "airstrike": false}
+		"fire": false, "mine": false, "dash": false, "airstrike": false,
+		"ability": false}
 
 ## Применяет команду к танку.
 static func apply_command(tank: Tank, world, cmd: Dictionary) -> void:
@@ -29,6 +30,8 @@ static func apply_command(tank: Tank, world, cmd: Dictionary) -> void:
 		tank.dash()
 	if bool(cmd["airstrike"]):
 		world.trigger_airstrike(tank.owner)
+	if bool(cmd.get("ability", false)):
+		tank.use_ability(world)
 
 # ---------------------------------------------------------------------------
 # Управление мышью: WASD + прицел мышью. Основная схема первого игрока.
@@ -49,6 +52,7 @@ class MouseAimScheme extends RefCounted:
 			"[ЛКМ] / [Space] выстрел",
 			"[E] / [ПКМ] мина",
 			"[Shift] рывок-таран",
+			"[Q] способность перка",
 			"[F] авиаудар (Оборона)",
 		]
 
@@ -74,6 +78,7 @@ class MouseAimScheme extends RefCounted:
 		cmd["mine"] = Input.is_physical_key_pressed(KEY_E) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
 		cmd["dash"] = Input.is_key_pressed(KEY_SHIFT) and not Input.is_physical_key_pressed(KEY_KP_0)
 		cmd["airstrike"] = Input.is_physical_key_pressed(KEY_F)
+		cmd["ability"] = Input.is_physical_key_pressed(KEY_Q)
 		return cmd
 
 	func apply(tank: Tank, player, world) -> void:
@@ -97,6 +102,7 @@ class KeyboardAimScheme extends RefCounted:
 			"[Правый Shift] / [Num 0] выстрел",
 			"[Num .] / [Правый Ctrl] мина",
 			"[Num +] рывок-таран",
+			"[Num -] способность перка",
 		]
 
 	func apply(tank: Tank, player, world) -> void:
@@ -131,3 +137,5 @@ class KeyboardAimScheme extends RefCounted:
 			tank.place_mine(world)
 		if Input.is_physical_key_pressed(KEY_KP_ADD):
 			tank.dash()
+		if Input.is_physical_key_pressed(KEY_KP_SUBTRACT):
+			tank.use_ability(world)

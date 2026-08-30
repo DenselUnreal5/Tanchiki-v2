@@ -126,6 +126,24 @@ func build(players: Array, world: World) -> void:
 		xp_wrap.add_child(xp_fill)
 		bottom.add_child(xp_wrap)
 
+		# ---- активная способность: иконка, подсказка клавиши и кулдаун ----
+		var ability_row := UiKit.hbox(6)
+		ability_row.visible = false
+		bottom.add_child(ability_row)
+		var ability_label := UiKit.label("", 10, Cfg.UI_TEXT)
+		ability_row.add_child(ability_label)
+		var cd_wrap := Control.new()
+		cd_wrap.custom_minimum_size = Vector2(90, 6)
+		var cd_bg := ColorRect.new()
+		cd_bg.color = Color(0, 0, 0, 0.65)
+		cd_bg.size = Vector2(90, 6)
+		cd_wrap.add_child(cd_bg)
+		var cd_fill := ColorRect.new()
+		cd_fill.color = Cfg.UI_ACCENT
+		cd_fill.size = Vector2(0, 6)
+		cd_wrap.add_child(cd_fill)
+		ability_row.add_child(cd_wrap)
+
 		var perks := UiKit.hbox(4)
 		bottom.add_child(perks)
 
@@ -141,6 +159,8 @@ func build(players: Array, world: World) -> void:
 			"shield_fill": shield_fill, "hp_text": hp_text,
 			"score": score, "objective": objective, "weather": weather_label,
 			"xp_label": xp_label, "xp_fill": xp_fill, "perks": perks,
+			"ability_row": ability_row, "ability_label": ability_label,
+			"ability_fill": cd_fill,
 			"minimap": mm, "last_perks": "",
 		}
 	layout(players)
@@ -192,6 +212,42 @@ func hide_hud() -> void:
 	hide_scoreboard()
 
 # ------------------------------------------------------------------ обновление
+## Индикатор способности. Обновляется каждый кадр, потому что кулдаун —
+## единственное в HUD, что меняется непрерывно.
+func _update_ability(panel: Dictionary, player) -> void:
+	var row: Control = panel["ability_row"]
+	var tank = player.tank
+	if tank == null or tank.ability_id == "":
+		row.visible = false
+		return
+	row.visible = true
+
+	var ab := Abilities.get_ability(tank.ability_id)
+	var label: Label = panel["ability_label"]
+	var fill: ColorRect = panel["ability_fill"]
+	# Второй игрок сидит на цифровом блоке — у него и подсказка своя.
+	var key := "Q" if player.index == 0 else "Num -"
+	var icon := String(ab.get("icon", "✦"))
+	var name := I18n.dn(ab, "name", "ability")
+
+	if tank.ability_timer > 0:
+		label.text = I18n.t("hud.ability.active", {"icon": icon, "name": name},
+			"%s %s — работает" % [icon, name])
+		label.modulate = Color.WHITE
+		fill.size.x = 90.0
+	elif tank.ability_cd <= 0:
+		label.text = I18n.t("hud.ability.ready", {"icon": icon, "name": name, "key": key},
+			"%s %s · [%s] готово" % [icon, name, key])
+		label.modulate = Color.WHITE
+		fill.size.x = 90.0
+	else:
+		label.text = I18n.t("hud.ability.cooldown",
+			{"icon": icon, "name": name, "sec": "%.1f" % (float(tank.ability_cd) / float(Cfg.TICK_HZ))},
+			"%s %s · %.1f с" % [icon, name, float(tank.ability_cd) / float(Cfg.TICK_HZ)])
+		label.modulate = Color(1, 1, 1, 0.55)
+		fill.size.x = 90.0 * tank.ability_ready
+	fill.color = ab.get("color", Cfg.UI_ACCENT)
+
 func update_hud(world: World) -> void:
 	for player in world.players:
 		if not panels.has(player.index):
@@ -270,6 +326,8 @@ func update_hud(world: World) -> void:
 		}, "Ур. %d · %d/%d XP   |   Профиль %d · %d/%d" % [
 			player.session_level, player.session_xp, need,
 			Prof.global_level, Prof.global_xp, Prof.xp_to_next_level()])
+
+		_update_ability(panel, player)
 
 		# Перки перерисовываем только при изменении набора.
 		var key := ",".join(player.perk_ids)

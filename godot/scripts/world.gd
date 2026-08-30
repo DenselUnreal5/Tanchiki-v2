@@ -782,6 +782,12 @@ func _credit_player_kill(player, victim, source: String) -> void:
 		var kill_dist := Vector2(killer_tank.x - victim.x, killer_tank.y - victim.y).length()
 		if kill_dist >= 400.0:
 			stat.emit("longKills", 1, "add")
+		if kill_dist >= 800.0:
+			stat.emit("sniperKills", 1, "add")
+		# Мост — единственная переправа через реку и самое узкое место
+		# на карте: убийство, сделанное стоя на нём, засчитывается отдельно.
+		if map.tile_at_pixel(killer_tank.x, killer_tank.y) == Cfg.T_BRIDGE:
+			stat.emit("bridgeKills", 1, "add")
 		if killer_tank.max_hp > 0.0 and killer_tank.hp / killer_tank.max_hp <= 0.4:
 			stat.emit("lowHpKills", 1, "add")
 
@@ -832,6 +838,11 @@ const MAX_DEBRIS := 300
 func hit_building(row: int, col: int, amount: float, source: String,
 		x: float, y: float, owner_tank) -> void:
 	var mat := Materials.at(row, col)
+	# «Осадные снаряды» усиливают любое своё попадание по постройке —
+	# и пулю, и мину, и ударную волну. Поэтому множитель применяется здесь,
+	# а не в каждом источнике урона по отдельности.
+	if owner_tank != null and amount > 0.0:
+		amount *= float(owner_tank.mods.get("buildingDmgMult", 1.0))
 	# Выбоина в месте попадания: цвет берётся у материала, поэтому дерево
 	# сыплет щепой, а бетон — светлой крошкой.
 	particles.burst(x, y, [mat["light"], mat["base"], mat["dark"]], 5, 2, 4, 8, 16, rng)
@@ -868,6 +879,11 @@ func _destroy_building(row: int, col: int, mat: Dictionary, owner_tank) -> void:
 	add_shake(float(mat["shake"]), cx, cy)
 	if owner_tank != null and owner_tank.owner != null:
 		stat.emit("bricksDestroyed", 1, "add")
+		# Бетон и железо держат втрое больше дерева, поэтому их снос —
+		# отдельная веха, а не часть общего счётчика.
+		var mid := String(mat["id"])
+		if mid == "concrete" or mid == "metal":
+			stat.emit("concreteDestroyed", 1, "add")
 
 func on_trees_driven(tank, count: int) -> void:
 	if tank.owner != null:

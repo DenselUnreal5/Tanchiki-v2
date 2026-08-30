@@ -75,6 +75,11 @@ var regen_accum := 0.0
 var mine_cooldown := 0
 var turbo_timer := 0
 var shadow_timer := 0
+## Активная способность: id из abilities.gd (пустая строка — нет),
+## оставшийся кулдаун и оставшееся время действия, всё в тиках.
+var ability_id := ""
+var ability_cd := 0
+var ability_timer := 0
 var dash_range := 0.0
 var dash_cooldown := 0
 ## Сколько тиков подряд рывок не даёт продвижения (упёрлись в стену).
@@ -159,6 +164,13 @@ var carrying_flag: bool:
 var can_fire: bool:
 	get: return alive and fire_cooldown <= 0
 
+## Время до следующего выстрела. «Форсаж» режет его вдвое, поэтому считается
+## здесь, а не в каждом из трёх видов стрельбы.
+func reload_ticks() -> int:
+	if ability_active("overdrive"):
+		return maxi(3, int(round(float(fire_rate) * Cfg.OVERDRIVE_RELOAD_MULT)))
+	return fire_rate
+
 ## Накладывает постоянные улучшения гаража на модификаторы.
 ## regenPerMinute складывается (это «скорость», а не множитель),
 ## остальное перемножается.
@@ -181,6 +193,10 @@ func recompute() -> void:
 	var hp_ratio := hp / max_hp if max_hp > 0.0 else 1.0
 	mods = Perks.compute_modifiers(perk_ids, is_bot)
 	flags = Perks.compute_flags(perk_ids, is_bot)
+	var next_ability := Perks.active_ability_of(perk_ids, is_bot)
+	if next_ability != ability_id:
+		ability_timer = 0
+		ability_id = next_ability
 	# Постоянные улучшения из гаража перемножаются с бонусами перков.
 	if not upgrade_mods.is_empty():
 		mods = _apply_upgrade_mods(mods)
@@ -233,6 +249,10 @@ func update(world) -> void:
 		mine_cooldown -= 1
 	if shield_cooldown > 0:
 		shield_cooldown -= 1
+	if ability_cd > 0:
+		ability_cd -= 1
+	if ability_timer > 0:
+		ability_timer -= 1
 	if turbo_timer > 0:
 		turbo_timer -= 1
 	if shadow_timer > 0:
@@ -437,7 +457,7 @@ func _try_ram(world) -> void:
 func shoot(world) -> bool:
 	if not can_fire:
 		return false
-	fire_cooldown = fire_rate
+	fire_cooldown = reload_ticks()
 
 	var muzzle_x := x + cos(turret_angle) * 18.0
 	var muzzle_y := y + sin(turret_angle) * 18.0
@@ -446,7 +466,7 @@ func shoot(world) -> bool:
 	# Временное оружие переопределяет выстрел.
 	var wp := Weapons.get_weapon(weapon) if weapon != "" else {}
 	if not wp.is_empty():
-		fire_cooldown = maxi(4, int(round(float(fire_rate) * float(wp["cooldown_mult"]))))
+		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * float(wp["cooldown_mult"]))))
 		var bullets := int(wp["bullets"])
 		for i in bullets:
 			var offset := 0.0
@@ -482,7 +502,7 @@ func shoot(world) -> bool:
 func shoot_lobbed(world) -> bool:
 	if not can_fire:
 		return false
-	fire_cooldown = fire_rate
+	fire_cooldown = reload_ticks()
 
 	var muzzle_x := x + cos(turret_angle) * 18.0
 	var muzzle_y := y + sin(turret_angle) * 18.0
@@ -526,6 +546,92 @@ func dash() -> bool:
 ## Считает и применяет урон. Всё побочное (табло, статистика, тряска)
 ## делает World — здесь только математика брони.
 ## @return {applied, killed, evaded, reflected}
+# ------------------------------------------------------------ способности
+## Активна ли конкретная способность прямо сейчас.
+func ability_active(id: String) -> bool:
+	return ability_id == id and ability_timer > 0
+
+## Доля готовности: 1.0 — можно жать, 0.0 — только что нажали.
+var ability_ready: float:
+	get:
+		if ability_id == "":
+			return 0.0
+		var ab := Abilities.get_ability(ability_id)
+		var cd := float(ab.get("cooldown", 1))
+		if cd <= 0.0:
+			return 1.0
+		return clampf(1.0 - float(ability_cd) / cd, 0.0, 1.0)
+
+## Нажатие способности. Клавишу можно держать зажатой: лишние нажатия
+## гасит кулдаун, поэтому отдельная обработка «только что нажал» не нужна.
+func use_ability(world) -> bool:
+	if not alive or ability_id == "" or ability_cd > 0:
+		return false
+	var ab := Abilities.get_ability(ability_id)
+	if ab.is_empty():
+		return false
+
+	ability_cd = int(ab["cooldown"])
+	ability_timer = int(ab["duration"])
+
+	match ability_id:
+		"nitro":
+			# Переиспользуем готовое состояние ускорения: оно уже учтено
+			# и в физике, и в отрисовке следа.
+			turbo_timer = maxi(turbo_timer, int(ab["duration"]))
+			world.particles.burst(x, y, [Color("#ffee55"), Color("#ffffaa")],
+				14, 2, 5, 14, 26, world.rng)
+		"overdrive":
+			world.particles.burst(x, y, [Color("#ff8833"), Color("#ffcc66")],
+				12, 2, 5, 12, 22, world.rng)
+		"bulwark":
+			world.particles.burst(x, y, [Cfg.shield, Color("#88ccff")],
+				14, 2, 5, 12, 20, world.rng)
+		"shockwave":
+			_shockwave(world)
+
+	Sfx.play("explosion" if ability_id == "shockwave" else "pickup", x, y)
+	if owner != null:
+		world.stat.emit("abilityUses", 1, "add")
+	return true
+
+## Ударная волна: кольцо урона вокруг танка. По постройкам бьёт как взрыв,
+## поэтому бетон держит её лучше дерева — материал решает, как и везде.
+func _shockwave(world) -> void:
+	var map = world.map
+	var row: int = map.row_at(y)
+	var col: int = map.col_at(x)
+	var reach := int(ceilf(Cfg.SHOCKWAVE_R / float(Cfg.TILE)))
+	for dr in range(-reach, reach + 1):
+		for dc in range(-reach, reach + 1):
+			var tx := float((col + dc) * Cfg.TILE) + Cfg.TILE * 0.5
+			var ty := float((row + dr) * Cfg.TILE) + Cfg.TILE * 0.5
+			var d := sqrt((tx - x) * (tx - x) + (ty - y) * (ty - y))
+			if d > Cfg.SHOCKWAVE_R:
+				continue
+			var falloff: float = 1.0 - d / Cfg.SHOCKWAVE_R * 0.6
+			world.hit_building(row + dr, col + dc,
+				Cfg.SHOCKWAVE_TILE_DAMAGE * falloff, "blast", tx, ty, self)
+
+	for other in world.tanks:
+		if other == self or not other.alive or not world.are_hostile(self, other):
+			continue
+		var dx: float = other.x - x
+		var dy: float = other.y - y
+		var d := sqrt(dx * dx + dy * dy)
+		if d > Cfg.SHOCKWAVE_R or d <= 0.001:
+			continue
+		var k: float = 1.0 - d / Cfg.SHOCKWAVE_R
+		world.deal_damage(other, Cfg.SHOCKWAVE_DMG * k * dmg_scale, self, "blast")
+		# Отброс — половина смысла способности: волной выбивают из упора
+		# и разрывают дистанцию, а не только добивают.
+		other.vx += (dx / d) * Cfg.SHOCKWAVE_PUSH * k
+		other.vy += (dy / d) * Cfg.SHOCKWAVE_PUSH * k
+
+	world.particles.burst(x, y, [Color("#ff55ff"), Color("#ffaaff"), Color.WHITE],
+		30, 3, 7, 26, 52, world.rng)
+	world.add_shake(9.0, x, y)
+
 func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 	var result := {"applied": 0.0, "killed": false, "evaded": false, "reflected": 0.0}
 	if not alive:
@@ -539,6 +645,8 @@ func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 		return result
 
 	var dmg := amount * float(mods["damageTakenMult"])
+	if ability_active("bulwark"):
+		dmg *= Cfg.BULWARK_DAMAGE_MULT
 
 	if shield_hp > 0.0:
 		var absorbed := minf(shield_hp, dmg)
@@ -568,6 +676,7 @@ func on_death(world, killer) -> void:
 	shield_hp = 0.0
 	turbo_timer = 0
 	shadow_timer = 0
+	ability_timer = 0
 	dash_range = 0.0
 
 	world.particles.burst(x, y, Cfg.explosion, 30, 3, 8, 20, 40, world.rng)
@@ -607,6 +716,9 @@ func respawn(nx: float, ny: float) -> void:
 	in_water = false
 	turbo_timer = 0
 	shadow_timer = 0
+	# Кулдаун способности переживает смерть: иначе размен «умер — получил
+	# заряженную волну» стал бы выгодной тактикой.
+	ability_timer = 0
 	dash_range = 0.0
 	dash_cooldown = 0
 	dash_stall = 0

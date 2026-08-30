@@ -461,7 +461,7 @@ func _refresh_menu_info() -> void:
 	_menu_info.text = "[center]%s [b]%d[/b]  ·  %d / %d XP  ·  %s [b]%d[/b] из %d  ·  %s [b]%d 🪙[/b][/center]" % [
 		I18n.t("menu.profile", {}, "Профиль: уровень"), Prof.global_level,
 		Prof.global_xp, need,
-		I18n.t("menu.perks", {}, "перков открыто"), Prof.unlocked.size(), Perks.LIST.size(),
+		I18n.t("menu.perks", {}, "перков открыто"), Prof.unlocked.size(), Perks.all().size(),
 		I18n.t("menu.coins", {}, "монет"), Prof.money]
 	_menu_info.custom_minimum_size.y = 18.0 + pct * 0.0
 
@@ -533,6 +533,9 @@ func _build_perk() -> void:
 	box.add_child(_perk_body)
 
 ## Показывает выбор перка для конкретного игрока.
+## Последняя предложенная тройка перков — для тестов и отладки.
+var last_perk_choices: Array = []
+
 func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 	# В режимах с запретами («Амфибия» в «Царе горы») такие перки не предлагаем:
 	# иначе игрок получит перк, который просто не работает.
@@ -544,6 +547,9 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 			continue
 		available.append(id)
 	var choices := rng.shuffled(available).slice(0, PERK_CHOICES)
+	# Предложенная тройка остаётся доступной снаружи: по ней тест снимков
+	# ищет расклад с активным перком, не повторяя логику отбора у себя.
+	last_perk_choices = choices
 
 	for c in _perk_body.get_children():
 		c.queue_free()
@@ -635,6 +641,16 @@ func _perk_card(player, id: String) -> Control:
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(name_label)
 
+	# Активный перк надо отличать до выбора, а не после: остальные работают
+	# сами, а этот бесполезен, если не знать клавишу.
+	if perk.has("active"):
+		var key := "Q" if player.index == 0 else "Num -"
+		var badge := UiKit.label(I18n.t("perk.active.badge", {"key": key},
+			"АКТИВНАЯ · [%s]" % key), 9, Cfg.UI_GOLD, true)
+		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		badge.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		box.add_child(badge)
+
 	var desc := UiKit.label(I18n.dn(perk, "desc", "perk"), 10, Color("#8a8a8a"))
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -649,15 +665,15 @@ func hide_perk_select() -> void:
 # ================================================================== ГАЛЕРЕЯ
 func open_gallery() -> void:
 	_gallery_sub.text = I18n.t("gallery.sub",
-		{"lvl": Prof.global_level, "n": Prof.unlocked.size(), "total": Perks.LIST.size()},
-		"Уровень профиля %d · открыто %d из %d" % [Prof.global_level, Prof.unlocked.size(), Perks.LIST.size()])
+		{"lvl": Prof.global_level, "n": Prof.unlocked.size(), "total": Perks.all().size()},
+		"Уровень профиля %d · открыто %d из %d" % [Prof.global_level, Prof.unlocked.size(), Perks.all().size()])
 
 	for c in _gallery_body.get_children():
 		c.queue_free()
 
 	for cat in Perks.CATEGORIES:
 		var perks := []
-		for p in Perks.LIST:
+		for p in Perks.all():
 			if p["category"] == cat["id"]:
 				perks.append(p)
 		if perks.is_empty():
@@ -866,10 +882,10 @@ var is_garage_open: bool:
 func open_stats() -> void:
 	_stats_sub.text = "[center]" + I18n.t("stats.sub", {
 		"lvl": Prof.global_level, "xp": Prof.global_xp, "need": Prof.xp_to_next_level(),
-		"n": Prof.unlocked.size(), "total": Perks.LIST.size(), "money": Prof.money,
+		"n": Prof.unlocked.size(), "total": Perks.all().size(), "money": Prof.money,
 	}, "Уровень профиля [b]%d[/b] · %d / %d XP · перков %d/%d · монет [b]%d[/b] 🪙" % [
 		Prof.global_level, Prof.global_xp, Prof.xp_to_next_level(),
-		Prof.unlocked.size(), Perks.LIST.size(), Prof.money]) + "[/center]"
+		Prof.unlocked.size(), Perks.all().size(), Prof.money]) + "[/center]"
 
 	for c in _stats_body.get_children():
 		c.queue_free()
@@ -1121,10 +1137,10 @@ func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 
 	var profile_line := UiKit.label(I18n.t("go.profile", {
 		"lvl": Prof.global_level, "xp": Prof.global_xp, "need": Prof.xp_to_next_level(),
-		"n": Prof.unlocked.size(), "total": Perks.LIST.size(),
+		"n": Prof.unlocked.size(), "total": Perks.all().size(),
 	}, "Профиль: уровень %d, %d/%d XP, перков %d/%d" % [
 		Prof.global_level, Prof.global_xp, Prof.xp_to_next_level(),
-		Prof.unlocked.size(), Perks.LIST.size()]), 11, Cfg.UI_GOLD)
+		Prof.unlocked.size(), Perks.all().size()]), 11, Cfg.UI_GOLD)
 	profile_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_gameover_body.add_child(profile_line)
 

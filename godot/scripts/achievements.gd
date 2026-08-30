@@ -28,6 +28,12 @@ const LIST := [
 	{"id": "lowhp_10", "name": "Берсерк", "desc": "10 убийств при HP ≤ 40%", "icon": "😤", "stat": "lowHpKills", "need": 10, "reward": 50},
 	{"id": "streak_10", "name": "Неприкасаемый", "desc": "Серия из 10 убийств без урона", "icon": "✨", "stat": "cleanStreak", "need": 10, "reward": 80},
 	{"id": "rapid_5", "name": "Шквал", "desc": "5 убийств за 10 секунд", "icon": "⚡", "stat": "rapidKills", "need": 5, "reward": 60},
+	{"id": "bridge_defender", "name": "Защитник моста", "desc": "15 убийств на мосту", "icon": "🌉", "stat": "bridgeKills", "need": 15, "reward": 70},
+	{"id": "demolition", "name": "Подрывник", "desc": "Снести 60 бетонных и железных построек", "icon": "🏗️", "stat": "concreteDestroyed", "need": 60, "reward": 70},
+	{"id": "demolition_master", "name": "Мастер сноса", "desc": "Снести 250 бетонных и железных построек", "icon": "🧨", "stat": "concreteDestroyed", "need": 250, "reward": 140},
+	{"id": "eagle_ear", "name": "Орлиный слух", "desc": "15 убийств с 800 px", "icon": "🦅", "stat": "sniperKills", "need": 15, "reward": 90},
+	{"id": "ability_50", "name": "Козырь в рукаве", "desc": "50 раз применить способность", "icon": "✦", "stat": "abilityUses", "need": 50, "reward": 40},
+	{"id": "ability_250", "name": "Мастер манёвра", "desc": "250 раз применить способность", "icon": "⚡", "stat": "abilityUses", "need": 250, "reward": 110},
 	{"id": "damage_1000", "name": "Артобстрел", "desc": "1000 урона за одну партию", "icon": "💥", "stat": "damageInGame", "need": 1000, "reward": 60},
 ]
 

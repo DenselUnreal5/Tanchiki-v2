@@ -23,6 +23,7 @@ static func base_modifiers() -> Dictionary:
 		"pickupRadiusMult": 1.0, # множитель радиуса подбора аптечек
 		"lifestealFraction": 0.0,# доля нанесённого урона, идущая в лечение
 		"regenPerMinute": 0.0,   # HP в минуту
+		"buildingDmgMult": 1.0,  # множитель урона своих попаданий по постройкам
 		"turboOnKill": 0.0,      # длительность ускорения после убийства, тиков
 		"shadowOnKill": 0.0,     # длительность невидимости на миникарте, тиков
 	}
@@ -182,6 +183,8 @@ const BOT_LIST := [
 	{"id": "bot_speed", "icon": "👟", "name": "Ноги", "desc": "Скорость x1.3", "mods": {"speedMult": 1.3}},
 	{"id": "bot_tough", "icon": "🛡", "name": "Толстая броня", "desc": "Максимум HP +40%", "mods": {"maxHPMult": 1.4}},
 	{"id": "bot_double", "icon": "🔫", "name": "Двойной выстрел", "desc": "2 пули параллельно", "flags": ["doubleShot"]},
+	{"id": "bot_nitro", "icon": "🚀", "name": "Нитро", "desc": "Рывок скорости по кулдауну", "active": "nitro"},
+	{"id": "bot_wave", "icon": "💠", "name": "Ударная волна", "desc": "Взрыв вокруг себя в упор", "active": "shockwave"},
 	{"id": "bot_accurate", "icon": "🎯", "name": "Снайпер", "desc": "Точность +15%", "mods": {"accuracyBonus": 0.15}},
 	{"id": "bot_regen", "icon": "❤", "name": "Регенерация", "desc": "60 HP в минуту", "mods": {"regenPerMinute": 60.0}},
 	{"id": "bot_heavy", "icon": "💥", "name": "Тяжёлые пули", "desc": "Урон +25%", "mods": {"dmgMult": 1.25}},
@@ -194,6 +197,8 @@ static var _bot_by_id := {}
 static func _index() -> void:
 	if _by_id.is_empty():
 		for p in LIST:
+			_by_id[p["id"]] = p
+		for p in ACTIVE_LIST:
 			_by_id[p["id"]] = p
 	if _bot_by_id.is_empty():
 		for p in BOT_LIST:
@@ -228,6 +233,60 @@ static func any_perk_icon(id: String) -> String:
 		return _bot_by_id[id]["icon"]
 	return "⭐"
 
+## Перки с активной способностью и осадный пассив. Вынесены отдельным
+## списком только для читаемости — в индекс они попадают наравне с LIST.
+const ACTIVE_LIST := [
+	{
+		"id": "siege", "name": "Осадные снаряды", "icon": "🏗",
+		"desc": "Урон по постройкам x2.2", "category": "fire",
+		"mods": {"buildingDmgMult": 2.2},
+	},
+	{
+		"id": "nitro", "name": "Нитро", "icon": "🚀",
+		"desc": "рывок скорости на 2.5 с", "category": "speed",
+		"active": "nitro",
+	},
+	{
+		"id": "overdrive", "name": "Форсаж", "icon": "🔥",
+		"desc": "4 с двойной скорострельности", "category": "fire",
+		"active": "overdrive",
+	},
+	{
+		"id": "bulwark", "name": "Бастион", "icon": "🛡",
+		"desc": "3 с урон по вам снижен на 60%", "category": "defense",
+		"active": "bulwark",
+	},
+	{
+		"id": "shockwave", "name": "Ударная волна", "icon": "💠",
+		"desc": "взрыв вокруг танка, сносит постройки", "category": "special",
+		"active": "shockwave",
+	},
+]
+
+## Полный список перков игрока. ACTIVE_LIST живёт отдельно только ради
+## читаемости файла, но галерея, гараж и выдача уровней должны видеть все.
+static var _all := []
+
+static func all() -> Array:
+	if _all.is_empty():
+		_all = LIST + ACTIVE_LIST
+	return _all
+
+## Способность из набора перков: берётся первая найденная. Двух активных
+## одновременно не бывает — иначе понадобилась бы вторая клавиша, и выбор
+## перестал бы быть выбором.
+static func active_ability_of(perk_ids: Array, bot: bool = false) -> String:
+	if perk_ids == null:
+		return ""
+	for id in perk_ids:
+		var perk: Dictionary = get_bot_perk(String(id)) if bot else get_perk(String(id))
+		if perk.has("active"):
+			return String(perk["active"])
+	return ""
+
+static func is_active_perk(id: String) -> bool:
+	return get_perk(id).has("active")
+
 ## Перки, запрещённые в конкретном режиме. В «Царе горы» нет «Амфибии»:
 ## вся соль режима — тонущая карта, и прятаться от неё нельзя.
 const MODE_BANNED := {"koth": ["amphibious"]}
@@ -246,12 +305,12 @@ static func filter_perks_for_mode(ids: Array, mode: String) -> Array:
 ## Перки, открываемые за глобальные уровни профиля.
 const UNLOCK_TABLE := {
 	1: ["rapid_fire", "heavy_armor", "sprinter"],
-	2: ["double_shot", "regen"],
-	3: ["quick_reload", "evasion"],
+	2: ["double_shot", "regen", "nitro"],
+	3: ["quick_reload", "evasion", "siege"],
 	4: ["fan_shot", "reflect"],
-	5: ["explosive", "shield"],
-	6: ["piercing"],
-	7: ["mines"],
+	5: ["explosive", "shield", "overdrive"],
+	6: ["piercing", "bulwark"],
+	7: ["mines", "shockwave"],
 }
 
 ## На каком глобальном уровне открывается перк (или 0 для челленджей).
@@ -278,7 +337,7 @@ static func compute_modifiers(perk_ids: Array, bot: bool = false) -> Dictionary:
 			var v: float = float(mods[key])
 			match key:
 				"maxHPMult", "speedMult", "fireRateMult", "dmgMult", "bulletSpeedMult", \
-				"damageTakenMult", "ramMult", "pickupRadiusMult":
+				"damageTakenMult", "ramMult", "pickupRadiusMult", "buildingDmgMult":
 					m[key] = float(m[key]) * v
 				"accuracyBonus", "reflectFraction", "lifestealFraction", "regenPerMinute":
 					m[key] = float(m[key]) + v

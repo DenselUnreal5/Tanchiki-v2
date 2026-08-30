@@ -94,6 +94,10 @@ var EN := {
 	# ------------------------------------------------------------- выбор перка
 	"perk.title": "LEVEL UP",
 	"perk.level": "level",
+	"perk.active.badge": "ACTIVE - [{key}]",
+	"hud.ability.active": "{icon} {name} - running",
+	"hud.ability.ready": "{icon} {name} - [{key}] ready",
+	"hud.ability.cooldown": "{icon} {name} - {sec} s",
 	"perk.profile": "Profile",
 	"perk.equipped": "equipped",
 	"perk.left": "picks left: {n}",

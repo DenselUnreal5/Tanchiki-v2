@@ -169,6 +169,17 @@ const KAMIKAZE_R := 64.0
 const BLAST_TILE_DAMAGE := 70.0
 const MINE_TILE_DAMAGE := 120.0
 
+# ------------------------------------------------------- активные способности
+## «Бастион»: множитель входящего урона на время действия.
+const BULWARK_DAMAGE_MULT := 0.4
+## «Ударная волна»: радиус, урон по танкам, урон по постройкам и отброс.
+const SHOCKWAVE_R := 118.0
+const SHOCKWAVE_DMG := 42.0
+const SHOCKWAVE_TILE_DAMAGE := 150.0
+const SHOCKWAVE_PUSH := 5.5
+## «Форсаж»: множитель времени перезарядки, пока способность активна.
+const OVERDRIVE_RELOAD_MULT := 0.5
+
 const EXPLOSIVE_R := 32.0
 const EXPLOSIVE_SPLASH := 0.5
 

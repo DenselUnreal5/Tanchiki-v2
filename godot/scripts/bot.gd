@@ -164,6 +164,9 @@ func update(tank: Tank, world) -> void:
 		target_dist = Vector2(tgt.x - tank.x, tgt.y - tank.y).length()
 		has_shot = world.map.has_line_of_sight(tank.x, tank.y, tgt.x, tgt.y)
 
+	# ---- активная способность --------------------------------------------
+	_maybe_use_ability(tank, world, target_dist, has_shot)
+
 	# ---- уклонение от летящей пули ---------------------------------------
 	if dodge_timer <= 0:
 		var incoming = find_incoming_bullet(tank, world, Cfg.BOT_DODGE_LOOKAHEAD)
@@ -439,6 +442,29 @@ func _try_dash(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> bo
 func _aim(tank: Tank, a: float) -> void:
 	var spread := (1.0 - accuracy) * (rng.nextf() - 0.5) * 0.4
 	tank.slew_turret_to(a + spread)
+
+## Когда бот жмёт свою способность.
+##
+## Правило одно на каждую: волна — только в упор, где она гарантированно
+## задевает; нитро — когда цель далеко и надо сокращать дистанцию. Бот не
+## копит способность «на потом»: у него нет плана на партию, и невыжатый
+## кулдаун — это просто потерянная способность.
+func _maybe_use_ability(tank: Tank, world, target_dist: float, has_shot: bool) -> void:
+	if tank.ability_id == "" or tank.ability_cd > 0:
+		return
+	match tank.ability_id:
+		"shockwave":
+			if target_dist < Cfg.SHOCKWAVE_R * 0.85:
+				tank.use_ability(world)
+		"nitro":
+			if target_dist > 260.0 and target_dist < INF:
+				tank.use_ability(world)
+		"bulwark":
+			if tank.max_hp > 0.0 and tank.hp / tank.max_hp < 0.45:
+				tank.use_ability(world)
+		"overdrive":
+			if has_shot and target_dist < 420.0:
+				tank.use_ability(world)
 
 func _try_fire(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> void:
 	if tgt == null or not has_shot:
