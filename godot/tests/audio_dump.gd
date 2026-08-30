@@ -14,18 +14,20 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	print("папка: ", ProjectSettings.globalize_path(dir))
 
-	# Ждём фоновую сборку музыкальной петли.
+	# Ждём фоновую сборку обеих тем.
 	var guard := 0
-	while Mus._loop == null and guard < 600:
+	while (Mus._menu == null or Mus._combat == null) and guard < 1800:
 		guard += 1
 		await get_tree().process_frame
-	if Mus._loop == null:
-		print("ОШИБКА: петля не собралась")
-	else:
-		var samples: int = Mus._loop.data.size() / 2
-		print("музыка: %.1f с, %d КБ" % [
-			float(samples) / float(Synth.RATE), Mus._loop.data.size() / 1024])
-		Mus._loop.save_to_wav(dir + "/music_combat.wav")
+	for pair in [["menu", Mus._menu], ["combat", Mus._combat]]:
+		var loop: AudioStreamWAV = pair[1]
+		if loop == null:
+			print("ОШИБКА: тема «%s» не собралась" % pair[0])
+			continue
+		var samples: int = loop.data.size() / 2
+		print("музыка «%s»: %.1f с, %d КБ" % [pair[0],
+			float(samples) / float(Synth.RATE), loop.data.size() / 1024])
+		loop.save_to_wav(dir + "/music_%s.wav" % pair[0])
 
 	for type in ["shoot", "shoot_heavy", "explosion", "hit", "clang",
 			"crumble", "crack", "airstrike", "water", "pickup", "levelup"]:

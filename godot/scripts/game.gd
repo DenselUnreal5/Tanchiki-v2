@@ -62,6 +62,8 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_on_resize)
 	_on_resize()
 	ui.show_menu()
+	# Тема меню включится сама, как только соберётся в фоне.
+	Mus.play_menu()
 
 ## Свёрнутое окно не должно означать проигранную партию.
 func _notification(what: int) -> void:
@@ -263,7 +265,7 @@ func start_match() -> void:
 
 func to_menu() -> void:
 	state = S_MENU
-	Mus.stop()
+	Mus.play_menu()
 	Sfx.clear_listeners()
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 	if world != null:
@@ -378,7 +380,7 @@ func _reward_label(kind: String, who: String) -> String:
 
 func _on_finish(result: Dictionary) -> void:
 	state = S_GAMEOVER
-	Mus.stop()
+	Mus.play_menu()
 	if bool(result["victory"]):
 		Prof.bump_stat("gamesWon", 1)
 	Prof.bump_daily("games", 1)
@@ -401,13 +403,13 @@ func _process_perk_queue() -> void:
 	if next == null:
 		if state == S_PERK:
 			state = S_PLAYING
-			Mus.set_ducked(false)
+			Mus.set_paused(false)
 			ui.hide_perk_select()
 			accumulator = 0.0
 		perk_player = null
 		return
 	state = S_PERK
-	Mus.set_ducked(true)
+	Mus.set_paused(true)
 	perk_player = next
 	var queue_left := -1
 	for p in players:
