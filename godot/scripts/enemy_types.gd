@@ -15,7 +15,7 @@ const LIST := {
 		"hp_mult": 1.0, "speed_mult": 1.0, "fire_rate_mult": 1.0, "dmg_scale": 1.0,
 		"accuracy_bonus": 0.0, "react_mult": 1.0,
 		"fire_range": 500.0, "keep_min": 80.0, "keep_max": 250.0,
-		"role": "attacker", "color_key": "enemy",
+		"chassis": "standard", "role": "attacker", "color_key": "enemy",
 		"weight": 50, "unlock_ramp": 1.0, "lobbed": false, "boss": false,
 	},
 	"scout": {
@@ -23,7 +23,7 @@ const LIST := {
 		"hp_mult": 0.75, "speed_mult": 1.3, "fire_rate_mult": 0.5, "dmg_scale": 0.5,
 		"accuracy_bonus": -0.1, "react_mult": 0.9,
 		"fire_range": 380.0, "keep_min": 60.0, "keep_max": 200.0,
-		"role": "attacker", "color_key": "scout",
+		"chassis": "light", "role": "attacker", "color_key": "scout",
 		"weight": 22, "unlock_ramp": 1.0, "lobbed": false, "boss": false,
 	},
 	"heavy": {
@@ -31,7 +31,7 @@ const LIST := {
 		"hp_mult": 2.2, "speed_mult": 0.8, "fire_rate_mult": 1.5, "dmg_scale": 1.35,
 		"accuracy_bonus": 0.0, "react_mult": 1.1,
 		"fire_range": 400.0, "keep_min": 120.0, "keep_max": 280.0,
-		"role": "attacker", "color_key": "heavy",
+		"chassis": "heavy", "role": "attacker", "color_key": "heavy",
 		"weight": 16, "unlock_ramp": 1.08, "lobbed": false, "boss": false,
 	},
 	"sniper": {
@@ -39,7 +39,7 @@ const LIST := {
 		"hp_mult": 0.9, "speed_mult": 1.0, "fire_rate_mult": 2.2, "dmg_scale": 2.5,
 		"accuracy_bonus": 0.18, "react_mult": 1.3,
 		"fire_range": 650.0, "keep_min": 300.0, "keep_max": 450.0,
-		"role": "defender", "color_key": "sniper",
+		"chassis": "sniper", "role": "defender", "color_key": "sniper",
 		"weight": 10, "unlock_ramp": 1.16, "lobbed": false, "boss": false,
 	},
 	"mortar": {
@@ -47,7 +47,7 @@ const LIST := {
 		"hp_mult": 1.1, "speed_mult": 0.85, "fire_rate_mult": 2.5, "dmg_scale": 1.2,
 		"accuracy_bonus": 0.0, "react_mult": 1.2,
 		"fire_range": 600.0, "keep_min": 320.0, "keep_max": 420.0,
-		"role": "defender", "color_key": "mortar",
+		"chassis": "mortar", "role": "defender", "color_key": "mortar",
 		"weight": 8, "unlock_ramp": 1.16, "lobbed": true, "boss": false,
 	},
 	"boss": {
@@ -55,7 +55,7 @@ const LIST := {
 		"hp_mult": 5.0, "speed_mult": 0.75, "fire_rate_mult": 1.2, "dmg_scale": 1.6,
 		"accuracy_bonus": 0.1, "react_mult": 1.0,
 		"fire_range": 420.0, "keep_min": 100.0, "keep_max": 300.0,
-		"role": "attacker", "color_key": "boss",
+		"chassis": "boss", "role": "attacker", "color_key": "boss",
 		"weight": 3, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
 	},
 }

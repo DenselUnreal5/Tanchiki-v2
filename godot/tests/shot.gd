@@ -56,6 +56,10 @@ func _ready() -> void:
 	# разрушения и разносим несколько до обломков.
 	await _damage_shot()
 
+	# Витрина корпусов и камуфляжей: их не увидеть в обычном бою рядом.
+	await _lineup_shot("chassis")
+	await _lineup_shot("camo")
+
 	# Активные способности: индикатор в HUD и карточка выбора перка.
 	await _ability_shot()
 
@@ -89,6 +93,84 @@ func _match_shot(mode: String, game_type: String, name: String) -> void:
 	await _frames(60)
 	print("    кадр: %.2f мс (эффекты %d)"
 		% [float(Time.get_ticks_usec() - t0) / 1000.0 / 60.0, Sets.fx_quality])
+	game.to_menu()
+	await _frames(5)
+
+## Витрина: все силуэты корпусов или все камуфляжи в один ряд.
+##
+## В бою рядом их не поставить — типы врагов выпадают вразнобой, а камуфляж
+## у игрока всегда один. Поэтому танки создаются вручную и расставляются
+## на расчищенной площадке перед камерой.
+func _lineup_shot(kind: String) -> void:
+	game.ui.settings["mode"] = "ffa"
+	game.ui.settings["game_type"] = "single"
+	game.ui.settings["level"] = 1
+	game.start_match()
+	var guard := 0
+	while game.state == "perk" and guard < 20:
+		guard += 1
+		game._on_perk_chosen(game.perk_player, "")
+	await _frames(6)
+
+	var world = game.world
+	var p = game.players[0]
+	var map = world.map
+	# Ставим витрину в середине карты и расчищаем под неё асфальт.
+	var cx: float = map.width * 0.5
+	var cy: float = map.height * 0.5
+	var r0: int = map.row_at(cy) - 4
+	var c0: int = map.col_at(cx) - 9
+	for r in range(r0, r0 + 8):
+		for c in range(c0, c0 + 18):
+			map.set_tile(r, c, Cfg.T_ROAD)
+
+	# Остальные танки убираем, чтобы не лезли в кадр.
+	world.tanks = [p.tank]
+	world.bullets.clear()
+	p.tank.x = cx
+	p.tank.y = cy + 90.0
+	p.tank.alive = true
+
+	var items := []
+	if kind == "chassis":
+		items = ["grunt", "scout", "heavy", "sniper", "mortar", "boss"]
+	else:
+		for c in Cosmetics.CAMOS:
+			items.append(String(c["id"]))
+
+	var step := 92.0
+	var x0: float = cx - step * (float(items.size()) - 1.0) * 0.5
+	for i in items.size():
+		var t: Tank
+		if kind == "chassis":
+			var type: Dictionary = EnemyTypes.get_type(String(items[i]))
+			t = Tank.new({
+				"x": x0 + step * float(i), "y": cy - 20.0, "team": "show",
+				"name": String(type["name"]), "owner": null, "max_hp": 100.0,
+				"speed": 1.0, "fire_rate": 20, "color_key": String(type["color_key"]),
+				"chassis": String(type.get("chassis", "standard")),
+			})
+		else:
+			t = Tank.new({
+				"x": x0 + step * float(i), "y": cy - 20.0, "team": "show",
+				"name": Cosmetics.get_cosmetic("camo", String(items[i]))["name"],
+				"owner": null, "max_hp": 100.0, "speed": 1.0, "fire_rate": 20,
+				"color_key": "p1", "chassis": "standard",
+			})
+			t.cosmetics = {"camo": String(items[i]), "hull": "none",
+				"track": "none", "turret": "none"}
+		# Танки смотрят вправо: так виден ствол целиком, а полоска HP
+		# над корпусом его не перекрывает.
+		t.body_angle = 0.0
+		t.angle = 0.0
+		t.turret_angle = 0.0
+		t.spawn_protect = 0
+		world.tanks.append(t)
+
+	p.update_camera()
+	p.camera.y = cy
+	await _frames(8)
+	await _save("lineup_" + kind)
 	game.to_menu()
 	await _frames(5)
 

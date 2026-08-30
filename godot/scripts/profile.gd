@@ -72,7 +72,7 @@ var upgrades := {}          # id -> уровень
 var achievements := {}      # Set<String>
 var daily := {"date": "", "progress": {}, "claimed": []}
 var cosmetic_owned := {}    # Set<"тип:id">
-var cosmetics := {"hull": "none", "track": "none", "turret": "none"}
+var cosmetics := {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
 
 func _ready() -> void:
 	_empty_stats()
@@ -182,7 +182,7 @@ func reset() -> void:
 	achievements.clear()
 	daily = {"date": Daily.today_key(), "progress": {}, "claimed": []}
 	cosmetic_owned.clear()
-	cosmetics = {"hull": "none", "track": "none", "turret": "none"}
+	cosmetics = {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
 	_sync_level_unlocks()
 	save_profile()
 

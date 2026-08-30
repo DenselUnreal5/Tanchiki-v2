@@ -772,7 +772,7 @@ func open_garage() -> void:
 
 	# ---- косметика ----
 	_garage_body.add_child(UiKit.section(I18n.t("garage.cosmetics", {}, "Косметика"), Color("#ff88dd")))
-	var type_names := {"hull": "Корпус", "track": "Гусеницы", "turret": "Башня"}
+	var type_names := {"camo": "Камуфляж", "hull": "Рисунок", "track": "Гусеницы", "turret": "Башня"}
 	for type in Cosmetics.TYPES:
 		var t2 := UiKit.label(I18n.t("cos." + type, {}, String(type_names[type])).to_upper(),
 			11, Color("#ff88dd"), true)

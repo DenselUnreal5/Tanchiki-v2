@@ -706,55 +706,167 @@ func _draw_tanks() -> void:
 
 func _draw_tank(tank: Tank) -> void:
 	var palette := Cfg.team_palette(tank.color_key)
+	var shape := TankArt.chassis(tank.chassis_id)
 	var is_viewer := player.tank == tank
 	var is_ally := player.tank != null and not world.are_hostile(player.tank, tank) and not is_viewer
 	var pos := Vector2(tank.x, tank.y)
-
-	# Тень под корпусом — отделяет танк от земли.
-	draw_set_transform(view_off + pos)
-	_draw_ellipse(Vector2(2, 4), tank.width * 0.5, tank.height / 2.4, Color(0, 0, 0, 0.25))
-
-	# ---- корпус ---------------------------------------------------------
-	draw_set_transform(view_off + pos, tank.body_angle + PI / 2.0)
 	var hw := tank.width * 0.5
 	var hh := tank.height * 0.5
 
-	# Гусеницы. Цвет можно менять косметикой.
+	# Тень под корпусом — отделяет танк от земли.
+	draw_set_transform(view_off + pos)
+	_draw_ellipse(Vector2(2, 4), hw * 1.05, hh / 1.2, Color(0, 0, 0, 0.25))
+
+	# ---- ходовая --------------------------------------------------------
+	draw_set_transform(view_off + pos, tank.body_angle + PI / 2.0)
 	var track_id := String(tank.cosmetics.get("track", "none"))
 	var track_fill := Cosmetics.color_of("track", track_id, Color("#2a2a2a"))
-	var track_tread := Cosmetics.color_of("track", track_id, Color("#444444"))
-	_rect(-hw - 2, -hh, 6, tank.height, track_fill)
-	_rect(hw - 4, -hh, 6, tank.height, track_fill)
+	var track_tread := Cosmetics.color_of("track", track_id, Color("#4a4a4a"))
+	var tw := float(shape["track_w"])
+	# Катки и траки рисуются прямоугольниками, а не кругами: на танке
+	# высотой 28 px разницы не видно, а draw_circle — полигон, и на
+	# разделённом экране полсотни танков это стоило 9 мс на кадр.
+	var wheel_col := Color(0, 0, 0, 0.45)
+	var wheels := int(shape["wheels"])
+	var wheel_r := tw * 0.30
+	for side in [-1.0, 1.0]:
+		var tx: float = side * hw - tw * 0.5
+		_rect(tx, -hh, tw, tank.height, track_fill)
+		for k in wheels:
+			var wy := -hh + tank.height * (float(k) + 0.5) / float(wheels)
+			_rect(tx + tw * 0.5 - wheel_r, wy - wheel_r, wheel_r * 2.0, wheel_r * 2.0, wheel_col)
+		# Ведущее и направляющее колесо крупнее катков.
+		_rect(tx + 0.5, -hh + 0.5, tw - 1.0, tw * 0.8, wheel_col)
+		_rect(tx + 0.5, hh - tw * 0.8 - 0.5, tw - 1.0, tw * 0.8, wheel_col)
 	# Траки «прокручиваются» вместе с движением.
-	var tread_shift := float(int((tank.x + tank.y) / 4.0) % 6)
-	var i := -hh + tread_shift
-	while i < hh:
-		_rect(-hw - 2, i, 6, 2, track_tread)
-		_rect(hw - 4, i, 6, 2, track_tread)
-		i += 6.0
+	var tread_shift := float(int((tank.x + tank.y) / 4.0) % 8)
+	var ty := -hh + tread_shift
+	while ty < hh:
+		_rect(-hw - tw * 0.5, ty, tw, 2, track_tread)
+		_rect(hw - tw * 0.5, ty, tw, 2, track_tread)
+		ty += 8.0
 
-	# Основной корпус.
-	_rect(-hw + 3, -hh + 2, tank.width - 6, tank.height - 4, palette["body"])
-	_rect(-hw + 3, hh - 8, tank.width - 6, 6, palette["dark"])
-	_rect(-hw + 5, -hh + 4, tank.width - 10, 3, palette["trim"])
+	# ---- корпус ---------------------------------------------------------
+	# Лоб со скосом: у разведчика он длинный и острый, у громилы почти
+	# плоский. Форма читается даже когда цвет не виден.
+	var nose := tank.height * float(shape["nose"])
+	# Лоб не просто скошен, а сужен: разведчик получается клиновидным,
+	# громила — почти прямоугольным. Это и есть главный признак роли.
+	var nose_hw: float = (hw - 1.0) * (1.0 - float(shape["nose"]) * 0.9)
+	var body := PackedVector2Array([
+		Vector2(-hw + 1.0, -hh + nose),
+		Vector2(-nose_hw, -hh),
+		Vector2(nose_hw, -hh),
+		Vector2(hw - 1.0, -hh + nose),
+		Vector2(hw - 1.0, hh - 2.0),
+		Vector2(hw - 4.0, hh),
+		Vector2(-hw + 4.0, hh),
+		Vector2(-hw + 1.0, hh - 2.0),
+	])
+	draw_colored_polygon(body, palette["body"])
 
-	# Рисунок корпуса (косметика).
+	# Камуфляж ложится под наклейки и обрезается по габаритам корпуса.
+	_draw_camo(tank, hw, hh, palette)
+
+	# Моторный отсек сзади и светлая полоса по лбу — объём без источника света.
+	_rect(-hw + 3.0, hh - 8.0, tank.width - 6.0, 6.0, palette["dark"])
+	_rect(-hw + 4.5, hh - 6.5, tank.width - 9.0, 1.2, Color(0, 0, 0, 0.35))
+	_rect(-hw + 5.0, -hh + nose + 1.0, tank.width - 10.0, 2.5, palette["trim"])
+
+	# Накладная броня у тяжёлых корпусов — с заклёпками.
+	if bool(shape["plates"]):
+		for side in [-1.0, 1.0]:
+			var px: float = side * (hw - 3.5) - 1.5
+			_rect(px, -hh + nose, 3.0, tank.height - nose - 4.0, palette["dark"])
+			for k in 3:
+				_rect(px + 0.8, -hh + nose + 3.5 + float(k) * 6.0, 1.6, 1.6,
+					Color(1, 1, 1, 0.35))
+
+	# Предупреждающие полосы босса.
+	if bool(shape["stripes"]):
+		for k in 3:
+			_rect(-hw + 4.0 + float(k) * 7.0, -hh + nose, 3.0, tank.height - nose - 5.0,
+				Color(0.95, 0.75, 0.1, 0.75))
+
+	# Рисунок корпуса (косметика-наклейка).
 	_draw_hull_pattern(tank, hw, hh)
+
+	# Кромки: светлая по левому борту, тёмная по правому. Свет считается
+	# один на всю карту, поэтому танки затенены согласованно друг с другом.
+	var light := PI * 0.75 - tank.body_angle
+	var lit := Color(1, 1, 1, 0.13)
+	var shade := Color(0, 0, 0, 0.22)
+	_rect(-hw + 1.0, -hh + nose, 1.5, tank.height - nose - 2.0,
+		lit if cos(light) < 0.0 else shade)
+	_rect(hw - 2.5, -hh + nose, 1.5, tank.height - nose - 2.0,
+		shade if cos(light) < 0.0 else lit)
+
+	# Копоть по мере потери прочности: подбитый танк видно до полоски HP.
+	var wear := 1.0 - clampf(tank.hp / tank.max_hp, 0.0, 1.0)
+	if wear > 0.35:
+		var soot := Color(0.05, 0.04, 0.03, (wear - 0.35) * 0.7)
+		_rect(-hw + 3.0, -hh + nose, tank.width - 6.0, tank.height - nose - 4.0, soot)
 
 	# ---- башня ----------------------------------------------------------
 	var turret_id := String(tank.cosmetics.get("turret", "none"))
 	var has_turret_color := turret_id != "" and turret_id != "none"
-	var barrel_base := Cosmetics.color_of("turret", turret_id, Color("#222222"))
-	var barrel_dark := Cosmetics.color_of("turret", turret_id, Color("#3a3a3a"))
+	var barrel_base := Cosmetics.color_of("turret", turret_id, Color("#4d545c"))
+	var barrel_dark := Cosmetics.color_of("turret", turret_id, Color("#2b3036"))
+	var tr := float(shape["turret_r"])
+	var bl := float(shape["barrel_len"])
+	var bw := float(shape["barrel_w"])
+
 	draw_set_transform(view_off + pos, tank.turret_angle)
-	_rect(0, -2.5, 22, 5, barrel_base)
-	_rect(18, -3.5, 5, 7, barrel_dark)
+	# Ствол считается от края башни, поэтому вылет виден целиком: у снайпера
+	# он вдвое длиннее обычного, у миномёта — короткий и вдвое толще.
+	var b0 := tr * 0.5
+	var b1 := b0 + bl
+	match String(shape["muzzle"]):
+		"twin":
+			# Спаренная установка: два ствола вместо одного — силуэт босса
+			# ни с чем не спутать.
+			for off in [-4.5, 4.5]:
+				_rect(b0, off - bw * 0.5, bl, bw, barrel_base)
+				_rect(b1 - 4.0, off - bw * 0.5 - 1.0, 5.0, bw + 2.0, barrel_dark)
+		"tube":
+			# Миномёт: короткая толстая труба с раструбом.
+			_rect(b0, -bw * 0.5, bl, bw, barrel_base)
+			_rect(b1 - 3.0, -bw * 0.5 - 2.0, 5.0, bw + 4.0, barrel_dark)
+		"brake":
+			_rect(b0, -bw * 0.5, bl, bw, barrel_base)
+			# Дульный тормоз: две «щеки» у среза.
+			_rect(b1 - 8.0, -bw * 0.5 - 1.8, 3.0, bw + 3.6, barrel_dark)
+			_rect(b1 - 3.5, -bw * 0.5 - 1.8, 3.5, bw + 3.6, barrel_dark)
+		_:
+			_rect(b0, -bw * 0.5, bl, bw, barrel_base)
+			_rect(b1 - 4.0, -bw * 0.5 - 1.0, 5.0, bw + 2.0, barrel_dark)
+	# Блик по верхней кромке ствола: без него ствол сливается в плоскую полосу.
+	if String(shape["muzzle"]) != "twin":
+		_rect(b0, -bw * 0.5, b1 - b0 - 3.0, 1.0, Color(1, 1, 1, 0.18))
+	# Маска ствола — утолщение у башни.
+	_rect(b0 - 1.0, -bw * 0.5 - 2.0, 4.5, bw + 4.0, barrel_dark)
 
 	draw_set_transform(view_off + pos)
-	draw_circle(Vector2.ZERO, 8.5,
-		Cosmetics.color_of("turret", turret_id, palette["dark"]) if has_turret_color else palette["dark"])
-	draw_circle(Vector2.ZERO, 6.5,
-		Cosmetics.color_of("turret", turret_id, palette["body"]) if has_turret_color else palette["body"])
+	var turret_dark: Color = Cosmetics.color_of("turret", turret_id, palette["dark"]) 		if has_turret_color else palette["dark"]
+	var turret_body: Color = Cosmetics.color_of("turret", turret_id, palette["body"]) 		if has_turret_color else palette["body"]
+	draw_circle(Vector2.ZERO, tr, turret_dark)
+	draw_circle(Vector2.ZERO, tr - 2.0, turret_body)
+	# Люк командира со смещением — башня перестаёт быть плоским кругом.
+	if tr >= 7.5:
+		draw_circle(Vector2(-tr * 0.25, -tr * 0.25), tr * 0.30, Color(0, 0, 0, 0.30))
+		draw_arc(Vector2.ZERO, tr - 1.0, PI * 0.7, PI * 1.55, 10, Color(1, 1, 1, 0.16), 1.5)
+
+	# Прицел снайпера и антенна — мелкие приметы роли.
+	draw_set_transform(view_off + pos, tank.turret_angle)
+	if bool(shape["scope"]):
+		_rect(tr * 0.2, -tr - 2.5, 5.0, 3.0, Color("#1a1a1a"))
+		draw_circle(Vector2(tr * 0.2 + 5.0, -tr - 1.0), 1.2, Color(0.6, 0.9, 1.0, 0.9))
+	draw_set_transform(view_off + pos, tank.body_angle + PI / 2.0)
+	if bool(shape["antenna"]):
+		draw_line(Vector2(hw - 5.0, hh - 4.0), Vector2(hw - 7.0, hh - 14.0),
+			Color(0.1, 0.1, 0.1, 0.85), 1.0)
+
+	draw_set_transform(view_off + pos)
 
 	# ---- индикаторы -----------------------------------------------------
 	if tank.spawn_protect > 0:
@@ -818,6 +930,81 @@ func _draw_ellipse(center: Vector2, rx: float, ry: float, color: Color) -> void:
 	draw_colored_polygon(pts, color)
 
 ## Рисунок на корпусе (косметика). Вызывается в повёрнутом контексте корпуса.
+## Камуфляж — базовая окраска корпуса под наклейками.
+##
+## Пятна рисуются в системе координат корпуса, а не карты: иначе камуфляж
+## «плыл» бы по броне при движении. Цвета смешиваются с командным, а не
+## заменяют его — в командных режимах свои должны оставаться узнаваемыми.
+func _draw_camo(tank: Tank, hw: float, hh: float, palette: Dictionary) -> void:
+	var id := String(tank.cosmetics.get("camo", "none"))
+	if id == "" or id == "none":
+		return
+	var camo := Cosmetics.get_cosmetic("camo", id)
+	if camo.is_empty() or not camo.has("a"):
+		return
+	var base: Color = palette["body"]
+	# Немного командного цвета подмешивается в оба пятна: камуфляж должен
+	# перекрашивать танк, но не превращать его в чужой силуэт.
+	var a: Color = Color(camo["a"]).lerp(base, 0.16)
+	var b: Color = Color(camo["b"]).lerp(base, 0.16)
+	var x0 := -hw + 2.0
+	var x1 := hw - 2.0
+	var y0 := -hh + 2.0
+	var y1 := hh - 2.0
+
+	match id:
+		"digital", "winter", "urban":
+			# Пиксельные пятна: размер блока отличает «цифру» от городского.
+			var cell := 3.0 if id == "digital" else (4.5 if id == "winter" else 5.5)
+			var row := 0
+			var y := y0
+			while y < y1:
+				var col := 0
+				var x := x0
+				while x < x1:
+					var q := Rng.hash01(row * 73856093 + col * 19349663, 4242)
+					if q < 0.42:
+						_rect(x, y, minf(cell, x1 - x), minf(cell, y1 - y), a)
+					elif q < 0.74:
+						_rect(x, y, minf(cell, x1 - x), minf(cell, y1 - y), b)
+					col += 1
+					x += cell
+				row += 1
+				y += cell
+		"tiger":
+			# Полосы поперёк корпуса, каждая со своим изломом.
+			var k := 0
+			var y2 := y0
+			while y2 < y1:
+				var wob := (Rng.hash01(k, 77) - 0.5) * 5.0
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(x0, y2), Vector2(x1, y2 + wob),
+					Vector2(x1, y2 + wob + 3.2), Vector2(x0, y2 + 3.2),
+				]), b if k % 2 == 0 else a)
+				k += 1
+				y2 += 5.0
+		"splinter":
+			# Угловатые осколки: по три на борт, зеркально.
+			for i in 3:
+				var yy := y0 + (y1 - y0) * (float(i) + 0.15) / 3.0
+				var h2 := (y1 - y0) / 3.4
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(x0, yy), Vector2(x0 + hw * 0.9, yy + h2 * 0.35),
+					Vector2(x0 + hw * 0.5, yy + h2), Vector2(x0, yy + h2 * 0.75),
+				]), a if i % 2 == 0 else b)
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(x1, yy + h2 * 0.5), Vector2(x1 - hw * 0.85, yy + h2 * 0.15),
+					Vector2(x1 - hw * 0.45, yy + h2 * 0.95), Vector2(x1, yy + h2 * 1.1),
+				]), b if i % 2 == 0 else a)
+		"desert":
+			# Мягкие кляксы: округлая форма отличает пустынный от цифрового.
+			for i in 13:
+				var px := x0 + (x1 - x0) * Rng.hash01(i, 11)
+				var py := y0 + (y1 - y0) * Rng.hash01(i, 23)
+				var r := 2.4 + Rng.hash01(i, 31) * 3.0
+				draw_circle(Vector2(clampf(px, x0 + r, x1 - r), clampf(py, y0 + r, y1 - r)),
+					r, a if i % 2 == 0 else b)
+
 func _draw_hull_pattern(tank: Tank, hw: float, hh: float) -> void:
 	var id := String(tank.cosmetics.get("hull", "none"))
 	if id == "" or id == "none":

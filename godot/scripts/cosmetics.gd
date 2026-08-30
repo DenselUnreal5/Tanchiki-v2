@@ -7,7 +7,27 @@
 class_name Cosmetics
 extends RefCounted
 
-const TYPES := ["hull", "track", "turret"]
+## Камуфляж идёт первым: это базовая окраска корпуса, поверх которой
+## ложится рисунок (звезда, пламя и прочие наклейки).
+const TYPES := ["camo", "hull", "track", "turret"]
+
+## Камуфляжи. Два цвета пятен смешиваются с командным цветом, а не заменяют
+## его: иначе в командном режиме свои и чужие стали бы неразличимы.
+static var CAMOS := [
+	{"id": "none", "type": "camo", "name": "Без камуфляжа", "icon": "⬛", "price": 0},
+	{"id": "digital", "type": "camo", "name": "Цифра", "icon": "🟩", "price": 150,
+		"a": Color("#43503a"), "b": Color("#2c3527")},
+	{"id": "splinter", "type": "camo", "name": "Осколочный", "icon": "🔷", "price": 170,
+		"a": Color("#4a4536"), "b": Color("#2b2f24")},
+	{"id": "tiger", "type": "camo", "name": "Тигр", "icon": "🐯", "price": 190,
+		"a": Color("#7a5a1e"), "b": Color("#241a0c")},
+	{"id": "desert", "type": "camo", "name": "Пустыня", "icon": "🏜️", "price": 160,
+		"a": Color("#b09a63"), "b": Color("#7d6a3f")},
+	{"id": "urban", "type": "camo", "name": "Город", "icon": "🏙️", "price": 160,
+		"a": Color("#6e737a"), "b": Color("#3c4046")},
+	{"id": "winter", "type": "camo", "name": "Зима", "icon": "❄️", "price": 180,
+		"a": Color("#d5dde4"), "b": Color("#8f9aa6")},
+]
 
 ## Рисунки корпуса.
 const HULLS := [
@@ -37,6 +57,8 @@ static var TURRETS := [
 
 static func by_type(type: String) -> Array:
 	match type:
+		"camo":
+			return CAMOS
 		"hull":
 			return HULLS
 		"track":
@@ -47,6 +69,7 @@ static func by_type(type: String) -> Array:
 
 static func all() -> Array:
 	var out := []
+	out.append_array(CAMOS)
 	out.append_array(HULLS)
 	out.append_array(TRACKS)
 	out.append_array(TURRETS)

@@ -226,7 +226,8 @@ class Bullet extends RefCounted:
 		return false
 
 	func _hit_tanks(world) -> bool:
-		var hit_r2 := Cfg.TANK_HIT_R * Cfg.TANK_HIT_R
+		# Радиус берётся у самого танка: силуэт и хитбокс должны совпадать,
+		# иначе крупный корпус врал бы игроку.
 		for tank in world.tanks:
 			if tank == owner or not tank.alive:
 				continue
@@ -234,6 +235,7 @@ class Bullet extends RefCounted:
 				continue
 			var dx: float = tank.x - x
 			var dy: float = tank.y - y
+			var hit_r2: float = tank.hit_r * tank.hit_r
 			if dx * dx + dy * dy > hit_r2:
 				continue
 

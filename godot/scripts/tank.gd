@@ -34,6 +34,17 @@ var color_key: String
 
 var width := Cfg.TANK_W
 var height := Cfg.TANK_H
+## Силуэт корпуса (ключ TankArt.CHASSIS) и радиус попадания пули.
+var chassis_id := "standard"
+## Габарит для рельефа. Он НЕ равен размеру корпуса: переулок в городе шириной
+## в один тайл (32 px), и босс с корпусом 34 px в него бы не пролез — а A*
+## всё равно построил бы через него маршрут и упёр бы босса в угол. Поэтому
+## крупные корпуса ездят по обычному габариту, но пули ловят по своему.
+var col_w := Cfg.TANK_W
+var col_h := Cfg.TANK_H
+var hit_r := Cfg.TANK_HIT_R
+## Вылет дульного среза от центра танка — оттуда рождаются снаряды.
+var muzzle_len := 18.0
 
 # Базовые характеристики — от них считаются итоговые с учётом перков.
 var base_max_hp: float
@@ -130,6 +141,16 @@ func _init(opts: Dictionary) -> void:
 	owner = opts.get("owner", null)
 	is_bot = owner == null
 	color_key = String(opts.get("color_key", "enemy"))
+	# Силуэт задаёт и вид, и габариты: у босса корпус крупнее, и пули он
+	# ловит соответственно.
+	chassis_id = String(opts.get("chassis", "standard"))
+	var shape := TankArt.chassis(chassis_id)
+	width = float(shape["w"])
+	height = float(shape["h"])
+	hit_r = TankArt.hit_radius(width, height)
+	muzzle_len = TankArt.muzzle_len(shape)
+	col_w = minf(width, TankArt.MAX_COLLIDE_W)
+	col_h = minf(height, TankArt.MAX_COLLIDE_H)
 
 	base_max_hp = float(opts["max_hp"])
 	base_speed = float(opts["speed"])
@@ -364,12 +385,12 @@ func _move(world) -> void:
 	var ny := y + vy
 
 	var hit := false
-	if not map.is_blocked_rect(nx, y, width, height):
+	if not map.is_blocked_rect(nx, y, col_w, col_h):
 		x = nx
 	elif vx != 0.0:
 		vx = 0.0
 		hit = true
-	if not map.is_blocked_rect(x, ny, width, height):
+	if not map.is_blocked_rect(x, ny, col_w, col_h):
 		y = ny
 	elif vy != 0.0:
 		vy = 0.0
@@ -379,8 +400,8 @@ func _move(world) -> void:
 
 	_crush_trees(world)
 
-	x = clampf(x, width * 0.5 + 2.0, map.width - width * 0.5 - 2.0)
-	y = clampf(y, height * 0.5 + 2.0, map.height - height * 0.5 - 2.0)
+	x = clampf(x, col_w * 0.5 + 2.0, map.width - col_w * 0.5 - 2.0)
+	y = clampf(y, col_h * 0.5 + 2.0, map.height - col_h * 0.5 - 2.0)
 
 func _crush_trees(world) -> void:
 	var map: GameMap = world.map
@@ -459,8 +480,8 @@ func shoot(world) -> bool:
 		return false
 	fire_cooldown = reload_ticks()
 
-	var muzzle_x := x + cos(turret_angle) * 18.0
-	var muzzle_y := y + sin(turret_angle) * 18.0
+	var muzzle_x := x + cos(turret_angle) * muzzle_len
+	var muzzle_y := y + sin(turret_angle) * muzzle_len
 	var scale_v := dmg_scale
 
 	# Временное оружие переопределяет выстрел.
@@ -504,8 +525,8 @@ func shoot_lobbed(world) -> bool:
 		return false
 	fire_cooldown = reload_ticks()
 
-	var muzzle_x := x + cos(turret_angle) * 18.0
-	var muzzle_y := y + sin(turret_angle) * 18.0
+	var muzzle_x := x + cos(turret_angle) * muzzle_len
+	var muzzle_y := y + sin(turret_angle) * muzzle_len
 	var b := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, dmg_scale)
 	b.lobbed = true
 	b.explosive = true

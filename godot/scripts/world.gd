@@ -251,6 +251,7 @@ func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Ta
 		"speed": float(diff["enemy_speed"]) * float(type["speed_mult"]),
 		"fire_rate": maxi(4, int(round(float(diff["enemy_fire_rate"]) * float(type["fire_rate_mult"])))),
 		"color_key": String(type["color_key"]) if color_key == "enemy" else color_key,
+		"chassis": String(type.get("chassis", "standard")),
 		"dmg_scale": float(type["dmg_scale"]),
 	})
 	tank.enemy_type = type
