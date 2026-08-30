@@ -207,7 +207,7 @@ func _update_heat(world) -> void:
 	if owner == null:
 		return
 	if heat > 0.0:
-		heat = maxf(0.0, heat - Cfg.HEAT_COOL)
+		heat = maxf(0.0, heat - Cfg.HEAT_COOL * float(mods["heatCoolMult"]))
 	if overheated:
 		# Пар из ствола, пока остывает.
 		if world.tick % 5 == 0:
@@ -216,7 +216,7 @@ func _update_heat(world) -> void:
 				x + cos(a) * muzzle_len, y + sin(a) * muzzle_len,
 				Color(0.85, 0.85, 0.88, 0.8), 2.0, 14.0, world.rng,
 				cos(a) * 0.2 - 0.1, sin(a) * 0.2 - 0.35)
-		if heat <= Cfg.HEAT_RESUME:
+		if heat <= Cfg.HEAT_RESUME + float(mods["heatResumeAdd"]):
 			overheated = false
 
 ## Учёт выстрела: нагрев и срыв в перегрев.
@@ -224,7 +224,12 @@ func _after_shot() -> void:
 	shots_fired += 1
 	if owner == null:
 		return
-	heat = minf(1.0, heat + Cfg.HEAT_PER_SHOT)
+	# «Разгон» удваивает нагрев: скорострельность покупается жаром, и это
+	# единственная плата — иначе способность была бы просто лучше.
+	var gain: float = Cfg.HEAT_PER_SHOT * float(mods["heatPerShotMult"])
+	if ability_active("overclock"):
+		gain *= 2.0
+	heat = minf(1.0, heat + gain)
 	if heat >= 1.0 and not overheated:
 		overheated = true
 		overheats += 1
@@ -233,7 +238,7 @@ func _after_shot() -> void:
 ## Время до следующего выстрела.## Время до следующего выстрела. «Форсаж» режет его вдвое, поэтому считается
 ## здесь, а не в каждом из трёх видов стрельбы.
 func reload_ticks() -> int:
-	if ability_active("overdrive"):
+	if ability_active("overdrive") or ability_active("overclock"):
 		return maxi(3, int(round(float(fire_rate) * Cfg.OVERDRIVE_RELOAD_MULT)))
 	return fire_rate
 
@@ -386,6 +391,15 @@ func update(world) -> void:
 func _update_surface(world) -> void:
 	surface = Surfaces.of_tile(world.map.tile_at_pixel(x, y))
 	surface_speed = float(surface["speed"])
+	# «Шипы»: любое покрытие держит как асфальт, пока способность активна.
+	if ability_active("grip"):
+		surface_speed = maxf(surface_speed, float(Surfaces.ASPHALT["speed"]))
+	elif surface_speed < 1.0:
+		# «Вездеход» отыгрывает штраф мягкого грунта, не давая при этом
+		# преимущества на асфальте: это перк проходимости, а не скорости.
+		surface_speed = lerpf(surface_speed, 1.0, clampf(float(mods["softGrip"]), 0.0, 1.0))
+	elif surface_speed > 1.0:
+		surface_speed *= float(mods["roadSpeedMult"])
 
 	var spd := sqrt(vx * vx + vy * vy)
 	if spd < 0.45:
@@ -548,6 +562,7 @@ func shoot(world) -> bool:
 			world.bullets.append(b)
 		world.particles.burst(muzzle_x, muzzle_y, [wp["color"], Color.WHITE], 6, 2, 4, 10, 12, world.rng)
 		Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
+		world.notify_shot(self)
 		return true
 
 	if flags.has("fanShot"):
@@ -565,6 +580,7 @@ func shoot(world) -> bool:
 
 	world.particles.burst(muzzle_x, muzzle_y, [Color("#ffee55"), Color("#ffffaa")], 5, 2, 4, 8, 8, world.rng)
 	Sfx.play("shoot", muzzle_x, muzzle_y)
+	world.notify_shot(self)
 	return true
 
 ## Выстрел миномёта: снаряд летит по дуге над стенами.
@@ -659,6 +675,24 @@ func use_ability(world) -> bool:
 				14, 2, 5, 12, 20, world.rng)
 		"shockwave":
 			_shockwave(world)
+		"coolant":
+			# Мгновенный сброс: снять перегрев в нужный момент ценнее,
+			# чем пережидать его.
+			heat = 0.0
+			overheated = false
+			world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE],
+				16, 2, 5, 14, 26, world.rng)
+		"repair":
+			hp = minf(max_hp, hp + max_hp * Cfg.REPAIR_FRACTION)
+			world.particles.burst(x, y, [Color("#55dd77"), Color("#aaffcc")],
+				18, 2, 5, 12, 22, world.rng)
+		"overclock", "grip", "breaker", "silencer", "smoke":
+			# Эффект этих способностей живёт в других местах: в нагреве,
+			# в покрытии, в пуле, в слышимости и в глазах ботов. Здесь
+			# только вспышка, чтобы нажатие было видно.
+			var ab_color: Color = ab.get("color", Color.WHITE)
+			world.particles.burst(x, y, [ab_color, Color.WHITE],
+				14, 2, 5, 12, 22, world.rng)
 
 	Sfx.play("explosion" if ability_id == "shockwave" else "pickup", x, y)
 	if owner != null:

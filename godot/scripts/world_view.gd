@@ -336,6 +336,52 @@ func _draw_debris() -> void:
 	draw_set_transform(view_off)
 
 ## Песчаный берег: база с крапинками и светлой кромкой у воды.
+## Знак работающей способности. Рисуется в системе координат танка, уже
+## после корпуса и башни, поэтому ложится поверх.
+func _draw_ability_state(tank: Tank) -> void:
+	var ab := Abilities.get_ability(tank.ability_id)
+	if ab.is_empty():
+		return
+	var col: Color = ab.get("color", Color.WHITE)
+	var pulse := 0.55 + 0.25 * sin(float(world.tick) * 0.25)
+
+	match tank.ability_id:
+		"smoke":
+			# Клубы вокруг корпуса: они и есть эффект — за ними танк
+			# не видно ни игроку, ни боту.
+			for i in 7:
+				var a := float(i) / 7.0 * TAU + float(world.tick) * 0.02
+				var r := 20.0 + 5.0 * sin(float(world.tick) * 0.08 + float(i))
+				draw_circle(Vector2(cos(a) * r, sin(a) * r), 9.0,
+					Color(0.82, 0.85, 0.88, 0.32))
+		"silencer":
+			# Глушитель на срезе ствола — виден и с чужого экрана.
+			draw_set_transform(view_off + Vector2(tank.x, tank.y), tank.turret_angle)
+			var shape := TankArt.chassis(tank.chassis_id)
+			var tip: float = float(shape["turret_r"]) * 0.5 + float(shape["barrel_len"])
+			_rect(tip - 9.0, -4.0, 11.0, 8.0, Color("#2a2e33"))
+			_rect(tip - 9.0, -4.0, 11.0, 2.0, Color("#454b52"))
+			draw_set_transform(view_off + Vector2(tank.x, tank.y))
+		"breaker":
+			# Раскалённая головка снаряда: кольцо у башни и искры.
+			draw_arc(Vector2.ZERO, 15.0, 0, TAU, 20, Color(col.r, col.g, col.b, pulse), 2.0)
+			for i in 3:
+				var a := float(world.tick) * 0.15 + float(i) * TAU / 3.0
+				draw_circle(Vector2(cos(a) * 15.0, sin(a) * 15.0), 1.8, col)
+		"grip":
+			# Искры из-под гусениц: сцепление держит на любом грунте.
+			for i in 4:
+				var a := tank.body_angle + PI + (float(i) - 1.5) * 0.5
+				draw_circle(Vector2(cos(a) * 14.0, sin(a) * 14.0), 1.6,
+					Color(0.75, 0.85, 1.0, 0.8))
+		"overclock":
+			# Разгон: пульсирующее красное кольцо, ствол и так раскалён жаром.
+			draw_arc(Vector2.ZERO, 17.0, 0, TAU, 20,
+				Color(1.0, 0.35, 0.15, pulse), 2.5)
+		_:
+			draw_arc(Vector2.ZERO, 17.0, 0, TAU, 20,
+				Color(col.r, col.g, col.b, pulse * 0.8), 2.0)
+
 ## Асфальт и мост — одно покрытие для разметки: мост продолжает улицу,
 ## поэтому линии не должны обрываться перед въездом.
 func _is_paved(r: int, c: int) -> bool:
@@ -875,6 +921,12 @@ func _draw_tank(tank: Tank) -> void:
 			Color(0.1, 0.1, 0.1, 0.85), 1.0)
 
 	draw_set_transform(view_off + pos)
+
+	# ---- состояние активной способности ---------------------------------
+	# У каждой длящейся способности свой знак: без него игрок видит только
+	# полоску кулдауна в углу и не понимает, работает ли перк прямо сейчас.
+	if tank.ability_timer > 0:
+		_draw_ability_state(tank)
 
 	# ---- индикаторы -----------------------------------------------------
 	if tank.spawn_protect > 0:

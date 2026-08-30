@@ -791,6 +791,10 @@ func _update_listeners() -> void:
 		pts.append(Vector2(p.camera.x, p.camera.y))
 		half = float(p.viewport.size.x) * 0.5
 	Sfx.set_listeners(pts, half)
+	# «Острый слух» слышит дальше: дальность берётся у местного игрока,
+	# потому что слушает именно он.
+	var t0 = players[0].tank if not players.is_empty() else null
+	Sfx.hear_scale = float(t0.mods["hearingMult"]) if t0 != null else 1.0
 
 ## Параметры постобработки ведёт погода: время суток, дождь, туман, молния.
 func _update_post_fx() -> void:

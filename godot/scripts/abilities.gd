@@ -36,6 +36,45 @@ static var LIST := [
 		"desc": "Взрыв вокруг: сносит постройки, бьёт и отбрасывает врагов",
 		"color": Color("#ff55ff"), "cooldown": 540, "duration": 0,
 	},
+
+	# --- вторая волна: каждая привязана к своей механике ---------------
+	{
+		# Мгновенная. Смысл в том, чтобы снять перегрев в самый нужный
+		# момент, а не пережидать его.
+		"id": "coolant", "name": "Продувка ствола", "icon": "🧊",
+		"desc": "Сбрасывает весь жар разом",
+		"color": Color("#88ddff"), "cooldown": 600, "duration": 0,
+	},
+	{
+		"id": "overclock", "name": "Разгон", "icon": "⚙",
+		"desc": "4 с перезарядка вдвое быстрее, жар копится вдвое",
+		"color": Color("#ff5533"), "cooldown": 780, "duration": 240,
+	},
+	{
+		"id": "grip", "name": "Шипы", "icon": "🕸",
+		"desc": "5 с любое покрытие держит как асфальт",
+		"color": Color("#aaccff"), "cooldown": 540, "duration": 300,
+	},
+	{
+		"id": "breaker", "name": "Кумулятив", "icon": "🧨",
+		"desc": "5 с пули проходят постройки насквозь и рвут их вчетверо",
+		"color": Color("#ffaa33"), "cooldown": 720, "duration": 300,
+	},
+	{
+		"id": "silencer", "name": "Глушитель", "icon": "🔇",
+		"desc": "6 с выстрелы не слышны ботам",
+		"color": Color("#99a0aa"), "cooldown": 660, "duration": 360,
+	},
+	{
+		"id": "smoke", "name": "Дымовая завеса", "icon": "🌫",
+		"desc": "5 с боты не видят вас дальше 150 px",
+		"color": Color("#cfd4da"), "cooldown": 720, "duration": 300,
+	},
+	{
+		"id": "repair", "name": "Полевой ремонт", "icon": "🔧",
+		"desc": "Чинит треть запаса прочности",
+		"color": Color("#55dd77"), "cooldown": 900, "duration": 0,
+	},
 ]
 
 static var _by_id := {}

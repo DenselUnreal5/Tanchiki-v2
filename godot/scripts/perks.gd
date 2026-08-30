@@ -26,6 +26,27 @@ static func base_modifiers() -> Dictionary:
 		"buildingDmgMult": 1.0,  # множитель урона своих попаданий по постройкам
 		"turboOnKill": 0.0,      # длительность ускорения после убийства, тиков
 		"shadowOnKill": 0.0,     # длительность невидимости на миникарте, тиков
+
+		# --- ствол: нагрев и сброс (см. Cfg.HEAT_*)
+		"heatPerShotMult": 1.0,  # множитель нагрева за выстрел
+		"heatCoolMult": 1.0,     # множитель скорости остывания
+		"heatResumeAdd": 0.0,    # прибавка к порогу возобновления огня
+
+		# --- покрытие под гусеницами (см. surfaces.gd)
+		"roadSpeedMult": 1.0,    # множитель хода по асфальту и мосту
+		"softGrip": 0.0,         # доля отыгранного штрафа за траву и песок
+
+		# --- материалы построек (см. materials.gd)
+		"woodDmgMult": 1.0,
+		"brickDmgMult": 1.0,
+		"concreteDmgMult": 1.0,
+		"metalDmgMult": 1.0,
+
+		# --- слышимость (см. audio.gd)
+		"hearingMult": 1.0,      # насколько дальше слышны чужие выстрелы
+		"noiseMult": 1.0,        # насколько далеко ваш выстрел слышат боты
+
+		"scavengeHeal": 0.0,     # лечение за снесённую поблизости постройку
 	}
 
 ## Категории перков. Порядок задаёт порядок разделов в галерее.
@@ -200,6 +221,10 @@ static func _index() -> void:
 			_by_id[p["id"]] = p
 		for p in ACTIVE_LIST:
 			_by_id[p["id"]] = p
+		for p in EXTRA_LIST:
+			_by_id[p["id"]] = p
+		for p in EXTRA_ACTIVE:
+			_by_id[p["id"]] = p
 	if _bot_by_id.is_empty():
 		for p in BOT_LIST:
 			_bot_by_id[p["id"]] = p
@@ -269,8 +294,123 @@ static var _all := []
 
 static func all() -> Array:
 	if _all.is_empty():
-		_all = LIST + ACTIVE_LIST
+		_all = LIST + ACTIVE_LIST + EXTRA_LIST + EXTRA_ACTIVE
 	return _all
+
+## Двадцать перков второй волны. Разнесены по тем механикам, которые в игре
+## уже есть: нагрев ствола, покрытие под гусеницами, материалы построек и
+## слышимость. Числа без механики — это не перк, а строка в таблице.
+const EXTRA_LIST := [
+	# ------------------------------------------------------------ ствол
+	{
+		"id": "heat_sink", "name": "Радиатор", "icon": "❄",
+		"desc": "Ствол остывает в 1.6 раза быстрее", "category": "fire",
+		"mods": {"heatCoolMult": 1.6},
+	},
+	{
+		"id": "thermal", "name": "Термостойкость", "icon": "🌡",
+		"desc": "Нагрев за выстрел на четверть меньше", "category": "fire",
+		"mods": {"heatPerShotMult": 0.75},
+	},
+	{
+		"id": "quick_vent", "name": "Быстрый сброс", "icon": "💨",
+		"desc": "После перегрева огонь возобновляется вдвое раньше", "category": "fire",
+		"mods": {"heatResumeAdd": 0.25},
+	},
+	{
+		"id": "heavy_shell", "name": "Тяжёлый снаряд", "icon": "🏋",
+		"desc": "Урон +25%, но снаряд летит медленнее", "category": "fire",
+		"mods": {"dmgMult": 1.25, "bulletSpeedMult": 0.85},
+	},
+	{
+		"id": "light_shell", "name": "Лёгкий снаряд", "icon": "🪶",
+		"desc": "Снаряд быстрее на треть, ствол греется меньше", "category": "fire",
+		"mods": {"bulletSpeedMult": 1.3, "heatPerShotMult": 0.8},
+	},
+	# ---------------------------------------------------------- покрытие
+	{
+		"id": "road_king", "name": "Асфальтоукладчик", "icon": "🛣",
+		"desc": "По асфальту и мостам ход быстрее на 18%", "category": "speed",
+		"mods": {"roadSpeedMult": 1.18},
+	},
+	{
+		"id": "all_terrain", "name": "Вездеход", "icon": "🌾",
+		"desc": "Трава и песок больше не тормозят", "category": "speed",
+		"mods": {"softGrip": 1.0},
+	},
+	# --------------------------------------------------------- материалы
+	{
+		"id": "lumberjack", "name": "Лесоруб", "icon": "🪓",
+		"desc": "Урон по деревянным постройкам ×2.5", "category": "fire",
+		"mods": {"woodDmgMult": 2.5},
+	},
+	{
+		"id": "concrete_breaker", "name": "Бетонолом", "icon": "🧱",
+		"desc": "Урон по бетону ×2.2", "category": "fire",
+		"mods": {"concreteDmgMult": 2.2},
+	},
+	{
+		"id": "can_opener", "name": "Консервный нож", "icon": "🔩",
+		"desc": "Урон по железу ×2.5 — иначе пули его почти не берут", "category": "fire",
+		"mods": {"metalDmgMult": 2.5},
+	},
+	{
+		"id": "scavenger", "name": "Мародёр", "icon": "🧰",
+		"desc": "Каждая снесённая рядом постройка чинит на 3 HP", "category": "special",
+		"mods": {"scavengeHeal": 3.0},
+	},
+	# -------------------------------------------------------- слышимость
+	{
+		"id": "keen_ear", "name": "Острый слух", "icon": "👂",
+		"desc": "Дальние выстрелы слышны и отмечаются на миникарте", "category": "special",
+		"mods": {"hearingMult": 1.7},
+	},
+	{
+		"id": "muffler", "name": "Глушение", "icon": "🤫",
+		"desc": "Ваши выстрелы боты слышат вдвое ближе", "category": "special",
+		"mods": {"noiseMult": 0.5},
+	},
+]
+
+## Перки с активной способностью. Активный перк отличается тем, что его надо
+## нажать вовремя: это единственная механика в игре, где решает момент.
+const EXTRA_ACTIVE := [
+	{
+		"id": "coolant", "name": "Продувка ствола", "icon": "🧊",
+		"desc": "Мгновенно сбрасывает весь жар", "category": "fire",
+		"active": "coolant",
+	},
+	{
+		"id": "overclock", "name": "Разгон", "icon": "⚙",
+		"desc": "4 с перезарядка вдвое быстрее, но и жар копится вдвое",
+		"category": "fire", "active": "overclock",
+	},
+	{
+		"id": "grip", "name": "Шипы", "icon": "🕸",
+		"desc": "5 с любое покрытие держит как асфальт", "category": "speed",
+		"active": "grip",
+	},
+	{
+		"id": "breaker", "name": "Кумулятив", "icon": "🧨",
+		"desc": "5 с пули проходят постройки насквозь и рвут их вчетверо",
+		"category": "fire", "active": "breaker",
+	},
+	{
+		"id": "silencer", "name": "Глушитель", "icon": "🔇",
+		"desc": "6 с ваши выстрелы боты не слышат вовсе", "category": "special",
+		"active": "silencer",
+	},
+	{
+		"id": "smoke", "name": "Дымовая завеса", "icon": "🌫",
+		"desc": "5 с боты не видят вас дальше 150 px", "category": "defense",
+		"active": "smoke",
+	},
+	{
+		"id": "repair", "name": "Полевой ремонт", "icon": "🔧",
+		"desc": "Мгновенно чинит на треть запаса", "category": "defense",
+		"active": "repair",
+	},
+]
 
 ## Способность из набора перков: берётся первая найденная. Двух активных
 ## одновременно не бывает — иначе понадобилась бы вторая клавиша, и выбор
@@ -311,6 +451,11 @@ const UNLOCK_TABLE := {
 	5: ["explosive", "shield", "overdrive"],
 	6: ["piercing", "bulwark"],
 	7: ["mines", "shockwave"],
+	8: ["heat_sink", "road_king", "lumberjack", "coolant"],
+	9: ["thermal", "all_terrain", "keen_ear", "grip"],
+	10: ["quick_vent", "concrete_breaker", "muffler", "repair"],
+	11: ["heavy_shell", "can_opener", "scavenger", "overclock"],
+	12: ["light_shell", "silencer", "smoke", "breaker"],
 }
 
 ## На каком глобальном уровне открывается перк (или 0 для челленджей).
@@ -337,9 +482,9 @@ static func compute_modifiers(perk_ids: Array, bot: bool = false) -> Dictionary:
 			var v: float = float(mods[key])
 			match key:
 				"maxHPMult", "speedMult", "fireRateMult", "dmgMult", "bulletSpeedMult", \
-				"damageTakenMult", "ramMult", "pickupRadiusMult", "buildingDmgMult":
+				"damageTakenMult", "ramMult", "pickupRadiusMult", "buildingDmgMult", 				"heatPerShotMult", "heatCoolMult", "roadSpeedMult", 				"woodDmgMult", "brickDmgMult", "concreteDmgMult", "metalDmgMult", 				"hearingMult", "noiseMult":
 					m[key] = float(m[key]) * v
-				"accuracyBonus", "reflectFraction", "lifestealFraction", "regenPerMinute":
+				"accuracyBonus", "reflectFraction", "lifestealFraction", "regenPerMinute", 				"heatResumeAdd", "softGrip", "scavengeHeal":
 					m[key] = float(m[key]) + v
 				"evasionChance":
 					evasion_miss *= (1.0 - v)

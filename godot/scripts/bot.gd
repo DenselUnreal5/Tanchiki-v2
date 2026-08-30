@@ -33,6 +33,10 @@ var owner_mods := {}
 
 var state := STATE_PATROL
 var target = null
+## Куда идти проверять услышанный выстрел и сколько ещё тиков это делать.
+var noise_x := 0.0
+var noise_y := 0.0
+var noise_timer := 0
 var dest_x := 0.0
 var dest_y := 0.0
 var state_timer := 0
@@ -202,6 +206,25 @@ func update(tank: Tank, world) -> void:
 		tank.thrust(cos(unstick_angle), sin(unstick_angle))
 		_track_frozen(tank, tgt, target_dist)
 		return
+
+	# ---- услышанный выстрел ----------------------------------------------
+	# Цели нет, но рядом стреляли: идём на звук. Именно поэтому «Глушитель»
+	# и «Глушение» имеют смысл — тихая стрельба не собирает вокруг толпу.
+	#
+	# Проверка стоит ПОСЛЕ вызволения из затора: в первой версии она была
+	# выше и перехватывала управление у застрявшего бота — замер показал
+	# рост самого долгого упора с 9 тиков до 55.
+	if noise_timer > 0:
+		noise_timer -= 1
+		if tgt == null:
+			# Идти на звук надо маршрутом, а не рулением: _steer обходит
+			# препятствие только локально, и бот, у которого источник звука
+			# за домом, упирается в стену намертво. Замер поймал упор
+			# в 8910 тиков — почти две с половиной минуты в стену.
+			_move_toward(tank, world, noise_x, noise_y)
+			_try_fire(tank, world, tgt, target_dist, has_shot)
+			_track_frozen(tank, tgt, target_dist)
+			return
 
 	# ---- выбор состояния --------------------------------------------------
 	_decide(tank, world, tgt, target_dist)
@@ -442,6 +465,17 @@ func _try_dash(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> bo
 func _aim(tank: Tank, a: float) -> void:
 	var spread := (1.0 - accuracy) * (rng.nextf() - 0.5) * 0.4
 	tank.slew_turret_to(a + spread)
+
+## Услышанный выстрел: запоминаем точку и идём проверять, если нечем заняться.
+func hear_shot(sx: float, sy: float) -> void:
+	# Пока идём на предыдущий звук, новые не перебивают цель. Иначе в бою
+	# у базы выстрелы гремят непрерывно, таймер не истекает никогда, и бот
+	# навсегда остаётся в режиме «иду проверять».
+	if noise_timer > 0:
+		return
+	noise_x = sx
+	noise_y = sy
+	noise_timer = 150
 
 ## Когда бот жмёт свою способность.
 ##
@@ -721,6 +755,10 @@ static func find_best_threat(tank: Tank, world):
 		var dy: float = other.y - tank.y
 		var d2 := dx * dx + dy * dy
 		if d2 > sight2:
+			continue
+		# «Дымовая завеса»: вплотную вас всё равно видно, но выцеливать
+		# издалека уже нечего — на том она и построена.
+		if other.ability_active("smoke") and d2 > Cfg.SMOKE_VISION * Cfg.SMOKE_VISION:
 			continue
 		var i := near.size()
 		while i > 0 and float(near[i - 1][0]) > d2:

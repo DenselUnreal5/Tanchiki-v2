@@ -88,18 +88,23 @@ var _players: Array[AudioStreamPlayer] = []
 var _voice_bus: PackedInt32Array = PackedInt32Array()
 var _next_player := 0
 var _rng := RandomNumberGenerator.new()
+## Номер фоновой задачи синтеза: при выходе её надо дождаться, иначе она
+## обращается к уже удалённой автозагрузке.
+var _task := -1
 
 ## Камеры живых игроков. Громкость считается по ближайшей: в «горячем стуле»
 ## два экрана, и бой у чужого края карты не должен глушить свой.
 var _listeners: PackedVector2Array = PackedVector2Array()
 var _pan_half := 640.0
+## Множитель дальности слышимости от перков игрока. Единица — как было.
+var hear_scale := 1.0
 
 func _ready() -> void:
 	_rng.randomize()
 	_ensure_buses()
 	# Синтез идёт в фоне: полсекунды тишины в меню никто не заметит,
 	# а полсекунды чёрного экрана на запуске — заметят все.
-	WorkerThreadPool.add_task(_build_async)
+	_task = WorkerThreadPool.add_task(_build_async)
 	for i in MAX_VOICES:
 		var p := AudioStreamPlayer.new()
 		p.bus = "SfxV%d" % i
@@ -124,6 +129,11 @@ func _ensure_buses() -> void:
 			var lp := AudioEffectLowPassFilter.new()
 			lp.cutoff_hz = 20000.0
 			AudioServer.add_bus_effect(idx, lp, 1)
+
+func _exit_tree() -> void:
+	if _task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_task)
+		_task = -1
 
 func _add_bus(bus_name: String, send_to: String) -> int:
 	var idx := AudioServer.get_bus_index(bus_name)
@@ -172,12 +182,13 @@ func play(type: String, x: float = INF, y: float = INF) -> void:
 			if d < best_d:
 				best_d = d
 				best = _listeners[k]
-		if best_d > HEAR_RANGE:
+		var reach := HEAR_RANGE * hear_scale
+		if best_d > reach:
 			return
 		# Спад громкости — обратная степенная кривая: у самого ствола звук
 		# бьёт в полную силу и быстро проваливается на первых экранах.
 		att = linear_to_db(1.0 / (1.0 + pow(best_d / NEAR_RANGE, 1.7)))
-		var t: float = clampf(best_d / HEAR_RANGE, 0.0, 1.0)
+		var t: float = clampf(best_d / reach, 0.0, 1.0)
 		cutoff = lerpf(20000.0, FAR_CUTOFF, t * t)
 		pan = clampf((x - best.x) / _pan_half, -1.0, 1.0) * 0.8
 

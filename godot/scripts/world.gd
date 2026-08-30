@@ -125,6 +125,24 @@ func _init(opts: Dictionary) -> void:
 	if mode == "defense":
 		_setup_defense()
 
+## Выстрел слышен. Боты без цели идут проверять источник — это и делает
+## «Глушитель» и «Глушение» осмысленными: тихая стрельба не собирает толпу.
+func notify_shot(shooter) -> void:
+	if shooter == null or shooter.ability_active("silencer"):
+		return
+	var reach: float = Cfg.BOT_HEAR_RANGE * float(shooter.mods.get("noiseMult", 1.0))
+	var r2 := reach * reach
+	for t in tanks:
+		if t == shooter or not t.alive or t.brain == null:
+			continue
+		if not are_hostile(shooter, t):
+			continue
+		var dx: float = t.x - shooter.x
+		var dy: float = t.y - shooter.y
+		if dx * dx + dy * dy > r2:
+			continue
+		t.brain.hear_shot(shooter.x, shooter.y)
+
 # ------------------------------------------------------------------- сеть
 ## Описание танка для клиента: всё, что не меняется каждый тик и потому
 ## не место ему в снапшоте — имя, команда, расцветка, силуэт, косметика.
@@ -901,6 +919,20 @@ func hit_building(row: int, col: int, amount: float, source: String,
 	# а не в каждом источнике урона по отдельности.
 	if owner_tank != null and amount > 0.0:
 		amount *= float(owner_tank.mods.get("buildingDmgMult", 1.0))
+		# Перки по материалу: железо пулями почти не берётся, поэтому
+		# «Консервный нож» и его собратья бьют именно туда, где стена
+		# иначе непроходима.
+		match String(mat["id"]):
+			"wood":
+				amount *= float(owner_tank.mods.get("woodDmgMult", 1.0))
+			"brick":
+				amount *= float(owner_tank.mods.get("brickDmgMult", 1.0))
+			"concrete":
+				amount *= float(owner_tank.mods.get("concreteDmgMult", 1.0))
+			"metal":
+				amount *= float(owner_tank.mods.get("metalDmgMult", 1.0))
+		if owner_tank.ability_active("breaker"):
+			amount *= Cfg.BREAKER_BUILDING_MULT
 	# Выбоина в месте попадания: цвет берётся у материала, поэтому дерево
 	# сыплет щепой, а бетон — светлой крошкой.
 	particles.burst(x, y, [mat["light"], mat["base"], mat["dark"]], 5, 2, 4, 8, 16, rng)
@@ -932,6 +964,14 @@ func _destroy_building(row: int, col: int, mat: Dictionary, owner_tank) -> void:
 	if int(mat["sparks"]) > 0:
 		particles.burst(cx, cy, [Color("#fff2c0"), Color("#ffcc55")],
 			int(mat["sparks"]), 1, 3, 10, 22, rng)
+
+	# «Мародёр»: обломки идут в дело.
+	if owner_tank != null and owner_tank.alive:
+		var heal: float = float(owner_tank.mods.get("scavengeHeal", 0.0))
+		if heal > 0.0 and owner_tank.hp < owner_tank.max_hp:
+			owner_tank.hp = minf(owner_tank.max_hp, owner_tank.hp + heal)
+			particles.burst(owner_tank.x, owner_tank.y,
+				[Color("#55dd77")], 4, 1, 3, 8, 14, rng)
 
 	Sfx.play(String(mat["sound"]), cx, cy)
 	add_shake(float(mat["shake"]), cx, cy)

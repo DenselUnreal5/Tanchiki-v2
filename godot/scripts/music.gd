@@ -90,6 +90,8 @@ var _want := ""
 var _paused := false
 var _ducked := false
 var _fade: Tween
+## Номера фоновых задач сборки — их надо дождаться при выходе.
+var _tasks: Array[int] = []
 
 func _ready() -> void:
 	_ensure_bus()
@@ -114,9 +116,16 @@ func _ready() -> void:
 		print("[Mus] тема «%s»: файлов %d" % [id, list.size()])
 
 	if _menu == null:
-		WorkerThreadPool.add_task(_build_menu_async)
+		_tasks.append(WorkerThreadPool.add_task(_build_menu_async))
 	if _combat == null:
-		WorkerThreadPool.add_task(_build_combat_async)
+		_tasks.append(WorkerThreadPool.add_task(_build_combat_async))
+
+## Выход из игры во время сборки: без ожидания фоновая задача продолжает
+## звать методы уже удалённой автозагрузки, и консоль засыпает ошибками.
+func _exit_tree() -> void:
+	for id in _tasks:
+		WorkerThreadPool.wait_for_task_completion(id)
+	_tasks.clear()
 
 ## Собирает список треков из папки. В собранной игре рядом с файлом лежит
 ## его .import, поэтому суффикс отрезается, а повторы отсеиваются.
