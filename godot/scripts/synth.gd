@@ -169,13 +169,30 @@ static func add_steps(b: PackedFloat32Array, at: float, dur: float, kind: String
 			float(freqs[k]), float(freqs[k]), gain, decay)
 
 # ------------------------------------------------------------------ сведение
+## Приводит буфер к заданному пику. Нужно оркестровой теме: там два десятка
+## слоёв, сумма легко выходит за единицу, и ограничитель начинает не
+## «подмягчать», а порождать гармоники — на чистых синусах хора это слышно
+## как грязь. Дешевле привести уровень заранее, чем чинить его лимитером.
+static func normalize(b: PackedFloat32Array, target: float) -> void:
+	var m := peak(b)
+	if m <= 0.0001:
+		return
+	var k: float = target / m
+	for i in b.size():
+		b[i] *= k
+
 ## Мягкое ограничение вместо жёсткого обрезания: слои складываются и легко
 ## выходят за единицу, а tanh давит пики, не превращая их в квадрат.
-static func to_stream(b: PackedFloat32Array, loop: bool = false) -> AudioStreamWAV:
+##
+## drive — насколько сильно материал загоняется в ограничитель. Для ударов
+## и боевой темы перегруз желателен, для оркестра он и есть та самая грязь,
+## поэтому там его убирают в единицу.
+static func to_stream(b: PackedFloat32Array, loop: bool = false,
+		drive: float = 1.1) -> AudioStreamWAV:
 	var data := PackedByteArray()
 	data.resize(b.size() * 2)
 	for i in b.size():
-		var v: float = tanh(b[i] * 1.1)
+		var v: float = tanh(b[i] * drive)
 		var s := int(clampf(v, -1.0, 1.0) * 32767.0)
 		data[i * 2] = s & 0xFF
 		data[i * 2 + 1] = (s >> 8) & 0xFF
