@@ -316,7 +316,7 @@ func _update_surface(world) -> void:
 		_tread_timer -= 1
 		if _tread_timer <= 0:
 			_tread_timer = 16
-			Sfx.play(String(surface["tread"]))
+			Sfx.play(String(surface["tread"]), x, y)
 
 func _update_regen() -> void:
 	var per_minute := float(mods["regenPerMinute"])
@@ -406,7 +406,7 @@ func _check_water(world) -> void:
 			world.deal_damage(self, Cfg.WATER_DMG, null, "water")
 			world.particles.burst(x, y, [Cfg.water_light, Color("#88aaff")], 5, 2, 4, 12, 18, world.rng)
 			if owner != null:
-				Sfx.play("water")
+				Sfx.play("water", x, y)
 	if world.tick % 8 == 0:
 		world.particles.burst(x, y, [Cfg.water_light], 1, 2, 2, 10, 10, world.rng)
 
@@ -458,7 +458,7 @@ func shoot(world) -> bool:
 				b.explosive = true
 			world.bullets.append(b)
 		world.particles.burst(muzzle_x, muzzle_y, [wp["color"], Color.WHITE], 6, 2, 4, 10, 12, world.rng)
-		Sfx.play("shoot")
+		Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
 		return true
 
 	if flags.has("fanShot"):
@@ -475,7 +475,7 @@ func shoot(world) -> bool:
 		world.bullets.append(Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, scale_v))
 
 	world.particles.burst(muzzle_x, muzzle_y, [Color("#ffee55"), Color("#ffffaa")], 5, 2, 4, 8, 8, world.rng)
-	Sfx.play("shoot")
+	Sfx.play("shoot", muzzle_x, muzzle_y)
 	return true
 
 ## Выстрел миномёта: снаряд летит по дуге над стенами.
@@ -492,7 +492,7 @@ func shoot_lobbed(world) -> bool:
 	world.bullets.append(b)
 
 	world.particles.burst(muzzle_x, muzzle_y, [Color("#ff9933"), Color("#ffcc66")], 6, 2, 4, 10, 12, world.rng)
-	Sfx.play("shoot")
+	Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
 	return true
 
 ## Ставит мину. Лимит мин отсчитывается для каждого танка отдельно.
@@ -571,7 +571,7 @@ func on_death(world, killer) -> void:
 	dash_range = 0.0
 
 	world.particles.burst(x, y, Cfg.explosion, 30, 3, 8, 20, 40, world.rng)
-	Sfx.play("explosion")
+	Sfx.play("explosion", x, y)
 	world.add_shake(6.0, x, y)
 
 	if flags.has("kamikaze"):

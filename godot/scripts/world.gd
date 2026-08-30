@@ -692,7 +692,12 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		target.owner.damage_flash = 12
 		target.owner.shake = maxf(target.owner.shake, 5.0)
 		target.owner.clean_streak = 0
+		# По себе попадание слышно всегда, где бы ни стояла камера.
 		Sfx.play("hit")
+	elif source == "bullet":
+		# Чужие попадания — с привязкой к месту: перестрелка на другом
+		# конце карты должна доноситься, а не бить в ухо.
+		Sfx.play("hit", target.x, target.y)
 
 	if bool(res["killed"]):
 		_kill_tank(target, attacker, source)
@@ -859,7 +864,7 @@ func _destroy_building(row: int, col: int, mat: Dictionary, owner_tank) -> void:
 		particles.burst(cx, cy, [Color("#fff2c0"), Color("#ffcc55")],
 			int(mat["sparks"]), 1, 3, 10, 22, rng)
 
-	Sfx.play(String(mat["sound"]))
+	Sfx.play(String(mat["sound"]), cx, cy)
 	add_shake(float(mat["shake"]), cx, cy)
 	if owner_tank != null and owner_tank.owner != null:
 		stat.emit("bricksDestroyed", 1, "add")

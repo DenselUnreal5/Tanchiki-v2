@@ -25,6 +25,7 @@ config/icon="res://icon.svg"
 I18n="*res://scripts/i18n.gd"
 Prof="*res://scripts/profile.gd"
 Sfx="*res://scripts/audio.gd"
+Mus="*res://scripts/music.gd"
 Sets="*res://scripts/settings.gd"
 Fonts="*res://scripts/fonts.gd"
 

@@ -256,12 +256,15 @@ func start_match() -> void:
 
 	# Стартовый выбор перка — по одному на игрока.
 	state = S_PLAYING
+	Mus.play_combat()
 	for p in players:
 		p.pending_level_ups += 1
 	_process_perk_queue()
 
 func to_menu() -> void:
 	state = S_MENU
+	Mus.stop()
+	Sfx.clear_listeners()
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 	if world != null:
 		world.dispose()
@@ -281,6 +284,7 @@ func pause() -> void:
 	if state != S_PLAYING:
 		return
 	state = S_PAUSED
+	Mus.set_ducked(true)
 	ui.show_pause()
 
 func resume() -> void:
@@ -288,6 +292,7 @@ func resume() -> void:
 		return
 	ui.hide_pause()
 	ui.close_gallery()
+	Mus.set_ducked(false)
 	state = S_PLAYING
 	accumulator = 0.0
 
@@ -373,6 +378,7 @@ func _reward_label(kind: String, who: String) -> String:
 
 func _on_finish(result: Dictionary) -> void:
 	state = S_GAMEOVER
+	Mus.stop()
 	if bool(result["victory"]):
 		Prof.bump_stat("gamesWon", 1)
 	Prof.bump_daily("games", 1)
@@ -395,11 +401,13 @@ func _process_perk_queue() -> void:
 	if next == null:
 		if state == S_PERK:
 			state = S_PLAYING
+			Mus.set_ducked(false)
 			ui.hide_perk_select()
 			accumulator = 0.0
 		perk_player = null
 		return
 	state = S_PERK
+	Mus.set_ducked(true)
 	perk_player = next
 	var queue_left := -1
 	for p in players:
@@ -490,9 +498,20 @@ func _process(delta: float) -> void:
 					_process_perk_queue()
 					break
 
+	_update_listeners()
 	if state == S_PLAYING or state == S_PAUSED or state == S_PERK:
 		hud.update_hud(world)
 	_update_post_fx()
+
+## Звук слышен «из камеры»: громкость, панорама и глухость далёких
+## выстрелов считаются от этих точек. В «горячем стуле» их две.
+func _update_listeners() -> void:
+	var pts := PackedVector2Array()
+	var half := 640.0
+	for p in players:
+		pts.append(Vector2(p.camera.x, p.camera.y))
+		half = float(p.viewport.size.x) * 0.5
+	Sfx.set_listeners(pts, half)
 
 ## Параметры постобработки ведёт погода: время суток, дождь, туман, молния.
 func _update_post_fx() -> void:

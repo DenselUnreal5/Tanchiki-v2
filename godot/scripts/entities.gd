@@ -349,7 +349,7 @@ class Mine extends RefCounted:
 					(row + dr) * Cfg.TILE + Cfg.TILE * 0.5, owner)
 		world.particles.burst(x, y, Cfg.explosion, 25, 3, 7, 20, 35, world.rng)
 		world.add_shake(10.0, x, y)
-		Sfx.play("explosion")
+		Sfx.play("explosion", x, y)
 		alive = false
 
 # ---------------------------------------------------------------------------
@@ -389,7 +389,7 @@ class StrikeRocket extends RefCounted:
 			world.deal_damage(target, dmg, owner, "airstrike")
 			world.particles.burst(x, y, Cfg.explosion, 16, 2, 5, 12, 24, world.rng)
 			world.add_shake(8.0, x, y)
-			Sfx.play("explosion")
+			Sfx.play("explosion", x, y)
 			alive = false
 			return
 		vx = (dx / length) * speed

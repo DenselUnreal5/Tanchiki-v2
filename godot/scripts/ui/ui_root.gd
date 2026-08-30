@@ -1329,7 +1329,7 @@ func _build_audio_section() -> void:
 			Sets.apply_audio()
 			Sets.save()))
 	_settings_body.add_child(UiKit.label(
-		I18n.t("set.music.hint", {}, "Музыки в игре пока нет: весь звук процедурный и состоит из эффектов. Ползунок уже подключён к своей шине и заработает, как только появится трек."),
+		I18n.t("set.music.hint", {}, "Боевой саундтрек игра собирает сама, как и остальной звук. Играет в бою и приглушается на паузе."),
 		9, Cfg.UI_MUTED))
 
 func close_settings() -> void:
