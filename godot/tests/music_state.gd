@@ -26,6 +26,15 @@ func _ready() -> void:
 	_check(Mus._current == "menu", "в меню играет тема меню")
 	_check(_active().playing, "плеер меню запущен")
 
+	# Колокол обязан делить петлю нацело: иначе на стыке петли интервал
+	# между ударами будет не 10 секунд, и это слышно на каждом обороте.
+	var bar := 60.0 / Mus.MENU_BPM * 4.0
+	var period := bar * float(Mus.BELL_EVERY_BARS)
+	var loop_len := bar * float(Mus.MENU_BARS)
+	_check(absf(period - 10.0) < 0.001, "колокол бьёт раз в %.3f с" % period)
+	_check(absf(fmod(loop_len, period)) < 0.001,
+		"петля %.3f с делится на период колокола нацело" % loop_len)
+
 	game.ui.settings["mode"] = "ffa"
 	game.ui.settings["game_type"] = "single"
 	game.ui.settings["level"] = 1
