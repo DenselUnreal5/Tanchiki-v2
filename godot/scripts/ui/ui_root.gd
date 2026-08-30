@@ -24,6 +24,8 @@ const PERK_CHOICES := 3
 var settings := {
 	"game_type": "single", "mode": "ffa", "difficulty": "medium",
 	"level": 1, "color1": "p1", "color2": "p2",
+	# "auto" — погода и время суток идут своим чередом, как раньше.
+	"weather": "auto", "daytime": "auto",
 }
 
 var menu_scene: MenuScene
@@ -365,6 +367,21 @@ func _build_menu() -> void:
 	]))
 	_menu_settings.add_child(_make_group(I18n.t("menu.level", {}, "Уровень"), "level", [
 		[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"], [-1, "?"],
+	]))
+	_menu_settings.add_child(_make_group(I18n.t("menu.weather", {}, "Погода"), "weather", [
+		["auto", I18n.t("wx.auto", {}, "Своя")],
+		["clear", I18n.t("wx.clear", {}, "☀ Ясно")],
+		["rain", I18n.t("wx.rain", {}, "🌧 Дождь")],
+		["fog", I18n.t("wx.fog", {}, "🌫 Туман")],
+		["snow", I18n.t("wx.snow", {}, "❄ Снег")],
+		["storm", I18n.t("wx.storm", {}, "⛈ Гроза")],
+	]))
+	_menu_settings.add_child(_make_group(I18n.t("menu.daytime", {}, "Время суток"), "daytime", [
+		["auto", I18n.t("tod.auto", {}, "Цикл")],
+		["day", I18n.t("tod.day", {}, "☀ День")],
+		["dusk", I18n.t("tod.dusk", {}, "🌆 Закат")],
+		["night", I18n.t("tod.night", {}, "🌙 Ночь")],
+		["midnight", I18n.t("tod.midnight", {}, "🌑 Полночь")],
 	]))
 	_menu_settings.add_child(_make_color_group(I18n.t("menu.color1", {}, "Цвет танка 1"), "color1"))
 	_menu_settings.add_child(_make_color_group(I18n.t("menu.color2", {}, "Цвет танка 2"), "color2"))

@@ -106,7 +106,7 @@ func _init(opts: Dictionary) -> void:
 	rng = Rng.new(seed_mix)
 
 	# Погода и атмосфера — детерминированы по seed карты.
-	weather = WeatherSystem.new(int(level["seed"]))
+	weather = WeatherSystem.new(int(level["seed"]), _weather_opts(opts))
 	particles = Ent.ParticleSystem.new()
 
 	# У клиента сетевой партии мир — марионетка: карта та же (собрана по тому
@@ -182,6 +182,30 @@ func step_cosmetic() -> void:
 		if w.alive:
 			live_wrecks.append(w)
 	wrecks = live_wrecks
+
+## Выбор игрока из меню превращается в закреплённые условия. «Своя» и
+## «Цикл» ничего не закрепляют — погода идёт сама, как раньше.
+static func _weather_opts(opts: Dictionary) -> Dictionary:
+	var out := {}
+	var wx := String(opts.get("weather", "auto"))
+	if wx != "auto" and wx != "":
+		out["condition"] = wx
+	# Фаза цикла: 0 — рассвет, 0.25 — день, 0.5 — закат, 0.75 — ночь.
+	# Полночь берётся серединой ночной половины, там темнее всего.
+	var tod := String(opts.get("daytime", "auto"))
+	match tod:
+		"day":
+			out["phase"] = 0.30
+		"dusk":
+			out["phase"] = 0.52
+		"night":
+			out["phase"] = 0.70
+		"midnight":
+			# Ровно ключевая точка «ночь» — самая тёмная в цикле. Замер
+			# поймал обратное: фаза 0.88 уже ползёт к рассвету, и «полночь»
+			# получалась светлее «ночи».
+			out["phase"] = 0.75
+	return out
 
 # ------------------------------------------------------------------ команды
 ## Враждебность определяется только несовпадением команд.

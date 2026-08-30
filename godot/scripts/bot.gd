@@ -731,7 +731,8 @@ func _target_valid(tank: Tank, world, t) -> bool:
 		return false
 	var dx: float = t.x - tank.x
 	var dy: float = t.y - tank.y
-	return dx * dx + dy * dy <= Cfg.BOT_SIGHT * Cfg.BOT_SIGHT
+	var sight := sight_range(world)
+	return dx * dx + dy * dy <= sight * sight
 
 ## Оценка угроз: приоритет тем, кто ближе, слабее по HP и несёт наш флаг.
 ##
@@ -742,8 +743,17 @@ func _target_valid(tank: Tank, world, t) -> bool:
 ## На выбор это не влияет — оценка и так падает с расстоянием.
 const THREAT_CANDIDATES := 6
 
+## Дальность зрения бота с учётом погоды. Ночью и в тумане бот видит
+## меньше — ровно настолько же, насколько меньше видит игрок. Без этого
+## погода была бы только картинкой поверх боя.
+static func sight_range(world) -> float:
+	if world == null or world.weather == null:
+		return Cfg.BOT_SIGHT
+	return Cfg.BOT_SIGHT * world.weather.vision_scale
+
 static func find_best_threat(tank: Tank, world):
-	var sight2 := Cfg.BOT_SIGHT * Cfg.BOT_SIGHT
+	var sight := sight_range(world)
+	var sight2 := sight * sight
 	# Ближайшие кандидаты: простая вставка в короткий массив.
 	var near: Array = []
 	for other in world.tanks:
@@ -775,7 +785,7 @@ static func find_best_threat(tank: Tank, world):
 		if not world.map.has_line_of_sight(tank.x, tank.y, other.x, other.y):
 			continue
 		var d := sqrt(float(entry[0]))
-		var score := (Cfg.BOT_SIGHT - d) / Cfg.BOT_SIGHT      # ближе — важнее
+		var score := (sight - d) / sight                      # ближе — важнее
 		score += (1.0 - other.hp / other.max_hp) * 0.6        # добить раненого
 		if other.carrying_flag and other.team != tank.team:
 			score += 1.5                                      # остановить флагоносца

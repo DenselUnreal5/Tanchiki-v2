@@ -52,6 +52,9 @@ static var road_alt := Color("#34353a")
 static var road_line := Color("#c8c07a")
 static var road_crack := Color("#232427")
 static var road_edge := Color("#5c5d63")
+## Цвет, к которому уходит земля в снегопад. Холодный и неяркий: белый
+## в лоб выбивает всю сцену в пересвет.
+static var snow_ground := Color("#9aa4b0")
 static var bridge := Color("#6a5c46")
 static var bridge_dark := Color("#4a3f2f")
 static var bridge_rail := Color("#a8977a")

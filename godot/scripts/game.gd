@@ -232,6 +232,8 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		s["mode"] = String(net_opts.get("mode", s["mode"]))
 		s["difficulty"] = String(net_opts.get("difficulty", s["difficulty"]))
 		s["level"] = int(net_opts.get("level", s["level"]))
+		s["weather"] = String(net_opts.get("weather", "auto"))
+		s["daytime"] = String(net_opts.get("daytime", "auto"))
 
 	# players — только местные игроки: по ним делится экран. Сетевые
 	# соперники живут в remote_players и в мир попадают наравне, но своего
@@ -276,6 +278,8 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		"players": players + remote_players,
 		"player_level": Prof.global_level,
 		"puppet": is_client,
+		"weather": String(s.get("weather", "auto")),
+		"daytime": String(s.get("daytime", "auto")),
 	})
 	if is_client:
 		# Состав приходит от хоста: свои танки клиент не порождает.
@@ -287,6 +291,8 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		Net.host_start_match({
 			"mode": String(s["mode"]), "difficulty": String(s["difficulty"]),
 			"level": int(s["level"]),
+			"weather": String(s.get("weather", "auto")),
+			"daytime": String(s.get("daytime", "auto")),
 		}, int(level["seed"]), world.roster())
 	_bind_world_events(world)
 

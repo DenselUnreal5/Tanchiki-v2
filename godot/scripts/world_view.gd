@@ -119,12 +119,15 @@ func _draw_weather(size: Vector2) -> void:
 
 	# --- туман: плавающие полупрозрачные пятна.
 	if w.fog * k > 0.02:
-		var count := int(round(w.fog * k * 9.0))
+		# Пятен тем больше, чем гуще туман: при полной густоте их четырнадцать,
+		# и сквозь них дальний край экрана уже не читается — ровно так же,
+		# как перестают видеть боты.
+		var count := int(round(w.fog * k * 14.0))
 		for i in count:
 			var cx := Rng.hash01(i, 7) * size.x + sin(world.tick * 0.003 + i * 2.1) * 40.0
 			var cy := Rng.hash01(i, 13) * size.y + cos(world.tick * 0.002 + i * 1.7) * 30.0
 			var r := 90.0 + Rng.hash01(i, 29) * 130.0
-			var fog_a := (0.02 + w.fog * 0.05) * k
+			var fog_a := (0.02 + w.fog * 0.075) * k
 			draw_circle(Vector2(cx, cy), r, Color(0.86, 0.89, 0.94, fog_a))
 			draw_circle(Vector2(cx, cy), r * 0.6, Color(0.86, 0.89, 0.94, fog_a))
 
@@ -139,6 +142,20 @@ func _draw_weather(size: Vector2) -> void:
 			var length := 8.0 + Rng.hash01(i, 47) * 10.0
 			draw_line(Vector2(x, y), Vector2(x - length * 0.4, y + length), col, 1.0)
 
+	# --- снег: хлопья падают медленно и сносятся вбок.
+	if w.snow * k > 0.03:
+		# Белёсая пелена: снег не только сыплется, он ещё и лежит.
+		draw_rect(Rect2(Vector2.ZERO, size),
+			Color(0.88, 0.92, 0.97, w.snow * k * 0.10))
+		var flakes := int(round(w.snow * k * 110.0))
+		for i in flakes:
+			var speed := 1.2 + Rng.hash01(i, 53) * 1.6
+			var sx := Rng.hash01(i, 59) * size.x 				+ sin(world.tick * 0.008 + float(i)) * 26.0
+			var sy := Rng.fract(Rng.hash01(i, 61) + world.tick * 0.0022 * speed) 				* (size.y + 30.0) - 15.0
+			var r := 1.2 + Rng.hash01(i, 67) * 1.8
+			draw_circle(Vector2(sx, sy), r,
+				Color(1.0, 1.0, 1.0, (0.35 + w.snow * 0.4) * k))
+
 	# --- вспышка молнии.
 	if w.flash * k > 0.02:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.86, 0.92, 1.0, w.flash * k * 0.35))
@@ -152,10 +169,21 @@ func _draw_tiles() -> void:
 	var r1 := mini(map.rows - 1, int(ceil(_view.end.y / Cfg.TILE)))
 
 	# Земля с лёгкой шахматкой, чтобы читалась сетка и масштаб.
+	#
+	# В снегопад она выбеливается. Первая попытка накрывала весь экран одним
+	# полупрозрачным слоем — и вся сцена уходила в бурый: цветокоррекция
+	# подхватывала осветление и грела его. Подкрашивать надо саму землю,
+	# а не кадр: цвета считаются один раз на кадр, лишних вызовов рисования
+	# не появляется вовсе.
+	var snow_k := 0.0
+	if world.weather != null:
+		snow_k = clampf(world.weather.snow * Sets.weather_scale(), 0.0, 1.0) * 0.55
+	var g0: Color = Cfg.ground.lerp(Cfg.snow_ground, snow_k)
+	var g1: Color = Cfg.ground_alt.lerp(Cfg.snow_ground, snow_k)
 	for r in range(r0, r1 + 1):
 		for c in range(c0, c1 + 1):
 			_rect(c * Cfg.TILE, r * Cfg.TILE, Cfg.TILE, Cfg.TILE,
-				Cfg.ground if (r + c) % 2 == 0 else Cfg.ground_alt)
+				g0 if (r + c) % 2 == 0 else g1)
 
 	var water_phase := float(world.tick % 120) / 120.0
 
@@ -382,6 +410,12 @@ func _draw_ability_state(tank: Tank) -> void:
 			draw_arc(Vector2.ZERO, 17.0, 0, TAU, 20,
 				Color(col.r, col.g, col.b, pulse * 0.8), 2.0)
 
+## Насколько всё занесено снегом: 0 — чисто, 0.55 — полный снегопад.
+func _snow_k() -> float:
+	if world.weather == null:
+		return 0.0
+	return clampf(world.weather.snow * Sets.weather_scale(), 0.0, 1.0) * 0.55
+
 ## Асфальт и мост — одно покрытие для разметки: мост продолжает улицу,
 ## поэтому линии не должны обрываться перед въездом.
 func _is_paved(r: int, c: int) -> bool:
@@ -391,7 +425,11 @@ func _is_paved(r: int, c: int) -> bool:
 ## Асфальт: латаное полотно с трещинами, бордюром по краю проезжей части
 ## и осевой разметкой вдоль улицы.
 func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
-	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.road if (r * 7 + c * 11) % 3 == 0 else Cfg.road_alt)
+	# Асфальт в снег светлеет слабее газона: его чистят, да и лежит на нём
+	# меньше.
+	var k := _snow_k() * 0.6
+	_rect(x, y, Cfg.TILE, Cfg.TILE,
+		(Cfg.road if (r * 7 + c * 11) % 3 == 0 else Cfg.road_alt).lerp(Cfg.snow_ground, k))
 	# Заплатки и трещины — детерминированы по клетке, поэтому не мерцают.
 	for i in 3:
 		var px := x + float((r * 17 + c * 5 + i * 9) % 25) + 3.0
@@ -467,7 +505,9 @@ func _draw_bridge_tile(x: float, y: float, r: int, c: int) -> void:
 
 ## Газон парка: трава с кустиками, по ней танк идёт чуть медленнее.
 func _draw_grass_tile(x: float, y: float, r: int, c: int) -> void:
-	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.grass if (r + c) % 2 == 0 else Cfg.grass_alt)
+	var k := _snow_k()
+	var base: Color = (Cfg.grass if (r + c) % 2 == 0 else Cfg.grass_alt) 		.lerp(Cfg.snow_ground, k)
+	_rect(x, y, Cfg.TILE, Cfg.TILE, base)
 	for i in 5:
 		var px := x + float((r * 11 + c * 19 + i * 7) % 27) + 2.0
 		var py := y + float((r * 19 + c * 11 + i * 5) % 25) + 3.0

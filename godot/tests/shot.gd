@@ -68,6 +68,11 @@ func _ready() -> void:
 	# Активные способности: индикатор в HUD и карточка выбора перка.
 	await _ability_shot()
 
+	# Новые погодные условия: их не поймать в обычной партии — цикл дня
+	# длится десять минут, а условие меняется раз в полминуты.
+	for wx in [["night", "clear"], ["day", "fog"], ["day", "snow"]]:
+		await _weather_shot(String(wx[0]), String(wx[1]))
+
 	# Река и мосты: камеру ставим на переправу, иначе её можно не увидеть.
 	await _bridge_shot()
 
@@ -98,6 +103,26 @@ func _match_shot(mode: String, game_type: String, name: String) -> void:
 	await _frames(60)
 	print("    кадр: %.2f мс (эффекты %d)"
 		% [float(Time.get_ticks_usec() - t0) / 1000.0 / 60.0, Sets.fx_quality])
+	game.to_menu()
+	await _frames(5)
+
+## Снимок партии с закреплённой погодой и временем суток.
+func _weather_shot(daytime: String, weather: String) -> void:
+	game.ui.settings["mode"] = "ffa"
+	game.ui.settings["game_type"] = "single"
+	game.ui.settings["level"] = 1
+	game.ui.settings["daytime"] = daytime
+	game.ui.settings["weather"] = weather
+	game.start_match()
+	var guard := 0
+	while game.state == "perk" and guard < 20:
+		guard += 1
+		game._on_perk_chosen(game.perk_player, "")
+	# Интенсивность условия набирается плавно — даём ей дойти до предела.
+	await _frames(150)
+	await _save("weather_%s_%s" % [daytime, weather])
+	game.ui.settings["daytime"] = "auto"
+	game.ui.settings["weather"] = "auto"
 	game.to_menu()
 	await _frames(5)
 

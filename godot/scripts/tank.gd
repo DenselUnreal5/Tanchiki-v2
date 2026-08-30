@@ -401,6 +401,12 @@ func _update_surface(world) -> void:
 	elif surface_speed > 1.0:
 		surface_speed *= float(mods["roadSpeedMult"])
 
+	# Погода поверх покрытия: по снегу танк разгоняется и держит дорогу
+	# заметно хуже, по мокрому асфальту — чуть хуже. «Шипы» это отменяют,
+	# на то они и шипы.
+	if world.weather != null and not ability_active("grip"):
+		surface_speed *= world.weather.traction
+
 	var spd := sqrt(vx * vx + vy * vy)
 	if spd < 0.45:
 		return
