@@ -81,6 +81,14 @@ var fire_rate: int
 
 var alive := true
 var fire_cooldown := 0
+## Нагрев ствола от 0 до 1 и признак срыва в перегрев. Механика только для
+## живых игроков: у ботов скорострельность и так задана сложностью.
+var heat := 0.0
+var overheated := false
+## Счётчики для замеров баланса: сколько раз выстрелил и сколько раз
+## упёрся в перегрев.
+var shots_fired := 0
+var overheats := 0
 var spawn_protect := Cfg.SPAWN_PROTECT
 var respawn_timer := 0
 
@@ -190,9 +198,39 @@ var carrying_flag: bool:
 	get: return flag != null
 
 var can_fire: bool:
-	get: return alive and fire_cooldown <= 0
+	get: return alive and fire_cooldown <= 0 and not overheated
 
-## Время до следующего выстрела. «Форсаж» режет его вдвое, поэтому считается
+## Нагрев ствола: копится от выстрелов, стекает сам. Перегрев — не штраф
+## за частую стрельбу, а её потолок: очередь остаётся быстрой, но держать
+## её бесконечно нельзя.
+func _update_heat(world) -> void:
+	if owner == null:
+		return
+	if heat > 0.0:
+		heat = maxf(0.0, heat - Cfg.HEAT_COOL)
+	if overheated:
+		# Пар из ствола, пока остывает.
+		if world.tick % 5 == 0:
+			var a := turret_angle
+			world.particles.spawn(
+				x + cos(a) * muzzle_len, y + sin(a) * muzzle_len,
+				Color(0.85, 0.85, 0.88, 0.8), 2.0, 14.0, world.rng,
+				cos(a) * 0.2 - 0.1, sin(a) * 0.2 - 0.35)
+		if heat <= Cfg.HEAT_RESUME:
+			overheated = false
+
+## Учёт выстрела: нагрев и срыв в перегрев.
+func _after_shot() -> void:
+	shots_fired += 1
+	if owner == null:
+		return
+	heat = minf(1.0, heat + Cfg.HEAT_PER_SHOT)
+	if heat >= 1.0 and not overheated:
+		overheated = true
+		overheats += 1
+		Sfx.play("steam", x, y)
+
+## Время до следующего выстрела.## Время до следующего выстрела. «Форсаж» режет его вдвое, поэтому считается
 ## здесь, а не в каждом из трёх видов стрельбы.
 func reload_ticks() -> int:
 	if ability_active("overdrive"):
@@ -273,6 +311,7 @@ func update(world) -> void:
 		spawn_protect -= 1
 	if fire_cooldown > 0:
 		fire_cooldown -= 1
+	_update_heat(world)
 	if mine_cooldown > 0:
 		mine_cooldown -= 1
 	if shield_cooldown > 0:
@@ -486,6 +525,7 @@ func shoot(world) -> bool:
 	if not can_fire:
 		return false
 	fire_cooldown = reload_ticks()
+	_after_shot()
 
 	var muzzle_x := x + cos(turret_angle) * muzzle_len
 	var muzzle_y := y + sin(turret_angle) * muzzle_len
@@ -495,6 +535,7 @@ func shoot(world) -> bool:
 	var wp := Weapons.get_weapon(weapon) if weapon != "" else {}
 	if not wp.is_empty():
 		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * float(wp["cooldown_mult"]))))
+		_after_shot()
 		var bullets := int(wp["bullets"])
 		for i in bullets:
 			var offset := 0.0
@@ -531,6 +572,7 @@ func shoot_lobbed(world) -> bool:
 	if not can_fire:
 		return false
 	fire_cooldown = reload_ticks()
+	_after_shot()
 
 	var muzzle_x := x + cos(turret_angle) * muzzle_len
 	var muzzle_y := y + sin(turret_angle) * muzzle_len
@@ -735,6 +777,8 @@ func respawn(nx: float, ny: float) -> void:
 	hp = max_hp
 	spawn_protect = Cfg.SPAWN_PROTECT * 2
 	fire_cooldown = 0
+	heat = 0.0
+	overheated = false
 	respawn_timer = 0
 	stall_ticks = 0
 	shield_hp = 0.0

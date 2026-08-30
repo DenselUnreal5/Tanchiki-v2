@@ -1,7 +1,19 @@
 # ============================================================================
-# music.gd — процедурный саундтрек. Автозагрузка «Mus».
+# music.gd — саундтрек. Автозагрузка «Mus».
 #
-# Ассетов в проекте нет, поэтому оба трека не проигрываются, а собираются:
+# Музыка берётся из двух источников, и файлы всегда главнее.
+#
+#   music/combat/*  и  music/menu/*  — обычные аудиофайлы. Есть хотя бы один —
+#   играют они, вперемешку, и синтез для этой темы даже не запускается.
+#
+#   Пусто — тема синтезируется из осцилляторов, как раньше. Это не запасной
+#   вариант «на всякий случай», а гарантия: игра звучит и без единого ассета.
+#
+# Так сделано потому, что сведённую живую запись синтезатором на GDScript не
+# догнать: там настоящие инструменты, комната и мастеринг. Процедурный трек
+# хорош ровно до того момента, как появляется файл.
+#
+# Дальше — про синтез. Он не проигрывается, а собирается:
 # сначала синтезируются отдельные ноты и удары, потом раскладываются по сетке,
 # и получившийся буфер отдаётся движку как зацикленный AudioStreamWAV.
 #
@@ -65,8 +77,11 @@ const MENU_CHORDS := [
 ## Скорость перехода между темами, секунд.
 const FADE := 0.7
 
-var _combat: AudioStreamWAV
-var _menu: AudioStreamWAV
+var _combat: AudioStream
+var _menu: AudioStream
+## Пришла ли тема из файлов: от этого зависит шина. Процедурная идёт через
+## зал с реверберацией, сведённая запись — сухой, ей обработка только вредит.
+var _from_files := {"menu": false, "combat": false}
 ## Два плеера ради кроссфейда: обрыв темы на входе в бой слышен как сбой.
 var _players: Array[AudioStreamPlayer] = []
 var _active := 0
@@ -84,18 +99,98 @@ func _ready() -> void:
 		p.volume_db = -60.0
 		add_child(p)
 		_players.append(p)
-	# Две независимые задачи: на многоядерной машине темы собираются
-	# параллельно, а до первой партии боевая всё равно не нужна.
-	WorkerThreadPool.add_task(_build_menu_async)
-	WorkerThreadPool.add_task(_build_combat_async)
+
+	# Сначала файлы: синтезировать то, что уже есть готовым, незачем —
+	# это и полсекунды процессора на запуске, и заведомо худший звук.
+	for id in ["menu", "combat"]:
+		var list := _scan_music("res://music/" + id)
+		if list.is_empty():
+			continue
+		_from_files[id] = true
+		if id == "menu":
+			_menu = _playlist(list)
+		else:
+			_combat = _playlist(list)
+		print("[Mus] тема «%s»: файлов %d" % [id, list.size()])
+
+	if _menu == null:
+		WorkerThreadPool.add_task(_build_menu_async)
+	if _combat == null:
+		WorkerThreadPool.add_task(_build_combat_async)
+
+## Собирает список треков из папки. В собранной игре рядом с файлом лежит
+## его .import, поэтому суффикс отрезается, а повторы отсеиваются.
+func _scan_music(path: String) -> Array:
+	var out := []
+	var seen := {}
+	var dir := DirAccess.open(path)
+	if dir == null:
+		return out
+	for f in dir.get_files():
+		var name := f
+		if name.ends_with(".import"):
+			name = name.trim_suffix(".import")
+		if seen.has(name):
+			continue
+		var ext := name.get_extension().to_lower()
+		if ext != "mp3" and ext != "ogg" and ext != "wav":
+			continue
+		seen[name] = true
+		var stream = load(path + "/" + name)
+		if stream != null:
+			out.append(stream)
+	return out
+
+## Несколько треков подряд вперемешку. Один файл — просто он сам, зацикленный.
+func _playlist(streams: Array) -> AudioStream:
+	for st in streams:
+		if st is AudioStreamMP3 or st is AudioStreamOggVorbis:
+			st.loop = streams.size() == 1
+	if streams.size() == 1:
+		return streams[0]
+	var pl := AudioStreamPlaylist.new()
+	pl.stream_count = streams.size()
+	for i in streams.size():
+		pl.set_list_stream(i, streams[i])
+	pl.loop = true
+	# Вперемешку: с тремя треками подряд порядок запоминается за пару партий.
+	pl.shuffle = true
+	pl.fade_time = 1.0
+	return pl
 
 func _ensure_bus() -> void:
-	if AudioServer.get_bus_index("Music") >= 0:
-		return
-	var idx := AudioServer.bus_count
+	_add_bus("Music", "Master")
+	# Зал для синтезированных тем. Сухой осциллятор звучит «в вакууме» —
+	# именно это ухо и читает как «компьютерный звук». Реверберация движка
+	# стоит дешевле любой свёртки в GDScript и делает больше для живости,
+	# чем ещё десяток слоёв синтеза.
+	var hall := _add_bus("MusicHall", "Music")
+	if AudioServer.get_bus_effect_count(hall) == 0:
+		var rev := AudioEffectReverb.new()
+		rev.room_size = 0.85
+		rev.damping = 0.35
+		rev.spread = 1.0
+		rev.wet = 0.32
+		rev.dry = 0.85
+		rev.predelay_msec = 25.0
+		AudioServer.add_bus_effect(hall, rev, 0)
+		# Лёгкий хорус разводит одинаковые голоса по ширине: секция из
+		# двух расстроенных пил перестаёт звучать как один синтезатор.
+		var cho := AudioEffectChorus.new()
+		cho.voice_count = 2
+		cho.wet = 0.18
+		cho.dry = 0.9
+		AudioServer.add_bus_effect(hall, cho, 1)
+
+func _add_bus(bus_name: String, send_to: String) -> int:
+	var idx := AudioServer.get_bus_index(bus_name)
+	if idx >= 0:
+		return idx
+	idx = AudioServer.bus_count
 	AudioServer.add_bus(idx)
-	AudioServer.set_bus_name(idx, "Music")
-	AudioServer.set_bus_send(idx, "Master")
+	AudioServer.set_bus_name(idx, bus_name)
+	AudioServer.set_bus_send(idx, send_to)
+	return idx
 
 func _build_menu_async() -> void:
 	var t0 := Time.get_ticks_msec()
@@ -107,7 +202,7 @@ func _build_combat_async() -> void:
 	var loop := _build_combat()
 	_on_built.call_deferred("combat", loop, Time.get_ticks_msec() - t0)
 
-func _on_built(id: String, loop: AudioStreamWAV, ms: int) -> void:
+func _on_built(id: String, loop: AudioStream, ms: int) -> void:
 	if id == "menu":
 		_menu = loop
 	else:
@@ -160,14 +255,14 @@ func _request(id: String) -> void:
 	_want = id
 	if _current == id:
 		return
-	var loop: AudioStreamWAV = _menu if id == "menu" else _combat
+	var loop: AudioStream = _menu if id == "menu" else _combat
 	if loop == null:
 		return  # ещё собирается — включим в _on_built
 	_switch(id)
 
 ## Кроссфейд: новая тема поднимается на втором плеере, старая уходит.
 func _switch(id: String) -> void:
-	var loop: AudioStreamWAV = _menu if id == "menu" else _combat
+	var loop: AudioStream = _menu if id == "menu" else _combat
 	if loop == null:
 		return
 	_current = id
@@ -175,6 +270,9 @@ func _switch(id: String) -> void:
 	_active = 1 - _active
 	var to := _players[_active]
 
+	# Синтезированная тема идёт через зал, файловая — напрямую: у записи
+	# своя комната уже в миксе, и вторая поверх неё звучит как в бочке.
+	to.bus = "Music" if _from_files.get(id, false) else "MusicHall"
 	to.stream = loop
 	to.stream_paused = _paused
 	to.volume_db = -60.0

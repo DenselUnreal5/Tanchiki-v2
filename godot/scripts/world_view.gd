@@ -840,6 +840,14 @@ func _draw_tank(tank: Tank) -> void:
 		_:
 			_rect(b0, -bw * 0.5, bl, bw, barrel_base)
 			_rect(b1 - 4.0, -bw * 0.5 - 1.0, 5.0, bw + 2.0, barrel_dark)
+	# Раскалённый ствол: по нему видно, сколько ещё можно стрелять, не
+	# отводя глаз на полоску в углу экрана.
+	if tank.heat > 0.25:
+		var glow := Color(1.0, 0.35, 0.1, minf(0.85, (tank.heat - 0.25) * 1.1))
+		if tank.overheated:
+			glow = Color(1.0, 0.75, 0.45, 0.75 + 0.2 * sin(world.tick * 0.4))
+		_rect(b1 - 9.0, -bw * 0.5 - 0.5, 9.0, bw + 1.0, glow)
+
 	# Блик по верхней кромке ствола: без него ствол сливается в плоскую полосу.
 	if String(shape["muzzle"]) != "twin":
 		_rect(b0, -bw * 0.5, b1 - b0 - 3.0, 1.0, Color(1, 1, 1, 0.18))

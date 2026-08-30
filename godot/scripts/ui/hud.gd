@@ -92,6 +92,21 @@ func build(players: Array, world: World) -> void:
 		var hp_text := UiKit.label("", 10, Color("#b0b0b0"))
 		left.add_child(hp_text)
 
+		# ---- нагрев ствола ----
+		# Узкая полоска прямо под здоровьем: она нужна в те же моменты,
+		# что и HP, и разносить их по разным углам экрана нельзя.
+		var heat_wrap := Control.new()
+		heat_wrap.custom_minimum_size = Vector2(190, 5)
+		var heat_bg := ColorRect.new()
+		heat_bg.color = Color(0, 0, 0, 0.55)
+		heat_bg.size = Vector2(190, 5)
+		heat_wrap.add_child(heat_bg)
+		var heat_fill := ColorRect.new()
+		heat_fill.color = Color("#ff8833")
+		heat_fill.size = Vector2(0, 5)
+		heat_wrap.add_child(heat_fill)
+		left.add_child(heat_wrap)
+
 		# ---- верхняя правая часть: счёт, задача, погода ----
 		var right := UiKit.vbox(2)
 		right.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -157,6 +172,7 @@ func build(players: Array, world: World) -> void:
 			"root": root, "left": left, "right": right, "bottom": bottom,
 			"name": name_label, "hp_fill": hp_fill, "hp_bg": hp_bg,
 			"shield_fill": shield_fill, "hp_text": hp_text,
+			"heat_fill": heat_fill, "heat_wrap": heat_wrap,
 			"score": score, "objective": objective, "weather": weather_label,
 			"xp_label": xp_label, "xp_fill": xp_fill, "perks": perks,
 			"ability_row": ability_row, "ability_label": ability_label,
@@ -326,6 +342,22 @@ func update_hud(world: World) -> void:
 		}, "Ур. %d · %d/%d XP   |   Профиль %d · %d/%d" % [
 			player.session_level, player.session_xp, need,
 			Prof.global_level, Prof.global_xp, Prof.xp_to_next_level()])
+
+		# Нагрев: полоска прячется, пока ствол холодный — в спокойный момент
+		# на экране и без неё есть что читать.
+		var heat_tank = player.tank
+		var heat: float = heat_tank.heat if heat_tank != null else 0.0
+		var heat_wrap2: Control = panel["heat_wrap"]
+		heat_wrap2.visible = heat > 0.02
+		if heat_wrap2.visible:
+			var fill: ColorRect = panel["heat_fill"]
+			fill.size.x = 190.0 * clampf(heat, 0.0, 1.0)
+			if heat_tank != null and heat_tank.overheated:
+				# Перегрев мигает: это не «много жара», а «стрелять нельзя».
+				var k := 0.5 + 0.5 * sin(float(world.tick) * 0.35)
+				fill.color = Color(1.0, 0.35 + 0.25 * k, 0.2)
+			else:
+				fill.color = Color("#ff8833").lerp(Color("#ff3322"), heat)
 
 		_update_ability(panel, player)
 

@@ -210,6 +210,14 @@ func _run_case(case: Dictionary) -> int:
 		float(GameMap.stat_los_calls) / float(ticks),
 		float(Pathfinding.stat_calls) / float(ticks),
 		float(Pathfinding.stat_expanded) / float(ticks)])
+	# Темп стрельбы игрока — то, ради чего вводился перегрев ствола.
+	var pt = game.players[0].tank
+	if pt != null:
+		var minutes: float = float(ticks) / 60.0 / 60.0
+		print("    игрок: выстрелов %d (%.2f/с), перегревов %d, фрагов %d"
+			% [pt.shots_fired, float(pt.shots_fired) / (float(ticks) / 60.0),
+				pt.overheats, pt.kills])
+
 	# Итоговые счётчики режима.
 	var kills := 0
 	for t in world.tanks:

@@ -246,6 +246,7 @@ func _spawn_combatants() -> void:
 			"x": spot.x, "y": spot.y, "team": team, "name": player.name,
 			"owner": player, "max_hp": hp,
 			"speed": Cfg.PLAYER_SPEED, "fire_rate": Cfg.PLAYER_FIRE_RATE,
+			"dmg_scale": Cfg.PLAYER_DMG_MULT,
 			"color_key": player.color_key,
 			"upgrade_mods": player.upgrade_mods,
 			"cosmetics": player.cosmetics,

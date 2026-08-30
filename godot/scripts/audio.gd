@@ -40,6 +40,7 @@ const THROTTLE := {
 	# Ход по покрытию: звучит часто, поэтому троттлинг жёсткий.
 	"tread_hard": 12,
 	"tread_soft": 12,
+	"steam": 20,
 }
 
 ## Базовая громкость события. Выстрел и взрыв — громче всего остального,
@@ -55,6 +56,7 @@ const LEVEL := {
 	"clang": -10.0,
 	"tread_hard": -21.0,
 	"tread_soft": -21.0,
+	"steam": -13.0,
 	"water": -12.0,
 	"pickup": -9.0,
 	"levelup": -8.0,
@@ -230,6 +232,8 @@ func _build_streams(_streams: Dictionary) -> void:
 	_streams["tread_hard"] = [_tread(4200.0, 2200.0, 0.06, 41), _tread(3800.0, 1900.0, 0.06, 42)]
 	_streams["tread_soft"] = [_tread(1300.0, 480.0, 0.09, 43), _tread(1100.0, 420.0, 0.09, 44)]
 	_streams["water"] = [_splash(0), _splash(1)]
+	# Сброс пара из перегретого ствола: шипение с падающим срезом.
+	_streams["steam"] = [_steam()]
 
 	# --- интерфейс и события
 	_streams["pickup"] = [_pickup()]
@@ -319,6 +323,13 @@ func _splash(variant: int) -> AudioStreamWAV:
 	var b := Synth.buf(0.45)
 	Synth.add_noise(b, 0.0, 0.35, 6000.0, 700.0, 0.45, 9.0, 9600 + variant)
 	Synth.add_tone(b, 0.02, 0.25, "sine", 520.0, 170.0, 0.22, 11.0)
+	return Synth.to_stream(b)
+
+## Пар: длинный шум с падающим срезом — «пш-ш-ш», а не щелчок.
+func _steam() -> AudioStreamWAV:
+	var b := Synth.buf(0.75)
+	Synth.add_noise(b, 0.0, 0.70, 7000.0, 1400.0, 0.45, 3.2, 4242)
+	Synth.add_noise(b, 0.0, 0.10, 9000.0, 5000.0, 0.25, 14.0, 4243)
 	return Synth.to_stream(b)
 
 func _pickup() -> AudioStreamWAV:
