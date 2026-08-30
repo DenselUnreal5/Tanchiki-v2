@@ -12,6 +12,8 @@ var index: int
 var name: String
 var color_key: String
 var scheme                      # Ctl.MouseAimScheme | Ctl.KeyboardAimScheme
+## Сетевой номер соединения: 0 — локальная игра, 1 — хост, дальше клиенты.
+var peer_id := 0
 
 var tank: Tank = null
 

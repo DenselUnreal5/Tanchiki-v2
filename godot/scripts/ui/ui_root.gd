@@ -43,6 +43,12 @@ var _menu_settings_btn: Button
 var _hints: RichTextLabel
 var _lang_btn: Button
 
+var _net: Control
+var _net_body: VBoxContainer
+var _net_sub: RichTextLabel
+var _net_address := "127.0.0.1"
+var _net_error := ""
+
 var _settings: Control
 var _settings_body: VBoxContainer
 var _settings_sub: RichTextLabel
@@ -102,6 +108,11 @@ func _ready() -> void:
 	_daily_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
 	_daily_body = _overlay_body(_daily, I18n.t("daily.title", {}, "📅 Ежедневные задания"),
 		_daily_sub, func(): close_daily())
+	_net = _make_overlay(true)
+	_net_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
+	_net_body = _overlay_body(_net, I18n.t("net.title", {}, "🌐 Сетевая игра"),
+		_net_sub, func(): close_net(), 620)
+
 	_settings = _make_overlay(true)
 	_settings_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
 	_settings_body = _overlay_body(_settings, I18n.t("settings.title", {}, "⚙ Настройки"),
@@ -163,7 +174,7 @@ func _overlay_body(root: Control, title_text: String, sub: Control,
 
 func _resize_overlays() -> void:
 	var screen := get_viewport_rect().size
-	for root in [_gallery, _garage, _stats, _achievements, _daily, _settings, _gameover]:
+	for root in [_gallery, _garage, _stats, _achievements, _daily, _settings, _net, _gameover]:
 		if root == null or not root.has_meta("scroll"):
 			continue
 		var scroll: ScrollContainer = root.get_meta("scroll")
@@ -289,6 +300,12 @@ func _build_menu() -> void:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(b[1])
 		footer.add_child(btn)
+
+	var net_btn := UiKit.secondary(I18n.t("menu.net", {}, "🌐 Сетевая игра"), 13)
+	net_btn.custom_minimum_size = Vector2(0, 38)
+	net_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	net_btn.pressed.connect(func(): open_net())
+	footer.add_child(net_btn)
 
 	var settings_btn := UiKit.secondary(I18n.t("menu.settings", {}, "⚙ Настройки"), 13)
 	settings_btn.custom_minimum_size = Vector2(0, 38)
@@ -470,7 +487,7 @@ func refresh_profile() -> void:
 
 func hide_all_overlays() -> void:
 	for c in [_menu, _pause, _perk, _gameover, _gallery, _garage, _stats,
-			_achievements, _daily, _settings]:
+			_achievements, _daily, _settings, _net]:
 		if c != null:
 			c.visible = false
 
@@ -1353,3 +1370,120 @@ func close_settings() -> void:
 
 var is_settings_open: bool:
 	get: return _settings != null and _settings.visible
+
+# ============================================================ сетевая игра
+## Экран собирается заново при каждом изменении лобби: состояние соединения
+## меняется редко, а держать ссылки на полтора десятка узлов ради этого
+## дороже, чем пересобрать десяток строк.
+func open_net() -> void:
+	if not Net.lobby_changed.is_connected(_refresh_net):
+		Net.lobby_changed.connect(_refresh_net)
+		Net.net_error.connect(_on_net_error)
+	_net.visible = true
+	_refresh_net()
+
+func close_net() -> void:
+	_net.visible = false
+
+var is_net_open: bool:
+	get: return _net != null and _net.visible
+
+func _on_net_error(text: String) -> void:
+	_net_error = text
+	_refresh_net()
+
+func _refresh_net() -> void:
+	if _net == null or not _net.visible:
+		return
+	_net_sub.text = "[center]" + I18n.t("net.sub", {},
+		"Хост считает партию целиком, остальные шлют ввод и получают состояние") + "[/center]"
+	for c in _net_body.get_children():
+		c.queue_free()
+
+	if _net_error != "":
+		_net_body.add_child(UiKit.label(_net_error, 12, Cfg.UI_DANGER))
+
+	if Net.role == "":
+		_build_net_offline()
+	else:
+		_build_net_lobby()
+
+func _build_net_offline() -> void:
+	_net_body.add_child(UiKit.section(I18n.t("net.new", {}, "Своя игра"), Color("#44aaff")))
+
+	var name_row := UiKit.hbox(8)
+	name_row.add_child(UiKit.label(I18n.t("net.name", {}, "Имя"), 12, Cfg.UI_TEXT))
+	var name_edit := LineEdit.new()
+	name_edit.text = Net.my_name
+	name_edit.custom_minimum_size = Vector2(220, 30)
+	name_edit.text_changed.connect(func(t: String): Net.my_name = t)
+	name_row.add_child(name_edit)
+	_net_body.add_child(name_row)
+
+	var host_btn := UiKit.primary(I18n.t("net.host", {}, "Создать игру"), 13)
+	host_btn.pressed.connect(func():
+		_net_error = ""
+		Net.host_game()
+		_refresh_net())
+	_net_body.add_child(host_btn)
+	_net_body.add_child(UiKit.label(
+		I18n.t("net.host.hint", {}, "Порт 8124. В локальной сети остальным нужен ваш адрес, через интернет — проброс порта."),
+		9, Cfg.UI_MUTED))
+
+	_net_body.add_child(UiKit.section(I18n.t("net.join.title", {}, "Подключиться"), Color("#55ff88")))
+	var addr_row := UiKit.hbox(8)
+	addr_row.add_child(UiKit.label(I18n.t("net.address", {}, "Адрес"), 12, Cfg.UI_TEXT))
+	var addr_edit := LineEdit.new()
+	addr_edit.text = _net_address
+	addr_edit.custom_minimum_size = Vector2(220, 30)
+	addr_edit.text_changed.connect(func(t: String): _net_address = t)
+	addr_row.add_child(addr_edit)
+	_net_body.add_child(addr_row)
+
+	var join_btn := UiKit.secondary(I18n.t("net.join", {}, "Подключиться"), 13)
+	join_btn.pressed.connect(func():
+		_net_error = ""
+		Net.join_game(_net_address)
+		_refresh_net())
+	_net_body.add_child(join_btn)
+
+func _build_net_lobby() -> void:
+	var role_text := I18n.t("net.role.host", {}, "Вы хост")
+	if Net.role != "host":
+		role_text = I18n.t("net.role.client", {}, "Вы подключены")
+	_net_body.add_child(UiKit.section(role_text, Color("#ffaa33")))
+
+	if Net.lobby.is_empty():
+		_net_body.add_child(UiKit.label(I18n.t("net.waiting", {}, "Соединение…"), 12, Cfg.UI_MUTED))
+	for peer_id in Net.lobby.keys():
+		var info: Dictionary = Net.lobby[peer_id]
+		var row := UiKit.hbox(8)
+		var mark := "★" if int(peer_id) == 1 else "•"
+		row.add_child(UiKit.label("%s %s" % [mark, String(info.get("name", "Игрок"))],
+			12, Cfg.UI_TEXT))
+		var pal := Cfg.team_palette(String(info.get("color_key", "p1")))
+		var chip := ColorRect.new()
+		chip.color = pal["body"]
+		chip.custom_minimum_size = Vector2(18, 14)
+		row.add_child(chip)
+		_net_body.add_child(row)
+
+	if Net.role == "host":
+		var start_btn := UiKit.primary(I18n.t("net.start", {}, "Начать партию"), 13)
+		start_btn.pressed.connect(func():
+			close_net()
+			start_requested.emit())
+		_net_body.add_child(start_btn)
+		_net_body.add_child(UiKit.label(
+			I18n.t("net.start.hint", {}, "Режим, сложность и уровень берутся из вашего меню и объявляются всем."),
+			9, Cfg.UI_MUTED))
+	else:
+		_net_body.add_child(UiKit.label(
+			I18n.t("net.wait.host", {}, "Ждём, когда хост начнёт партию."), 11, Cfg.UI_MUTED))
+
+	var leave_btn := UiKit.danger(I18n.t("net.leave", {}, "Отключиться"), 12)
+	leave_btn.pressed.connect(func():
+		Net.leave()
+		_net_error = ""
+		_refresh_net())
+	_net_body.add_child(leave_btn)

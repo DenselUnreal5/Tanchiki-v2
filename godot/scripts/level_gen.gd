@@ -41,9 +41,13 @@ static func _defense_enemy_area(cols: int, rows: int) -> Dictionary:
 
 ## @param level_num 1..5 либо -1 для случайного
 ## @param mode ffa | ctf | koth | defense
-static func generate(level_num: int, mode: String) -> Dictionary:
+## @param seed_override сетевая партия передаёт seed хоста: карта у всех
+##        собирается локально и обязана совпасть до тайла.
+static func generate(level_num: int, mode: String, seed_override: int = -1) -> Dictionary:
 	var seed_value := 0
-	if level_num < 0:
+	if seed_override >= 0:
+		seed_value = seed_override
+	elif level_num < 0:
 		seed_value = randi() & 0xFFFFFFFF
 	else:
 		seed_value = ((level_num - 1) * 7777 + 42) & 0xFFFFFFFF

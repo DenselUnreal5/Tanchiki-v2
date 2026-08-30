@@ -36,6 +36,11 @@ var width := Cfg.TANK_W
 var height := Cfg.TANK_H
 ## Силуэт корпуса (ключ TankArt.CHASSIS) и радиус попадания пули.
 var chassis_id := "standard"
+## Сетевой номер танка: по нему клиент узнаёт, какой присланный танк
+## какому его собственному соответствует. Ноль — офлайн-партия.
+var net_id := 0
+## Чей это танк в сетевой партии: peer_id владельца, 0 — бот.
+var owner_peer := 0
 ## Габарит для рельефа. Он НЕ равен размеру корпуса: переулок в городе шириной
 ## в один тайл (32 px), и босс с корпусом 34 px в него бы не пролез — а A*
 ## всё равно построил бы через него маршрут и упёр бы босса в угол. Поэтому
@@ -144,6 +149,8 @@ func _init(opts: Dictionary) -> void:
 	# Силуэт задаёт и вид, и габариты: у босса корпус крупнее, и пули он
 	# ловит соответственно.
 	chassis_id = String(opts.get("chassis", "standard"))
+	net_id = int(opts.get("net_id", 0))
+	owner_peer = int(opts.get("owner_peer", 0))
 	var shape := TankArt.chassis(chassis_id)
 	width = float(shape["w"])
 	height = float(shape["h"])

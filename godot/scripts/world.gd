@@ -88,6 +88,8 @@ var max_flood_depth := 1
 var flood_level := 0.0
 
 var used_names := {}
+## Мир клиента: шага симуляции нет, состояние приходит по сети.
+var puppet := false
 
 func _init(opts: Dictionary) -> void:
 	map = opts["map"]
@@ -107,6 +109,13 @@ func _init(opts: Dictionary) -> void:
 	weather = WeatherSystem.new(int(level["seed"]))
 	particles = Ent.ParticleSystem.new()
 
+	# У клиента сетевой партии мир — марионетка: карта та же (собрана по тому
+	# же seed), но танки, аптечки и флаги не рождаются здесь, а приходят
+	# от хоста. Иначе на каждом экране была бы своя расстановка.
+	puppet = bool(opts.get("puppet", false))
+	if puppet:
+		return
+
 	_spawn_combatants()
 	_spawn_pickups()
 	_spawn_weapon_pickups()
@@ -115,6 +124,46 @@ func _init(opts: Dictionary) -> void:
 		_setup_koth()
 	if mode == "defense":
 		_setup_defense()
+
+# ------------------------------------------------------------------- сеть
+## Описание танка для клиента: всё, что не меняется каждый тик и потому
+## не место ему в снапшоте — имя, команда, расцветка, силуэт, косметика.
+static func tank_info(t: Tank) -> Dictionary:
+	return {
+		"id": t.net_id, "team": t.team, "name": t.name,
+		"color_key": t.color_key, "chassis": t.chassis_id,
+		"max_hp": t.max_hp, "speed": t.speed, "fire_rate": t.fire_rate,
+		"owner_peer": t.owner_peer, "cosmetics": t.cosmetics,
+	}
+
+func roster() -> Array:
+	var out := []
+	for t in tanks:
+		out.append(tank_info(t))
+	return out
+
+## Косметический шаг для клиента: время идёт, частицы летят, погода меняется,
+## но ни одно правило игры не выполняется — иначе клиент начал бы спорить
+## с хостом о том, кто в кого попал.
+func step_cosmetic() -> void:
+	tick += 1
+	Sfx.advance()
+	weather.update()
+	particles.update()
+	for piece in debris:
+		piece.update()
+	var live_debris := []
+	for piece in debris:
+		if piece.alive:
+			live_debris.append(piece)
+	debris = live_debris
+	for w in wrecks:
+		w.update()
+	var live_wrecks := []
+	for w in wrecks:
+		if w.alive:
+			live_wrecks.append(w)
+	wrecks = live_wrecks
 
 # ------------------------------------------------------------------ команды
 ## Враждебность определяется только несовпадением команд.
@@ -201,6 +250,8 @@ func _spawn_combatants() -> void:
 			"upgrade_mods": player.upgrade_mods,
 			"cosmetics": player.cosmetics,
 		})
+		tank.net_id = Net.next_tank_id()
+		tank.owner_peer = int(player.peer_id)
 		player.tank = tank
 		tanks.append(tank)
 
@@ -254,6 +305,7 @@ func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Ta
 		"chassis": String(type.get("chassis", "standard")),
 		"dmg_scale": float(type["dmg_scale"]),
 	})
+	tank.net_id = Net.next_tank_id()
 	tank.enemy_type = type
 	if bool(type["boss"]):
 		boss_alive = true
@@ -278,6 +330,10 @@ func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Ta
 		feed.emit(I18n.t("feed.boss", {"icon": type["icon"], "name": tank.name},
 			"%s %s — БОСС на поле боя!" % [type["icon"], tank.name]), Color("#e74c3c"))
 	tanks.append(tank)
+	# Волны «Обороны» и подкрепления рождаются посреди партии: снапшот
+	# их только двигает, а кто это такой — приходит отдельно и надёжно.
+	if Net.role == "host":
+		Net.host_tank_spawned(tank_info(tank))
 	return tank
 
 func _spawn_pickups() -> void:

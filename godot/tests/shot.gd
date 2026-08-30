@@ -37,6 +37,11 @@ func _ready() -> void:
 	await _save("settings")
 	game.ui.close_settings()
 
+	game.ui.open_net()
+	await _frames(10)
+	await _save("net_lobby")
+	game.ui.close_net()
+
 	game.ui.open_gallery()
 	await _frames(12)
 	await _save("gallery")

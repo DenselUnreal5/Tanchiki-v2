@@ -20,6 +20,20 @@ var players: Array = []
 
 ## Накопитель времени для фиксированного шага.
 var accumulator := 0.0
+## Сетевые соперники: играют в том же мире, но экран на этой машине не делят.
+var remote_players: Array = []
+var _snap_tick := 0
+var _sum_tick := 0
+## Сколько раз карта клиента разошлась с хостовой за партию. Ноль — норма;
+## всё остальное видно в тестах и в отладке.
+var net_desyncs := 0
+## Сколько сверок отпечатка вообще состоялось. Без этого счётчика ноль
+## расхождений неотличим от «сверка ни разу не сработала».
+var net_sums := 0
+## Последняя пара отпечатков: свой и хостовый. По ней видно не только
+## «разошлось или нет», но и на каком именно состоянии сверяли.
+var net_last_mine := 0
+var net_last_theirs := 0
 ## Игрок, для которого сейчас открыт выбор перка.
 var perk_player = null
 ## Суммарный урон за партию, для челленджа «Вампир».
@@ -58,6 +72,7 @@ func _ready() -> void:
 
 	_bind_ui()
 	_bind_profile_events()
+	_bind_net()
 
 	get_viewport().size_changed.connect(_on_resize)
 	_on_resize()
@@ -199,7 +214,9 @@ func _rebuild_views() -> void:
 	_layout_viewports()
 
 # ------------------------------------------------------------------ партия
-func start_match() -> void:
+## @param net_opts настройки сетевой партии от хоста: seed карты и состав.
+##        Пустой словарь — обычная локальная игра.
+func start_match(net_opts: Dictionary = {}) -> void:
 	# Предыдущая партия могла остаться в памяти из-за циклических ссылок.
 	if world != null:
 		world.dispose()
@@ -207,25 +224,70 @@ func start_match() -> void:
 
 	var s := ui.settings
 	var hotseat: bool = String(s["game_type"]) == "hotseat"
+	var is_client := Net.role == "client"
+	var seed_override := int(net_opts.get("net_seed", -1))
+	if is_client:
+		# Клиент играет тем режимом, который объявил хост, а не тем,
+		# что выбрано в его собственном меню.
+		s["mode"] = String(net_opts.get("mode", s["mode"]))
+		s["difficulty"] = String(net_opts.get("difficulty", s["difficulty"]))
+		s["level"] = int(net_opts.get("level", s["level"]))
 
+	# players — только местные игроки: по ним делится экран. Сетевые
+	# соперники живут в remote_players и в мир попадают наравне, но своего
+	# окна на этом компьютере не имеют.
+	remote_players = []
 	players = [PlayerState.new(0, I18n.t("player1", {}, "Игрок 1"),
 		String(s["color1"]), Ctl.MouseAimScheme.new(not hotseat))]
-	if hotseat:
+	if hotseat and not Net.is_online:
 		players.append(PlayerState.new(1, I18n.t("player2", {}, "Игрок 2"),
 			String(s["color2"]), Ctl.KeyboardAimScheme.new()))
+	if Net.is_online:
+		players[0].peer_id = multiplayer.get_unique_id()
+		players[0].name = String(Net.my_name)
+	if Net.role == "host":
+		# Каждому подключённому — свой игрок с сетевой схемой управления:
+		# его ввод приходит пакетами, а не с этой клавиатуры.
+		for peer_id in Net.lobby.keys():
+			if int(peer_id) == multiplayer.get_unique_id():
+				continue
+			var info: Dictionary = Net.lobby[peer_id]
+			var rp := PlayerState.new(remote_players.size() + 1,
+				String(info.get("name", "Игрок")), String(info.get("color_key", "p2")),
+				Ctl.NetScheme.new(int(peer_id)))
+			rp.peer_id = int(peer_id)
+			rp.cosmetics = info.get("cosmetics", {})
+			remote_players.append(rp)
+
 	for p in players:
 		p.reset_for_match()
 		p.upgrade_mods = Prof.upgrade_mods()
 		p.cosmetics = Prof.equipped_cosmetics()
+	for p in remote_players:
+		p.reset_for_match()
 
 	_layout_viewports()
 
-	var level := LevelGen.generate(int(s["level"]), String(s["mode"]))
+	var level := LevelGen.generate(int(s["level"]), String(s["mode"]), seed_override)
+	Net.reset_tank_ids()
 	world = World.new({
 		"map": level["map"], "level": level, "mode": String(s["mode"]),
-		"difficulty": String(s["difficulty"]), "players": players,
+		"difficulty": String(s["difficulty"]),
+		"players": players + remote_players,
 		"player_level": Prof.global_level,
+		"puppet": is_client,
 	})
+	if is_client:
+		# Состав приходит от хоста: свои танки клиент не порождает.
+		for info in net_opts.get("net_roster", []):
+			net_spawn_puppet(info)
+	elif Net.role == "host":
+		# Журнал изменений карты нужен только хосту и только в партии.
+		world.map.net_log_on = true
+		Net.host_start_match({
+			"mode": String(s["mode"]), "difficulty": String(s["difficulty"]),
+			"level": int(s["level"]),
+		}, int(level["seed"]), world.roster())
 	_bind_world_events(world)
 
 	match_damage = 0.0
@@ -300,7 +362,10 @@ func resume() -> void:
 
 # ------------------------------------------------------------------ события мира
 func _bind_world_events(w: World) -> void:
-	w.feed.connect(func(text: String, color: Color): hud.add_feed(text, color))
+	w.feed.connect(func(text: String, color: Color):
+		hud.add_feed(text, color)
+		if Net.role == "host":
+			Net.host_event("feed", {"text": text, "color": color.to_html()}))
 
 	w.damage_number.connect(func(x: float, y: float, text: String, color: Color):
 		if floaters.size() > 80:
@@ -380,6 +445,8 @@ func _reward_label(kind: String, who: String) -> String:
 
 func _on_finish(result: Dictionary) -> void:
 	state = S_GAMEOVER
+	if Net.role == "host":
+		Net.host_event("finish", result)
 	Mus.play_menu()
 	if bool(result["victory"]):
 		Prof.bump_stat("gamesWon", 1)
@@ -423,6 +490,9 @@ func _on_perk_chosen(player, perk_id: String) -> void:
 		hud.add_feed(I18n.t("feed.perkTook",
 			{"name": player.name, "icon": perk["icon"], "perk": I18n.dn(perk, "name", "perk")},
 			"%s взял %s %s" % [player.name, perk["icon"], perk["name"]]), Cfg.UI_GOLD)
+	# Клиент выбирает у себя, а танк живёт у хоста — отправляем выбор туда.
+	if Net.role == "client":
+		Net.send_perk(perk_id)
 	player.pending_level_ups = maxi(0, player.pending_level_ups - 1)
 	_process_perk_queue()
 
@@ -471,7 +541,9 @@ func _process(delta: float) -> void:
 		if p.scheme.has_method("read_command"):
 			p.scheme.mouse = mouse
 
-	if state == S_PLAYING:
+	if state == S_PLAYING and Net.role == "client":
+		_client_frame(delta)
+	elif state == S_PLAYING:
 		accumulator += minf(0.25, delta)
 		var steps := 0
 		while accumulator >= Cfg.TICK_SEC and steps < Cfg.MAX_STEPS_PER_FRAME:
@@ -494,6 +566,8 @@ func _process(delta: float) -> void:
 		if accumulator > Cfg.TICK_SEC * Cfg.MAX_STEPS_PER_FRAME:
 			accumulator = 0.0
 
+		_host_frame()
+
 		if not world.finished_flag:
 			for p in players:
 				if p.pending_level_ups > 0:
@@ -504,6 +578,209 @@ func _process(delta: float) -> void:
 	if state == S_PLAYING or state == S_PAUSED or state == S_PERK:
 		hud.update_hud(world)
 	_update_post_fx()
+
+# ============================================================== сетевая игра
+func _bind_net() -> void:
+	Net.bind_game(self)
+	Net.match_starting.connect(func(settings: Dictionary): start_match(settings))
+	Net.disconnected.connect(func():
+		if state != S_MENU:
+			to_menu())
+
+## Кадр клиента: своя симуляция не считается вовсе. Идут только частицы,
+## погода и обломки, а положение всего живого приходит от хоста.
+func _client_frame(delta: float) -> void:
+	accumulator += minf(0.25, delta)
+	var steps := 0
+	while accumulator >= Cfg.TICK_SEC and steps < Cfg.MAX_STEPS_PER_FRAME:
+		world.step_cosmetic()
+		_update_floaters()
+		accumulator -= Cfg.TICK_SEC
+		steps += 1
+		var p = players[0]
+		if p.scheme.has_method("read_command"):
+			Net.send_command(p.scheme.read_command(p))
+	if accumulator > Cfg.TICK_SEC * Cfg.MAX_STEPS_PER_FRAME:
+		accumulator = 0.0
+	_apply_net_state()
+	for p in players:
+		p.update_camera()
+
+## Хвост кадра хоста: разослать изменения карты и снапшот.
+func _host_frame() -> void:
+	if Net.role != "host" or world == null:
+		return
+	Net.host_map_delta(world.map.take_net_log())
+	# Уровень сетевому игроку начисляет мир у хоста, а выбирает перк он сам:
+	# зовём его экран, ответ придёт обратно как выбор.
+	for rp in remote_players:
+		while rp.pending_level_ups > 0:
+			rp.pending_level_ups -= 1
+			Net.host_event_to(int(rp.peer_id), "perk", {})
+	# Раз в пять секунд — отпечаток карты. Это дёшево и ловит потерю
+	# надёжного пакета, после которой у клиента осталась бы стена там,
+	# где её снесли ещё в прошлой атаке.
+	if world.tick - _sum_tick >= 300:
+		_sum_tick = world.tick
+		Net.host_event("mapsum", {"h": world.map.checksum()})
+
+	if world.tick - _snap_tick < Net.SNAP_EVERY:
+		return
+	_snap_tick = world.tick
+	Net.host_broadcast(world.tick, world.tanks, world.bullets, _net_extra())
+
+## Мелочь режима, без которой HUD клиента врёт: счёт, флаги, аптечки, база.
+func _net_extra() -> Dictionary:
+	var flags := []
+	for f in world.flags:
+		flags.append([f.x, f.y, 0 if f.team == "player" else 1, f.at_home])
+	var picks := []
+	for p in world.pickups:
+		picks.append([p.x, p.y])
+	var weapons := []
+	for w in world.weapon_pickups:
+		weapons.append([w.x, w.y, w.weapon_id])
+	var out := {
+		"flags": flags, "pickups": picks, "weapons": weapons,
+		"score": world.team_score, "wave": world.wave,
+	}
+	if world.base != null:
+		out["base"] = [world.base["hp"], world.base["max_hp"]]
+	return out
+
+## Раскладывает присланное состояние по объектам мира. Танки уже созданы
+## заранее по составу, поэтому здесь только координаты и здоровье.
+func _apply_net_state() -> void:
+	var st := Net.render_state()
+	if st.is_empty() or world == null:
+		return
+	var seen := {}
+	var live := []
+	for t in world.tanks:
+		var info = st["tanks"].get(t.net_id)
+		if info == null:
+			continue
+		seen[t.net_id] = true
+		t.x = float(info["x"])
+		t.y = float(info["y"])
+		t.body_angle = float(info["body"])
+		t.angle = t.body_angle
+		t.turret_angle = float(info["turret"])
+		t.hp = float(info["hp"])
+		t.shield_hp = float(info["shield"])
+		var flags := int(info["flags"])
+		t.alive = (flags & 1) != 0
+		# Таймеры не тикают у клиента, поэтому держим их взведёнными,
+		# пока хост сообщает, что эффект активен: отрисовке нужен сам факт.
+		t.turbo_timer = 2 if (flags & 2) != 0 else 0
+		t.spawn_protect = 2 if (flags & 4) != 0 else 0
+		t.shadow_timer = 2 if (flags & 16) != 0 else 0
+		t.ability_timer = 2 if (flags & 32) != 0 else 0
+		live.append(t)
+	world.tanks = live
+
+	# Пули пересобираются каждый кадр: их номера по сети не гоняются,
+	# а связывать их между пакетами ради экономии — сложность без выигрыша.
+	world.bullets.clear()
+	for b in st["bullets"]:
+		var pb = Ent.Bullet.new(float(b["x"]), float(b["y"]), 0.0, null)
+		pb.vx = float(b["vx"])
+		pb.vy = float(b["vy"])
+		pb.from_player = bool(b["player"])
+		world.bullets.append(pb)
+
+	_apply_net_extra(st.get("extra", {}))
+
+func _apply_net_extra(extra: Dictionary) -> void:
+	if extra.is_empty():
+		return
+	world.flags.clear()
+	for f in extra.get("flags", []):
+		var fl = Ent.Flag.new(float(f[0]), float(f[1]), "player" if int(f[2]) == 0 else "enemy")
+		fl.at_home = bool(f[3])
+		world.flags.append(fl)
+	world.pickups.clear()
+	for p in extra.get("pickups", []):
+		world.pickups.append(Ent.Pickup.new(float(p[0]), float(p[1])))
+	world.weapon_pickups.clear()
+	for w in extra.get("weapons", []):
+		world.weapon_pickups.append(Ent.WeaponPickup.new(float(w[0]), float(w[1]), String(w[2])))
+	if extra.has("score"):
+		world.team_score = extra["score"]
+	if extra.has("wave"):
+		world.wave = int(extra["wave"])
+	if extra.has("base") and world.base != null:
+		world.base["hp"] = float(extra["base"][0])
+
+## Создаёт у клиента танк-марионетку по описанию от хоста.
+func net_spawn_puppet(info: Dictionary) -> void:
+	if world == null:
+		return
+	for t in world.tanks:
+		if t.net_id == int(info["id"]):
+			return
+	var tank := Tank.new({
+		"x": 0.0, "y": 0.0, "team": String(info["team"]), "name": String(info["name"]),
+		"owner": null, "max_hp": float(info["max_hp"]), "speed": float(info["speed"]),
+		"fire_rate": int(info["fire_rate"]), "color_key": String(info["color_key"]),
+		"chassis": String(info["chassis"]),
+		"net_id": int(info["id"]), "owner_peer": int(info["owner_peer"]),
+	})
+	tank.cosmetics = info.get("cosmetics", {})
+	# Свой танк цепляется к местному игроку: иначе не будет ни камеры,
+	# ни HUD, ни прицеливания.
+	if int(info["owner_peer"]) == multiplayer.get_unique_id() and not players.is_empty():
+		tank.owner = players[0]
+		players[0].tank = tank
+	world.tanks.append(tank)
+
+func net_apply_map_delta(delta: Array) -> void:
+	if world == null:
+		return
+	var map := world.map
+	for entry in delta:
+		var i := int(entry[0])
+		map.tiles[i] = int(entry[1])
+		map.damage[i] = int(entry[2])
+	map.version += 1
+
+func net_apply_event(kind: String, args: Dictionary) -> void:
+	match kind:
+		"feed":
+			hud.add_feed(String(args.get("text", "")), Color(args.get("color", "#ffffff")))
+		"mapsum":
+			# Расхождение чиним не «подкруткой», а запросом карты целиком:
+			# знать, какие именно тайлы разошлись, клиент не может.
+			if world == null:
+				return
+			net_sums += 1
+			var mine := world.map.checksum()
+			var theirs := int(args.get("h", 0))
+			net_last_mine = mine
+			net_last_theirs = theirs
+			if mine != theirs:
+				net_desyncs += 1
+				print("[Net] карта разошлась: у меня %08x, у хоста %08x" % [mine, theirs])
+				Net.request_map_resync()
+		"perk":
+			if not players.is_empty():
+				players[0].pending_level_ups += 1
+				_process_perk_queue()
+		"finish":
+			if state != S_GAMEOVER:
+				_on_finish(args)
+
+## Перк, выбранный сетевым игроком: экран у него, танк — здесь.
+func net_apply_perk(peer_id: int, perk_id: String) -> void:
+	if perk_id == "":
+		return
+	for rp in remote_players:
+		if int(rp.peer_id) != peer_id:
+			continue
+		if rp.equip_perk(perk_id) and rp.tank != null:
+			rp.tank.perk_ids = rp.perk_ids
+			rp.tank.recompute()
+		return
 
 ## Звук слышен «из камеры»: громкость, панорама и глухость далёких
 ## выстрелов считаются от этих точек. В «горячем стуле» их две.

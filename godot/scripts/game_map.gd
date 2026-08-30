@@ -64,6 +64,11 @@ func set_tile(row: int, col: int, value: int) -> void:
 	# сразу стояло бы с трещинами.
 	damage[i] = 0
 	version += 1
+	# Журнал ведётся здесь, а не у вызывающих: тайлы меняют и снаряды,
+	# и гусеницы по деревьям, и потоп в «Царе горы». Замер показал, что
+	# при записи по местам вызова карта клиента расходилась с хостом —
+	# ровно на те изменения, которые проходили мимо.
+	_log_tile(row, col)
 
 func fill(value: int) -> void:
 	tiles.fill(value)
@@ -110,6 +115,55 @@ func damage_ratio(row: int, col: int) -> float:
 ## Наносит урон постройке. Возвращает true, если она разрушена.
 ## Урон не увеличивает version: перерисовывать кэши (миникарту, затенение)
 ## нужно только когда тайл действительно исчез.
+## Журнал изменений тайлов для сети. Включается только у хоста и только
+## на время партии: генерация уровня пишет в карту тысячи раз, и логировать
+## её было бы бессмысленно — клиент собирает ту же карту сам по seed.
+var net_log_on := false
+var net_log: Array = []
+
+func _log_tile(row: int, col: int) -> void:
+	if not net_log_on:
+		return
+	var i := row * cols + col
+	net_log.append([i, tiles[i], damage[i]])
+
+## Отпечаток карты. Хост шлёт его клиентам, те сверяют со своим: надёжный
+## пакет с изменениями может не дойти при переподключении, и тогда у клиента
+## останется стена там, где её давно снесли. Дешевле раз в пять секунд
+## сверить одно число, чем гонять карту целиком.
+func checksum() -> int:
+	var h := 5381
+	for i in tiles.size():
+		h = ((h * 33) ^ tiles[i]) & 0x7FFFFFFF
+	return h
+
+## Полный слепок карты — на случай, если отпечатки разошлись.
+## Тайлов одиннадцать видов, урон не больше 255, поэтому байта хватает
+## на каждое поле: 16 КБ вместо 64 КБ при передаче целыми числами.
+func snapshot_bytes() -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(tiles.size() * 2)
+	for i in tiles.size():
+		out[i * 2] = tiles[i] & 0xFF
+		out[i * 2 + 1] = damage[i] & 0xFF
+	return out
+
+func apply_snapshot_bytes(data: PackedByteArray) -> void:
+	if data.size() != tiles.size() * 2:
+		return
+	for i in tiles.size():
+		tiles[i] = data[i * 2]
+		damage[i] = data[i * 2 + 1]
+	version += 1
+
+## Забирает накопленные изменения и очищает журнал.
+func take_net_log() -> Array:
+	if net_log.is_empty():
+		return []
+	var out := net_log
+	net_log = []
+	return out
+
 func apply_damage(row: int, col: int, amount: float, source: String) -> bool:
 	if not in_bounds(row, col):
 		return false
@@ -120,10 +174,12 @@ func apply_damage(row: int, col: int, amount: float, source: String) -> bool:
 	var dealt := amount * Materials.resist(mat, source)
 	var total: float = float(damage[i]) + dealt
 	if total >= float(mat["hp"]):
+		# set_tile сам запишет изменение в журнал.
 		set_tile(row, col, Cfg.T_EMPTY)
 		return true
 	# 255 хватает: самая прочная постройка — 160 единиц.
 	damage[i] = int(minf(255.0, total))
+	_log_tile(row, col)
 	return false
 
 func is_drivable(row: int, col: int) -> bool:

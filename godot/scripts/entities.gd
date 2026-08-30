@@ -124,6 +124,13 @@ class Bullet extends RefCounted:
 		x = x_
 		y = y_
 		owner = owner_
+		# Пуля без владельца — марионетка сетевого клиента: она только
+		# рисуется, попадания за неё считает хост.
+		if owner_ == null:
+			var sp := Cfg.BULLET_SPEED
+			vx = cos(angle) * sp
+			vy = sin(angle) * sp
+			return
 		var speed: float = Cfg.BULLET_SPEED * float(owner_.mods["bulletSpeedMult"])
 		vx = cos(angle) * speed
 		vy = sin(angle) * speed
