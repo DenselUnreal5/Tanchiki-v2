@@ -92,6 +92,12 @@ func build(players: Array, world: World) -> void:
 		var hp_text := UiKit.label("", 10, Color("#b0b0b0"))
 		left.add_child(hp_text)
 
+		# Строка состояния сети. В одиночной игре скрыта: пустое место
+		# в углу экрана — тоже цена.
+		var net_label := UiKit.label("", 9, Color("#7fd0ff"))
+		net_label.visible = false
+		left.add_child(net_label)
+
 		# ---- нагрев ствола ----
 		# Узкая полоска прямо под здоровьем: она нужна в те же моменты,
 		# что и HP, и разносить их по разным углам экрана нельзя.
@@ -173,6 +179,7 @@ func build(players: Array, world: World) -> void:
 			"name": name_label, "hp_fill": hp_fill, "hp_bg": hp_bg,
 			"shield_fill": shield_fill, "hp_text": hp_text,
 			"heat_fill": heat_fill, "heat_wrap": heat_wrap,
+			"net": net_label,
 			"score": score, "objective": objective, "weather": weather_label,
 			"xp_label": xp_label, "xp_fill": xp_fill, "perks": perks,
 			"ability_row": ability_row, "ability_label": ability_label,
@@ -228,6 +235,38 @@ func hide_hud() -> void:
 	hide_scoreboard()
 
 # ------------------------------------------------------------------ обновление
+## Состояние сети: оборот, потери и молчание. Показывается только
+## в сетевой партии — и это единственное место, где игрок вообще узнаёт,
+## что связь плохая, а не «игра тормозит».
+func _update_net(panel: Dictionary) -> void:
+	var label: Label = panel["net"]
+	if not Net.is_online:
+		label.visible = false
+		return
+	label.visible = true
+	var st := Net.stats()
+	if Net.role == "host":
+		label.text = I18n.t("hud.net.host", {"n": Net.lobby.size() - 1},
+			"сеть: хост, игроков рядом %d" % (Net.lobby.size() - 1))
+		label.modulate = Color.WHITE
+		return
+
+	var lost: int = int(st["snap_lost"])
+	var total: int = maxi(1, int(st["snap_in"]) + lost)
+	label.text = I18n.t("hud.net.client",
+		{"rtt": int(st["rtt"]), "loss": int(round(float(lost) * 100.0 / float(total)))},
+		"сеть: %d мс, потерь %d%%" % [int(st["rtt"]),
+			int(round(float(lost) * 100.0 / float(total)))])
+	# Молчащая сеть подсвечивается: застывшая картинка без объяснения —
+	# худшее, что можно показать игроку.
+	label.modulate = Cfg.UI_DANGER if _game_stale() else Color.WHITE
+
+func _game_stale() -> bool:
+	var g := get_parent()
+	while g != null and not g.has_method("net_peer_left"):
+		g = g.get_parent()
+	return g != null and bool(g.get("net_stale"))
+
 ## Индикатор способности. Обновляется каждый кадр, потому что кулдаун —
 ## единственное в HUD, что меняется непрерывно.
 func _update_ability(panel: Dictionary, player) -> void:
@@ -358,6 +397,8 @@ func update_hud(world: World) -> void:
 				fill.color = Color(1.0, 0.35 + 0.25 * k, 0.2)
 			else:
 				fill.color = Color("#ff8833").lerp(Color("#ff3322"), heat)
+
+		_update_net(panel)
 
 		_update_ability(panel, player)
 

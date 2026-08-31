@@ -34,6 +34,8 @@ var net_sums := 0
 ## «разошлось или нет», но и на каком именно состоянии сверяли.
 var net_last_mine := 0
 var net_last_theirs := 0
+## Сеть молчит дольше порога: HUD показывает это игроку.
+var net_stale := false
 ## Игрок, для которого сейчас открыт выбор перка.
 var perk_player = null
 ## Суммарный урон за партию, для челленджа «Вампир».
@@ -609,8 +611,30 @@ func _client_frame(delta: float) -> void:
 	if accumulator > Cfg.TICK_SEC * Cfg.MAX_STEPS_PER_FRAME:
 		accumulator = 0.0
 	_apply_net_state()
+	_check_net_alive()
 	for p in players:
 		p.update_camera()
+
+## Сколько молчит сеть, прежде чем предупредить игрока и прежде чем
+## признать партию потерянной. Первый порог — четыре пропущенных снапшота
+## подряд, второй — заведомо не джиттер, а обрыв.
+const NET_WARN_MSEC := 700
+const NET_DEAD_MSEC := 8000
+
+## Клиент не считает мир сам, поэтому молчащая сеть выглядит как застывшая
+## картинка без единой ошибки в консоли. Это худший вид поломки: игра цела,
+## но не играет. Здесь она называет вещи своими именами.
+func _check_net_alive() -> void:
+	if Net.role != "client":
+		return
+	var st := Net.stats()
+	var stale := int(st["stale_msec"])
+	net_stale = stale > NET_WARN_MSEC
+	if stale > NET_DEAD_MSEC:
+		hud.add_feed(I18n.t("net.dead", {}, "Хост не отвечает — выходим в меню"),
+			Cfg.UI_DANGER)
+		Net.leave(false)
+		to_menu()
 
 ## Хвост кадра хоста: разослать изменения карты и снапшот.
 func _host_frame() -> void:
@@ -775,6 +799,31 @@ func net_apply_event(kind: String, args: Dictionary) -> void:
 		"finish":
 			if state != S_GAMEOVER:
 				_on_finish(args)
+
+## Игрок отключился посреди партии. Без уборки его танк оставался
+## в мире с последней командой в руках: ехал в стену до конца партии,
+## занимал место в счёте и продолжал получать уровни.
+func net_peer_left(peer_id: int) -> void:
+	for i in range(remote_players.size() - 1, -1, -1):
+		var rp = remote_players[i]
+		if int(rp.peer_id) != peer_id:
+			continue
+		if rp.tank != null:
+			# Танк убирается из мира целиком, а не просто помечается мёртвым.
+			# Мёртвый корпус остаётся в списке, и его продолжает расталкивать
+			# физика: замер показал, что за две секунды он уезжал на 40 px
+			# сам по себе. Клиенты уберут его следом — снапшот его больше
+			# не содержит, а лишние танки клиент вычищает сам.
+			rp.tank.alive = false
+			rp.tank.owner = null
+			if world != null:
+				world.tanks.erase(rp.tank)
+		hud.add_feed(I18n.t("net.left", {"name": rp.name},
+			"%s покинул бой" % rp.name), Cfg.UI_WARN)
+		if world != null:
+			world.players.erase(rp)
+		remote_players.remove_at(i)
+	return
 
 ## Перк, выбранный сетевым игроком: экран у него, танк — здесь.
 func net_apply_perk(peer_id: int, perk_id: String) -> void:

@@ -54,6 +54,35 @@ var _snaps: Array = []
 var _roster := {}
 var _match_active := false
 
+# ------------------------------------------------------------- диагностика
+## Счётчики за партию. Без них про «потери и лаги» нечего сказать: сеть
+## либо работает, либо нет, а насколько плохо — не видно.
+var stat_snap_out := 0     # отправлено снапшотов (хост)
+var stat_snap_in := 0      # принято снапшотов (клиент)
+var stat_snap_lost := 0    # не дошло, посчитано по разрывам нумерации
+var stat_snap_late := 0    # пришло с опозданием и отброшено
+var stat_cmd_in := 0       # принято пакетов ввода (хост)
+var stat_cmd_late := 0     # ввод, пришедший не по порядку
+var rtt_msec := 0.0        # время оборота до хоста
+var last_snap_msec := 0    # когда пришёл последний снапшот
+
+## Номер исходящей команды и последний принятый номер по каждому игроку.
+var _cmd_seq := 0
+var _cmd_last := {}
+## Номер исходящего снапшота и последний принятый — по разрывам между
+## ними считаются потери.
+var _snap_seq := 0
+var _last_snap_seq := -1
+
+# --------------------------------------------------- искусственные условия
+## Доля намеренно теряемых пакетов и добавочная задержка. Ноль — обычная
+## работа. Нужны, чтобы плохую сеть можно было воспроизвести и починить,
+## а не рассуждать о ней умозрительно.
+var debug_loss := 0.0
+var debug_lag_msec := 0.0
+var _delayed: Array = []
+var _dbg_rng := RandomNumberGenerator.new()
+
 var is_online: bool:
 	get: return role != ""
 
@@ -62,6 +91,7 @@ var is_authority: bool:
 	get: return role != "client"
 
 func _ready() -> void:
+	_dbg_rng.randomize()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected)
@@ -70,6 +100,49 @@ func _ready() -> void:
 
 func bind_game(g: Node) -> void:
 	_game = g
+
+## Отложенная отправка и замер оборота. Задержка нужна только отладке:
+## в обычной игре очередь всегда пуста и цикл ничего не стоит.
+func _process(_delta: float) -> void:
+	if not _delayed.is_empty():
+		var now := Time.get_ticks_msec()
+		var keep := []
+		for item in _delayed:
+			if int(item["due"]) <= now:
+				(item["call"] as Callable).call()
+			else:
+				keep.append(item)
+		_delayed = keep
+
+	# Оборот до хоста меряется средствами ENet: своей нумерации для этого
+	# заводить незачем.
+	if role == "client" and _peer != null:
+		var st := _peer.get_peer(1)
+		if st != null:
+			rtt_msec = float(st.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME))
+
+## Отправка с учётом отладочных условий: часть пакетов теряется, остальные
+## уходят с задержкой.
+func _send(callable: Callable) -> void:
+	if debug_loss > 0.0 and _dbg_rng.randf() < debug_loss:
+		return
+	if debug_lag_msec > 0.0:
+		_delayed.append({"due": Time.get_ticks_msec() + int(debug_lag_msec),
+			"call": callable})
+		return
+	callable.call()
+
+## Сводка состояния сети для HUD и тестов.
+func stats() -> Dictionary:
+	var stale := 0
+	if last_snap_msec > 0:
+		stale = Time.get_ticks_msec() - last_snap_msec
+	return {
+		"role": role, "rtt": rtt_msec, "stale_msec": stale,
+		"snap_in": stat_snap_in, "snap_out": stat_snap_out,
+		"snap_lost": stat_snap_lost, "snap_late": stat_snap_late,
+		"cmd_in": stat_cmd_in, "cmd_late": stat_cmd_late,
+	}
 
 # ------------------------------------------------------------------ сессия
 func host_game(port: int = PORT) -> bool:
@@ -100,7 +173,13 @@ func join_game(address: String, port: int = PORT) -> bool:
 	lobby_changed.emit()
 	return true
 
-func leave() -> void:
+## @param notify сообщить игре, что партия оборвалась. Ложь только там,
+##        где игра уже сама уходит в меню — иначе выйдет двойной переход.
+func leave(notify: bool = true) -> void:
+	# Уход посреди партии — это тот же обрыв, только по своей воле. Без
+	# сообщения игре клиент оставался в бою с застывшей картинкой: снапшоты
+	# больше не приходят, а мир он не считает.
+	var was_playing := _match_active and role == "client"
 	if _peer != null:
 		_peer.close()
 		_peer = null
@@ -108,10 +187,17 @@ func leave() -> void:
 	role = ""
 	lobby.clear()
 	_commands.clear()
+	_cmd_last.clear()
 	_snaps.clear()
+	_delayed.clear()
 	_roster.clear()
 	_match_active = false
+	_last_snap_seq = -1
+	_snap_seq = 0
+	last_snap_msec = 0
 	lobby_changed.emit()
+	if was_playing and notify:
+		disconnected.emit()
 
 func _self_info() -> Dictionary:
 	return {
@@ -132,6 +218,13 @@ func _on_peer_disconnected(id: int) -> void:
 	if role != "host":
 		return
 	lobby.erase(id)
+	# Ввод отключившегося стирается немедленно. Без этого его танк продолжал
+	# ехать по последней команде до конца партии — упирался в стену и жёг
+	# гусеницы, пока кто-нибудь не подстрелит.
+	_commands.erase(id)
+	_cmd_last.erase(id)
+	if _game != null and _game.has_method("net_peer_left"):
+		_game.net_peer_left(id)
 	_rpc_lobby.rpc(lobby)
 	lobby_changed.emit()
 
@@ -145,7 +238,7 @@ func _on_connect_failed() -> void:
 func _on_server_disconnected() -> void:
 	net_error.emit(I18n.t("net.err.lost", {}, "Соединение с хостом потеряно"))
 	disconnected.emit()
-	leave()
+	leave(false)
 
 @rpc("any_peer", "reliable")
 func _rpc_hello(info: Dictionary) -> void:
@@ -175,10 +268,16 @@ func host_start_match(settings: Dictionary, seed_value: int, roster: Array) -> v
 
 @rpc("authority", "reliable")
 func _rpc_match_start(settings: Dictionary, seed_value: int, roster: Array) -> void:
+	if seed_value < 0 or roster.is_empty() or not settings.has("mode"):
+		net_error.emit(I18n.t("net.err.start", {},
+			"Хост прислал непонятный старт партии"))
+		return
 	_snaps.clear()
+	_last_snap_seq = -1
 	_roster.clear()
 	for info in roster:
-		_roster[int(info["id"])] = info
+		if _valid_tank_info(info):
+			_roster[int(info["id"])] = info
 	_match_active = true
 	var s := settings.duplicate()
 	s["net_seed"] = seed_value
@@ -194,9 +293,22 @@ func host_tank_spawned(info: Dictionary) -> void:
 
 @rpc("authority", "reliable")
 func _rpc_tank_spawn(info: Dictionary) -> void:
+	if not _valid_tank_info(info):
+		push_warning("[Net] отброшено описание танка без обязательных полей")
+		return
 	_roster[int(info["id"])] = info
 	if _game != null and _game.world != null:
 		_game.net_spawn_puppet(info)
+
+## Описание танка приходит по сети, и верить ему на слово нельзя: одно
+## отсутствующее поле роняет игру прямо в обработчике пакета. Проверка
+## дешевле любого разбора падения у игрока.
+static func _valid_tank_info(info: Dictionary) -> bool:
+	for key in ["id", "team", "name", "color_key", "chassis", "max_hp",
+			"speed", "fire_rate", "owner_peer"]:
+		if not info.has(key):
+			return false
+	return int(info["id"]) > 0
 
 func next_tank_id() -> int:
 	_next_tank_id += 1
@@ -211,31 +323,76 @@ func reset_tank_ids() -> void:
 func send_command(cmd: Dictionary) -> void:
 	if role != "client":
 		return
-	_rpc_command.rpc_id(1, NetProtocol.encode_command(cmd))
+	_cmd_seq = (_cmd_seq + 1) & 0xFFFF
+	var data := NetProtocol.encode_command(cmd, _cmd_seq)
+	_send(func(): _rpc_command.rpc_id(1, data))
 
 @rpc("any_peer", "unreliable")
 func _rpc_command(data: PackedByteArray) -> void:
 	if role != "host":
 		return
-	_commands[multiplayer.get_remote_sender_id()] = NetProtocol.decode_command(data)
+	var id := multiplayer.get_remote_sender_id()
+	if not lobby.has(id):
+		return  # пакет от того, кого в партии нет
+	var cmd := NetProtocol.decode_command(data)
+	stat_cmd_in += 1
+
+	# UDP не гарантирует порядок: пакет, ушедший раньше, может прийти позже.
+	# Без этой проверки опоздавший кадр ввода затирал свежий, и танк дёргался
+	# на ровном месте.
+	var seq := int(cmd["seq"])
+	if _cmd_last.has(id):
+		var diff: int = (seq - int(_cmd_last[id])) & 0xFFFF
+		if diff == 0 or diff > 32768:
+			stat_cmd_late += 1
+			return
+	_cmd_last[id] = seq
+
+	cmd["at"] = Time.get_ticks_msec()
+	_commands[id] = cmd
+
+## Сколько миллисекунд ввод считается годным после последнего пакета.
+## Дальше танк отпускает управление вместо того, чтобы вечно ехать по
+## последней команде: при обрыве это выглядело как танк-призрак, уходящий
+## в стену до конца партии.
+const COMMAND_TTL_MSEC := 500
 
 ## Последний ввод игрока — его читает сетевая схема управления.
 func command_of(peer_id: int) -> Dictionary:
-	return _commands.get(peer_id, {})
+	var cmd: Dictionary = _commands.get(peer_id, {})
+	if cmd.is_empty():
+		return cmd
+	if Time.get_ticks_msec() - int(cmd.get("at", 0)) > COMMAND_TTL_MSEC:
+		return {}
+	return cmd
 
 # ---------------------------------------------------------------- снапшоты
 func host_broadcast(tick: int, tanks: Array, bullets: Array, extra: Dictionary) -> void:
 	if role != "host" or lobby.size() <= 1:
 		return
-	_rpc_snapshot.rpc(NetProtocol.encode_snapshot(tick, tanks, bullets, extra))
+	_snap_seq += 1
+	var data := NetProtocol.encode_snapshot(_snap_seq, tick, tanks, bullets, extra)
+	stat_snap_out += 1
+	_send(func(): _rpc_snapshot.rpc(data))
 
 @rpc("authority", "unreliable")
 func _rpc_snapshot(data: PackedByteArray) -> void:
 	var snap := NetProtocol.decode_snapshot(data)
+	var seq := int(snap["seq"])
+
 	# Пакеты приходят не по порядку: старый после нового просто отбрасываем,
 	# иначе картинка дёрнется назад.
-	if not _snaps.is_empty() and int(snap["tick"]) <= int(_snaps[-1]["data"]["tick"]):
+	if _last_snap_seq >= 0 and seq <= _last_snap_seq:
+		stat_snap_late += 1
 		return
+
+	# Разрыв в нумерации — это и есть потерянные пакеты.
+	if _last_snap_seq >= 0:
+		stat_snap_lost += seq - _last_snap_seq - 1
+	_last_snap_seq = seq
+
+	stat_snap_in += 1
+	last_snap_msec = Time.get_ticks_msec()
 	_snaps.append({"t": Time.get_ticks_msec() / 1000.0, "data": snap})
 	while _snaps.size() > 8:
 		_snaps.pop_front()
@@ -302,8 +459,24 @@ func host_map_delta(delta: Array) -> void:
 
 @rpc("authority", "reliable")
 func _rpc_map_delta(delta: Array) -> void:
-	if _game != null and _game.world != null:
-		_game.net_apply_map_delta(delta)
+	if _game == null or _game.world == null:
+		return
+	# Пакет мог прийти от старой версии или прийти битым: индекс за границей
+	# карты — это падение прямо в обработчике.
+	var limit: int = _game.world.map.tiles.size()
+	var clean := []
+	for entry in delta:
+		if not (entry is Array) or entry.size() < 3:
+			continue
+		var i := int(entry[0])
+		if i < 0 or i >= limit:
+			continue
+		clean.append(entry)
+	if clean.size() != delta.size():
+		push_warning("[Net] отброшено %d негодных изменений карты"
+			% (delta.size() - clean.size()))
+	if not clean.is_empty():
+		_game.net_apply_map_delta(clean)
 
 ## Перк выбирается на экране клиента, а танк живёт у хоста — без этого
 ## выбор не имел бы никакого действия.
@@ -339,9 +512,14 @@ func _rpc_want_map() -> void:
 
 @rpc("authority", "reliable")
 func _rpc_full_map(data: PackedByteArray) -> void:
-	if _game != null and _game.world != null:
-		_game.world.map.apply_snapshot_bytes(data)
-		print("[Net] карта пересинхронизирована (%d байт)" % data.size())
+	if _game == null or _game.world == null:
+		return
+	var want: int = _game.world.map.tiles.size() * 2
+	if data.size() != want:
+		push_warning("[Net] карта не того размера: %d вместо %d" % [data.size(), want])
+		return
+	_game.world.map.apply_snapshot_bytes(data)
+	print("[Net] карта пересинхронизирована (%d байт)" % data.size())
 
 func host_event(kind: String, args: Dictionary) -> void:
 	if role != "host" or lobby.size() <= 1:
@@ -350,5 +528,10 @@ func host_event(kind: String, args: Dictionary) -> void:
 
 @rpc("authority", "reliable")
 func _rpc_event(kind: String, args: Dictionary) -> void:
-	if _game != null:
-		_game.net_apply_event(kind, args)
+	if _game == null:
+		return
+	# Вид события приходит строкой: незнакомую игра просто не понимает,
+	# и это нормально — так старый клиент переживает нового хоста.
+	if not ["feed", "finish", "perk", "mapsum"].has(kind):
+		return
+	_game.net_apply_event(kind, args)

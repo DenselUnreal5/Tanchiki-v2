@@ -19,16 +19,23 @@ extends RefCounted
 ## Версия формата. Клиент с другой версией отвергается на входе: разошедшийся
 ## протокол выглядит как случайные телепорты танков, и искать причину потом
 ## куда дороже, чем сверить число.
-const VERSION := 1
+## Версия 3: у снапшота появился свой номер. Раньше потери считались
+## по шагу тиков, а хост шлёт снапшот не строго каждые три тика —
+## за кадр мир может шагнуть несколько раз. Замер показывал 48%
+## потерь там, где их было 25%.
+const VERSION := 3
 
 # ------------------------------------------------------------------ снапшот
 ## Полное состояние партии на текущий тик.
 ##   tanks   — [{id, x, y, body, turret, hp, flags}]
 ##   bullets — [{x, y, vx, vy, team}]
-static func encode_snapshot(tick: int, tanks: Array, bullets: Array,
+static func encode_snapshot(seq: int, tick: int, tanks: Array, bullets: Array,
 		extra: Dictionary) -> PackedByteArray:
 	var buf := StreamPeerBuffer.new()
 	buf.big_endian = false
+	# Номер пакета идёт первым: по разрывам в нём считаются потери,
+	# и это единственный честный способ их посчитать.
+	buf.put_u32(seq)
 	buf.put_u32(tick)
 
 	buf.put_u16(tanks.size())
@@ -74,7 +81,8 @@ static func decode_snapshot(data: PackedByteArray) -> Dictionary:
 	var buf := StreamPeerBuffer.new()
 	buf.big_endian = false
 	buf.data_array = data
-	var out := {"tick": buf.get_u32(), "tanks": [], "bullets": [], "extra": {}}
+	var out := {"seq": buf.get_u32(), "tick": buf.get_u32(),
+		"tanks": [], "bullets": [], "extra": {}}
 
 	var n := buf.get_u16()
 	for i in n:
@@ -105,9 +113,13 @@ static func decode_snapshot(data: PackedByteArray) -> Dictionary:
 # ------------------------------------------------------------------- команда
 ## Ввод одного игрока за тик. Летит от клиента к хосту шестьдесят раз
 ## в секунду, поэтому ужат до тринадцати байт.
-static func encode_command(cmd: Dictionary) -> PackedByteArray:
+static func encode_command(cmd: Dictionary, seq: int) -> PackedByteArray:
 	var buf := StreamPeerBuffer.new()
 	buf.big_endian = false
+	# Номер по кругу в два байта: при 60 пакетах в секунду оборот раз
+	# в восемнадцать минут — этого хватает, чтобы отличить свежий пакет
+	# от опоздавшего.
+	buf.put_u16(seq & 0xFFFF)
 	# Направление движения — два байта вместо двух float: оно всегда
 	# в пределах [-1, 1].
 	buf.put_8(clampi(int(round(float(cmd["mx"]) * 100.0)), -127, 127))
@@ -132,12 +144,14 @@ static func decode_command(data: PackedByteArray) -> Dictionary:
 	var buf := StreamPeerBuffer.new()
 	buf.big_endian = false
 	buf.data_array = data
+	var seq := buf.get_u16()
 	var mx := float(buf.get_8()) / 100.0
 	var my := float(buf.get_8()) / 100.0
 	var ax := buf.get_float()
 	var ay := buf.get_float()
 	var bits := buf.get_u8()
 	return {
+		"seq": seq,
 		"mx": mx, "my": my, "ax": ax, "ay": ay,
 		"fire": (bits & 1) != 0,
 		"mine": (bits & 2) != 0,
