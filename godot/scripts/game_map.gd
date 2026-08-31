@@ -35,9 +35,15 @@ static func is_solid_tile(tile: int) -> bool:
 	return tile == Cfg.T_WALL or tile == Cfg.T_BRICK
 
 ## Тайлы, по которым бот согласен строить маршрут.
+##
+## Асфальт, мост и газон здесь обязаны быть. Их отсутствие обошлось дорого:
+## страховка связности считала всю дорожную сеть препятствием и прорубала
+## сквозь неё коридоры, стирая улицы и разрезая мосты, а боты не строили
+## по дорогам маршрутов вовсе — на городской карте, где асфальта четверть.
 static func is_drivable_tile(tile: int) -> bool:
 	return tile == Cfg.T_EMPTY or tile == Cfg.T_TREE or tile == Cfg.T_BASE_P \
-		or tile == Cfg.T_BASE_E or tile == Cfg.T_SAND
+		or tile == Cfg.T_BASE_E or tile == Cfg.T_SAND \
+		or tile == Cfg.T_ROAD or tile == Cfg.T_BRIDGE or tile == Cfg.T_GRASS
 
 var width: float:
 	get: return float(cols * Cfg.TILE)

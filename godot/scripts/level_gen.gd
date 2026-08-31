@@ -1,22 +1,34 @@
 # ============================================================================
-# level_gen.gd — генерация уровней: город, река, мосты и парки.
+# level_gen.gd — оркестратор генерации уровня.
 #
-# Генерация полностью детерминирована от seed: номер уровня 1..5 даёт всегда
-# одну и ту же карту, 'random' — случайную.
+# Сам он ничего не рисует. Его дело — порядок этапов и то, что специфично
+# для режимов: базы, флаги, зоны спавна.
 #
-# Карта строится в четыре слоя, порядок важен:
-#   1. Сетка улиц и проспектов — асфальт, скелет всей карты.
-#   2. Кварталы между улицами — застройка, парки и площади.
-#   3. Река поперёк города — стирает всё, через что течёт.
-#   4. Мосты по улицам, которые её пересекают, — единственные переправы.
+#   1. MapPlan   — план: магистрали, улицы, кварталы, районы, кольца
+#   2. RoadNet   — покраска дорожной сети
+#   3. Districts — застройка каждого квартала по его району
+#   4. WaterGen  — река, берега, до четырёх мостов
+#   5. режим     — базы, флаги, площадки
+#   6. связность — проходимость карты и целостность дорожной сети
 #
-# Река идёт последней именно потому, что должна резать готовый город:
-# набережная получается там, где вода съела часть квартала, а мост ложится
-# ровно на улицу и продолжает её.
+# Порядок не переставляется произвольно. Река идёт после города, потому что
+# должна резать готовую застройку; связность — последней, потому что чинит
+# последствия всех предыдущих этапов.
+#
+# Раньше все шесть этапов жили в одном файле на шестьсот строк вперемешку,
+# и любой вопрос вида «почему этот квартал промышленный» требовал читать
+# его целиком. Теперь каждый этап — отдельный модуль в scripts/mapgen.
+#
+# Генерация детерминирована от seed: номер уровня 1..5 даёт всегда одну и ту
+# же карту, -1 — случайную, а сетевая партия передаёт seed хоста.
 # ============================================================================
 class_name LevelGen
 extends RefCounted
 
+## Проброшено наружу ради тестов и документации.
+const MAX_BRIDGES := WaterGen.MAX_BRIDGES
+
+# ------------------------------------------------------------------ зоны
 ## Зоны спавна в «Захвате флага»: у своей базы по центру кромки карты.
 static func _ctf_player_area(cols: int, rows: int) -> Dictionary:
 	return {"r0": rows - 8, "r1": rows - 4, "c0": cols / 2 - 8, "c1": cols / 2 + 8}
@@ -39,6 +51,7 @@ static func _defense_player_area(cols: int, rows: int) -> Dictionary:
 static func _defense_enemy_area(cols: int, rows: int) -> Dictionary:
 	return {"r0": 2, "r1": rows - 3, "c0": 2, "c1": cols - 3, "edge": true}
 
+# ------------------------------------------------------------- генерация
 ## @param level_num 1..5 либо -1 для случайного
 ## @param mode ffa | ctf | koth | defense
 ## @param seed_override сетевая партия передаёт seed хоста: карта у всех
@@ -67,7 +80,6 @@ static func generate(level_num: int, mode: String, seed_override: int = -1) -> D
 	var map := GameMap.new(cols, rows)
 	map.fill(Cfg.T_EMPTY)
 
-	# -------------------------------------------------------------- рамка
 	for r in rows:
 		map.set_tile(r, 0, Cfg.T_WALL)
 		map.set_tile(r, cols - 1, Cfg.T_WALL)
@@ -75,36 +87,35 @@ static func generate(level_num: int, mode: String, seed_override: int = -1) -> D
 		map.set_tile(0, c, Cfg.T_WALL)
 		map.set_tile(rows - 1, c, Cfg.T_WALL)
 
-	# ---------------------------------------------------------------- город
-	var city := _build_city(map, rng, cols, rows)
+	# ---- 1-3: план, дороги, застройка ------------------------------------
+	var plan := MapPlan.build(rng, cols, rows)
+	RoadNet.paint(map, plan)
+	for block in plan["blocks"]:
+		Districts.paint(map, rng, block)
 
-	# ---------------------------------------------------------- река и мосты
+	# ---- 4: река ---------------------------------------------------------
 	# Только на больших картах: «Оборона» и «Захват флага» собраны под свою
 	# геометрию, и река поперёк них ломала бы выверенный баланс.
 	if mode == "ffa" or mode == "koth":
-		_build_river(map, rng, cols, rows, city["h"])
+		WaterGen.carve(map, rng, cols, rows, plan["h"])
 
+	# ---- 5: режим --------------------------------------------------------
 	var homes := {"player": null, "enemy": null}
 	var flag_spots := {"player": [], "enemy": []}
-
-	# -------------------------------------------------------------- CTF
 	if mode == "ctf":
 		_build_ctf(map, rng, cols, rows, homes, flag_spots)
-
-	# -------------------------------------------------------------- Оборона
-	# База — центральная площадь города, вокруг неё чистый асфальт.
 	if mode == "defense":
 		var cr := rows / 2
 		var cc := cols / 2
 		_fill_rect(map, cr - 4, cr + 4, cc - 4, cc + 4, Cfg.T_ROAD)
 		homes["player"] = Vector2(cc * Cfg.TILE + Cfg.TILE * 0.5, cr * Cfg.TILE + Cfg.TILE * 0.5)
 
-	# Связность прорубается ПОСЛЕ всех правок рельефа.
+	# ---- 6: связность ----------------------------------------------------
+	# Проходимость карты и целостность дорожной сети — разные вещи: пройти
+	# можно и через двор, а улица, обрывающаяся посреди квартала, читается
+	# как ошибка генерации.
 	map.ensure_connectivity()
-	# И отдельно — связность самих улиц. Проходимость карты и целостность
-	# дорожной сети это разные вещи: пройти можно и через двор, а улица,
-	# обрывающаяся посреди квартала, читается как ошибка генерации.
-	_repair_roads(map)
+	RoadNet.repair(map)
 
 	var areas := {}
 	if mode == "ctf":
@@ -126,151 +137,14 @@ static func generate(level_num: int, mode: String, seed_override: int = -1) -> D
 		"homes": homes,
 		"flag_spots": flag_spots,
 		"areas": areas,
+		"plan": plan,
 	}
 
-## Сшивает разорванные куски асфальта.
-##
-## Улицы рисуются сплошными линиями и обязаны пересекаться, но поверх них
-## ложатся река, берега и застройка, и часть сетки отрезается. Здесь каждый
-## отрезанный кусок соединяется с главным прямым коридором — по строке,
-## потом по столбцу.
-##
-## Вода не трогается: соединять берега — дело мостов, а не этой функции.
-static func _repair_roads(map: GameMap) -> void:
-	# Два прохода: после первого куски сливаются, и то, что не дотянулось
-	# напрямую, находит дорогу через уже сшитого соседа.
-	for attempt in 2:
-		var groups := _road_groups(map)
-		if groups.size() <= 1:
-			return
-		# По убыванию размера: самый большой кусок и есть главная сеть.
-		groups.sort_custom(func(a, b): return a.size() > b.size())
-
-		var joined := false
-		for i in range(1, groups.size()):
-			# Мелкие пятачки асфальта (площадка у базы, кусок двора) сшивать
-			# незачем — от них не зависит проезд по городу.
-			if groups[i].size() < 12:
-				continue
-			var from: Vector2i = _center_of(map, groups[i])
-			# Сначала пробуем главную сеть, потом остальные по убыванию.
-			# Кусок на дальнем берегу до главной сети посуху не дотянется,
-			# зато соединится с соседями по своему берегу — а берега свяжут
-			# мосты. Без этого замер давал 74% асфальта в сети вместо 95%.
-			for j in groups.size():
-				if j == i:
-					continue
-				if _pave_corridor(map, from, _center_of(map, groups[j])):
-					joined = true
-					break
-		if not joined:
-			return
-
-## Разбивает асфальт на связные куски. Возвращает списки индексов тайлов.
-static func _road_groups(map: GameMap) -> Array:
-	var cols := map.cols
-	var seen := {}
-	var out := []
-	for r in range(1, map.rows - 1):
-		for c in range(1, cols - 1):
-			var i := r * cols + c
-			if seen.has(i) or not _is_paved(map, r, c):
-				continue
-			var cells := PackedInt32Array()
-			var stack := [i]
-			seen[i] = true
-			while not stack.is_empty():
-				var cur: int = stack.pop_back()
-				cells.append(cur)
-				var cr := cur / cols
-				var cc := cur % cols
-				for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
-					var nr: int = cr + int(d[0])
-					var nc: int = cc + int(d[1])
-					if not _is_paved(map, nr, nc):
-						continue
-					var ni := nr * cols + nc
-					if seen.has(ni):
-						continue
-					seen[ni] = true
-					stack.append(ni)
-			out.append(cells)
-	return out
-
-static func _is_paved(map: GameMap, r: int, c: int) -> bool:
-	if r < 1 or c < 1 or r >= map.rows - 1 or c >= map.cols - 1:
-		return false
-	var t := map.get_tile(r, c)
-	return t == Cfg.T_ROAD or t == Cfg.T_BRIDGE
-
-static func _center_of(map: GameMap, cells: PackedInt32Array) -> Vector2i:
-	var i: int = cells[cells.size() / 2]
-	return Vector2i(i / map.cols, i % map.cols)
-
-## Прокладывает асфальт от точки до точки Г-образным коридором. Пробуются
-## оба порядка — сначала по строке, потом по столбцу и наоборот.
-##
-## Воду коридор не пересекает. Это принципиально: первая версия клала через
-## реку мост, и замер показал, что переправ становится вдвое больше
-## разрешённых четырёх. Река на то и река, чтобы делить город; сшивать
-## берега — работа мостов, а не починки сетки.
-static func _pave_corridor(map: GameMap, from: Vector2i, to: Vector2i) -> bool:
-	for row_first in [true, false]:
-		var path := _corridor_path(from, to, row_first)
-		var dry := true
-		for p in path:
-			if map.get_tile(p.x, p.y) == Cfg.T_WATER:
-				dry = false
-				break
-		if not dry:
-			continue
-		for p in path:
-			_pave(map, p.x, p.y)
-		return true
-	return false
-
-static func _corridor_path(from: Vector2i, to: Vector2i, row_first: bool) -> Array:
-	var out := []
-	if row_first:
-		var c := from.y
-		while c != to.y:
-			out.append(Vector2i(from.x, c))
-			c += 1 if to.y > c else -1
-		var r := from.x
-		while r != to.x:
-			out.append(Vector2i(r, to.y))
-			r += 1 if to.x > r else -1
-	else:
-		var r2 := from.x
-		while r2 != to.x:
-			out.append(Vector2i(r2, from.y))
-			r2 += 1 if to.x > r2 else -1
-		var c2 := from.y
-		while c2 != to.y:
-			out.append(Vector2i(to.x, c2))
-			c2 += 1 if to.y > c2 else -1
-	out.append(to)
-	return out
-
-static func _pave(map: GameMap, r: int, c: int) -> void:
-	if r <= 0 or c <= 0 or r >= map.rows - 1 or c >= map.cols - 1:
-		return
-	var t := map.get_tile(r, c)
-	if t == Cfg.T_WALL or t == Cfg.T_WATER:
-		return
-	map.set_tile(r, c, Cfg.T_ROAD)
-
 # ============================================================== примитивы
-
-## Заливка прямоугольника (в тайлах) без выхода на внешнюю рамку.
 static func _fill_rect(map: GameMap, r0: int, r1: int, c0: int, c1: int, tile: int) -> void:
 	for r in range(maxi(1, r0), mini(map.rows - 2, r1) + 1):
 		for c in range(maxi(1, c0), mini(map.cols - 2, c1) + 1):
 			map.set_tile(r, c, tile)
-
-## Расчищает прямоугольник до земли — используется командными режимами.
-static func _clear_rect(map: GameMap, r0: int, r1: int, c0: int, c1: int) -> void:
-	_fill_rect(map, r0, r1, c0, c1, Cfg.T_EMPTY)
 
 ## Симметричный блок укрытия: кирпич с бетонным ядром.
 static func _cover_block(map: GameMap, r: int, c: int, w: int, h: int) -> void:
@@ -280,290 +154,7 @@ static func _cover_block(map: GameMap, r: int, c: int, w: int, h: int) -> void:
 	if w >= 2 and h >= 2:
 		map.set_tile(r + h / 2, c + w / 2, Cfg.T_WALL)
 
-# ================================================================== город
-
-## Раскладывает улицы вдоль одной оси. Возвращает список {pos, w}:
-## pos — координата первой полосы, w — ширина (2 — улица, 3 — проспект).
-static func _street_line(rng: Rng, size: int, block_min: int, block_max: int) -> Array:
-	var out := []
-	var p := 3 + int(rng.nextf() * 3.0)
-	while p < size - 5:
-		var w := 3 if rng.nextf() < 0.28 else 2
-		out.append({"pos": p, "w": w})
-		p += w + block_min + int(rng.nextf() * float(block_max - block_min + 1))
-	return out
-
-## Промежутки между улицами — это и есть кварталы.
-static func _gaps(streets: Array, size: int) -> Array:
-	var out := []
-	var prev := 1
-	for st in streets:
-		var pos: int = int(st["pos"])
-		if pos - 1 >= prev:
-			out.append([prev, pos - 1])
-		prev = pos + int(st["w"])
-	if size - 2 >= prev:
-		out.append([prev, size - 2])
-	return out
-
-## Режет отрезок [a, b] переулками: сами линии переулков в результат
-## не попадают, поэтому между участками остаётся проезд.
-static func _split(a: int, b: int, cuts: Array) -> Array:
-	var out := []
-	var start := a
-	for cut in cuts:
-		var x: int = int(cut)
-		if x - 1 >= start:
-			out.append([start, x - 1])
-		start = x + 1
-	if b >= start:
-		out.append([start, b])
-	return out
-
-## Строит городскую сетку и застраивает кварталы.
-## Возвращает {"v": [...], "h": [...]} — списки улиц, они нужны мостам.
-static func _build_city(map: GameMap, rng: Rng, cols: int, rows: int) -> Dictionary:
-	# Кварталы вдоль длинной оси чуть крупнее — так город не выглядит
-	# нарезанным на одинаковые квадраты.
-	var v := _street_line(rng, cols, 9, 14)
-	var h := _street_line(rng, rows, 7, 11)
-
-	for st in v:
-		var w: int = int(st["w"])
-		for dc in w:
-			var c: int = int(st["pos"]) + dc
-			if c <= 0 or c >= cols - 1:
-				continue
-			for r in range(1, rows - 1):
-				map.set_tile(r, c, Cfg.T_ROAD)
-	for st in h:
-		var w: int = int(st["w"])
-		for dr in w:
-			var r: int = int(st["pos"]) + dr
-			if r <= 0 or r >= rows - 1:
-				continue
-			for c in range(1, cols - 1):
-				map.set_tile(r, c, Cfg.T_ROAD)
-
-	var row_gaps := _gaps(h, rows)
-	var col_gaps := _gaps(v, cols)
-	for rg in row_gaps:
-		for cg in col_gaps:
-			var r0: int = int(rg[0])
-			var r1: int = int(rg[1])
-			var c0: int = int(cg[0])
-			var c1: int = int(cg[1])
-			# Узкие полоски у кромки карты застраивать нечем — газон.
-			if r1 - r0 < 2 or c1 - c0 < 2:
-				_fill_rect(map, r0, r1, c0, c1, Cfg.T_GRASS)
-				continue
-			var roll := rng.nextf()
-			if roll < 0.18:
-				_block_park(map, rng, r0, r1, c0, c1)
-			elif roll < 0.28:
-				_block_square(map, rng, r0, r1, c0, c1)
-			else:
-				_block_houses(map, rng, r0, r1, c0, c1)
-
-	return {"v": v, "h": h}
-
-## Жилой квартал: тротуар по периметру, внутри — участки под застройку,
-## разделённые переулками.
-static func _block_houses(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -> void:
-	_fill_rect(map, r0, r1, c0, c1, Cfg.T_EMPTY)
-	var br0 := r0 + 1
-	var br1 := r1 - 1
-	var bc0 := c0 + 1
-	var bc1 := c1 - 1
-	if br1 < br0 or bc1 < bc0:
-		return
-
-	var ccuts := []
-	if bc1 - bc0 >= 7 and rng.nextf() < 0.7:
-		ccuts.append(bc0 + 3 + int(rng.nextf() * float(bc1 - bc0 - 5)))
-	var rcuts := []
-	if br1 - br0 >= 7 and rng.nextf() < 0.5:
-		rcuts.append(br0 + 3 + int(rng.nextf() * float(br1 - br0 - 5)))
-
-	for rl in _split(br0, br1, rcuts):
-		for cl in _split(bc0, bc1, ccuts):
-			_house(map, rng, int(rl[0]), int(rl[1]), int(cl[0]), int(cl[1]))
-
-## Одна постройка. Материал не задаётся здесь — он выводится из координат
-## тайла в Materials, поэтому дом сам «решает», деревянный он или бетонный.
-static func _house(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -> void:
-	var h := r1 - r0 + 1
-	var w := c1 - c0 + 1
-	if h <= 0 or w <= 0:
-		return
-
-	# Пустырь: заброшенный участок с деревьями и остатками фундамента.
-	if h < 2 or w < 2 or rng.nextf() < 0.12:
-		for r in range(r0, r1 + 1):
-			for c in range(c0, c1 + 1):
-				var q := rng.nextf()
-				if q < 0.09:
-					map.set_tile(r, c, Cfg.T_TREE)
-				elif q < 0.14:
-					map.set_tile(r, c, Cfg.T_BRICK)
-		return
-
-	_fill_rect(map, r0, r1, c0, c1, Cfg.T_BRICK)
-
-	# Несущий каркас: пара бетонных колонн, которые не сбить ничем.
-	# Из-за них даже полностью разрушенный дом оставляет укрытие.
-	if h >= 4 and w >= 4 and rng.nextf() < 0.45:
-		map.set_tile(r0 + h / 2, c0 + w / 2, Cfg.T_WALL)
-		if rng.nextf() < 0.6:
-			map.set_tile(r0 + h / 2, c1 - 1, Cfg.T_WALL)
-
-	# Внутренний двор с подворотнёй — сквозной проезд через дом.
-	if h >= 6 and w >= 6 and rng.nextf() < 0.5:
-		_fill_rect(map, r0 + 2, r1 - 2, c0 + 2, c1 - 2, Cfg.T_EMPTY)
-		var gate := c0 + w / 2
-		map.set_tile(r0, gate, Cfg.T_EMPTY)
-		map.set_tile(r0 + 1, gate, Cfg.T_EMPTY)
-		if rng.nextf() < 0.5:
-			map.set_tile(r1, gate, Cfg.T_EMPTY)
-			map.set_tile(r1 - 1, gate, Cfg.T_EMPTY)
-
-## Городской парк: газон, дорожки крест-накрест, деревья и иногда пруд.
-static func _block_park(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -> void:
-	_fill_rect(map, r0, r1, c0, c1, Cfg.T_GRASS)
-
-	var mr := (r0 + r1) / 2
-	var mc := (c0 + c1) / 2
-	_fill_rect(map, mr, mr, c0, c1, Cfg.T_EMPTY)
-	_fill_rect(map, mr - 1, mr - 1, c0, c1, Cfg.T_EMPTY)
-	_fill_rect(map, r0, r1, mc, mc, Cfg.T_EMPTY)
-
-	for r in range(r0, r1 + 1):
-		for c in range(c0, c1 + 1):
-			if map.get_tile(r, c) != Cfg.T_GRASS:
-				continue
-			var q := rng.nextf()
-			if q < 0.17:
-				map.set_tile(r, c, Cfg.T_TREE)
-			elif q < 0.19:
-				# Скамейки и киоски: одиночные укрытия среди зелени.
-				map.set_tile(r, c, Cfg.T_BRICK)
-
-	# Пруд в глубине парка — с песчаным берегом его добавит общий проход.
-	if r1 - r0 >= 5 and c1 - c0 >= 5 and rng.nextf() < 0.3:
-		var pr := r0 + 1 + int(rng.nextf() * float(r1 - r0 - 3))
-		var pc := c0 + 1 + int(rng.nextf() * float(c1 - c0 - 3))
-		_fill_rect(map, pr, pr + 1, pc, pc + 2, Cfg.T_WATER)
-		_sand_shore(map, pr - 1, pr + 2, pc - 1, pc + 3)
-
-## Площадь или парковка: сплошной асфальт с редкими киосками.
-static func _block_square(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -> void:
-	_fill_rect(map, r0, r1, c0, c1, Cfg.T_ROAD)
-	var kiosks := 1 + int(rng.nextf() * 3.0)
-	for i in kiosks:
-		var kr := r0 + int(rng.nextf() * float(maxi(1, r1 - r0)))
-		var kc := c0 + int(rng.nextf() * float(maxi(1, c1 - c0)))
-		_fill_rect(map, kr, kr + 1, kc, kc + 1, Cfg.T_BRICK)
-	# Аллея деревьев вдоль края площади.
-	if rng.nextf() < 0.5:
-		for c in range(c0, c1 + 1, 2):
-			map.set_tile(r0, c, Cfg.T_TREE)
-
-# =========================================================== река и мосты
-
-## Обводит воду песком в указанном прямоугольнике.
-##
-## Асфальт песком не засыпается. Это не косметика: замер связности показал,
-## что пруд в парке или берег реки съедали соседние дорожные тайлы, и улица
-## обрывалась — в главную сеть попадало 15–45% асфальта вместо почти всего.
-static func _sand_shore(map: GameMap, r0: int, r1: int, c0: int, c1: int) -> void:
-	for r in range(maxi(1, r0), mini(map.rows - 2, r1) + 1):
-		for c in range(maxi(1, c0), mini(map.cols - 2, c1) + 1):
-			var here := map.get_tile(r, c)
-			if here == Cfg.T_WATER or here == Cfg.T_ROAD or here == Cfg.T_BRIDGE:
-				continue
-			var near := false
-			for dr in range(-1, 2):
-				for dc in range(-1, 2):
-					if map.get_tile(r + dr, c + dc) == Cfg.T_WATER:
-						near = true
-						break
-				if near:
-					break
-			if near:
-				map.set_tile(r, c, Cfg.T_SAND)
-
-## Больше четырёх переправ на карту не бывает: мост — узкое место, а не
-## одна из дюжины равнозначных дорог.
-const MAX_BRIDGES := 4
-
-## Река течёт сверху вниз, разрезая город на два берега, и стирает всё,
-## через что проходит: дома на её пути превращаются в набережную.
-static func _build_river(map: GameMap, rng: Rng, cols: int, rows: int, h_streets: Array) -> void:
-	var base := float(cols) * (0.38 + rng.nextf() * 0.24)
-	var amp := float(cols) * (0.04 + rng.nextf() * 0.05)
-	var freq := 0.055 + rng.nextf() * 0.05
-	var phase := rng.nextf() * TAU
-	var half := 2 + int(rng.nextf() * 2.0)
-
-	# Границы русла по строкам — по ним потом кладутся мосты.
-	var left := PackedInt32Array()
-	var right := PackedInt32Array()
-	left.resize(rows)
-	right.resize(rows)
-	for r in rows:
-		var centre := base + sin(float(r) * freq + phase) * amp
-		var c0 := int(roundf(centre)) - half
-		var c1 := int(roundf(centre)) + half
-		left[r] = c0
-		right[r] = c1
-		if r <= 0 or r >= rows - 1:
-			continue
-		for c in range(maxi(1, c0), mini(cols - 2, c1) + 1):
-			map.set_tile(r, c, Cfg.T_WATER)
-
-	_sand_shore(map, 1, rows - 2, int(base - amp) - half - 2, int(base + amp) + half + 2)
-
-	# Мосты: берём улицы, пересекающие реку. Их не больше четырёх на карту —
-	# переправа должна быть узким местом, за которое дерутся, а не одной
-	# из дюжины равнозначных дорог. Замер до ограничения давал по семь-
-	# двенадцать переправ.
-	#
-	# Выбираются они не подряд и не случайно, а равномерно по всей длине
-	# реки: иначе три моста рядом оставляли бы полкарты без переправы.
-	var usable := []
-	for st in h_streets:
-		var pos: int = int(st["pos"])
-		if pos >= 2 and pos + int(st["w"]) <= rows - 2:
-			usable.append(st)
-	if usable.is_empty():
-		return
-	var want: int = mini(MAX_BRIDGES, usable.size())
-	for i in want:
-		var idx := 0
-		if want > 1:
-			idx = int(round(float(i) * float(usable.size() - 1) / float(want - 1)))
-		_build_bridge(map, usable[idx], left, right, cols)
-
-## Кладёт мост на одну улицу: настил над водой плюс въезды на оба берега.
-static func _build_bridge(map: GameMap, street: Dictionary, left: PackedInt32Array,
-		right: PackedInt32Array, cols: int) -> void:
-	var pos: int = int(street["pos"])
-	var w: int = int(street["w"])
-	for dr in w:
-		var r: int = pos + dr
-		if r <= 0 or r >= map.rows - 1:
-			continue
-		# Въезды заходят на два тайла берега: мост должен смыкаться
-		# с улицей, а не обрываться в песок.
-		var c0: int = maxi(1, left[r] - 2)
-		var c1: int = mini(cols - 2, right[r] + 2)
-		for c in range(c0, c1 + 1):
-			if map.get_tile(r, c) == Cfg.T_WALL:
-				continue
-			map.set_tile(r, c, Cfg.T_BRIDGE)
-
 # ==================================================================== CTF
-
 ## Карта «Захвата флага».
 ##
 ## Базы стоят по центру верхней и нижней кромки, между ними — открытая
@@ -578,7 +169,6 @@ static func _build_ctf(map: GameMap, rng: Rng, cols: int, rows: int,
 	var cc := cols / 2
 	var mid := rows / 2
 
-	# --- базы по центру кромок и площадки вокруг них
 	_fill_rect(map, 1, 6, cc - 8, cc + 8, Cfg.T_ROAD)
 	_fill_rect(map, rows - 7, rows - 2, cc - 8, cc + 8, Cfg.T_ROAD)
 	map.set_tile(2, cc, Cfg.T_BASE_E)
@@ -586,11 +176,11 @@ static func _build_ctf(map: GameMap, rng: Rng, cols: int, rows: int,
 	homes["enemy"] = Vector2(cc * Cfg.TILE + Cfg.TILE * 0.5, 2 * Cfg.TILE + Cfg.TILE * 0.5)
 	homes["player"] = Vector2(cc * Cfg.TILE + Cfg.TILE * 0.5, (rows - 3) * Cfg.TILE + Cfg.TILE * 0.5)
 
-	# --- поперечные подъезды к базам, чтобы дом не запирался застройкой
+	# Поперечные подъезды к базам, чтобы дом не запирался застройкой.
 	_fill_rect(map, 3, 3, 5, cols - 6, Cfg.T_ROAD)
 	_fill_rect(map, rows - 4, rows - 4, 5, cols - 6, Cfg.T_ROAD)
 
-	# --- центральная площадь: главное место боя
+	# Центральная площадь: главное место боя.
 	_fill_rect(map, mid - 4, mid + 4, 4, cols - 5, Cfg.T_ROAD)
 
 	# Укрытия на площади — симметрично относительно центра, чтобы ни одна
@@ -600,7 +190,6 @@ static func _build_ctf(map: GameMap, rng: Rng, cols: int, rows: int,
 		_cover_block(map, mid + 1, cc + side * 15 - 1, 2, 3)
 	_cover_block(map, mid - 1, cc - 1, 3, 3)
 
-	# --- флаги в двух полосах вплотную к центру
 	var per_team: int = Cfg.MODES["ctf"]["flags_per_team"]
 	flag_spots["enemy"] = _pick_flag_spots(map, rng, per_team,
 		int(rows * 0.28), int(rows * 0.40))

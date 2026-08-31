@@ -211,12 +211,11 @@ func _draw_tiles() -> void:
 			# ночью и в тумане контраст съедается, — а тень читается
 			# всегда, потому что она про форму, а не про цвет.
 			if tile == Cfg.T_BRICK or tile == Cfg.T_WALL:
-				var below := map.get_tile(r + 1, c)
-				var right := map.get_tile(r, c + 1)
-				if not GameMap.is_solid_tile(below):
-					_rect(x + 3, y + Cfg.TILE, Cfg.TILE, 4, Color(0, 0, 0, 0.34))
-				if not GameMap.is_solid_tile(right):
-					_rect(x + Cfg.TILE, y + 3, 4, Cfg.TILE, Color(0, 0, 0, 0.34))
+				# Тень только вниз. Вторая, вправо, стоила ещё столько же
+				# вызовов рисования, а глубину добавляла едва заметно:
+				# ухо видит форму по одной кромке.
+				if not GameMap.is_solid_tile(map.get_tile(r + 1, c)):
+					_rect(x + 3, y + Cfg.TILE, Cfg.TILE, 5, Color(0, 0, 0, 0.38))
 
 			match tile:
 				Cfg.T_WALL:
@@ -560,6 +559,83 @@ func _is_paved(r: int, c: int) -> bool:
 	var t := world.map.get_tile(r, c)
 	return t == Cfg.T_ROAD or t == Cfg.T_BRIDGE
 
+## Класс дорожного тайла. Считается один раз на партию по плану города:
+## план знает, что магистраль, что улица, а что залитый асфальтом квартал,
+## и гадать по соседям не нужно.
+const RC_NONE := 0
+const RC_STREET := 1
+const RC_ARTERIAL := 2
+const RC_SQUARE := 3
+const RC_JUNCTION := 4
+
+var _road_class: PackedByteArray = PackedByteArray()
+var _road_class_ready := false
+
+func _road_class_at(r: int, c: int) -> int:
+	if not _road_class_ready:
+		_build_road_class()
+	var map := world.map
+	if r < 0 or c < 0 or r >= map.rows or c >= map.cols:
+		return RC_NONE
+	return _road_class[r * map.cols + c]
+
+func _build_road_class() -> void:
+	var map := world.map
+	_road_class = PackedByteArray()
+	_road_class.resize(map.cols * map.rows)
+	_road_class_ready = true
+
+	# Полосы улиц и магистралей по плану. Режимные площади и залитые
+	# асфальтом кварталы в план не попадают и остаются площадью — это
+	# и правильно: по ним ездят как по парковке, а не как по улице.
+	var vr := PackedByteArray()
+	var hr := PackedByteArray()
+	vr.resize(map.cols)
+	hr.resize(map.rows)
+	var plan: Dictionary = world.level.get("plan", {})
+	for st in plan.get("v", []):
+		for d in int(st["w"]):
+			var c: int = int(st["pos"]) + d
+			if c >= 0 and c < map.cols:
+				vr[c] = 2 if int(st["rank"]) == MapPlan.RANK_ARTERIAL else 1
+	for st in plan.get("h", []):
+		for d in int(st["w"]):
+			var r: int = int(st["pos"]) + d
+			if r >= 0 and r < map.rows:
+				hr[r] = 2 if int(st["rank"]) == MapPlan.RANK_ARTERIAL else 1
+
+	for r in map.rows:
+		for c in map.cols:
+			if not RoadNet.is_paved(map, r, c):
+				continue
+			var v: int = vr[c]
+			var h: int = hr[r]
+			var klass := RC_SQUARE
+			if v > 0 and h > 0:
+				klass = RC_JUNCTION
+			elif v > 0:
+				klass = RC_ARTERIAL if v == 2 else RC_STREET
+			elif h > 0:
+				klass = RC_ARTERIAL if h == 2 else RC_STREET
+			_road_class[r * map.cols + c] = klass
+
+## Разметка парковочных мест на открытом асфальте. Рисуется не на каждой
+## клетке: сплошная штриховка превращает площадь в тетрадный лист.
+func _draw_parking_bay(x: float, y: float, r: int, c: int) -> void:
+	# Каждая шестая клетка: сплошная штриховка превращает площадь
+	# в тетрадный лист и стоит лишних вызовов рисования.
+	if (r * 5 + c * 3) % 6 != 0:
+		return
+	var horizontal := (r % 8) < 4
+	if horizontal:
+		_rect(x + 2.0, y + 6.0, Cfg.TILE - 4.0, 1.0, Color(0.85, 0.85, 0.85, 0.30))
+		_rect(x + 2.0, y + Cfg.TILE - 7.0, Cfg.TILE - 4.0, 1.0,
+			Color(0.85, 0.85, 0.85, 0.30))
+	else:
+		_rect(x + 6.0, y + 2.0, 1.0, Cfg.TILE - 4.0, Color(0.85, 0.85, 0.85, 0.30))
+		_rect(x + Cfg.TILE - 7.0, y + 2.0, 1.0, Cfg.TILE - 4.0,
+			Color(0.85, 0.85, 0.85, 0.30))
+
 ## Асфальт: латаное полотно с трещинами, бордюром по краю проезжей части
 ## и осевой разметкой вдоль улицы.
 func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
@@ -578,7 +654,35 @@ func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
 	var down := _is_paved(r + 1, c)
 	var left := _is_paved(r, c - 1)
 	var right := _is_paved(r, c + 1)
-	# Перекрёсток и середина площади остаются пустым асфальтом.
+
+	# Класс дороги берётся из плана города, а не угадывается по соседям.
+	# Угадывание не различает широкую магистраль и площадь — у обеих
+	# замощено всё вокруг, — и магистраль разлиновывало под парковку.
+	var klass := _road_class_at(r, c)
+
+	if klass == RC_SQUARE:
+		_draw_parking_bay(x, y, r, c)
+		return
+	if klass == RC_JUNCTION:
+		return
+
+	# Пешеходный переход: полосы поперёк улицы у самого перекрёстка.
+	# Это единственная разметка, которая говорит игроку «здесь сходятся
+	# дороги» раньше, чем он увидит сам перекрёсток.
+	# Только на обычных улицах. У магистрали перекрёсток вчетверо шире,
+	# и полосы рисовались на каждом из четырёх рядов — замер кадра вырос
+	# с 34 до 43 мс на разметке, которой на широкой дороге почти не видно.
+	if klass == RC_STREET and up and down and (_road_class_at(r - 1, c) == RC_JUNCTION
+			or _road_class_at(r + 1, c) == RC_JUNCTION):
+		for i in 4:
+			_rect(x + 3.0 + float(i) * 7.0, y + 10.0, 4.0, 12.0,
+				Color(0.88, 0.90, 0.92, 0.55))
+	elif klass == RC_STREET and left and right and (_road_class_at(r, c - 1) == RC_JUNCTION
+			or _road_class_at(r, c + 1) == RC_JUNCTION):
+		for i in 4:
+			_rect(x + 10.0, y + 3.0 + float(i) * 7.0, 12.0, 4.0,
+				Color(0.88, 0.90, 0.92, 0.55))
+
 	if up and down and left and right:
 		return
 
@@ -591,6 +695,22 @@ func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
 		_rect(x, y, 2, Cfg.TILE, Cfg.road_edge)
 	if not right:
 		_rect(x + Cfg.TILE - 2, y, 2, Cfg.TILE, Cfg.road_edge)
+
+	# Магистраль размечается двойной сплошной по своей оси. Ось — стык
+	# второй и третьей полосы, поэтому линия ставится там, где слева
+	# кончилась магистраль ровно через одну клетку.
+	if klass == RC_ARTERIAL:
+		if up and down:
+			if _road_class_at(r, c - 1) == RC_ARTERIAL \
+					and _road_class_at(r, c - 2) != RC_ARTERIAL:
+				_rect(x + Cfg.TILE - 2.5, y, 1.5, Cfg.TILE, Cfg.road_line)
+				_rect(x + Cfg.TILE - 0.5, y, 1.5, Cfg.TILE, Cfg.road_line)
+		elif left and right:
+			if _road_class_at(r - 1, c) == RC_ARTERIAL \
+					and _road_class_at(r - 2, c) != RC_ARTERIAL:
+				_rect(x, y + Cfg.TILE - 2.5, Cfg.TILE, 1.5, Cfg.road_line)
+				_rect(x, y + Cfg.TILE - 0.5, Cfg.TILE, 1.5, Cfg.road_line)
+		return
 
 	# Осевая: только на улице шириной в две-три полосы. Ширину определяем
 	# по соседям через одного — иначе разметка расползалась бы по площадям
