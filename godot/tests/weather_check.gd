@@ -67,6 +67,37 @@ func _ready() -> void:
 	var slippery := tank.surface_speed
 	_check(slippery < dry, "снег доходит до хода танка: %.2f -> %.2f" % [dry, slippery])
 
+	# ---- гроза: разряд бьёт ровно на 90 ----------------------------------
+	_start("storm", "night")
+	# Бьём бота: у игрока броня из гаража режет любой входящий урон, и на
+	# нём «ровно 90» не проверить. Первая версия теста этого не учла и
+	# показала 61 — цифра верная, но проверяла она не то.
+	var victim: Tank = null
+	for t in game.world.tanks:
+		if t.owner == null and t.perk_ids.is_empty():
+			victim = t
+			break
+	if victim == null:
+		_check(false, "бот для проверки молнии не нашёлся")
+		return
+	# Запас поднимаем выше урона: у бота его 80, и удар просто убивал —
+	# разница по здоровью упиралась в ноль и ничего не доказывала.
+	victim.max_hp = 300.0
+	victim.hp = victim.max_hp
+	victim.spawn_protect = 0
+	var hp_before := victim.hp
+	game.world.strike_lightning(victim.x + 8.0, victim.y + 8.0)
+	_check(absf(hp_before - victim.hp - Cfg.LIGHTNING_DAMAGE) < 0.001,
+		"прямое попадание молнии: %.0f -> %.0f (ровно %.0f)"
+			% [hp_before, victim.hp, Cfg.LIGHTNING_DAMAGE])
+	_check(game.world.scorches.size() > 0, "на земле остался след от удара")
+	_check(game.world.bolts.size() > 0, "разряд появился в кадре")
+
+	# Мимо — значит мимо: за радиусом поражения урона быть не должно.
+	var hp2 := victim.hp
+	game.world.strike_lightning(victim.x + Cfg.LIGHTNING_RADIUS * 3.0, victim.y)
+	_check(absf(victim.hp - hp2) < 0.001, "удар в стороне не задевает танк")
+
 	print("=== ПРОВЕРКА ПОГОДЫ ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
 

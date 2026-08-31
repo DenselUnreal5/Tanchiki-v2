@@ -101,6 +101,10 @@ static func generate(level_num: int, mode: String, seed_override: int = -1) -> D
 
 	# Связность прорубается ПОСЛЕ всех правок рельефа.
 	map.ensure_connectivity()
+	# И отдельно — связность самих улиц. Проходимость карты и целостность
+	# дорожной сети это разные вещи: пройти можно и через двор, а улица,
+	# обрывающаяся посреди квартала, читается как ошибка генерации.
+	_repair_roads(map)
 
 	var areas := {}
 	if mode == "ctf":
@@ -123,6 +127,138 @@ static func generate(level_num: int, mode: String, seed_override: int = -1) -> D
 		"flag_spots": flag_spots,
 		"areas": areas,
 	}
+
+## Сшивает разорванные куски асфальта.
+##
+## Улицы рисуются сплошными линиями и обязаны пересекаться, но поверх них
+## ложатся река, берега и застройка, и часть сетки отрезается. Здесь каждый
+## отрезанный кусок соединяется с главным прямым коридором — по строке,
+## потом по столбцу.
+##
+## Вода не трогается: соединять берега — дело мостов, а не этой функции.
+static func _repair_roads(map: GameMap) -> void:
+	# Два прохода: после первого куски сливаются, и то, что не дотянулось
+	# напрямую, находит дорогу через уже сшитого соседа.
+	for attempt in 2:
+		var groups := _road_groups(map)
+		if groups.size() <= 1:
+			return
+		# По убыванию размера: самый большой кусок и есть главная сеть.
+		groups.sort_custom(func(a, b): return a.size() > b.size())
+
+		var joined := false
+		for i in range(1, groups.size()):
+			# Мелкие пятачки асфальта (площадка у базы, кусок двора) сшивать
+			# незачем — от них не зависит проезд по городу.
+			if groups[i].size() < 12:
+				continue
+			var from: Vector2i = _center_of(map, groups[i])
+			# Сначала пробуем главную сеть, потом остальные по убыванию.
+			# Кусок на дальнем берегу до главной сети посуху не дотянется,
+			# зато соединится с соседями по своему берегу — а берега свяжут
+			# мосты. Без этого замер давал 74% асфальта в сети вместо 95%.
+			for j in groups.size():
+				if j == i:
+					continue
+				if _pave_corridor(map, from, _center_of(map, groups[j])):
+					joined = true
+					break
+		if not joined:
+			return
+
+## Разбивает асфальт на связные куски. Возвращает списки индексов тайлов.
+static func _road_groups(map: GameMap) -> Array:
+	var cols := map.cols
+	var seen := {}
+	var out := []
+	for r in range(1, map.rows - 1):
+		for c in range(1, cols - 1):
+			var i := r * cols + c
+			if seen.has(i) or not _is_paved(map, r, c):
+				continue
+			var cells := PackedInt32Array()
+			var stack := [i]
+			seen[i] = true
+			while not stack.is_empty():
+				var cur: int = stack.pop_back()
+				cells.append(cur)
+				var cr := cur / cols
+				var cc := cur % cols
+				for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+					var nr: int = cr + int(d[0])
+					var nc: int = cc + int(d[1])
+					if not _is_paved(map, nr, nc):
+						continue
+					var ni := nr * cols + nc
+					if seen.has(ni):
+						continue
+					seen[ni] = true
+					stack.append(ni)
+			out.append(cells)
+	return out
+
+static func _is_paved(map: GameMap, r: int, c: int) -> bool:
+	if r < 1 or c < 1 or r >= map.rows - 1 or c >= map.cols - 1:
+		return false
+	var t := map.get_tile(r, c)
+	return t == Cfg.T_ROAD or t == Cfg.T_BRIDGE
+
+static func _center_of(map: GameMap, cells: PackedInt32Array) -> Vector2i:
+	var i: int = cells[cells.size() / 2]
+	return Vector2i(i / map.cols, i % map.cols)
+
+## Прокладывает асфальт от точки до точки Г-образным коридором. Пробуются
+## оба порядка — сначала по строке, потом по столбцу и наоборот.
+##
+## Воду коридор не пересекает. Это принципиально: первая версия клала через
+## реку мост, и замер показал, что переправ становится вдвое больше
+## разрешённых четырёх. Река на то и река, чтобы делить город; сшивать
+## берега — работа мостов, а не починки сетки.
+static func _pave_corridor(map: GameMap, from: Vector2i, to: Vector2i) -> bool:
+	for row_first in [true, false]:
+		var path := _corridor_path(from, to, row_first)
+		var dry := true
+		for p in path:
+			if map.get_tile(p.x, p.y) == Cfg.T_WATER:
+				dry = false
+				break
+		if not dry:
+			continue
+		for p in path:
+			_pave(map, p.x, p.y)
+		return true
+	return false
+
+static func _corridor_path(from: Vector2i, to: Vector2i, row_first: bool) -> Array:
+	var out := []
+	if row_first:
+		var c := from.y
+		while c != to.y:
+			out.append(Vector2i(from.x, c))
+			c += 1 if to.y > c else -1
+		var r := from.x
+		while r != to.x:
+			out.append(Vector2i(r, to.y))
+			r += 1 if to.x > r else -1
+	else:
+		var r2 := from.x
+		while r2 != to.x:
+			out.append(Vector2i(r2, from.y))
+			r2 += 1 if to.x > r2 else -1
+		var c2 := from.y
+		while c2 != to.y:
+			out.append(Vector2i(to.x, c2))
+			c2 += 1 if to.y > c2 else -1
+	out.append(to)
+	return out
+
+static func _pave(map: GameMap, r: int, c: int) -> void:
+	if r <= 0 or c <= 0 or r >= map.rows - 1 or c >= map.cols - 1:
+		return
+	var t := map.get_tile(r, c)
+	if t == Cfg.T_WALL or t == Cfg.T_WATER:
+		return
+	map.set_tile(r, c, Cfg.T_ROAD)
 
 # ============================================================== примитивы
 
@@ -335,10 +471,15 @@ static func _block_square(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1:
 # =========================================================== река и мосты
 
 ## Обводит воду песком в указанном прямоугольнике.
+##
+## Асфальт песком не засыпается. Это не косметика: замер связности показал,
+## что пруд в парке или берег реки съедали соседние дорожные тайлы, и улица
+## обрывалась — в главную сеть попадало 15–45% асфальта вместо почти всего.
 static func _sand_shore(map: GameMap, r0: int, r1: int, c0: int, c1: int) -> void:
 	for r in range(maxi(1, r0), mini(map.rows - 2, r1) + 1):
 		for c in range(maxi(1, c0), mini(map.cols - 2, c1) + 1):
-			if map.get_tile(r, c) == Cfg.T_WATER:
+			var here := map.get_tile(r, c)
+			if here == Cfg.T_WATER or here == Cfg.T_ROAD or here == Cfg.T_BRIDGE:
 				continue
 			var near := false
 			for dr in range(-1, 2):
@@ -350,6 +491,10 @@ static func _sand_shore(map: GameMap, r0: int, r1: int, c0: int, c1: int) -> voi
 					break
 			if near:
 				map.set_tile(r, c, Cfg.T_SAND)
+
+## Больше четырёх переправ на карту не бывает: мост — узкое место, а не
+## одна из дюжины равнозначных дорог.
+const MAX_BRIDGES := 4
 
 ## Река течёт сверху вниз, разрезая город на два берега, и стирает всё,
 ## через что проходит: дома на её пути превращаются в набережную.
@@ -378,19 +523,26 @@ static func _build_river(map: GameMap, rng: Rng, cols: int, rows: int, h_streets
 
 	_sand_shore(map, 1, rows - 2, int(base - amp) - half - 2, int(base + amp) + half + 2)
 
-	# Мосты: берём улицы, пересекающие реку. Первую и последнюю — обязательно,
-	# иначе половина города оказалась бы отрезанной; остальные — через одну,
-	# чтобы переправы оставались узкими местами, за которые стоит драться.
+	# Мосты: берём улицы, пересекающие реку. Их не больше четырёх на карту —
+	# переправа должна быть узким местом, за которое дерутся, а не одной
+	# из дюжины равнозначных дорог. Замер до ограничения давал по семь-
+	# двенадцать переправ.
+	#
+	# Выбираются они не подряд и не случайно, а равномерно по всей длине
+	# реки: иначе три моста рядом оставляли бы полкарты без переправы.
 	var usable := []
 	for st in h_streets:
 		var pos: int = int(st["pos"])
 		if pos >= 2 and pos + int(st["w"]) <= rows - 2:
 			usable.append(st)
-	for i in usable.size():
-		var force := i == 0 or i == usable.size() - 1
-		if not force and rng.nextf() > 0.5:
-			continue
-		_build_bridge(map, usable[i], left, right, cols)
+	if usable.is_empty():
+		return
+	var want: int = mini(MAX_BRIDGES, usable.size())
+	for i in want:
+		var idx := 0
+		if want > 1:
+			idx = int(round(float(i) * float(usable.size() - 1) / float(want - 1)))
+		_build_bridge(map, usable[idx], left, right, cols)
 
 ## Кладёт мост на одну улицу: настил над водой плюс въезды на оба берега.
 static func _build_bridge(map: GameMap, street: Dictionary, left: PackedInt32Array,

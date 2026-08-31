@@ -420,8 +420,12 @@ func _carve_put(r: int, c: int) -> int:
 	var i := r * cols + c
 	if is_drivable_tile(tiles[i]):
 		return 0
-	# Через воду коридор идёт мостом: сухая канава посреди реки выглядела
-	# бы ошибкой генерации.
-	tiles[i] = Cfg.T_BRIDGE if tiles[i] == Cfg.T_WATER else Cfg.T_EMPTY
+	# Воду коридор не трогает. Раньше он клал через неё мост, и замер
+	# показал по 13–18 переправ на карту вместо четырёх разрешённых:
+	# страховка связности прорубала реку везде, где ей было удобно.
+	# Берега соединяют мосты генератора, и только они.
+	if tiles[i] == Cfg.T_WATER:
+		return 0
+	tiles[i] = Cfg.T_EMPTY
 	version += 1
 	return 1

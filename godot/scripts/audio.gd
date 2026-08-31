@@ -41,6 +41,7 @@ const THROTTLE := {
 	"tread_hard": 12,
 	"tread_soft": 12,
 	"steam": 20,
+	"thunder": 30,
 }
 
 ## Базовая громкость события. Выстрел и взрыв — громче всего остального,
@@ -57,6 +58,7 @@ const LEVEL := {
 	"tread_hard": -21.0,
 	"tread_soft": -21.0,
 	"steam": -13.0,
+	"thunder": -3.0,
 	"water": -12.0,
 	"pickup": -9.0,
 	"levelup": -8.0,
@@ -245,6 +247,7 @@ func _build_streams(_streams: Dictionary) -> void:
 	_streams["water"] = [_splash(0), _splash(1)]
 	# Сброс пара из перегретого ствола: шипение с падающим срезом.
 	_streams["steam"] = [_steam()]
+	_streams["thunder"] = [_thunder(0), _thunder(1)]
 
 	# --- интерфейс и события
 	_streams["pickup"] = [_pickup()]
@@ -334,6 +337,18 @@ func _splash(variant: int) -> AudioStreamWAV:
 	var b := Synth.buf(0.45)
 	Synth.add_noise(b, 0.0, 0.35, 6000.0, 700.0, 0.45, 9.0, 9600 + variant)
 	Synth.add_tone(b, 0.02, 0.25, "sine", 520.0, 170.0, 0.22, 11.0)
+	return Synth.to_stream(b)
+
+## Гром: резкий треск разряда и долгий раскат следом.
+func _thunder(variant: int) -> AudioStreamWAV:
+	var b := Synth.buf(1.6)
+	var s := 5200 + variant * 37
+	# Треск: он и читается как «ударило рядом», а не «где-то громыхнуло».
+	Synth.add_noise(b, 0.0, 0.09, 11000.0, 2500.0, 0.55, 22.0, s)
+	Synth.add_noise(b, 0.02, 0.55, 2600.0, 260.0, 0.75, 7.0, s + 1)
+	# Раскат: низ, который держится больше секунды.
+	Synth.add_noise(b, 0.10, 1.40, 420.0, 90.0, 0.50, 3.0, s + 2)
+	Synth.add_tone(b, 0.0, 0.50, "sine", 110.0, 34.0, 0.55, 6.0)
 	return Synth.to_stream(b)
 
 ## Пар: длинный шум с падающим срезом — «пш-ш-ш», а не щелчок.

@@ -90,6 +90,10 @@ var flood_level := 0.0
 var used_names := {}
 ## Мир клиента: шага симуляции нет, состояние приходит по сети.
 var puppet := false
+## Разряды молний и следы от них. Разряд живёт доли секунды, след —
+## до конца партии.
+var bolts: Array = []
+var scorches: Array = []
 
 func _init(opts: Dictionary) -> void:
 	map = opts["map"]
@@ -142,6 +146,67 @@ func notify_shot(shooter) -> void:
 		if dx * dx + dy * dy > r2:
 			continue
 		t.brain.hear_shot(shooter.x, shooter.y)
+
+## Гроза бьёт разрядами в землю рядом с игроком. Именно рядом: молния
+## в другом конце карты — это звук без картинки, а игроку нужно видеть,
+## куда ударило, и успеть отъехать.
+func _update_storm() -> void:
+	for i in range(bolts.size() - 1, -1, -1):
+		bolts[i]["life"] -= 1
+		if int(bolts[i]["life"]) <= 0:
+			bolts.remove_at(i)
+
+	if weather == null or weather.condition != "storm":
+		return
+	if tick % Cfg.LIGHTNING_EVERY != 0:
+		return
+	if rng.nextf() > Cfg.LIGHTNING_CHANCE:
+		return
+
+	# Точка удара: рядом с кем-то из живых игроков, но не в упор.
+	var anchor = null
+	for p in players:
+		if p.tank != null and p.tank.alive:
+			anchor = p.tank
+			break
+	if anchor == null:
+		return
+	var angle := rng.nextf() * TAU
+	var dist := 120.0 + rng.nextf() * 260.0
+	var x := clampf(anchor.x + cos(angle) * dist, 32.0, map.width - 32.0)
+	var y := clampf(anchor.y + sin(angle) * dist, 32.0, map.height - 32.0)
+	# В стену молния не бьёт: удар должен быть виден на открытом месте.
+	if not map.is_drivable(map.row_at(y), map.col_at(x)):
+		return
+
+	strike_lightning(x, y)
+
+## Разряд в точку: урон, след, звук и вспышка.
+func strike_lightning(x: float, y: float) -> void:
+	# Номер разряда нужен только для формы ломаной, поэтому берётся из
+	# счётчика тиков и целой части случайного числа — своего метода
+	# у Rng для целых нет.
+	bolts.append({"x": x, "y": y, "life": 14,
+		"seed": tick * 31 + int(rng.nextf() * 100000.0)})
+	scorches.append(Vector2(x, y))
+	while scorches.size() > Cfg.MAX_SCORCH:
+		scorches.pop_front()
+
+	var r2: float = Cfg.LIGHTNING_RADIUS * Cfg.LIGHTNING_RADIUS
+	for t in tanks:
+		if not t.alive:
+			continue
+		var dx: float = t.x - x
+		var dy: float = t.y - y
+		if dx * dx + dy * dy > r2:
+			continue
+		deal_damage(t, Cfg.LIGHTNING_DAMAGE, null, "lightning")
+
+	particles.burst(x, y, [Cfg.bolt_core, Cfg.bolt_glow, Color.WHITE],
+		22, 3, 7, 20, 44, rng)
+	add_shake(7.0, x, y)
+	Sfx.play("thunder", x, y)
+	weather.flash = maxf(weather.flash, 0.45)
 
 # ------------------------------------------------------------------- сеть
 ## Описание танка для клиента: всё, что не меняется каждый тик и потому
@@ -656,6 +721,7 @@ func step() -> void:
 	weather.update()
 	if mode == "koth":
 		_update_flood()
+	_update_storm()
 
 	for tank in tanks:
 		tank.update(self)

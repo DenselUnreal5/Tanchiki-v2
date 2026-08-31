@@ -52,6 +52,7 @@ func _draw() -> void:
 
 	draw_set_transform(view_off)
 	_draw_tiles()
+	_draw_scorches()
 	_draw_ao()
 	_draw_pickups()
 	_draw_weapon_pickups()
@@ -69,6 +70,9 @@ func _draw() -> void:
 
 	draw_set_transform(Vector2.ZERO)
 	_draw_weather(size)
+	# Разряд рисуется ПОСЛЕ погоды: молния — источник света, а не предмет
+	# в темноте. Под ночным затемнением она тонула и была не видна вовсе.
+	_draw_bolts()
 
 	if player.damage_flash > 0:
 		draw_rect(Rect2(Vector2.ZERO, size),
@@ -116,6 +120,12 @@ func _draw_weather(size: Vector2) -> void:
 	var dark := (1.0 - w.light) * 0.55 if Sets.day_night else 0.0
 	if dark > 0.01:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.039, 0.055, 0.133, dark))
+
+	# --- свет фонарей. Включается сам, когда темно или густой туман:
+	# именно ради этих двух состояний фонари и ставились.
+	var lamp_k: float = maxf((1.0 - w.light) if Sets.day_night else 0.0, w.fog * 0.7)
+	if lamp_k > 0.25:
+		_draw_lamp_light(clampf((lamp_k - 0.25) / 0.6, 0.0, 1.0))
 
 	# --- туман: плавающие полупрозрачные пятна.
 	if w.fog * k > 0.02:
@@ -185,6 +195,8 @@ func _draw_tiles() -> void:
 			_rect(c * Cfg.TILE, r * Cfg.TILE, Cfg.TILE, Cfg.TILE,
 				g0 if (r + c) % 2 == 0 else g1)
 
+	_draw_lamp_posts()
+
 	var water_phase := float(world.tick % 120) / 120.0
 
 	for r in range(r0, r1 + 1):
@@ -194,6 +206,18 @@ func _draw_tiles() -> void:
 				continue
 			var x := float(c * Cfg.TILE)
 			var y := float(r * Cfg.TILE)
+			# Отброшенная тень. Она и решает жалобу «дома сливаются
+			# с дорогой»: цветом их различать трудно — на тёмной карте,
+			# ночью и в тумане контраст съедается, — а тень читается
+			# всегда, потому что она про форму, а не про цвет.
+			if tile == Cfg.T_BRICK or tile == Cfg.T_WALL:
+				var below := map.get_tile(r + 1, c)
+				var right := map.get_tile(r, c + 1)
+				if not GameMap.is_solid_tile(below):
+					_rect(x + 3, y + Cfg.TILE, Cfg.TILE, 4, Color(0, 0, 0, 0.34))
+				if not GameMap.is_solid_tile(right):
+					_rect(x + Cfg.TILE, y + 3, 4, Cfg.TILE, Color(0, 0, 0, 0.34))
+
 			match tile:
 				Cfg.T_WALL:
 					_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.wall)
@@ -415,6 +439,120 @@ func _snow_k() -> float:
 	if world.weather == null:
 		return 0.0
 	return clampf(world.weather.snow * Sets.weather_scale(), 0.0, 1.0) * 0.55
+
+## Световые пятна фонарей. Рисуются после ночного затемнения, поэтому
+## действительно освещают мостовую, а не тонут в нём вместе с ней.
+func _draw_lamp_light(k: float) -> void:
+	if not _lamps_ready:
+		_build_lamps()
+	for lamp in _lamps:
+		if not _in_view(lamp.x, lamp.y, 50):
+			continue
+		var p := lamp + view_off
+		# Три круга вместо градиента: дёшево и на глаз неотличимо.
+		draw_circle(p, 46.0, Color(Cfg.lamp_glow, 0.05 * k))
+		draw_circle(p, 30.0, Color(Cfg.lamp_glow, 0.07 * k))
+		draw_circle(p, 15.0, Color(Cfg.lamp_glow, 0.10 * k))
+		draw_circle(p - Vector2(0, 4.0), 3.0, Color(Cfg.lamp_glow, 0.9 * k))
+
+## След от удара молнии: выжженное пятно на земле. Живёт до конца партии —
+## по нему видно, где уже било.
+func _draw_scorches() -> void:
+	# Преобразование вида уже стоит (draw_set_transform(view_off) в _draw),
+	# поэтому координаты здесь мировые. Прибавлять смещение второй раз —
+	# ровно та ошибка, из-за которой первый разряд ушёл за край экрана.
+	for p in world.scorches:
+		if not _in_view(p.x, p.y, 24):
+			continue
+		draw_circle(Vector2(p.x, p.y), 13.0, Color(Cfg.scorch, 0.55))
+		draw_circle(Vector2(p.x, p.y), 7.0, Color(Cfg.scorch, 0.75))
+
+## Разряд: ломаная от верхнего края экрана до точки удара.
+##
+## Ломаная считается от номера разряда, а не случайно каждый кадр: иначе
+## молния «кипела» бы все свои четверть секунды вместо того, чтобы висеть
+## одной вспышкой.
+func _draw_bolts() -> void:
+	# Отрисовка танков оставляет своё преобразование, поэтому возвращаем
+	# общее — иначе разряд уедет вслед за последним нарисованным танком.
+	draw_set_transform(view_off)
+	for b in world.bolts:
+		var x: float = float(b["x"])
+		var y: float = float(b["y"])
+		if not _in_view(x, y, 400):
+			continue
+		var life: int = int(b["life"])
+		var a: float = clampf(float(life) / 14.0, 0.0, 1.0)
+		var seed_v: int = int(b["seed"])
+
+		var top := Vector2(x + (Rng.hash01(seed_v, 3) - 0.5) * 120.0,
+			y - _view.size.y * 0.55)
+		var pts := PackedVector2Array()
+		var steps := 9
+		for i in steps + 1:
+			var t := float(i) / float(steps)
+			var px: float = lerpf(top.x, x, t)
+			var py: float = lerpf(top.y, y, t)
+			# Излом тем шире, чем дальше от земли: у самой земли разряд
+			# должен приходить точно в отмеченную точку.
+			var jag := (Rng.hash01(seed_v + i * 977, 11) - 0.5) * 46.0 * (1.0 - t)
+			pts.append(Vector2(px + jag, py))
+		# Сначала широкое голубое свечение, поверх — узкое белое ядро.
+		# Три полосы: широкий ореол, средняя синева и узкое белое ядро.
+		draw_polyline(pts, Color(Cfg.bolt_glow, a * 0.30), 13.0)
+		draw_polyline(pts, Color(Cfg.bolt_glow, a * 0.75), 6.0)
+		draw_polyline(pts, Color(Cfg.bolt_core, a), 2.0)
+		draw_circle(Vector2(x, y), 16.0 * a, Color(Cfg.bolt_glow, a * 0.35))
+	# Погодный слой рисуется в экранных координатах — возвращаем их обратно.
+	draw_set_transform(Vector2.ZERO)
+
+## Фонари вдоль проезжей части.
+##
+## Отдельных тайлов под них нет: положение выводится из координат клетки,
+## поэтому карта не растёт ни на байт, а фонари стоят там же при каждом
+## запуске. Ставятся только на краю асфальта — посреди дороги столб
+## выглядел бы нелепо.
+func _lamp_at(r: int, c: int) -> bool:
+	if not _is_paved(r, c):
+		return false
+	# Край проезжей части: с одной стороны асфальт кончился.
+	if _is_paved(r, c - 1) and _is_paved(r, c + 1) \
+			and _is_paved(r - 1, c) and _is_paved(r + 1, c):
+		return false
+	# Реже, чем «каждая девятая клетка»: первый вариант ставил столбы
+	# сплошной цепью, и ночная карта превращалась в аэродром.
+	return (r * 7 + c * 13) % 17 == 0
+
+## Места фонарей считаются один раз на партию, а не каждый кадр.
+##
+## Проверка «край асфальта» стоит четырёх обращений к карте, и на тысяче
+## видимых клеток дважды за кадр (столбы и свет) это обошлось в 5–8 мс —
+## замер кадра вырос с 26–32 мс до 32–38. Асфальт в бою не меняется:
+## дороги неразрушимы, — поэтому список можно построить однажды.
+var _lamps: PackedVector2Array = PackedVector2Array()
+var _lamps_ready := false
+
+func _build_lamps() -> void:
+	_lamps = PackedVector2Array()
+	var map := world.map
+	for r in range(1, map.rows - 1):
+		for c in range(1, map.cols - 1):
+			if _lamp_at(r, c):
+				_lamps.append(Vector2(float(c * Cfg.TILE) + Cfg.TILE * 0.5,
+					float(r * Cfg.TILE) + Cfg.TILE * 0.5))
+	_lamps_ready = true
+
+## Столбы рисуются вместе с тайлами, а свет — в погодном слое: он должен
+## ложиться ПОВЕРХ ночной темноты, иначе фонарь не освещает, а просто
+## сам себя показывает.
+func _draw_lamp_posts() -> void:
+	if not _lamps_ready:
+		_build_lamps()
+	for p in _lamps:
+		if not _in_view(p.x, p.y, 16):
+			continue
+		_rect(p.x - 1.0, p.y - 2.0, 2.0, 9.0, Cfg.lamp_post)
+		_rect(p.x - 3.0, p.y - 5.0, 6.0, 3.0, Cfg.lamp_head)
 
 ## Асфальт и мост — одно покрытие для разметки: мост продолжает улицу,
 ## поэтому линии не должны обрываться перед въездом.
