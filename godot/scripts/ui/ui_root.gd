@@ -21,6 +21,14 @@ signal quit_requested
 ## Сколько вариантов показывать при повышении уровня.
 const PERK_CHOICES := 3
 
+## Предел мёртвой зоны стика: половина хода. Выше — стик уже не отзывается.
+const MAX_DEADZONE := 0.5
+
+## Версия сборки. Источник один — project.godot, чтобы показанное на экране
+## и записанное в свойствах .exe не разъезжались.
+static func game_version() -> String:
+	return String(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+
 var settings := {
 	"game_type": "single", "mode": "ffa", "difficulty": "medium",
 	"level": 1, "color1": "p1", "color2": "p2",
@@ -92,32 +100,32 @@ func _ready() -> void:
 	_build_gameover()
 	_gallery = _make_overlay(true)
 	_gallery_sub = UiKit.subtitle("")
-	_gallery_body = _overlay_body(_gallery, I18n.t("gallery.title", {}, "Галерея перков"), _gallery_sub,
+	_gallery_body = _overlay_body(_gallery, "gallery.title", "Галерея перков", _gallery_sub,
 		func(): close_gallery())
 	_garage = _make_overlay(true)
 	_garage_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_garage_body = _overlay_body(_garage, I18n.t("garage.title", {}, "🔧 Гараж"), _garage_sub,
+	_garage_body = _overlay_body(_garage, "garage.title", "🔧 Гараж", _garage_sub,
 		func(): close_garage(), 880)
 	_stats = _make_overlay(true)
 	_stats_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_stats_body = _overlay_body(_stats, I18n.t("stats.title", {}, "Статистика"), _stats_sub,
+	_stats_body = _overlay_body(_stats, "stats.title", "Статистика", _stats_sub,
 		func(): close_stats(), 540)
 	_achievements = _make_overlay(true)
 	_achievements_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_achievements_body = _overlay_body(_achievements, I18n.t("achievements.title", {}, "🏅 Достижения"),
+	_achievements_body = _overlay_body(_achievements, "achievements.title", "🏅 Достижения",
 		_achievements_sub, func(): close_achievements())
 	_daily = _make_overlay(true)
 	_daily_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_daily_body = _overlay_body(_daily, I18n.t("daily.title", {}, "📅 Ежедневные задания"),
+	_daily_body = _overlay_body(_daily, "daily.title", "📅 Ежедневные задания",
 		_daily_sub, func(): close_daily())
 	_net = _make_overlay(true)
 	_net_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_net_body = _overlay_body(_net, I18n.t("net.title", {}, "🌐 Сетевая игра"),
+	_net_body = _overlay_body(_net, "net.title", "🌐 Сетевая игра",
 		_net_sub, func(): close_net(), 620)
 
 	_settings = _make_overlay(true)
 	_settings_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_settings_body = _overlay_body(_settings, I18n.t("settings.title", {}, "⚙ Настройки"),
+	_settings_body = _overlay_body(_settings, "settings.title", "⚙ Настройки",
 		_settings_sub, func(): close_settings(), 700)
 
 	_confirm = ConfirmationDialog.new()
@@ -138,8 +146,66 @@ func _make_overlay(dim: bool) -> Control:
 	return root
 
 ## Стандартная схема оверлея: заголовок, подзаголовок, тело, кнопка «Закрыть».
-func _overlay_body(root: Control, title_text: String, sub: Control,
-		on_close: Callable, width: float = 760.0) -> VBoxContainer:
+## Собирает строки настроек боя. Вынесено отдельно, потому что при смене
+## языка их надо построить заново: подписи и варианты переводятся один раз
+## при создании, а не на каждый кадр.
+func _build_menu_settings() -> void:
+	for c in _menu_settings.get_children():
+		c.queue_free()
+	var caption := UiKit.label(I18n.t("menu.selectMode", {}, "⚙️ Выбрать режим").to_upper(),
+		12, Cfg.UI_ACCENT, true)
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_menu_settings.add_child(caption)
+
+	_menu_settings.add_child(_make_group(I18n.t("menu.gametype", {}, "Тип игры"), "game_type", [
+		["single", I18n.t("gametype.single", {}, "1 игрок")],
+		["hotseat", I18n.t("gametype.hotseat", {}, "Горячий стул")],
+	]))
+	_menu_settings.add_child(_make_group(I18n.t("menu.mode", {}, "Режим"), "mode", [
+		["ffa", I18n.t("mode.ffa", {}, "Каждый за себя")],
+		["ctf", I18n.t("mode.ctf", {}, "Захват флага")],
+		["koth", I18n.t("mode.koth", {}, "Царь горы")],
+		["defense", I18n.t("mode.defense", {}, "Оборона")],
+	]))
+	_menu_settings.add_child(_make_group(I18n.t("menu.diff", {}, "Сложность"), "difficulty", [
+		["easy", I18n.t("diff.easy", {}, "Легко")],
+		["medium", I18n.t("diff.medium", {}, "Средне")],
+		["hard", I18n.t("diff.hard", {}, "Сложно")],
+	]))
+	_menu_settings.add_child(_make_group(I18n.t("menu.level", {}, "Уровень"), "level", [
+		[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"], [-1, "?"],
+	]))
+	_menu_settings.add_child(_make_group(I18n.t("menu.location", {}, "Локация"), "location", [
+		["auto", I18n.t("loc.auto", {}, "Жребий")],
+		["city", I18n.t("loc.city", {}, "🏙 Город")],
+		["dust", I18n.t("loc.dust", {}, "🏜 Пустошь")],
+		["jungle", I18n.t("loc.jungle", {}, "🌴 Джунгли")],
+	]))
+	_menu_settings.add_child(_make_group(I18n.t("menu.weather", {}, "Погода"), "weather", [
+		["auto", I18n.t("wx.auto", {}, "Своя")],
+		["clear", I18n.t("wx.clear", {}, "☀ Ясно")],
+		["rain", I18n.t("wx.rain", {}, "🌧 Дождь")],
+		["fog", I18n.t("wx.fog", {}, "🌫 Туман")],
+		["snow", I18n.t("wx.snow", {}, "❄ Снег")],
+		["storm", I18n.t("wx.storm", {}, "⛈ Гроза")],
+	]))
+	_menu_settings.add_child(_make_group(I18n.t("menu.daytime", {}, "Время суток"), "daytime", [
+		["auto", I18n.t("tod.auto", {}, "Цикл")],
+		["day", I18n.t("tod.day", {}, "☀ День")],
+		["dusk", I18n.t("tod.dusk", {}, "🌆 Закат")],
+		["night", I18n.t("tod.night", {}, "🌙 Ночь")],
+		["midnight", I18n.t("tod.midnight", {}, "🌑 Полночь")],
+	]))
+	_menu_settings.add_child(_make_color_group(I18n.t("menu.color1", {}, "Цвет танка 1"), "color1"))
+	_menu_settings.add_child(_make_color_group(I18n.t("menu.color2", {}, "Цвет танка 2"), "color2"))
+
+
+## @param title_key ключ перевода заголовка. Именно ключ, а не готовая
+##        строка: заголовок и кнопка «Закрыть» собираются один раз при
+##        запуске, и при смене языка их надо перевести заново.
+func _overlay_body(root: Control, title_key: String, title_fallback: String,
+		sub: Control, on_close: Callable, width: float = 760.0) -> VBoxContainer:
+	var title_text := I18n.t(title_key, {}, title_fallback)
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(center)
@@ -170,6 +236,8 @@ func _overlay_body(root: Control, title_text: String, sub: Control,
 	box.add_child(wrap)
 
 	root.set_meta("title_label", title)
+	root.set_meta("title_key", title_key)
+	root.set_meta("title_fallback", title_fallback)
 	root.set_meta("close_button", close)
 	root.set_meta("scroll", scroll)
 	return body
@@ -283,6 +351,12 @@ func _build_menu() -> void:
 	_hints = UiKit.rich("", 10, Color(0.76, 0.80, 0.76, 0.6))
 	col.add_child(_hints)
 
+	# Версия на виду. Без неё отчёт игрока не к чему привязать: «не работает»
+	# без номера сборки не отличить от «не работало в прошлой».
+	var ver := UiKit.label("v" + game_version(), 9, Color(0.60, 0.64, 0.60, 0.55))
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(ver)
+
 	var footer := GridContainer.new()
 	footer.columns = 2
 	footer.add_theme_constant_override("h_separation", 8)
@@ -345,52 +419,7 @@ func _build_menu() -> void:
 	_menu_settings = UiKit.vbox(11)
 	_menu_settings_panel.add_child(_menu_settings)
 
-	var caption := UiKit.label(I18n.t("menu.selectMode", {}, "⚙️ Выбрать режим").to_upper(),
-		12, Cfg.UI_ACCENT, true)
-	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_menu_settings.add_child(caption)
-
-	_menu_settings.add_child(_make_group(I18n.t("menu.gametype", {}, "Тип игры"), "game_type", [
-		["single", I18n.t("gametype.single", {}, "1 игрок")],
-		["hotseat", I18n.t("gametype.hotseat", {}, "Горячий стул")],
-	]))
-	_menu_settings.add_child(_make_group(I18n.t("menu.mode", {}, "Режим"), "mode", [
-		["ffa", I18n.t("mode.ffa", {}, "Каждый за себя")],
-		["ctf", I18n.t("mode.ctf", {}, "Захват флага")],
-		["koth", I18n.t("mode.koth", {}, "Царь горы")],
-		["defense", I18n.t("mode.defense", {}, "Оборона")],
-	]))
-	_menu_settings.add_child(_make_group(I18n.t("menu.diff", {}, "Сложность"), "difficulty", [
-		["easy", I18n.t("diff.easy", {}, "Легко")],
-		["medium", I18n.t("diff.medium", {}, "Средне")],
-		["hard", I18n.t("diff.hard", {}, "Сложно")],
-	]))
-	_menu_settings.add_child(_make_group(I18n.t("menu.level", {}, "Уровень"), "level", [
-		[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"], [-1, "?"],
-	]))
-	_menu_settings.add_child(_make_group(I18n.t("menu.location", {}, "Локация"), "location", [
-		["auto", I18n.t("loc.auto", {}, "Жребий")],
-		["city", I18n.t("loc.city", {}, "🏙 Город")],
-		["dust", I18n.t("loc.dust", {}, "🏜 Пустошь")],
-		["jungle", I18n.t("loc.jungle", {}, "🌴 Джунгли")],
-	]))
-	_menu_settings.add_child(_make_group(I18n.t("menu.weather", {}, "Погода"), "weather", [
-		["auto", I18n.t("wx.auto", {}, "Своя")],
-		["clear", I18n.t("wx.clear", {}, "☀ Ясно")],
-		["rain", I18n.t("wx.rain", {}, "🌧 Дождь")],
-		["fog", I18n.t("wx.fog", {}, "🌫 Туман")],
-		["snow", I18n.t("wx.snow", {}, "❄ Снег")],
-		["storm", I18n.t("wx.storm", {}, "⛈ Гроза")],
-	]))
-	_menu_settings.add_child(_make_group(I18n.t("menu.daytime", {}, "Время суток"), "daytime", [
-		["auto", I18n.t("tod.auto", {}, "Цикл")],
-		["day", I18n.t("tod.day", {}, "☀ День")],
-		["dusk", I18n.t("tod.dusk", {}, "🌆 Закат")],
-		["night", I18n.t("tod.night", {}, "🌙 Ночь")],
-		["midnight", I18n.t("tod.midnight", {}, "🌑 Полночь")],
-	]))
-	_menu_settings.add_child(_make_color_group(I18n.t("menu.color1", {}, "Цвет танка 1"), "color1"))
-	_menu_settings.add_child(_make_color_group(I18n.t("menu.color2", {}, "Цвет танка 2"), "color2"))
+	_build_menu_settings()
 
 	_refresh_lang_btn()
 	_refresh_hints()
@@ -475,17 +504,35 @@ func _refresh_hints() -> void:
 	var fire := I18n.t("hint.p1.fire", {}, "выстрел")
 	var mine := I18n.t("hint.p1.mine", {}, "мина")
 	var rows := []
-	rows.append("[b]%s:[/b] [W][A][S][D] %s · [%s] %s · [ЛКМ] %s · [E] %s · [Shift] %s" % [
-		I18n.t("player1", {}, "Игрок 1"), move,
-		I18n.t("hint.p1.aim", {}, "мышь"), I18n.t("hint.p1.aim2", {}, "прицел"),
-		fire, mine, I18n.t("hint.p1.dash", {}, "рывок")])
+	# Подсказка обязана соответствовать выбранному устройству: игроку
+	# с геймпадом бесполезно читать про WASD.
+	rows.append(_hint_row(I18n.t("player1", {}, "Игрок 1"), Sets.p1_device, 0,
+		move, fire, mine))
 	if settings["game_type"] == "hotseat":
-		rows.append("[b]%s:[/b] [↑][←][↓][→] %s · [<][>] %s · [Num 0] %s · [Num .] %s" % [
-			I18n.t("player2", {}, "Игрок 2"), move,
-			I18n.t("hint.p2.turret", {}, "башня"), fire, mine])
+		rows.append(_hint_row(I18n.t("player2", {}, "Игрок 2"), Sets.p2_device, 1,
+			move, fire, mine))
 	rows.append("[P]/[Esc] %s · [Tab] %s" % [
 		I18n.t("hint.pause", {}, "пауза"), I18n.t("hint.scoreboard", {}, "табло")])
 	_hints.text = "[center]" + "\n".join(rows) + "[/center]"
+
+## Строка подсказки под выбранное устройство игрока.
+func _hint_row(who: String, device: String, index: int,
+		move: String, fire: String, mine: String) -> String:
+	if device.begins_with("pad"):
+		return "[b]%s:[/b] [%s] %s · [%s] %s · [RT] %s · [LT] %s · [LB] %s" % [
+			who,
+			I18n.t("hint.pad.stickL", {}, "левый стик"), I18n.t("hint.pad.move", {}, "движение"),
+			I18n.t("hint.pad.stickR", {}, "правый стик"), I18n.t("hint.pad.aim", {}, "прицел"),
+			I18n.t("hint.pad.fire", {}, "выстрел"), I18n.t("hint.pad.mine", {}, "мина"),
+			I18n.t("hint.pad.dash", {}, "рывок")]
+	var keys_only := device == Sets.DEV_KEYS or (device == Sets.DEV_AUTO and index == 1)
+	if keys_only:
+		return "[b]%s:[/b] [↑][←][↓][→] %s · [<][>] %s · [Num 0] %s · [Num .] %s" % [
+			who, move, I18n.t("hint.p2.turret", {}, "башня"), fire, mine]
+	return "[b]%s:[/b] [W][A][S][D] %s · [%s] %s · [ЛКМ] %s · [E] %s · [Shift] %s" % [
+		who, move,
+		I18n.t("hint.p1.aim", {}, "мышь"), I18n.t("hint.p1.aim2", {}, "прицел"),
+		fire, mine, I18n.t("hint.p1.dash", {}, "рывок")]
 
 func show_menu() -> void:
 	hide_all_overlays()
@@ -575,6 +622,24 @@ func _build_perk() -> void:
 ## Показывает выбор перка для конкретного игрока.
 ## Последняя предложенная тройка перков — для тестов и отладки.
 var last_perk_choices: Array = []
+
+## Выбранный транспорт сетевой игры: steam | direct.
+var _net_kind := "steam"
+
+## Ставит выбранный транспорт в Net. Ошибку показываем в самом окне, а не
+## всплывающим сообщением: игрок сейчас смотрит именно сюда.
+func _apply_net_kind() -> void:
+	var t: NetTransport = NetTransport.SteamTransport.new() if _net_kind == "steam" 		else NetTransport.EnetTransport.new(Net.PORT)
+	if not t.available():
+		_net_kind = "direct"
+		t = NetTransport.EnetTransport.new(Net.PORT)
+	Net.transport = t
+	# Адрес от другого транспорта здесь бессмыслен: IP не SteamID и наоборот.
+	# Проверка стоит здесь, а не только в обработчике переключателя, потому
+	# что умолчание 127.0.0.1 висело бы в поле и при первом открытии окна.
+	var looks_like_ip := _net_address.find(".") >= 0
+	if _net_address != "" and looks_like_ip == (_net_kind == "steam"):
+		_net_address = ""
 
 func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 	# В режимах с запретами («Амфибия» в «Царе горы») такие перки не предлагаем:
@@ -1224,6 +1289,21 @@ func hide_game_over() -> void:
 
 # ---------------------------------------------------------------- язык
 func _on_language_changed() -> void:
+	# Заголовки окон и кнопка «Закрыть» живут вне меню: они собираются один
+	# раз в _ready и пересборкой меню не затрагиваются. Поэтому в английской
+	# игре над сетевым окном оставалась надпись «Сетевая игра».
+	for root in [_gallery, _garage, _stats, _achievements, _daily, _settings,
+			_net, _gameover]:
+		if root == null or not root.has_meta("title_key"):
+			continue
+		var label := root.get_meta("title_label") as Label
+		if label != null:
+			label.text = I18n.t(String(root.get_meta("title_key")), {},
+				String(root.get_meta("title_fallback")))
+		var btn := root.get_meta("close_button") as Button
+		if btn != null:
+			btn.text = I18n.t("btn.close", {}, "Закрыть")
+
 	# Полная пересборка меню — самый надёжный способ применить перевод
 	# ко всем подписям сразу.
 	var was_menu := _menu.visible
@@ -1248,6 +1328,10 @@ func _on_language_changed() -> void:
 		open_achievements()
 	if is_daily_open:
 		open_daily()
+	# Сетевого окна в этом списке не было — оно единственное оставалось
+	# на прежнем языке до закрытия и повторного открытия.
+	if _net != null and _net.visible:
+		_refresh_net()
 	if not _last_gameover.is_empty() and _gameover.visible:
 		show_game_over(_last_gameover["result"], _last_gameover["world"], _last_gameover["hotseat"])
 
@@ -1319,6 +1403,64 @@ func _build_video_section() -> void:
 			Sets.save()))
 
 func _build_graphics_section() -> void:
+	# ---- управление -----------------------------------------------------
+	_settings_body.add_child(UiKit.section(
+		I18n.t("set.input", {}, "Управление"), Color("#ffcc44")))
+
+	var devices := [
+		[Sets.DEV_AUTO, I18n.t("dev.auto", {}, "Как обычно")],
+		[Sets.DEV_KBM, I18n.t("dev.kbm", {}, "Клавиатура и мышь")],
+		[Sets.DEV_KEYS, I18n.t("dev.keys", {}, "Только клавиатура")],
+	]
+	for pad in Sets.pads():
+		devices.append(["pad%d" % int(pad["id"]),
+			"%s %d: %s" % [I18n.t("dev.pad", {}, "Геймпад"), int(pad["id"]) + 1,
+				String(pad["name"])]])
+	var labels := []
+	for d in devices:
+		labels.append(String(d[1]))
+
+	for who in [0, 1]:
+		var current: String = Sets.p1_device if who == 0 else Sets.p2_device
+		var idx := 0
+		for i in devices.size():
+			if String(devices[i][0]) == current:
+				idx = i
+		_settings_body.add_child(UiKit.choice_row(
+			I18n.t("set.dev1", {}, "Игрок 1") if who == 0
+				else I18n.t("set.dev2", {}, "Игрок 2"),
+			labels, idx,
+			func(v: int):
+				var id: String = String(devices[v][0])
+				if who == 0:
+					Sets.p1_device = id
+				else:
+					Sets.p2_device = id
+				Sets.save()
+				_refresh_hints()))
+
+	if Sets.pads().is_empty():
+		_settings_body.add_child(UiKit.label(
+			I18n.t("set.pad.none", {}, "Геймпад не найден. Подключите его и откройте настройки заново."),
+			9, Cfg.UI_MUTED))
+	else:
+		# Ползунок ходит 0..1, а мёртвая зона выше половины хода бессмысленна:
+		# стик перестал бы отзываться вовсе. Поэтому шкала сжата вдвое.
+		_settings_body.add_child(UiKit.slider_row(
+			I18n.t("set.pad.deadzone", {}, "Мёртвая зона стиков"),
+			Sets.pad_deadzone / MAX_DEADZONE,
+			func(v: float):
+				Sets.pad_deadzone = v * MAX_DEADZONE
+				Sets.save()))
+		_settings_body.add_child(UiKit.label(
+			I18n.t("set.pad.deadzone.hint", {}, "Ниже этого порога стик считается отпущенным. Слишком малая зона — танк едет сам."),
+			9, Cfg.UI_MUTED))
+		_settings_body.add_child(UiKit.switch_row(
+			I18n.t("set.pad.vibration", {}, "Отдача геймпада"), Sets.pad_vibration,
+			func(v: bool):
+				Sets.pad_vibration = v
+				Sets.save()))
+
 	_settings_body.add_child(UiKit.section(I18n.t("set.graphics", {}, "Графика"), Color("#ff8833")))
 
 	_settings_body.add_child(UiKit.choice_row(
@@ -1432,6 +1574,33 @@ func _refresh_net() -> void:
 		_build_net_lobby()
 
 func _build_net_offline() -> void:
+	# Выбор транспорта. Steam ведёт соединение через релей Valve, поэтому
+	# проброс портов не нужен; прямой адрес остаётся для локальной сети.
+	var steam_ok := NetTransport.SteamTransport.new().available()
+	if not steam_ok and _net_kind == "steam":
+		_net_kind = "direct"
+	var kinds := [
+		["steam", I18n.t("net.kind.steam", {}, "Через Steam")],
+		["direct", I18n.t("net.kind.direct", {}, "Прямой адрес")],
+	]
+	var labels := []
+	for k in kinds:
+		labels.append(String(k[1]))
+	var idx := 0 if _net_kind == "steam" else 1
+	_net_body.add_child(UiKit.choice_row(
+		I18n.t("net.kind", {}, "Соединение"), labels, idx,
+		func(v: int):
+			_net_kind = String(kinds[v][0])
+			# Адрес от другого транспорта здесь бессмыслен: IP не SteamID
+			# и наоборот. Чистим, чтобы игрок не подключался к мусору.
+			_apply_net_kind()
+			_refresh_net()))
+	if not steam_ok:
+		_net_body.add_child(UiKit.label(
+			I18n.t("net.steam.off", {}, "Steam недоступен в этой сборке — работает только прямой адрес."),
+			9, Cfg.UI_MUTED))
+	_apply_net_kind()
+
 	_net_body.add_child(UiKit.section(I18n.t("net.new", {}, "Своя игра"), Color("#44aaff")))
 
 	var name_row := UiKit.hbox(8)
@@ -1449,13 +1618,34 @@ func _build_net_offline() -> void:
 		Net.host_game()
 		_refresh_net())
 	_net_body.add_child(host_btn)
-	_net_body.add_child(UiKit.label(
-		I18n.t("net.host.hint", {}, "Порт 8124. В локальной сети остальным нужен ваш адрес, через интернет — проброс порта."),
-		9, Cfg.UI_MUTED))
+	if _net_kind == "steam":
+		var sid := NetTransport.SteamTransport.my_steam_id()
+		_net_body.add_child(UiKit.label(
+			I18n.t("net.steam.hint", {}, "Соединение идёт через серверы Valve — проброс портов не нужен."),
+			9, Cfg.UI_MUTED))
+		if sid > 0:
+			var id_row := UiKit.hbox(8)
+			id_row.add_child(UiKit.label(I18n.t("net.steam.mine", {}, "Ваш SteamID"),
+				12, Cfg.UI_TEXT))
+			var id_edit := LineEdit.new()
+			id_edit.text = str(sid)
+			id_edit.editable = false
+			id_edit.custom_minimum_size = Vector2(220, 30)
+			id_row.add_child(id_edit)
+			_net_body.add_child(id_row)
+			_net_body.add_child(UiKit.label(
+				I18n.t("net.steam.share", {}, "Передайте его тем, кто подключается."),
+				9, Cfg.UI_MUTED))
+	else:
+		_net_body.add_child(UiKit.label(
+			I18n.t("net.host.hint", {}, "Порт 8124. В локальной сети остальным нужен ваш адрес, через интернет — проброс порта."),
+			9, Cfg.UI_MUTED))
 
 	_net_body.add_child(UiKit.section(I18n.t("net.join.title", {}, "Подключиться"), Color("#55ff88")))
 	var addr_row := UiKit.hbox(8)
-	addr_row.add_child(UiKit.label(I18n.t("net.address", {}, "Адрес"), 12, Cfg.UI_TEXT))
+	addr_row.add_child(UiKit.label(
+		I18n.t("net.steam.id", {}, "SteamID хоста") if _net_kind == "steam"
+			else I18n.t("net.address", {}, "Адрес"), 12, Cfg.UI_TEXT))
 	var addr_edit := LineEdit.new()
 	addr_edit.text = _net_address
 	addr_edit.custom_minimum_size = Vector2(220, 30)
@@ -1482,7 +1672,7 @@ func _build_net_lobby() -> void:
 		var info: Dictionary = Net.lobby[peer_id]
 		var row := UiKit.hbox(8)
 		var mark := "★" if int(peer_id) == 1 else "•"
-		row.add_child(UiKit.label("%s %s" % [mark, String(info.get("name", "Игрок"))],
+		row.add_child(UiKit.label("%s %s" % [mark, String(info.get("name", I18n.t("net.player", {}, "Игрок")))],
 			12, Cfg.UI_TEXT))
 		var pal := Cfg.team_palette(String(info.get("color_key", "p1")))
 		var chip := ColorRect.new()

@@ -42,10 +42,15 @@ signal disconnected
 var role := ""
 ## peer_id -> {name, color_key, cosmetics, ready}
 var lobby := {}
-var my_name := "Игрок"
+## Имя по умолчанию. Переводится при запуске: в английской игре в поле имени
+## не должно стоять русское слово. Дальше это значение принадлежит игроку —
+## смена языка его уже не трогает, иначе стёрла бы введённое им имя.
+var my_name := ""
 
 var _game: Node = null
-var _peer: ENetMultiplayerPeer = null
+## Тип нарочно общий, а не ENetMultiplayerPeer: транспорт сменный, и Steam
+## вернёт сюда свой peer. Ничего специфичного для ENet отсюда не вызывается.
+var _peer: MultiplayerPeer = null
 var _next_tank_id := 1
 ## id танка -> команда последнего ввода (только у хоста).
 var _commands := {}
@@ -91,6 +96,11 @@ var is_authority: bool:
 	get: return role != "client"
 
 func _ready() -> void:
+	# Steam поднимается на старте, а не при первой партии: SteamID нужен
+	# уже в меню, чтобы игрок мог его скопировать и передать.
+	NetTransport.SteamTransport.boot()
+	if my_name == "":
+		my_name = I18n.t("net.player", {}, "Игрок")
 	_dbg_rng.randomize()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
@@ -104,6 +114,10 @@ func bind_game(g: Node) -> void:
 ## Отложенная отправка и замер оборота. Задержка нужна только отладке:
 ## в обычной игре очередь всегда пуста и цикл ничего не стоит.
 func _process(_delta: float) -> void:
+	# Колбэки Steam надо качать каждый кадр, иначе P2P не отвечает вовсе.
+	# Дёшево и безвредно, когда Steam не используется: внутри стоит проверка.
+	NetTransport.SteamTransport.pump()
+
 	if not _delayed.is_empty():
 		var now := Time.get_ticks_msec()
 		var keep := []
@@ -115,9 +129,11 @@ func _process(_delta: float) -> void:
 		_delayed = keep
 
 	# Оборот до хоста меряется средствами ENet: своей нумерации для этого
-	# заводить незачем.
-	if role == "client" and _peer != null:
-		var st := _peer.get_peer(1)
+	# заводить незачем. У другого транспорта такой статистики может не быть —
+	# тогда rtt просто остаётся прежним, а не роняет процесс.
+	var enet := _peer as ENetMultiplayerPeer
+	if role == "client" and enet != null:
+		var st: ENetPacketPeer = enet.get_peer(1)
 		if st != null:
 			rtt_msec = float(st.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME))
 
@@ -145,28 +161,48 @@ func stats() -> Dictionary:
 	}
 
 # ------------------------------------------------------------------ сессия
+## Чем доставляются пакеты. Меняется целиком: снапшоты, команды и RPC
+## работают поверх высокоуровневого мультиплеера и транспорт не различают.
+var transport: NetTransport = NetTransport.EnetTransport.new(PORT)
+
+## Переключает транспорт. Недоступный (Steam без расширения) не ставится:
+## иначе игрок нажал бы «Создать» и получил молчание вместо объяснения.
+func set_transport(t: NetTransport) -> bool:
+	if not t.available():
+		net_error.emit(t.unavailable_reason())
+		return false
+	leave()
+	transport = t
+	return true
+
 func host_game(port: int = PORT) -> bool:
 	leave()
-	_peer = ENetMultiplayerPeer.new()
-	var err := _peer.create_server(port, MAX_PLAYERS - 1)
-	if err != OK:
+	if transport is NetTransport.EnetTransport:
+		(transport as NetTransport.EnetTransport).port = port
+	var peer := transport.host(MAX_PLAYERS - 1)
+	if peer == null:
 		_peer = null
-		net_error.emit(I18n.t("net.err.host", {}, "Не удалось открыть порт %d" % port))
+		net_error.emit(transport.error)
 		return false
+	_peer = peer
 	multiplayer.multiplayer_peer = _peer
 	role = "host"
 	lobby = {1: _self_info()}
 	lobby_changed.emit()
 	return true
 
+## @param address адрес для ENet либо идентификатор лобби для Steam —
+##        для этого слоя это непрозрачная строка.
 func join_game(address: String, port: int = PORT) -> bool:
 	leave()
-	_peer = ENetMultiplayerPeer.new()
-	var err := _peer.create_client(address, port)
-	if err != OK:
+	if transport is NetTransport.EnetTransport:
+		(transport as NetTransport.EnetTransport).port = port
+	var peer := transport.join(address)
+	if peer == null:
 		_peer = null
-		net_error.emit(I18n.t("net.err.join", {}, "Не удалось подключиться к %s" % address))
+		net_error.emit(transport.error)
 		return false
+	_peer = peer
 	multiplayer.multiplayer_peer = _peer
 	role = "client"
 	lobby = {}

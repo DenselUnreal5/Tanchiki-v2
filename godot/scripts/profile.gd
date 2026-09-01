@@ -241,6 +241,10 @@ func check_achievements() -> Array:
 			total += int(Achievements.get_achievement(id).get("reward", 0))
 		money += total
 		save_profile()
+		# Отражаем наружу: в профиле Steam достижение должно появиться тогда
+		# же, когда в игре. Прогресс при этом остаётся своим — profile.json.
+		for id in newly:
+			SteamStats.unlock(String(id))
 		achievement.emit(newly, total)
 	return newly
 

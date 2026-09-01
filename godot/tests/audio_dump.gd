@@ -19,15 +19,36 @@ func _ready() -> void:
 	while (Mus._menu == null or Mus._combat == null) and guard < 1800:
 		guard += 1
 		await get_tree().process_frame
+	# Тема может быть и синтезированной (AudioStreamWAV), и собранной из
+	# файлов (AudioStreamMP3 либо плейлист). Жёсткий тип здесь ронял тест
+	# с «Trying to assign value of type AudioStreamMP3»: музыка стала
+	# файловой, а выгрузка про это не знала.
 	for pair in [["menu", Mus._menu], ["combat", Mus._combat]]:
-		var loop: AudioStreamWAV = pair[1]
+		var loop: AudioStream = pair[1]
 		if loop == null:
 			print("ОШИБКА: тема «%s» не собралась" % pair[0])
 			continue
-		var samples: int = loop.data.size() / 2
+		var wav := loop as AudioStreamWAV
+		if wav == null:
+			print("музыка «%s»: %s из файлов, %.1f с — выгружать нечего"
+				% [pair[0], loop.get_class(), loop.get_length()])
+			continue
+		var samples: int = wav.data.size() / 2
 		print("музыка «%s»: %.1f с, %d КБ" % [pair[0],
-			float(samples) / float(Synth.RATE), loop.data.size() / 1024])
-		loop.save_to_wav(dir + "/music_%s.wav" % pair[0])
+			float(samples) / float(Synth.RATE), wav.data.size() / 1024])
+		wav.save_to_wav(dir + "/music_%s.wav" % pair[0])
+
+	# Звуки собираются в фоновом потоке. Ждать их обязательно: раньше тест
+	# успевал случайно — музыка синтезировалась дольше и держала паузу.
+	# Как только музыка стала файловой, тест начал падать на первом же звуке.
+	guard = 0
+	while not Sfx._streams.has("shoot") and guard < 1800:
+		guard += 1
+		await get_tree().process_frame
+	if not Sfx._streams.has("shoot"):
+		print("ОШИБКА: звуки не собрались")
+		get_tree().quit(1)
+		return
 
 	for type in ["shoot", "shoot_heavy", "explosion", "hit", "clang",
 			"crumble", "crack", "airstrike", "water", "pickup", "levelup"]:

@@ -162,3 +162,84 @@ class KeyboardAimScheme extends RefCounted:
 			tank.dash()
 		if Input.is_physical_key_pressed(KEY_KP_SUBTRACT):
 			tank.use_ability(world)
+
+# ---------------------------------------------------------------------------
+# Геймпад. Левый стик — ход, правый — наводка, спусковые крючки — огонь.
+#
+# Наводка стиком отличается от наводки мышью принципиально: мышь задаёт ТОЧКУ,
+# а стик — НАПРАВЛЕНИЕ. Поэтому точка прицеливания строится впереди танка по
+# направлению стика, а когда стик отпущен, прежний угол сохраняется — иначе
+# башня прыгала бы в ноль каждый раз, когда игрок убирает большой палец.
+#
+# Мёртвая зона обязательна: стики почти всегда возвращают ненулевые значения
+# в покое, и без неё танк медленно ползёт сам по себе.
+# ---------------------------------------------------------------------------
+class GamepadScheme extends RefCounted:
+	## Номер устройства: 0 — первый подключённый геймпад.
+	var device := 0
+	## Последняя точка прицеливания в мире. Держится между кадрами.
+	var aim := Vector2.ZERO
+	var _aim_ready := false
+
+	## На каком расстоянии перед танком ставится точка прицела. На попадание
+	## это не влияет — башня всё равно смотрит по направлению, — но слишком
+	## близкая точка делает наводку дёрганой.
+	const AIM_REACH := 260.0
+
+	func _init(device_: int = 0) -> void:
+		device = device_
+
+	func hints() -> Array:
+		return [
+			"[левый стик] движение",
+			"[правый стик] прицел",
+			"[RT] / [A] выстрел",
+			"[LT] / [B] мина",
+			"[LB] рывок-таран",
+			"[Y] способность перка",
+			"[RB] авиаудар (Оборона)",
+		]
+
+	## Ось с мёртвой зоной. Ниже порога — ровный ноль, выше — растяжка
+	## остатка на весь ход, чтобы у самого порога не было ступеньки.
+	func _axis(a: JoyAxis) -> float:
+		var v := Input.get_joy_axis(device, a)
+		var dz: float = Sets.pad_deadzone
+		if absf(v) <= dz:
+			return 0.0
+		return signf(v) * (absf(v) - dz) / maxf(0.001, 1.0 - dz)
+
+	func read_command(player) -> Dictionary:
+		var cmd := Ctl.empty_command()
+		cmd["mx"] = _axis(JOY_AXIS_LEFT_X)
+		cmd["my"] = _axis(JOY_AXIS_LEFT_Y)
+
+		var tank = player.tank
+		var ax := _axis(JOY_AXIS_RIGHT_X)
+		var ay := _axis(JOY_AXIS_RIGHT_Y)
+		if tank != null:
+			var dir := Vector2(ax, ay)
+			if dir.length() > 0.2:
+				aim = Vector2(tank.x, tank.y) + dir.normalized() * AIM_REACH
+				_aim_ready = true
+			elif not _aim_ready:
+				# Пока игрок не трогал правый стик, целимся туда, куда едем.
+				var move := Vector2(float(cmd["mx"]), float(cmd["my"]))
+				var ahead := move.normalized() if move.length() > 0.2 else Vector2.RIGHT
+				aim = Vector2(tank.x, tank.y) + ahead * AIM_REACH
+		cmd["ax"] = aim.x
+		cmd["ay"] = aim.y
+
+		# Крючок считается нажатым с середины хода: полное нажатие требовать
+		# незачем, а срабатывание от касания мешает целиться.
+		var rt := Input.get_joy_axis(device, JOY_AXIS_TRIGGER_RIGHT) > 0.5
+		var lt := Input.get_joy_axis(device, JOY_AXIS_TRIGGER_LEFT) > 0.5
+		cmd["fire"] = rt or Input.is_joy_button_pressed(device, JOY_BUTTON_A)
+		cmd["mine"] = lt or Input.is_joy_button_pressed(device, JOY_BUTTON_B)
+		cmd["dash"] = Input.is_joy_button_pressed(device, JOY_BUTTON_LEFT_SHOULDER)
+		cmd["ability"] = Input.is_joy_button_pressed(device, JOY_BUTTON_Y)
+		cmd["airstrike"] = Input.is_joy_button_pressed(device, JOY_BUTTON_RIGHT_SHOULDER)
+		return cmd
+
+	func apply(tank: Tank, player, world) -> void:
+		Ctl.apply_command(tank, world, read_command(player))

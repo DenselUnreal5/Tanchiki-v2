@@ -32,6 +32,33 @@ var screen_shake := 1.0
 ## Горящие остовы подбитых танков.
 var wrecks := true
 
+# ------------------------------------------------------------- управление
+## Устройство игрока: auto | kbm | keys | pad0…pad3.
+##
+## «auto» — то, что было всегда: первому игроку мышь с клавиатурой, второму
+## клавиатура. Как только выбран геймпад, он закрепляется за игроком по
+## номеру устройства, иначе в «горячем стуле» оба игрока получали бы ввод
+## с одного и того же джойстика.
+const DEV_AUTO := "auto"
+const DEV_KBM := "kbm"
+const DEV_KEYS := "keys"
+
+var p1_device := DEV_AUTO
+var p2_device := DEV_AUTO
+
+## Мёртвая зона стиков. В покое стики почти всегда отдают не ноль, и без
+## неё танк медленно уезжает сам.
+var pad_deadzone := 0.22
+## Отдача геймпада на попаданиях и взрывах.
+var pad_vibration := true
+
+## Подключённые геймпады: [{id, name}]. Спрашивается интерфейсом настроек.
+func pads() -> Array:
+	var out := []
+	for id in Input.get_connected_joypads():
+		out.append({"id": id, "name": Input.get_joy_name(id)})
+	return out
+
 # ---------------------------------------------------------------- видео
 const MODE_WINDOWED := 0
 const MODE_FULLSCREEN := 1
@@ -79,6 +106,10 @@ func load_settings() -> void:
 	if res is Vector2i:
 		resolution = res
 	vsync = bool(cfg.get_value("window", "vsync", vsync))
+	p1_device = String(cfg.get_value("input", "p1_device", p1_device))
+	p2_device = String(cfg.get_value("input", "p2_device", p2_device))
+	pad_deadzone = clampf(float(cfg.get_value("input", "pad_deadzone", pad_deadzone)), 0.0, 0.6)
+	pad_vibration = bool(cfg.get_value("input", "pad_vibration", pad_vibration))
 
 func save() -> void:
 	var cfg := ConfigFile.new()
@@ -94,6 +125,10 @@ func save() -> void:
 	cfg.set_value("window", "mode", display_mode)
 	cfg.set_value("window", "resolution", resolution)
 	cfg.set_value("window", "vsync", vsync)
+	cfg.set_value("input", "p1_device", p1_device)
+	cfg.set_value("input", "p2_device", p2_device)
+	cfg.set_value("input", "pad_deadzone", pad_deadzone)
+	cfg.set_value("input", "pad_vibration", pad_vibration)
 	cfg.save(SAVE_PATH)
 	changed.emit()
 
@@ -108,6 +143,10 @@ func reset() -> void:
 	day_night = true
 	screen_shake = 1.0
 	wrecks = true
+	p1_device = DEV_AUTO
+	p2_device = DEV_AUTO
+	pad_deadzone = 0.22
+	pad_vibration = true
 	display_mode = MODE_WINDOWED
 	resolution = Vector2i(1280, 720)
 	vsync = true

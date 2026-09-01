@@ -60,6 +60,11 @@ var hud: Hud
 var ui: UiRoot
 
 func _ready() -> void:
+	# Догоняем Steam тем, что игрок успел открыть без него: профиль — источник
+	# правды, и достижения, полученные офлайн, обязаны появиться в Steam
+	# задним числом. Отложено на кадр: автозагрузки должны завершить _ready.
+	_sync_steam.call_deferred()
+
 	# Интерфейс рассчитан так, чтобы целиком помещаться без прокрутки;
 	# меньше этого размера верстка начала бы налезать сама на себя.
 	get_window().min_size = Vector2i(1024, 640)
@@ -252,10 +257,10 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	# окна на этом компьютере не имеют.
 	remote_players = []
 	players = [PlayerState.new(0, I18n.t("player1", {}, "Игрок 1"),
-		String(s["color1"]), Ctl.MouseAimScheme.new(not hotseat))]
+		String(s["color1"]), _scheme_for(Sets.p1_device, 0, hotseat))]
 	if hotseat and not Net.is_online:
 		players.append(PlayerState.new(1, I18n.t("player2", {}, "Игрок 2"),
-			String(s["color2"]), Ctl.KeyboardAimScheme.new()))
+			String(s["color2"]), _scheme_for(Sets.p2_device, 1, hotseat)))
 	if Net.is_online:
 		players[0].peer_id = multiplayer.get_unique_id()
 		players[0].name = String(Net.my_name)
@@ -483,9 +488,48 @@ func _on_finish(result: Dictionary) -> void:
 	Prof.bump_daily("games", 1)
 	Prof.check_challenges()
 	Prof.save_profile()
+	# Итоги партии уходят в Steam: показатели — под достижения на стороне
+	# Valve, лучший счёт — в общую таблицу.
+	SteamStats.push_stats(Prof.stats)
+	var best := 0
+	for p in players:
+		best = maxi(best, p.score)
+	SteamStats.push_score(best)
 	hud.hide_hud()
 	ui.refresh_profile()
 	ui.show_game_over(result, world, players.size() > 1)
+
+## Разовая синхронизация со Steam при запуске.
+##
+## Отдаёт уже открытые достижения и накопленную статистику. Steam повторную
+## выдачу игнорирует, поэтому вызов безопасен при каждом запуске.
+func _sync_steam() -> void:
+	if not SteamStats.ready():
+		return
+	var sent := SteamStats.push_all(Prof.achievements.keys())
+	SteamStats.push_stats(Prof.stats)
+	# Ответ на поиск таблицы приходит колбэком — подписываемся один раз.
+	var steam: Object = Engine.get_singleton("Steam")
+	if steam.has_signal("leaderboard_find_result") 			and not steam.is_connected("leaderboard_find_result", _on_leaderboard_found):
+		steam.connect("leaderboard_find_result", _on_leaderboard_found)
+	print("[Steam] достижений отправлено: %d из %d" % [sent, Prof.achievements.size()])
+
+func _on_leaderboard_found(_handle, found: int) -> void:
+	SteamStats.on_leaderboard_found(found != 0)
+
+## Схема управления по настройке игрока.
+##
+## «auto» сохраняет прежнее поведение: первому — мышь с клавиатурой, второму
+## клавиатура. Геймпад закрепляется за игроком по НОМЕРУ устройства, иначе
+## в «горячем стуле» оба танка слушали бы один и тот же джойстик.
+func _scheme_for(device: String, index: int, hotseat: bool):
+	if device.begins_with("pad"):
+		return Ctl.GamepadScheme.new(int(device.substr(3)))
+	if device == Sets.DEV_KEYS:
+		return Ctl.KeyboardAimScheme.new()
+	if device == Sets.DEV_KBM:
+		return Ctl.MouseAimScheme.new(not hotseat)
+	return Ctl.MouseAimScheme.new(not hotseat) if index == 0 		else Ctl.KeyboardAimScheme.new()
 
 # ------------------------------------------------------------------ перки
 ## Показывает выбор перка следующему игроку в очереди, если он есть.
