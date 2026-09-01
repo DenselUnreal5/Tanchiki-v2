@@ -50,19 +50,39 @@ func _ready() -> void:
 
 	# Старт партии сразу открывает выбор перка — это и есть проверяемый случай.
 	_check(game.state == "perk", "после старта открыт выбор перка")
-	_check(_active().stream_paused, "на выборе перка музыка стоит на паузе")
+	# Раньше здесь музыка вставала на паузу. Теперь она обязана продолжать
+	# играть, только тише: пауза на несколько секунд звучала как обрыв.
+	_check(not _active().stream_paused, "на выборе перка музыка не останавливается")
 	var pos_before := _active().get_playback_position()
+	await _frames(20)
+	_check(_active().get_playback_position() > pos_before,
+		"на выборе перка трек идёт дальше (%.2f -> %.2f с)"
+			% [pos_before, _active().get_playback_position()])
+	# Громкость: −3.1 дБ, то есть амплитуда 0.7 от полной — «на 30% тише».
+	# Приглушение живёт на шине, а не на плеере: кроссфейд твинит громкость
+	# самого плеера и затирал бы его.
+	var bus := AudioServer.get_bus_index("Music")
+	var bus_db := AudioServer.get_bus_volume_db(bus)
+	_check(absf(bus_db - Mus.PERK_DUCK_DB) < 0.01,
+		"на выборе перка громкость %.1f дБ (ждали %.1f)" % [bus_db, Mus.PERK_DUCK_DB])
+	var quiet := db_to_linear(bus_db)
+	_check(absf(quiet - 0.7) < 0.01,
+		"это ровно 0.70 от полной громкости (получилось %.2f)" % quiet)
 
+	var pos_ducked := _active().get_playback_position()
 	game._on_perk_chosen(game.perk_player, "")
 	await _frames(4)
 	while game.state == "perk":
 		game._on_perk_chosen(game.perk_player, "")
 		await _frames(2)
 	_check(not _active().stream_paused, "после выбора музыка продолжается")
+	var bus_after := AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Music"))
+	_check(absf(bus_after) < 0.01,
+		"после выбора громкость вернулась к полной (%.1f дБ)" % bus_after)
 	# Позиция не сбросилась: трек именно продолжился, а не начался заново.
-	_check(_active().get_playback_position() >= pos_before - 0.05,
+	_check(_active().get_playback_position() >= pos_ducked - 0.05,
 		"трек продолжился с того же места (%.2f -> %.2f с)"
-			% [pos_before, _active().get_playback_position()])
+			% [pos_ducked, _active().get_playback_position()])
 
 	game.pause()
 	await _frames(2)

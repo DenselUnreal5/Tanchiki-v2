@@ -93,6 +93,9 @@ var _current := ""
 var _want := ""
 var _paused := false
 var _ducked := false
+## Приглушение на выборе перка — отдельно от приглушения в меню паузы:
+## это разные состояния и разная глубина, и одно может застать другое.
+var _perk_ducked := false
 var _fade: Tween
 ## Номера фоновых задач сборки — их надо дождаться при выходе.
 var _tasks: Array[int] = []
@@ -256,9 +259,19 @@ func stop() -> void:
 		p.stop()
 		p.volume_db = -60.0
 
-## Пауза музыки на экране выбора перка. Не приглушение, а именно остановка:
-## выбор перка — это пауза боя, и тишина в этот момент отделяет его от
-## стрельбы куда лучше, чем тот же трек потише.
+## Насколько тише играет музыка на выборе перка.
+##
+## «На 30% тише» — это про громкость, а не про децибелы: амплитуда ×0.7,
+## то есть 20·lg(0.7) ≈ −3.1 дБ. Приглушение неглубокое намеренно: выбор
+## перка длится секунды, и провал до фонового уровня успел бы прозвучать
+## как обрыв трека.
+const PERK_DUCK_DB := -3.1
+## Приглушение в меню паузы: там игрок может задержаться надолго, и трек
+## уходит на задний план по-настоящему.
+const MENU_DUCK_DB := -14.0
+
+## Полная остановка музыки. Осталась для случаев, где нужна именно тишина;
+## выбор перка ею больше не пользуется — см. set_perk_ducked.
 func set_paused(on: bool) -> void:
 	if _paused == on:
 		return
@@ -272,12 +285,39 @@ func set_ducked(on: bool) -> void:
 	if _ducked == on:
 		return
 	_ducked = on
-	var p := _players[_active]
-	if p.playing:
-		p.volume_db = _target_db()
+	_apply_volume()
 
+## Приглушение на выборе перка. Раньше здесь музыка останавливалась совсем;
+## теперь трек продолжает идти, только тише — выбор перка перестал звучать
+## как обрыв.
+func set_perk_ducked(on: bool) -> void:
+	if _perk_ducked == on:
+		return
+	_perk_ducked = on
+	_apply_volume()
+
+## Приглушение применяется к ШИНЕ, а не к плееру.
+##
+## Кроссфейд между темами твинит volume_db самих плееров, и выставленная
+## им громкость затирала приглушение: партия начинается с выбора перка,
+## то есть ровно в момент перехода с меню на бой. Шина и плееры не спорят —
+## громкости складываются.
+func _apply_volume() -> void:
+	var db := _target_db()
+	for bus in ["Music", "MusicHall"]:
+		var idx := AudioServer.get_bus_index(bus)
+		if idx >= 0:
+			AudioServer.set_bus_volume_db(idx, db)
+
+## Из двух приглушений действует более глубокое: попасть в меню паузы прямо
+## с выбора перка можно, и складывать их значения незачем.
 func _target_db() -> float:
-	return -14.0 if _ducked else 0.0
+	var db := 0.0
+	if _ducked:
+		db = minf(db, MENU_DUCK_DB)
+	if _perk_ducked:
+		db = minf(db, PERK_DUCK_DB)
+	return db
 
 func _request(id: String) -> void:
 	_want = id
@@ -318,7 +358,7 @@ func _switch(id: String) -> void:
 		_fade.kill()
 	_fade = create_tween()
 	_fade.set_parallel(true)
-	_fade.tween_property(to, "volume_db", _target_db(), FADE)
+	_fade.tween_property(to, "volume_db", 0.0, FADE)
 	if from.playing:
 		_fade.tween_property(from, "volume_db", -60.0, FADE)
 		_fade.chain().tween_callback(from.stop)

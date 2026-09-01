@@ -500,13 +500,13 @@ func _process_perk_queue() -> void:
 	if next == null:
 		if state == S_PERK:
 			state = S_PLAYING
-			Mus.set_paused(false)
+			Mus.set_perk_ducked(false)
 			ui.hide_perk_select()
 			accumulator = 0.0
 		perk_player = null
 		return
 	state = S_PERK
-	Mus.set_paused(true)
+	Mus.set_perk_ducked(true)
 	perk_player = next
 	var queue_left := -1
 	for p in players:
