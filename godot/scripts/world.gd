@@ -41,6 +41,10 @@ var player_level := 1
 
 var rng: Rng
 var weather: WeatherSystem
+## Локация партии и то, чем на ней замощены дороги. Держится в мире, а не
+## ищется по словарю: покрытие спрашивается каждым танком каждый тик.
+var location := Locations.CITY
+var road_kind := "asphalt"
 
 var tanks: Array = []
 var bullets: Array = []
@@ -116,7 +120,15 @@ func _init(opts: Dictionary) -> void:
 	rng = Rng.new(seed_mix)
 
 	# Погода и атмосфера — детерминированы по seed карты.
-	weather = WeatherSystem.new(int(level["seed"]), _weather_opts(opts))
+	# Локация решает, какая погода тут вообще бывает, и чем замощены дороги.
+	# И то и другое читается один раз: спрашивать словарь локации каждый тик
+	# для каждого танка — впустую.
+	location = String(level.get("location", Locations.CITY))
+	var loc := Locations.get_location(location)
+	road_kind = String(loc.get("road_kind", "asphalt"))
+	var wx_opts := _weather_opts(opts)
+	wx_opts["allowed"] = loc.get("weather", [])
+	weather = WeatherSystem.new(int(level["seed"]), wx_opts)
 	particles = Ent.ParticleSystem.new()
 
 	# У клиента сетевой партии мир — марионетка: карта та же (собрана по тому

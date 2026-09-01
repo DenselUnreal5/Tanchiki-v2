@@ -54,12 +54,14 @@ static func build(rng: Rng, cols: int, rows: int, loc: Dictionary) -> Dictionary
 	var arterials: bool = bool(loc.get("arterials", true))
 	# Поперечные кварталы короче продольных: карта шире, чем выше, и при
 	# одинаковом шаге сетка выходила бы вытянутой.
-	var v := _axis(rng, cols, bmin, bmax, arterials)
-	var h := _axis(rng, rows, maxi(4, bmin - 2), maxi(6, bmax - 3), arterials)
+	var v := _axis(rng, cols, bmin, bmax, arterials, loc)
+	var h := _axis(rng, rows, maxi(4, bmin - 2), maxi(6, bmax - 3), arterials, loc)
 	var seeds := _district_seeds(rng, cols, rows, loc.get("districts", {}))
 	var blocks := _blocks(v, h, cols, rows, seeds)
 	var circles := _circles(rng, v, h) if bool(loc.get("circles", true)) else []
-	return {"v": v, "h": h, "blocks": blocks, "circles": circles, "seeds": seeds}
+	var links := _links(rng, v, h, cols, rows, loc)
+	return {"v": v, "h": h, "blocks": blocks, "circles": circles,
+		"seeds": seeds, "links": links}
 
 # ------------------------------------------------------------------ улицы
 ## Раскладывает улицы вдоль одной оси и назначает им ранг.
@@ -72,8 +74,11 @@ static func build(rng: Rng, cols: int, rows: int, loc: Dictionary) -> Dictionary
 ## В джунглях магистралей не бывает вовсе: там только узкие тропы, и широкая
 ## четырёхполосная дорога посреди леса читалась бы как ошибка генерации.
 static func _axis(rng: Rng, size: int, block_min: int, block_max: int,
-		with_arterials: bool = true) -> Array:
+		with_arterials: bool = true, loc: Dictionary = {}) -> Array:
 	var out := []
+	var art_w: int = int(loc.get("arterial_w", ARTERIAL_W))
+	var w_narrow: int = int(loc.get("street_w", STREET_W_NARROW))
+	var w_wide: int = int(loc.get("street_w_wide", STREET_W_WIDE))
 
 	# Магистрали: одна почти всегда, вторая — если карта достаточно длинная.
 	var arterials := []
@@ -85,16 +90,16 @@ static func _axis(rng: Rng, size: int, block_min: int, block_max: int,
 			if absi(second - first) >= ARTERIAL_GAP:
 				arterials.append(second)
 	for pos in arterials:
-		if pos > 2 and pos + ARTERIAL_W < size - 2:
-			out.append({"pos": pos, "w": ARTERIAL_W, "rank": RANK_ARTERIAL})
+		if pos > 2 and pos + art_w < size - 2:
+			out.append({"pos": pos, "w": art_w, "rank": RANK_ARTERIAL})
 
 	# Обычные улицы поверх той же оси.
 	var p := 3 + int(rng.nextf() * 3.0)
 	while p < size - 5:
-		var w := STREET_W_WIDE if rng.nextf() < 0.22 else STREET_W_NARROW
+		var w := w_wide if rng.nextf() < 0.22 else w_narrow
 		var clash := false
 		for a in arterials:
-			if absi(p - a) < ARTERIAL_W + 3:
+			if absi(p - a) < art_w + 3:
 				clash = true
 				break
 		if not clash:
@@ -211,4 +216,62 @@ static func _circles(rng: Rng, v: Array, h: Array) -> Array:
 		"c": int(vi["pos"]) + ARTERIAL_W / 2,
 		"radius": 6,
 	})
+	return out
+
+# --------------------------------------------------------------- перемычки
+## Короткие связки между соседними параллельными улицами.
+##
+## Сетка из сплошных линий даёт только прямоугольные кварталы: между двумя
+## точками маршрут почти всегда один с точностью до порядка поворотов.
+## Перемычка режет квартал пополам, и это сразу две вещи: развилка —
+## Т-образный узел, из которого есть третий выход, — и лишняя петля в графе
+## дорог, то есть объезд, которого раньше не было.
+static func _links(rng: Rng, v: Array, h: Array, cols: int, rows: int,
+		loc: Dictionary) -> Array:
+	var out := []
+	var chance := float(loc.get("link_chance", 0.0))
+	if chance <= 0.0:
+		return out
+	var w: int = maxi(1, int(loc.get("street_w", STREET_W_NARROW)))
+
+	# Поперечные связки: жребий бросается на КАЖДЫЙ квартал, а не один раз
+	# на пару улиц. Одна перемычка на пару давала прибавку в пару процентов —
+	# на фоне сетки её просто не было видно.
+	var row_gaps := gaps(h, rows)
+	for i in range(v.size() - 1):
+		var a: Dictionary = v[i]
+		var b: Dictionary = v[i + 1]
+		var c0: int = int(a["pos"]) + int(a["w"])
+		var c1: int = int(b["pos"]) - 1
+		if c1 - c0 < 3:
+			continue
+		for g in row_gaps:
+			if rng.nextf() >= chance:
+				continue
+			var r0: int = int(g[0])
+			var r1: int = int(g[1])
+			if r1 - r0 < w + 2:
+				continue
+			var rr: int = r0 + 1 + int(rng.nextf() * float(r1 - r0 - w))
+			out.append({"r0": rr, "r1": rr + w - 1, "c0": c0, "c1": c1})
+
+	# Продольные связки — так же, по каждому кварталу.
+	var col_gaps := gaps(v, cols)
+	for i in range(h.size() - 1):
+		var a: Dictionary = h[i]
+		var b: Dictionary = h[i + 1]
+		var r0: int = int(a["pos"]) + int(a["w"])
+		var r1: int = int(b["pos"]) - 1
+		if r1 - r0 < 3:
+			continue
+		for g in col_gaps:
+			if rng.nextf() >= chance:
+				continue
+			var c0: int = int(g[0])
+			var c1: int = int(g[1])
+			if c1 - c0 < w + 2:
+				continue
+			var cc: int = c0 + 1 + int(rng.nextf() * float(c1 - c0 - w))
+			out.append({"r0": r0, "r1": r1, "c0": cc, "c1": cc + w - 1})
+
 	return out

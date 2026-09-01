@@ -62,11 +62,23 @@ var locked := false
 ## две минуты превращалась бы в рассвет, а игрок просил именно ночь.
 var time_locked := false
 
+## Какие условия возможны на этой земле. В пустоши не идёт снег, в джунглях
+## тоже: погода — часть локации, а не независимый от неё генератор.
+## Пустой список означает «любые», как было до появления локаций.
+var allowed: Array = []
+
 ## @param opts condition — закрепить условие, phase — закрепить время суток
 func _init(seed_value: int, opts: Dictionary = {}) -> void:
 	rng = Rng.new((seed_value ^ 0x9e3779b9) & 0xFFFFFFFF)
 	cycle_ticks = int(round(DAY_START_PHASE * DAY_CYCLE))
 	timer = _duration()
+
+	allowed = opts.get("allowed", [])
+	# Стартовое условие тоже обязано быть разрешённым: партия не должна
+	# начинаться со снега в пустыне только потому, что «ясно» — значение
+	# по умолчанию, а первая смена произойдёт через полминуты.
+	if not allowed.is_empty() and not allowed.has(condition):
+		condition = String(allowed[0])
 
 	var forced := String(opts.get("condition", ""))
 	if TYPES.has(forced):
@@ -140,8 +152,13 @@ func _duration() -> int:
 func _pick_next() -> void:
 	var others := []
 	for k in TYPES.keys():
-		if k != condition:
-			others.append(k)
+		if k == condition:
+			continue
+		if not allowed.is_empty() and not allowed.has(k):
+			continue
+		others.append(k)
+	if others.is_empty():
+		return  # локация с единственным условием: менять не на что
 	var total := 0.0
 	for k in others:
 		total += float(TYPES[k]["weight"])

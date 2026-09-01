@@ -113,6 +113,8 @@ var dash_stall := 0
 
 var in_water := false
 var water_timer := 0
+## Тики в зыбучем песке — свой счётчик, потому что интервал у него свой.
+var quicksand_timer := 0
 ## Множитель хода от покрытия и его данные — обновляются раз в тик.
 var surface_speed := 1.0
 var surface := {}
@@ -400,7 +402,7 @@ func update(world) -> void:
 
 ## Читает покрытие под центром танка и оставляет след из-под гусениц.
 func _update_surface(world) -> void:
-	surface = Surfaces.of_tile(world.map.tile_at_pixel(x, y))
+	surface = Surfaces.of_tile(world.map.tile_at_pixel(x, y), world.road_kind)
 	surface_speed = float(surface["speed"])
 	# «Шипы»: любое покрытие держит как асфальт, пока способность активна.
 	if ability_active("grip"):
@@ -503,6 +505,20 @@ func _crush_trees(world) -> void:
 		world.on_trees_driven(self, count)
 
 func _check_water(world) -> void:
+	# Зыбучий песок разбирается первым: он не вода, «Амфибия» от него не
+	# спасает, и тонуть в нём не надо — надо застрять и получать по чуть-чуть,
+	# пока выбираешься.
+	if world.map.tile_at_pixel(x, y) == Cfg.T_QUICKSAND:
+		in_water = false
+		quicksand_timer += 1
+		if quicksand_timer >= Cfg.QUICKSAND_DMG_INTERVAL:
+			quicksand_timer = 0
+			world.deal_damage(self, Cfg.QUICKSAND_DMG, null, "water")
+			world.particles.burst(x, y, [Cfg.quicksand, Cfg.quicksand_wet],
+				4, 1, 3, 8, 14, world.rng)
+		return
+	quicksand_timer = 0
+
 	var wet: bool = world.map.is_water_at(x, y)
 	if not wet:
 		in_water = false

@@ -142,6 +142,10 @@ func _render_cache() -> void:
 					col = Color("#7a6a50")
 				Cfg.T_GRASS:
 					col = Color("#3d5c33")
+				Cfg.T_DUNE:
+					col = Color("#bfa967")
+				Cfg.T_QUICKSAND:
+					col = Color("#7d6a45")
 				Cfg.T_TREE:
 					col = Color("#245a33")
 				Cfg.T_BASE_P:

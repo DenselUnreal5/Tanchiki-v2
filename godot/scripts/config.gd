@@ -35,6 +35,8 @@ const T_SAND := 7    # песчаный берег вокруг воды (про
 const T_ROAD := 8    # асфальт: улицы и проспекты, лучшее сцепление
 const T_BRIDGE := 9  # мост через воду — единственный способ пересечь реку
 const T_GRASS := 10  # газон городского парка
+const T_DUNE := 11   # бархан: проезжаемый, но вязкий — рельеф вместо стены
+const T_QUICKSAND := 12  # зыбучий песок: вязнет и жжёт, «Амфибия» не спасает
 
 # ---------------------------------------------------------------- цвета
 static var ground := Color("#3a3a2a")
@@ -70,6 +72,23 @@ static var grass := Color("#3d5c33")
 static var grass_alt := Color("#456634")
 static var grass_dark := Color("#2c4426")
 static var sand := Color("#c9b878")
+## Бархан: тот же песок, но темнее по подветренной стороне — по этой тени
+## гребень читается как объём, а не как пятно.
+static var dune := Color("#bfa967")
+static var dune_dark := Color("#93803f")
+static var dune_light := Color("#e0cd92")
+## Зыбучий песок: сырой, с бурым отливом. Он обязан отличаться от обычного
+## песка с одного взгляда — иначе игрок въезжает в него по незнанию.
+static var quicksand := Color("#7d6a45")
+static var quicksand_dark := Color("#5d4e31")
+static var quicksand_wet := Color("#96825a")
+## Грунтовая дорога пустоши и тропа джунглей: «дорога» механически, но
+## по виду не асфальт.
+static var dirt_road := Color("#6a5a3c")
+static var dirt_road_alt := Color("#63543a")
+static var dirt_rut := Color("#4e4230")
+static var path_road := Color("#5c5335")
+static var path_road_alt := Color("#565030")
 static var sand_light := Color("#ddc98a")
 static var sand_dark := Color("#a8975f")
 static var tree := Color("#2a6b3a")
@@ -150,6 +169,10 @@ const RESPAWN_DELAY := 120   # 2 сек до возрождения
 
 const WATER_DMG := 5.0
 const WATER_DMG_INTERVAL := 15
+## Зыбучий песок бьёт чаще воды, но слабее: утонуть в нём нельзя за пару
+## секунд, а вот застрять под обстрелом — можно, и это и есть его смысл.
+const QUICKSAND_DMG := 3.0
+const QUICKSAND_DMG_INTERVAL := 12
 
 const RAM_MIN_SPEED := 0.5
 const RAM_DMG_PER_SPEED := 8.0

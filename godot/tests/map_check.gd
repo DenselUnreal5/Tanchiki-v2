@@ -11,7 +11,7 @@ var failures := 0
 
 func _ready() -> void:
 	await get_tree().process_frame
-	print("локация  режим        асфальт  в сети  перекр  переправ  проходимо")
+	print("локация  режим       асфальт  в сети  перемычек  переправ  проходимо")
 	for loc in Locations.ORDER:
 		for mode in ["ffa", "koth", "ctf", "defense"]:
 			for level in [1, 2, 3, 4, 5]:
@@ -37,9 +37,16 @@ func _ready() -> void:
 				if walk < 0.97:
 					mark += "   КАРТА РАЗОРВАНА"
 					failures += 1
-				print("  %-7s %-8s ур.%d  %5d  %5.1f%%  %5d  %5d  %6.1f%%%s" % [
+				# Перемычек — прямой счёт. Тайловые метрики («узлов», «петель»)
+				# отброшены намеренно: у двухполосной дороги почти каждый тайл
+				# имеет три соседа, вся сеть слипается в один узел, и число
+				# мерило бы ширину дороги, а не топологию. Каждая перемычка
+				# соединяет две уже связанные улицы, то есть добавляет ровно
+				# одну независимую петлю и две Т-образные развилки.
+				print("  %-7s %-8s ур.%d %5d  %5.1f%%  %8d  %5d  %6.1f%%%s" % [
 					loc, mode, level, r["total"], float(r["share"]) * 100.0,
-					r["crossings"], r["bridges"], walk * 100.0, mark])
+					int(lvl["plan"]["links"].size()), r["bridges"],
+					walk * 100.0, mark])
 	print("проблем: %d" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -90,6 +97,8 @@ func _road_stats(map: GameMap) -> Dictionary:
 	var total := 0
 	var bridge_tiles := 0
 	var crossings := 0
+	var forks := 0
+	var edges := 0
 	for r in rows:
 		for c in cols:
 			var t := map.get_tile(r, c)
@@ -98,10 +107,23 @@ func _road_stats(map: GameMap) -> Dictionary:
 			if not is_road.call(r, c):
 				continue
 			total += 1
+			# Рёбра считаем по двум направлениям из четырёх: иначе каждое
+			# ребро попало бы в счёт дважды.
+			if is_road.call(r + 1, c):
+				edges += 1
+			if is_road.call(r, c + 1):
+				edges += 1
+			var deg := 0
+			for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+				if is_road.call(r + int(d[0]), c + int(d[1])):
+					deg += 1
 			# Перекрёсток: асфальт со всех четырёх сторон.
-			if is_road.call(r - 1, c) and is_road.call(r + 1, c) \
-					and is_road.call(r, c - 1) and is_road.call(r, c + 1):
+			if deg == 4:
 				crossings += 1
+			# Развилка: ровно три выхода. Это и есть «третий путь», которого
+			# в чистой прямоугольной сетке нет нигде, кроме кромки квартала.
+			elif deg == 3:
+				forks += 1
 
 	# Заливка от первой найденной клетки: доля, попавшая в главную сеть.
 	var seen := {}
@@ -163,7 +185,53 @@ func _road_stats(map: GameMap) -> Dictionary:
 					seen_b[ni] = true
 					st.append(ni)
 
+	# Узлы сети — связные группы тайлов со степенью 3 и выше, а не отдельные
+	# тайлы. Считать по тайлам нельзя: у широкой дороги их десятки на один
+	# перекрёсток, и метрика мерила бы ширину дороги, а не топологию.
+	var nodes := 0
+	var seen_n := {}
+	for r in rows:
+		for c in cols:
+			var i0 := r * cols + c
+			if seen_n.has(i0) or not is_road.call(r, c):
+				continue
+			var deg0 := 0
+			for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+				if is_road.call(r + int(d[0]), c + int(d[1])):
+					deg0 += 1
+			if deg0 < 3:
+				continue
+			nodes += 1
+			var stn := [i0]
+			seen_n[i0] = true
+			while not stn.is_empty():
+				var cur: int = stn.pop_back()
+				var cr := cur / cols
+				var cc2 := cur % cols
+				for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+					var nr: int = cr + int(d[0])
+					var nc: int = cc2 + int(d[1])
+					if not is_road.call(nr, nc):
+						continue
+					var dn := 0
+					for e in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+						if is_road.call(nr + int(e[0]), nc + int(e[1])):
+							dn += 1
+					if dn < 3:
+						continue
+					var ni := nr * cols + nc
+					if seen_n.has(ni):
+						continue
+					seen_n[ni] = true
+					stn.append(ni)
+
+	# Цикломатическое число графа дорог: рёбра минус вершины плюс компоненты.
+	# Это и есть «сколько независимых петель», то есть сколько раз можно
+	# доехать до той же точки другим путём.
 	return {
+		"nodes": nodes,
+		"loops": maxi(0, edges - total + 1),
+		"forks": forks,
 		"total": total, "bridges": spans, "bridge_tiles": bridge_tiles,
 		"crossings": crossings,
 		"share": float(best) / float(maxi(1, total)),

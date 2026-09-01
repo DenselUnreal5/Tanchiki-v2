@@ -172,6 +172,18 @@ func _tiles() -> void:
 		"Городской парк и островки развязок")
 
 	m = _blank(N)
+	_box(m, 2, 6, 2, 6, Cfg.T_DUNE)
+	_use(m, empty_plan)
+	await _shot("tile_dune", VIEW9, "env", "Бархан (T_DUNE)",
+		"Проезжаемый, но вязкий: ход ×0.62. Рельеф пустоши вместо стен")
+
+	m = _blank(N)
+	_box(m, 2, 6, 2, 6, Cfg.T_QUICKSAND)
+	_use(m, empty_plan)
+	await _shot("tile_quicksand", VIEW9, "env", "Зыбучий песок (T_QUICKSAND)",
+		"Ход ×0.34 и 3 урона каждые 12 тиков. «Амфибия» не спасает")
+
+	m = _blank(N)
 	_box(m, 2, 6, 2, 6, Cfg.T_TREE)
 	_use(m, empty_plan)
 	await _shot("tile_tree", VIEW9, "env", "Дерево (T_TREE)",
@@ -308,6 +320,15 @@ func _scenes(level: Dictionary) -> void:
 		ps.tank = null
 		ps.camera = _find_spot(m, false)
 		var loc := Locations.get_location(loc_id)
+		# Оазис снимается отдельно: он маленький и в общий кадр не попадает.
+		var oasis := _find_tile_spot(m, Cfg.T_QUICKSAND)
+		if oasis.x >= 0:
+			var keep := ps.camera
+			ps.camera = oasis
+			await _shot("loc_oasis", SCENE_VIEW, "scene",
+				"Оазис пустоши: вода и зыбучий песок",
+				"вода 14 урона/с, зыбучка 10 и «Амфибия» не спасает")
+			ps.camera = keep
 		await _shot("loc_" + loc_id, SCENE_VIEW, "scene",
 			"%s %s" % [String(loc["icon"]), String(loc["name"])],
 			"музыка: music/%s" % String(loc["music"]))
@@ -345,3 +366,12 @@ func _find_spot(m: GameMap, water_wanted: bool) -> Vector2:
 				best_score = score
 				best = Vector2(c * Cfg.TILE, r * Cfg.TILE)
 	return best
+
+
+## Первая клетка нужного тайла — в пикселях, для наводки камеры.
+func _find_tile_spot(m: GameMap, tile: int) -> Vector2:
+	for r in range(2, m.rows - 2):
+		for c in range(2, m.cols - 2):
+			if m.get_tile(r, c) == tile:
+				return Vector2(c * Cfg.TILE, r * Cfg.TILE)
+	return Vector2(-1, -1)

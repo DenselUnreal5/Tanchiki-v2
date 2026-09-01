@@ -138,8 +138,14 @@ func _draw_weather(size: Vector2) -> void:
 			var cy := Rng.hash01(i, 13) * size.y + cos(world.tick * 0.002 + i * 1.7) * 30.0
 			var r := 90.0 + Rng.hash01(i, 29) * 130.0
 			var fog_a := (0.02 + w.fog * 0.075) * k
-			draw_circle(Vector2(cx, cy), r, Color(0.86, 0.89, 0.94, fog_a))
-			draw_circle(Vector2(cx, cy), r * 0.6, Color(0.86, 0.89, 0.94, fog_a))
+			# Цвет взвеси берётся у локации: в пустоши это пыль, и она
+			# песочная, а не белая, как пар над городом.
+			if not _loc_ready:
+				_read_location()
+			var fog_col := _loc_fog
+			fog_col.a = fog_a
+			draw_circle(Vector2(cx, cy), r, fog_col)
+			draw_circle(Vector2(cx, cy), r * 0.6, fog_col)
 
 	# --- дождь: наклонные штрихи, падающие вниз.
 	if w.rain * k > 0.03:
@@ -240,6 +246,10 @@ func _draw_tiles() -> void:
 					_draw_bridge_tile(x, y, r, c)
 				Cfg.T_GRASS:
 					_draw_grass_tile(x, y, r, c)
+				Cfg.T_DUNE:
+					_draw_dune_tile(x, y, r, c)
+				Cfg.T_QUICKSAND:
+					_draw_quicksand_tile(x, y, r, c)
 				Cfg.T_TREE:
 					_draw_tree_tile(x, y, r, c)
 				Cfg.T_BASE_P:
@@ -576,13 +586,214 @@ const RC_JUNCTION := 4
 ## для всех тайлов кадра, а искать его в словаре на каждый — впустую.
 var _loc_ground := Cfg.ground
 var _loc_ground_alt := Cfg.ground_alt
+## Чем замощены дороги и какого цвета взвесь в воздухе — тоже от локации.
+var _loc_road_kind := "asphalt"
+var _loc_fog := Color(0.86, 0.89, 0.94)
 var _loc_ready := false
 
 func _read_location() -> void:
 	var loc := Locations.get_location(String(world.level.get("location", Locations.CITY)))
 	_loc_ground = loc["ground"]
 	_loc_ground_alt = loc["ground_alt"]
+	_loc_road_kind = String(loc.get("road_kind", "asphalt"))
+	_loc_fog = loc.get("fog_tint", Color(0.86, 0.89, 0.94))
 	_loc_ready = true
+
+## Бархан: гребни, идущие через много клеток подряд.
+##
+## Первая версия рисовала узор внутри каждой клетки, и масса барханов
+## читалась полосатым ковром: у соседних тайлов рисунок не сходился.
+## Здесь высота гребня считается низкочастотной волной от координат карты,
+## поэтому светлая и тёмная стороны продолжаются в соседнюю клетку и
+## складываются в длинные дюны.
+## Цвет земли под этой клеткой — та же шахматка, что рисует _draw_tiles.
+## Нужен, чтобы срезанный угол дороги совпал с фоном, а не выделился пятном.
+func _ground_at(x: float, y: float, r: int, c: int) -> Color:
+	var k := 0.0
+	if world.weather != null:
+		k = clampf(world.weather.snow * Sets.weather_scale(), 0.0, 1.0) * 0.55
+	var base: Color = _loc_ground if (r + c) % 2 == 0 else _loc_ground_alt
+	return base.lerp(Cfg.snow_ground, k)
+
+## Скругление внешнего угла дороги.
+##
+## Дорога набрана из квадратов, и поворот получался ступенькой. Здесь угол
+## клетки срезается четвертью круга в цвет земли — там, где с ОБЕИХ смежных
+## сторон дороги нет. На прямом участке условие не выполняется, поэтому
+## ровный край не выкусывается.
+##
+## corner: 0 — левый верхний, 1 — правый верхний, 2 — правый нижний,
+##         3 — левый нижний.
+func _corner_cut(x: float, y: float, corner: int, col: Color) -> void:
+	var radius := 9.0
+	var ox: float = x if (corner == 0 or corner == 3) else x + Cfg.TILE
+	var oy: float = y if (corner == 0 or corner == 1) else y + Cfg.TILE
+	var dx: float = 1.0 if (corner == 0 or corner == 3) else -1.0
+	var dy: float = 1.0 if (corner == 0 or corner == 1) else -1.0
+	var cx := ox + dx * radius
+	var cy := oy + dy * radius
+	var pts := PackedVector2Array()
+	pts.append(Vector2(ox, oy))
+	for i in 7:
+		var a := PI * 0.5 * float(i) / 6.0
+		pts.append(Vector2(cx - dx * radius * sin(a), cy - dy * radius * cos(a)))
+	draw_colored_polygon(pts, col)
+
+## Цвет дорожного полотна этой клетки — чтобы скруглённый угол квартала
+## совпал с проезжей частью, а не выделился пятном.
+func _road_color_at(r: int, c: int) -> Color:
+	var k := _snow_k() * 0.6
+	if _loc_road_kind == "asphalt":
+		return (Cfg.road if (r * 7 + c * 11) % 3 == 0 else Cfg.road_alt) 			.lerp(Cfg.snow_ground, k)
+	var base: Color = Cfg.dirt_road if _loc_road_kind == "dirt" else Cfg.path_road
+	var alt: Color = Cfg.dirt_road_alt if _loc_road_kind == "dirt" else Cfg.path_road_alt
+	return (base if (r * 7 + c * 11) % 3 == 0 else alt).lerp(Cfg.snow_ground, k)
+
+## Скругление угла КВАРТАЛА — того самого закруглённого бордюра, который
+## и виден на перекрёстке.
+##
+## Внешнее скругление дороги (см. _round_road_corners) в плотной сетке почти
+## не срабатывает: у дорожного тайла редко бывают две незамощённые смежные
+## стороны. А вот угол газона или песка, к которому с двух сторон подходит
+## проезжая часть, виден на каждом перекрёстке — его и срезаем.
+##
+## Рисует сама клетка земли, а не дорога: тайлы красятся по порядку, и
+## всё, что дорога вылила бы за свои границы, затёрла бы следующая клетка.
+func _round_block_corners(x: float, y: float, r: int, c: int) -> void:
+	if not _loc_ready:
+		_read_location()
+	var up := _is_paved(r - 1, c)
+	var down := _is_paved(r + 1, c)
+	var left := _is_paved(r, c - 1)
+	var right := _is_paved(r, c + 1)
+	if up and left:
+		_corner_cut(x, y, 0, _road_color_at(r, c))
+	if up and right:
+		_corner_cut(x, y, 1, _road_color_at(r, c))
+	if down and right:
+		_corner_cut(x, y, 2, _road_color_at(r, c))
+	if down and left:
+		_corner_cut(x, y, 3, _road_color_at(r, c))
+
+## Срезает все четыре угла, где это уместно.
+func _round_road_corners(x: float, y: float, r: int, c: int) -> void:
+	var up := _is_paved(r - 1, c)
+	var down := _is_paved(r + 1, c)
+	var left := _is_paved(r, c - 1)
+	var right := _is_paved(r, c + 1)
+	if up and down and left and right:
+		return
+	var col := _ground_at(x, y, r, c)
+	if not up and not left:
+		_corner_cut(x, y, 0, col)
+	if not up and not right:
+		_corner_cut(x, y, 1, col)
+	if not down and not right:
+		_corner_cut(x, y, 2, col)
+	if not down and not left:
+		_corner_cut(x, y, 3, col)
+
+func _draw_dune_tile(x: float, y: float, r: int, c: int) -> void:
+	var k := _snow_k()
+	var lit: Color = Cfg.dune_light.lerp(Cfg.snow_ground, k)
+	var shade: Color = Cfg.dune_dark.lerp(Cfg.snow_ground, k * 0.6)
+	# Две волны разной частоты: одна задаёт крупные дюны, вторая ломает
+	# их регулярность, иначе получается синусоида, а не песок.
+	# Гребни идут по диагонали, а не поперёк карты: при почти горизонтальной
+	# волне масса барханов читалась слоёным пирогом — длинными ровными
+	# ступенями во всю ширину экрана.
+	var wave := sin(float(c) * 0.30 + float(r) * 0.62) * 0.65 		+ sin(float(c) * 0.51 - float(r) * 0.23) * 0.35
+	var crest := Cfg.TILE * 0.5 + wave * Cfg.TILE * 0.42
+	crest = clampf(crest, 3.0, Cfg.TILE - 3.0)
+	# Склон не двумя плашками, а тремя ступенями с промежуточным тоном:
+	# резкая граница света и тени превращала дюны в полосатый ковёр.
+	var mid: Color = lit.lerp(shade, 0.5)
+	_rect(x, y, Cfg.TILE, maxf(0.0, crest - 5.0), lit)
+	_rect(x, y + maxf(0.0, crest - 5.0), Cfg.TILE, 5.0, lit.lerp(mid, 0.6))
+	_rect(x, y + crest, Cfg.TILE, 6.0, mid)
+	_rect(x, y + crest + 6.0, Cfg.TILE, maxf(0.0, Cfg.TILE - crest - 6.0), shade)
+	# Гребень: мягкая кромка, а не белая линия.
+	_rect(x, y + crest - 1.5, Cfg.TILE, 1.5, lit.lightened(0.10))
+	# Рябь на наветренном склоне — редкая, иначе снова получится ковёр.
+	if (r * 5 + c * 3) % 3 == 0:
+		var ry := y + crest * 0.45
+		_rect(x + float((r * 7 + c * 11) % 12), ry, 9.0, 1.0,
+			Color(1, 1, 1, 0.10))
+
+## Зыбучий песок: сплошное топкое пятно.
+##
+## Тёмная кайма рисуется только там, где рядом НЕ зыбучка. Первая версия
+## обводила каждую клетку, и лужа выглядела кафельной плиткой — по этой
+## сетке было видно тайлы, а не ловушку.
+func _draw_quicksand_tile(x: float, y: float, r: int, c: int) -> void:
+	_rect(x, y, Cfg.TILE, Cfg.TILE,
+		Cfg.quicksand if (r * 3 + c * 5) % 2 == 0
+		else Cfg.quicksand_dark.lerp(Cfg.quicksand, 0.6))
+
+	# Пузыри всплывают не на каждой клетке: сплошная рябь снова дала бы сетку.
+	if (r * 7 + c * 13) % 4 == 0:
+		var cx := x + Cfg.TILE * 0.5
+		var cy := y + Cfg.TILE * 0.5
+		var phase := float((world.tick + (r * 13 + c * 7) * 11) % 150) / 150.0
+		var col := Cfg.quicksand_wet
+		col.a = 0.45 * (1.0 - phase)
+		draw_arc(Vector2(cx, cy), 2.0 + phase * 9.0, 0.0, TAU, 12, col, 1.0)
+
+	# Кайма только по внешнему краю пятна.
+	if not _is_quicksand(r - 1, c):
+		_rect(x, y, Cfg.TILE, 2, Cfg.quicksand_dark)
+	if not _is_quicksand(r + 1, c):
+		_rect(x, y + Cfg.TILE - 2, Cfg.TILE, 2, Cfg.quicksand_dark)
+	if not _is_quicksand(r, c - 1):
+		_rect(x, y, 2, Cfg.TILE, Cfg.quicksand_dark)
+	if not _is_quicksand(r, c + 1):
+		_rect(x + Cfg.TILE - 2, y, 2, Cfg.TILE, Cfg.quicksand_dark)
+
+func _is_quicksand(r: int, c: int) -> bool:
+	var map := world.map
+	if r < 0 or c < 0 or r >= map.rows or c >= map.cols:
+		return false
+	return map.get_tile(r, c) == Cfg.T_QUICKSAND
+
+## Грунтовка и тропа: та же дорога механически, но без асфальта, разметки
+## и бордюра. Вместо них — две накатанные колеи вдоль движения.
+func _draw_dirt_road(x: float, y: float, r: int, c: int) -> void:
+	var k := _snow_k() * 0.6
+	var base: Color = Cfg.dirt_road if _loc_road_kind == "dirt" else Cfg.path_road
+	var alt: Color = Cfg.dirt_road_alt if _loc_road_kind == "dirt" else Cfg.path_road_alt
+	_rect(x, y, Cfg.TILE, Cfg.TILE,
+		(base if (r * 7 + c * 11) % 3 == 0 else alt).lerp(Cfg.snow_ground, k))
+
+	# Камешки и выбоины — детерминированы по клетке, поэтому не мерцают.
+	for i in 3:
+		var px := x + float((r * 17 + c * 5 + i * 9) % 26) + 3.0
+		var py := y + float((r * 5 + c * 17 + i * 13) % 26) + 3.0
+		_rect(px, py, 3, 2, Cfg.dirt_rut)
+
+	# Направление колеи — вдоль дороги. Считать его по принципу «замощено
+	# с этой стороны и не замощено с той» нельзя: у внутреннего тайла широкой
+	# дороги замощены все четыре стороны, и колеи не рисовались бы вовсе.
+	# Ровно на этом же раньше пропадала осевая линия магистрали.
+	var vert := _is_paved(r - 1, c) and _is_paved(r + 1, c)
+	var horiz := _is_paved(r, c - 1) and _is_paved(r, c + 1)
+	if vert and horiz:
+		# Перекрёсток или площадка: колеи расходятся, рисовать нечего.
+		var long_v: bool = _is_paved(r - 2, c) and _is_paved(r + 2, c)
+		var long_h: bool = _is_paved(r, c - 2) and _is_paved(r, c + 2)
+		if long_v == long_h:
+			return
+		vert = long_v
+		horiz = long_h
+	var rut: Color = Cfg.dirt_rut
+	rut.a = 0.55
+	if vert:
+		_rect(x + 7.0, y, 3.0, Cfg.TILE, rut)
+		_rect(x + Cfg.TILE - 10.0, y, 3.0, Cfg.TILE, rut)
+	elif horiz:
+		_rect(x, y + 7.0, Cfg.TILE, 3.0, rut)
+		_rect(x, y + Cfg.TILE - 10.0, Cfg.TILE, 3.0, rut)
+
+
 
 var _road_class: PackedByteArray = PackedByteArray()
 var _road_class_ready := false
@@ -620,6 +831,14 @@ func _build_road_class() -> void:
 			if r >= 0 and r < map.rows:
 				hr[r] = 2 if int(st["rank"]) == MapPlan.RANK_ARTERIAL else 1
 
+	# Перемычки — тоже улицы. Без этого они попадали бы в «площадь», и город
+	# размечал бы их под парковку прямо посреди квартала.
+	var link_mask := {}
+	for link in plan.get("links", []):
+		for r in range(int(link["r0"]), int(link["r1"]) + 1):
+			for c in range(int(link["c0"]), int(link["c1"]) + 1):
+				link_mask[r * map.cols + c] = true
+
 	for r in map.rows:
 		for c in map.cols:
 			if not RoadNet.is_paved(map, r, c):
@@ -627,6 +846,8 @@ func _build_road_class() -> void:
 			var v: int = vr[c]
 			var h: int = hr[r]
 			var klass := RC_SQUARE
+			if link_mask.has(r * map.cols + c) and (v <= 0 or h <= 0):
+				klass = RC_STREET
 			if v > 0 and h > 0:
 				klass = RC_JUNCTION
 			elif v > 0:
@@ -655,6 +876,14 @@ func _draw_parking_bay(x: float, y: float, r: int, c: int) -> void:
 ## Асфальт: латаное полотно с трещинами, бордюром по краю проезжей части
 ## и осевой разметкой вдоль улицы.
 func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
+	# Асфальт — только в городе. У пустоши и джунглей своя дорога, и вся
+	# разметка, бордюры и зебры к ней не применяются: их там просто нет.
+	if not _loc_ready:
+		_read_location()
+	if _loc_road_kind != "asphalt":
+		_draw_dirt_road(x, y, r, c)
+		_round_road_corners(x, y, r, c)
+		return
 	# Асфальт в снег светлеет слабее газона: его чистят, да и лежит на нём
 	# меньше.
 	var k := _snow_k() * 0.6
@@ -665,6 +894,8 @@ func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
 		var px := x + float((r * 17 + c * 5 + i * 9) % 25) + 3.0
 		var py := y + float((r * 5 + c * 17 + i * 13) % 25) + 3.0
 		_rect(px, py, 4, 2, Cfg.road_crack)
+
+	_round_road_corners(x, y, r, c)
 
 	var up := _is_paved(r - 1, c)
 	var down := _is_paved(r + 1, c)
@@ -778,23 +1009,55 @@ func _draw_bridge_tile(x: float, y: float, r: int, c: int) -> void:
 			_rect(x + Cfg.TILE - 4, y, 1, Cfg.TILE, Cfg.bridge_dark)
 
 ## Газон парка: трава с кустиками, по ней танк идёт чуть медленнее.
+## Плавная тональная неровность земли, 0..1.
+##
+## Шахматка у травы и светлая кайма у каждого тайла песка делали большие поля
+## похожими на клетчатую скатерть: сетка тайлов читалась сама по себе, и
+## пустыня выглядела кафелем. Здесь оттенок берётся суммой двух низкочастотных
+## волн от координат КАРТЫ, поэтому пятна крупнее клетки и переходят из тайла
+## в тайл — сетка пропадает, а земля остаётся неоднородной.
+func _terrain_shade(r: int, c: int) -> float:
+	var v := sin(float(c) * 0.19 + float(r) * 0.12) * 0.6 		+ sin(float(c) * 0.061 - float(r) * 0.094) * 0.4
+	return clampf(v * 0.5 + 0.5, 0.0, 1.0)
+
+## Тот же тайл рядом? Нужно, чтобы кайма рисовалась только по внешнему краю
+## массива, а не вокруг каждой клетки.
+func _same_tile(r: int, c: int, tile: int) -> bool:
+	var map := world.map
+	if r < 0 or c < 0 or r >= map.rows or c >= map.cols:
+		return false
+	return map.get_tile(r, c) == tile
+
 func _draw_grass_tile(x: float, y: float, r: int, c: int) -> void:
 	var k := _snow_k()
-	var base: Color = (Cfg.grass if (r + c) % 2 == 0 else Cfg.grass_alt) 		.lerp(Cfg.snow_ground, k)
+	var t := _terrain_shade(r, c)
+	var base: Color = Cfg.grass_dark.lerp(Cfg.grass_alt, 0.25 + t * 0.75) 		.lerp(Cfg.snow_ground, k)
 	_rect(x, y, Cfg.TILE, Cfg.TILE, base)
-	for i in 5:
+	# Травинок меньше и они темнее самой клетки лишь чуть-чуть: густая рябь
+	# поверх плавного тона снова дала бы шум вместо гладкой земли.
+	var blade: Color = Cfg.grass_dark
+	blade.a = 0.45
+	for i in 3:
 		var px := x + float((r * 11 + c * 19 + i * 7) % 27) + 2.0
 		var py := y + float((r * 19 + c * 11 + i * 5) % 25) + 3.0
-		_rect(px, py, 2, 4, Cfg.grass_dark)
+		_rect(px, py, 2, 4, blade)
+	_round_block_corners(x, y, r, c)
 
 func _draw_sand_tile(x: float, y: float, r: int, c: int) -> void:
-	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.sand)
-	for i in 6:
+	var t := _terrain_shade(r, c)
+	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.sand_dark.lerp(Cfg.sand_light, 0.3 + t * 0.7))
+	var fleck: Color = Cfg.sand_dark
+	fleck.a = 0.35
+	for i in 3:
 		var px := x + float((r * 13 + c * 7 + i * 5) % 26) + 3.0
 		var py := y + float((r * 7 + c * 13 + i * 11) % 26) + 3.0
-		_rect(px, py, 2, 2, Cfg.sand_dark)
-	_rect(x, y, Cfg.TILE, 2, Cfg.sand_light)
-	_rect(x, y, 2, Cfg.TILE, Cfg.sand_light)
+		_rect(px, py, 2, 2, fleck)
+	# Светлая кромка — только по внешнему краю песчаного массива.
+	if not _same_tile(r - 1, c, Cfg.T_SAND):
+		_rect(x, y, Cfg.TILE, 2, Cfg.sand_light)
+	if not _same_tile(r, c - 1, Cfg.T_SAND):
+		_rect(x, y, 2, Cfg.TILE, Cfg.sand_light)
+	_round_block_corners(x, y, r, c)
 
 func _draw_water_tile(x: float, y: float, r: int, c: int, phase: float) -> void:
 	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.water)

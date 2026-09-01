@@ -43,7 +43,8 @@ static func is_solid_tile(tile: int) -> bool:
 static func is_drivable_tile(tile: int) -> bool:
 	return tile == Cfg.T_EMPTY or tile == Cfg.T_TREE or tile == Cfg.T_BASE_P \
 		or tile == Cfg.T_BASE_E or tile == Cfg.T_SAND \
-		or tile == Cfg.T_ROAD or tile == Cfg.T_BRIDGE or tile == Cfg.T_GRASS
+		or tile == Cfg.T_ROAD or tile == Cfg.T_BRIDGE or tile == Cfg.T_GRASS \
+		or tile == Cfg.T_DUNE or tile == Cfg.T_QUICKSAND
 
 var width: float:
 	get: return float(cols * Cfg.TILE)

@@ -27,6 +27,19 @@ static func paint(map: GameMap, plan: Dictionary) -> void:
 	for circle in plan["circles"]:
 		_paint_circle(map, circle)
 
+## Перемычки между улицами. Красятся ОТДЕЛЬНО и после застройки кварталов:
+## перемычка проходит по середине квартала, а Districts.paint заливает квартал
+## целиком — если положить её раньше, застройка её же и сотрёт. Замер поймал
+## это сразу: карты с перемычками и без совпали побайтово.
+static func paint_links(map: GameMap, plan: Dictionary) -> void:
+	for link in plan.get("links", []):
+		for r in range(maxi(1, int(link["r0"])), mini(map.rows - 2, int(link["r1"])) + 1):
+			for c in range(maxi(1, int(link["c0"])), mini(map.cols - 2, int(link["c1"])) + 1):
+				# Воду перемычка не пересекает: для этого есть мосты.
+				if map.get_tile(r, c) == Cfg.T_WATER:
+					continue
+				map.set_tile(r, c, Cfg.T_ROAD)
+
 static func _paint_line(map: GameMap, st: Dictionary, vertical: bool) -> void:
 	var w: int = int(st["w"])
 	var pos: int = int(st["pos"])

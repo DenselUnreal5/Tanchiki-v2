@@ -103,6 +103,8 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	RoadNet.paint(map, plan)
 	for block in plan["blocks"]:
 		Districts.paint(map, rng, block, loc)
+	# Перемычки — после застройки, иначе она их сотрёт.
+	RoadNet.paint_links(map, plan)
 
 	# ---- 4: река ---------------------------------------------------------
 	# Только на больших картах: «Оборона» и «Захват флага» собраны под свою
@@ -114,6 +116,7 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	# Идёт по готовому рельефу и трогает только пустую землю, поэтому не
 	# может ни разрезать улицу, ни засыпать мост.
 	Locations.overgrow(map, rng, loc)
+	Locations.carve_oases(map, rng, loc)
 
 	# ---- 6: режим --------------------------------------------------------
 	var homes := {"player": null, "enemy": null}
