@@ -77,13 +77,23 @@ func _ready() -> void:
 		_check(false, "газон на карте не найден")
 
 	# ---- материалы -------------------------------------------------------
-	_expect("lumberjack", tank, func(): return float(tank.mods["woodDmgMult"]), 1.0, 2.5)
+	# «Лесоруб» проверяется поведением, а не числом: прежний множитель урона
+	# по дереву был числом, которое ничего не меняло — дом из досок и так
+	# падал с одного попадания. Теперь перк даёт сквозной выстрел, и признак
+	# этого один — две деревянные постройки, снесённые одной пулей.
+	_check_wood_pierce(world, tank)
 	_expect("can_opener", tank, func(): return float(tank.mods["metalDmgMult"]), 1.0, 2.5)
 	_expect("concrete_breaker", tank, func(): return float(tank.mods["concreteDmgMult"]), 1.0, 2.2)
 
 	# ---- слышимость ------------------------------------------------------
 	_expect("keen_ear", tank, func(): return float(tank.mods["hearingMult"]), 1.0, 1.7)
 	_expect("muffler", tank, func(): return float(tank.mods["noiseMult"]), 1.0, 0.5)
+	_expect("muffler", tank, func(): return float(tank.mods["ambushDmgMult"]), 1.0, 1.5)
+
+	# Скорострельность обязана снимать и нагрев: одна лишь перезарядка упирается
+	# в жар и не поднимает устойчивый темп (замер давал +4 урона в секунду).
+	_expect("rapid_fire", tank, func(): return float(tank.mods["heatPerShotMult"]), 1.0, 0.7)
+	_expect("quick_reload", tank, func(): return float(tank.mods["heatPerShotMult"]), 1.0, 0.8)
 
 	# «Глушитель» обязан отменять оповещение ботов о выстреле.
 	tank.perk_ids = ["silencer"]
@@ -99,8 +109,60 @@ func _ready() -> void:
 	_check(heard_silent == 0 and heard_loud > 0,
 		"«Глушитель»: услышали %d ботов, без него %d" % [heard_silent, heard_loud])
 
+	# «Острый слух» обещает отметки на миникарте. Раньше это была неправда:
+	# перк менял только громкость в аудиомиксе.
+	world.shot_pings.clear()
+	world.notify_shot(tank)
+	_check(not world.shot_pings.is_empty(),
+		"«Острый слух»: выстрел попал в отметки миникарты (%d)" % world.shot_pings.size())
+
 	print("=== ПРОВЕРКА ПЕРКОВ ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
+
+## Сквозной выстрел по дереву: одна пуля обязана снести две постройки подряд.
+func _check_wood_pierce(world, tank: Tank) -> void:
+	var map = world.map
+	# Материал выводится из координат, поэтому нужна не любая пара клеток,
+	# а пара, которая окажется именно деревянной.
+	var spot := Vector2i(-1, -1)
+	for r in range(4, map.rows - 4):
+		for c in range(4, map.cols - 5):
+			if String(Materials.at(r, c)["id"]) == "wood" 					and String(Materials.at(r, c + 1)["id"]) == "wood":
+				spot = Vector2i(r, c)
+				break
+		if spot.x >= 0:
+			break
+	if spot.x < 0:
+		_check(false, "две деревянные клетки подряд на карте не нашлись")
+		return
+
+	var survived := 0
+	for use_perk in [false, true]:
+		map.set_tile(spot.x, spot.y, Cfg.T_BRICK)
+		map.set_tile(spot.x, spot.y + 1, Cfg.T_BRICK)
+		tank.perk_ids = ["lumberjack"] if use_perk else []
+		tank.recompute()
+		tank.x = float(spot.y * Cfg.TILE) - Cfg.TILE
+		tank.y = float(spot.x * Cfg.TILE) + Cfg.TILE * 0.5
+		world.bullets.clear()
+		var b = Ent.Bullet.new(tank.x, tank.y, 0.0, tank, Cfg.PLAYER_DMG_MULT)
+		world.bullets.append(b)
+		for i in 40:
+			world.step()
+			if not b.alive:
+				break
+		var broken := 0
+		if map.get_tile(spot.x, spot.y) != Cfg.T_BRICK:
+			broken += 1
+		if map.get_tile(spot.x, spot.y + 1) != Cfg.T_BRICK:
+			broken += 1
+		if use_perk:
+			_check(broken == 2, "«Лесоруб»: одна пуля снесла построек: %d из 2" % broken)
+		else:
+			survived = broken
+			_check(broken == 1, "без перка одна пуля сносит построек: %d (ждали 1)" % broken)
+	tank.perk_ids = []
+	tank.recompute()
 
 ## Сколько ботов пошло на звук выстрела.
 func _count_alerted(world, shooter: Tank) -> int:

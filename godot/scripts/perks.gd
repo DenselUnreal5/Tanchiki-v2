@@ -45,6 +45,7 @@ static func base_modifiers() -> Dictionary:
 		# --- слышимость (см. audio.gd)
 		"hearingMult": 1.0,      # насколько дальше слышны чужие выстрелы
 		"noiseMult": 1.0,        # насколько далеко ваш выстрел слышат боты
+		"ambushDmgMult": 1.0,    # множитель урона по тому, кто вас ещё не нашёл
 
 		"scavengeHeal": 0.0,     # лечение за снесённую поблизости постройку
 	}
@@ -71,8 +72,12 @@ const LIST := [
 	},
 	{
 		"id": "rapid_fire", "name": "Скорострельность", "icon": "⚡",
-		"desc": "Перезарядка быстрее на 40%", "category": "fire",
-		"mods": {"fireRateMult": 0.6},
+		"desc": "Перезарядка быстрее на 40%, ствол греется меньше", "category": "fire",
+		# Один лишь темп перезарядки ничего не давал: устойчивый огонь упирается
+		# не в неё, а в нагрев ствола. Замер непрерывной стрельбы показал +4
+		# урона в секунду при обещанных +40% скорострельности — перк снимал
+		# ограничение, которое и так не было узким местом.
+		"mods": {"fireRateMult": 0.6, "heatPerShotMult": 0.7},
 	},
 	{
 		"id": "explosive", "name": "Взрывные пули", "icon": "💥",
@@ -117,8 +122,9 @@ const LIST := [
 	},
 	{
 		"id": "quick_reload", "name": "Быстрая перезарядка", "icon": "🔄",
-		"desc": "Перезарядка быстрее на 30%", "category": "speed",
-		"mods": {"fireRateMult": 0.7},
+		"desc": "Перезарядка быстрее на 30%, ствол греется меньше", "category": "speed",
+		# То же, что и у «Скорострельности»: замер давал −1 урона в секунду.
+		"mods": {"fireRateMult": 0.7, "heatPerShotMult": 0.8},
 	},
 
 	# ---------------------------------------------------------------- особые
@@ -341,8 +347,13 @@ const EXTRA_LIST := [
 	# --------------------------------------------------------- материалы
 	{
 		"id": "lumberjack", "name": "Лесоруб", "icon": "🪓",
-		"desc": "Урон по деревянным постройкам ×2.5", "category": "fire",
-		"mods": {"woodDmgMult": 2.5},
+		"desc": "Снаряд прошивает деревянные постройки насквозь", "category": "fire",
+		# Было «урон по дереву ×2.5». Это не работало и не могло: пуля игрока
+		# наносит постройке 37.5, дерево держит 30 HP при сопротивлении пуле
+		# ×1.15 — то есть 43 урона по 30, один выстрел в любом случае. Замер
+		# подтвердил: партия с перком проходила побитово как без него, 8 из 8.
+		# Теперь перк даёт то, чего множитель дать не мог, — линию огня.
+		"flags": ["woodPierce"],
 	},
 	{
 		"id": "concrete_breaker", "name": "Бетонолом", "icon": "🧱",
@@ -367,8 +378,12 @@ const EXTRA_LIST := [
 	},
 	{
 		"id": "muffler", "name": "Глушение", "icon": "🤫",
-		"desc": "Ваши выстрелы боты слышат вдвое ближе", "category": "special",
-		"mods": {"noiseMult": 0.5},
+		"desc": "Выстрелы слышны вдвое ближе, урон по незаметившим +50%",
+		"category": "special",
+		# Одна тишина была чистым минусом: боты не сбегаются, целей меньше,
+		# замер показал −1.0 убийства и −217 урона в минуту при том, что
+		# полученный урон не падал. Тишина должна возвращаться засадой.
+		"mods": {"noiseMult": 0.5, "ambushDmgMult": 1.5},
 	},
 ]
 
@@ -382,7 +397,7 @@ const EXTRA_ACTIVE := [
 	},
 	{
 		"id": "overclock", "name": "Разгон", "icon": "⚙",
-		"desc": "4 с перезарядка вдвое быстрее, но и жар копится вдвое",
+		"desc": "2.5 с двойной темп стрельбы, ствол не греется",
 		"category": "fire", "active": "overclock",
 	},
 	{
@@ -443,19 +458,51 @@ static func filter_perks_for_mode(ids: Array, mode: String) -> Array:
 	return out
 
 ## Перки, открываемые за глобальные уровни профиля.
+## Открытие перков по уровню профиля, 1..20.
+##
+## Порядок не по вкусу, а по трём правилам, и каждое проверяется замером
+## (tests/perk_dps.gd — устойчивый урон, tests/perk_bench.gd — бой):
+##
+##   1. Сначала то, что работает само. Уровни 1..3 — постоянные прибавки
+##      к характеристикам: их не надо вовремя нажимать и под них не надо
+##      менять поведение.
+##   2. Активные способности — с четвёртого уровня и порознь. Это
+##      единственная механика, где решает момент, и вываливать её в первый
+##      же выбор незачем.
+##   3. Сильное и требующее знания карты — в конце. На двадцатом уровне
+##      стоят перки с наибольшим замеренным вкладом: «Радиатор» даёт +40
+##      урона в секунду при непрерывном огне, «Разгон» — +28.
+##
+## Прежняя таблица ужимала те же 38 перков в двенадцать уровней по три-четыре
+## за раз. К восьмому уровню игрок получал доступ почти ко всему сразу, и
+## дальше прогрессия ничего не открывала.
 const UNLOCK_TABLE := {
+	# --- постоянные прибавки: учат характеристикам
 	1: ["rapid_fire", "heavy_armor", "sprinter"],
-	2: ["double_shot", "regen", "nitro"],
-	3: ["quick_reload", "evasion", "siege"],
-	4: ["fan_shot", "reflect"],
-	5: ["explosive", "shield", "overdrive"],
-	6: ["piercing", "bulwark"],
-	7: ["mines", "shockwave"],
-	8: ["heat_sink", "road_king", "lumberjack", "coolant"],
-	9: ["thermal", "all_terrain", "keen_ear", "grip"],
-	10: ["quick_vent", "concrete_breaker", "muffler", "repair"],
-	11: ["heavy_shell", "can_opener", "scavenger", "overclock"],
-	12: ["light_shell", "silencer", "smoke", "breaker"],
+	2: ["regen", "quick_reload"],
+	3: ["double_shot", "evasion"],
+	# --- первая активная способность
+	4: ["nitro", "shield"],
+	# --- покрытие под гусеницами и нагрев ствола: механики города
+	5: ["fan_shot", "road_king"],
+	6: ["reflect", "thermal"],
+	7: ["explosive", "all_terrain"],
+	8: ["overdrive", "quick_vent"],
+	9: ["piercing", "scavenger"],
+	10: ["bulwark", "light_shell"],
+	# --- материалы построек: работают, когда игрок уже читает застройку
+	11: ["mines", "concrete_breaker"],
+	12: ["repair", "heavy_shell"],
+	13: ["siege", "grip"],
+	14: ["coolant", "can_opener"],
+	15: ["lumberjack", "smoke"],
+	# --- слышимость и скрытность: требуют понимания поведения ботов
+	16: ["keen_ear", "silencer"],
+	17: ["muffler", "breaker"],
+	# --- вершина: наибольший замеренный вклад
+	18: ["shockwave"],
+	19: ["heat_sink"],
+	20: ["overclock"],
 }
 
 ## На каком глобальном уровне открывается перк (или 0 для челленджей).
@@ -482,7 +529,7 @@ static func compute_modifiers(perk_ids: Array, bot: bool = false) -> Dictionary:
 			var v: float = float(mods[key])
 			match key:
 				"maxHPMult", "speedMult", "fireRateMult", "dmgMult", "bulletSpeedMult", \
-				"damageTakenMult", "ramMult", "pickupRadiusMult", "buildingDmgMult", 				"heatPerShotMult", "heatCoolMult", "roadSpeedMult", 				"woodDmgMult", "brickDmgMult", "concreteDmgMult", "metalDmgMult", 				"hearingMult", "noiseMult":
+				"damageTakenMult", "ramMult", "pickupRadiusMult", "buildingDmgMult", 				"heatPerShotMult", "heatCoolMult", "roadSpeedMult", 				"woodDmgMult", "brickDmgMult", "concreteDmgMult", "metalDmgMult", 				"hearingMult", "noiseMult", "ambushDmgMult":
 					m[key] = float(m[key]) * v
 				"accuracyBonus", "reflectFraction", "lifestealFraction", "regenPerMinute", 				"heatResumeAdd", "softGrip", "scavengeHeal":
 					m[key] = float(m[key]) + v

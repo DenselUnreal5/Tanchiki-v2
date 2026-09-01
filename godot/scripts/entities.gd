@@ -198,6 +198,10 @@ class Bullet extends RefCounted:
 			# читается в попаданиях.
 			var dmg := (Cfg.BULLET_DMG_MIN + Cfg.BULLET_DMG_MAX) * 0.5 * dmg_scale
 			world.hit_building(row, col, dmg, "bullet", x, y, owner)
+			# «Лесоруб»: доска снаряд не держит. Постоянная версия «Кумулятива»,
+			# но только по дереву — и потому не ломающая ценность способности.
+			if owner != null and owner.flags.has("woodPierce") 					and String(Materials.at(row, col)["id"]) == "wood":
+				return false
 			# «Кумулятив»: снаряд не вязнет в стене, а идёт дальше. Ради
 			# этого он и берётся — пробить ряд построек одним выстрелом.
 			if owner != null and owner.ability_active("breaker"):

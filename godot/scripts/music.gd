@@ -79,6 +79,10 @@ const FADE := 0.7
 
 var _combat: AudioStream
 var _menu: AudioStream
+## Боевые темы локаций: {"dust": поток, "jungle": поток}. Города здесь нет —
+## он и есть _combat, потому что у него единственного есть процедурный
+## запасной вариант на случай пустой папки.
+var _extra := {}
 ## Пришла ли тема из файлов: от этого зависит шина. Процедурная идёт через
 ## зал с реверберацией, сведённая запись — сухой, ей обработка только вредит.
 var _from_files := {"menu": false, "combat": false}
@@ -104,15 +108,22 @@ func _ready() -> void:
 
 	# Сначала файлы: синтезировать то, что уже есть готовым, незачем —
 	# это и полсекунды процессора на запуске, и заведомо худший звук.
-	for id in ["menu", "combat"]:
+	var themes := ["menu", "combat"]
+	for key in Locations.ORDER:
+		var name := Locations.music_of(key)
+		if not themes.has(name):
+			themes.append(name)
+	for id in themes:
 		var list := _scan_music("res://music/" + id)
 		if list.is_empty():
 			continue
 		_from_files[id] = true
 		if id == "menu":
 			_menu = _playlist(list)
-		else:
+		elif id == "combat":
 			_combat = _playlist(list)
+		else:
+			_extra[id] = _playlist(list)
 		print("[Mus] тема «%s»: файлов %d" % [id, list.size()])
 
 	if _menu == null:
@@ -225,8 +236,16 @@ func _on_built(id: String, loop: AudioStream, ms: int) -> void:
 func play_menu() -> void:
 	_request("menu")
 
-func play_combat() -> void:
-	_request("combat")
+## @param location город | пустошь | джунгли — у каждой свой набор треков.
+## Локация без собственной папки играет городской набор: остаться в тишине
+## из-за пустой папки хуже, чем услышать не совсем ту музыку.
+func play_combat(location: String = "") -> void:
+	var theme := "combat"
+	if location != "":
+		var want := Locations.music_of(location)
+		if _extra.has(want) or want == "combat":
+			theme = want
+	_request(theme)
 
 func stop() -> void:
 	_want = ""
@@ -264,14 +283,22 @@ func _request(id: String) -> void:
 	_want = id
 	if _current == id:
 		return
-	var loop: AudioStream = _menu if id == "menu" else _combat
+	var loop := _stream_of(id)
 	if loop == null:
 		return  # ещё собирается — включим в _on_built
 	_switch(id)
 
+## Поток темы по имени.
+func _stream_of(id: String) -> AudioStream:
+	if id == "menu":
+		return _menu
+	if _extra.has(id):
+		return _extra[id]
+	return _combat
+
 ## Кроссфейд: новая тема поднимается на втором плеере, старая уходит.
 func _switch(id: String) -> void:
-	var loop: AudioStream = _menu if id == "menu" else _combat
+	var loop := _stream_of(id)
 	if loop == null:
 		return
 	_current = id

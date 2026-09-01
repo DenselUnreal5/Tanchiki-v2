@@ -8,8 +8,13 @@
 #   2. RoadNet   — покраска дорожной сети
 #   3. Districts — застройка каждого квартала по его району
 #   4. WaterGen  — река, берега, до четырёх мостов
-#   5. режим     — базы, флаги, площадки
-#   6. связность — проходимость карты и целостность дорожной сети
+#   5. Locations — зарастание пустот песком или лесом
+#   6. режим     — базы, флаги, площадки
+#   7. связность — проходимость карты и целостность дорожной сети
+#
+# Локация (город, пустошь, джунгли) не отдельный генератор, а набор правил
+# для этого же конвейера: густота сетки, состав районов, ширина реки и то,
+# чем зарастают пустоты.
 #
 # Порядок не переставляется произвольно. Река идёт после города, потому что
 # должна резать готовую застройку; связность — последней, потому что чинит
@@ -56,7 +61,9 @@ static func _defense_enemy_area(cols: int, rows: int) -> Dictionary:
 ## @param mode ffa | ctf | koth | defense
 ## @param seed_override сетевая партия передаёт seed хоста: карта у всех
 ##        собирается локально и обязана совпасть до тайла.
-static func generate(level_num: int, mode: String, seed_override: int = -1) -> Dictionary:
+## @param location city | dust | jungle | auto
+static func generate(level_num: int, mode: String, seed_override: int = -1,
+		location: String = Locations.CITY) -> Dictionary:
 	var seed_value := 0
 	if seed_override >= 0:
 		seed_value = seed_override
@@ -65,6 +72,10 @@ static func generate(level_num: int, mode: String, seed_override: int = -1) -> D
 	else:
 		seed_value = ((level_num - 1) * 7777 + 42) & 0xFFFFFFFF
 	var rng := Rng.new(seed_value)
+	# Локация тянется из того же генератора, что и карта: при «случайной»
+	# в сетевой партии у хоста и клиента обязана совпасть и она.
+	var loc_id := Locations.resolve(location, rng)
+	var loc := Locations.get_location(loc_id)
 
 	# Размер карты зависит от режима: «Оборона» вдвое меньше общей (база
 	# в центре), «Захват флага» — ещё меньше, чтобы команды постоянно
@@ -88,18 +99,23 @@ static func generate(level_num: int, mode: String, seed_override: int = -1) -> D
 		map.set_tile(rows - 1, c, Cfg.T_WALL)
 
 	# ---- 1-3: план, дороги, застройка ------------------------------------
-	var plan := MapPlan.build(rng, cols, rows)
+	var plan := MapPlan.build(rng, cols, rows, loc)
 	RoadNet.paint(map, plan)
 	for block in plan["blocks"]:
-		Districts.paint(map, rng, block)
+		Districts.paint(map, rng, block, loc)
 
 	# ---- 4: река ---------------------------------------------------------
 	# Только на больших картах: «Оборона» и «Захват флага» собраны под свою
 	# геометрию, и река поперёк них ломала бы выверенный баланс.
 	if mode == "ffa" or mode == "koth":
-		WaterGen.carve(map, rng, cols, rows, plan["h"])
+		WaterGen.carve(map, rng, cols, rows, plan["h"], float(loc["river"]))
 
-	# ---- 5: режим --------------------------------------------------------
+	# ---- 5: зарастание --------------------------------------------------
+	# Идёт по готовому рельефу и трогает только пустую землю, поэтому не
+	# может ни разрезать улицу, ни засыпать мост.
+	Locations.overgrow(map, rng, loc)
+
+	# ---- 6: режим --------------------------------------------------------
 	var homes := {"player": null, "enemy": null}
 	var flag_spots := {"player": [], "enemy": []}
 	if mode == "ctf":
@@ -110,7 +126,7 @@ static func generate(level_num: int, mode: String, seed_override: int = -1) -> D
 		_fill_rect(map, cr - 4, cr + 4, cc - 4, cc + 4, Cfg.T_ROAD)
 		homes["player"] = Vector2(cc * Cfg.TILE + Cfg.TILE * 0.5, cr * Cfg.TILE + Cfg.TILE * 0.5)
 
-	# ---- 6: связность ----------------------------------------------------
+	# ---- 7: связность ----------------------------------------------------
 	# Проходимость карты и целостность дорожной сети — разные вещи: пройти
 	# можно и через двор, а улица, обрывающаяся посреди квартала, читается
 	# как ошибка генерации.
@@ -138,6 +154,7 @@ static func generate(level_num: int, mode: String, seed_override: int = -1) -> D
 		"flag_spots": flag_spots,
 		"areas": areas,
 		"plan": plan,
+		"location": loc_id,
 	}
 
 # ============================================================== примитивы

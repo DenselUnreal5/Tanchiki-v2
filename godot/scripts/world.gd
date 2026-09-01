@@ -106,7 +106,13 @@ func _init(opts: Dictionary) -> void:
 	for p in players:
 		p.map = map
 
+	# Затравка обычно мешается со временем: две партии на одной карте не
+	# должны разыгрываться одинаково. Замер перков — исключение: он сравнивает
+	# партии между собой, и при разных стартах разница перка тонет в разбросе.
 	var seed_mix: int = (Time.get_ticks_msec() ^ (int(level["seed"]) * 2654435761)) & 0xFFFFFFFF
+	var fixed_seed: int = int(opts.get("rng_seed", -1))
+	if fixed_seed >= 0:
+		seed_mix = fixed_seed & 0xFFFFFFFF
 	rng = Rng.new(seed_mix)
 
 	# Погода и атмосфера — детерминированы по seed карты.
@@ -129,12 +135,30 @@ func _init(opts: Dictionary) -> void:
 	if mode == "defense":
 		_setup_defense()
 
+## Сколько тиков отметка выстрела держится на миникарте: слух даёт свежее
+## направление, а не постоянную картинку.
+const PING_LIFE := 150
+
+## Недавние выстрелы: {x, y, tick, team, reach}. Читает миникарта — «Острый
+## слух» показывает точку там, где стреляли, даже если стрелка не видно.
+var shot_pings: Array = []
+
 ## Выстрел слышен. Боты без цели идут проверять источник — это и делает
 ## «Глушитель» и «Глушение» осмысленными: тихая стрельба не собирает толпу.
 func notify_shot(shooter) -> void:
 	if shooter == null or shooter.ability_active("silencer"):
 		return
 	var reach: float = Cfg.BOT_HEAR_RANGE * float(shooter.mods.get("noiseMult", 1.0))
+
+	# Та же дальность идёт и в отметку на миникарте: заглушенный выстрел
+	# должен и слышаться ближе, и отмечаться только вблизи.
+	shot_pings.append({
+		"x": shooter.x, "y": shooter.y, "tick": tick,
+		"team": shooter.team, "reach": reach,
+	})
+	while shot_pings.size() > 48:
+		shot_pings.pop_front()
+
 	var r2 := reach * reach
 	for t in tanks:
 		if t == shooter or not t.alive or t.brain == null:
@@ -827,6 +851,11 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		var ratio: float = attacker.hp / attacker.max_hp if attacker.max_hp > 0.0 else 0.0
 		if ratio <= 0.4:
 			amount *= 1.6
+	# «Глушение»: попадание по тому, кто вас ещё не нашёл, бьёт сильнее.
+	# Это и есть плата за тишину — иначе перк только отваживал цели.
+	if attacker != null and source == "bullet" 			and float(attacker.mods["ambushDmgMult"]) > 1.0 			and target.brain != null and target.brain.target != attacker:
+		amount *= float(attacker.mods["ambushDmgMult"])
+
 	var res: Dictionary = target.take_damage(self, amount, attacker, source)
 	if bool(res["evaded"]) or float(res["applied"]) <= 0.0:
 		return 0.0

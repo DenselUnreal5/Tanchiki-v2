@@ -11,24 +11,71 @@ var failures := 0
 
 func _ready() -> void:
 	await get_tree().process_frame
-	print("режим        асфальт  в сети  перекрёстков  переправ")
-	for mode in ["ffa", "koth", "ctf", "defense"]:
-		for level in [1, 2, 3, 4, 5]:
-			var lvl := LevelGen.generate(level, mode)
-			var map: GameMap = lvl["map"]
-			var r := _road_stats(map)
-			var mark := ""
-			if int(r["bridges"]) > LevelGen.MAX_BRIDGES:
-				mark = "   ПРЕВЫШЕНО"
-				failures += 1
-			if float(r["share"]) < 0.70:
-				mark += "   СЕТКА РВАНАЯ"
-				failures += 1
-			print("  %-8s ур.%d  %5d  %5.1f%%  %6d  %6d%s" % [
-				mode, level, r["total"], float(r["share"]) * 100.0,
-				r["crossings"], r["bridges"], mark])
+	print("локация  режим        асфальт  в сети  перекр  переправ  проходимо")
+	for loc in Locations.ORDER:
+		for mode in ["ffa", "koth", "ctf", "defense"]:
+			for level in [1, 2, 3, 4, 5]:
+				var lvl := LevelGen.generate(level, mode, -1, loc)
+				var map: GameMap = lvl["map"]
+				var r := _road_stats(map)
+				var walk := _walkable_share(map)
+				var mark := ""
+				if String(lvl["location"]) != loc:
+					mark += "   ЛОКАЦИЯ НЕ ТА"
+					failures += 1
+				if int(r["bridges"]) > LevelGen.MAX_BRIDGES:
+					mark += "   ПЕРЕПРАВ БОЛЬШЕ ЧЕТЫРЁХ"
+					failures += 1
+				# Дорожная сеть должна быть связной там, где дороги вообще
+				# есть. В джунглях их мало по замыслу, поэтому порог ниже
+				# применяется только к сколько-нибудь заметной сети.
+				if r["total"] > 200 and float(r["share"]) < 0.70:
+					mark += "   СЕТКА РВАНАЯ"
+					failures += 1
+				# А вот проходимость карты обязательна везде: остров, куда
+				# не доехать, ломает и ботов, и режимные точки.
+				if walk < 0.97:
+					mark += "   КАРТА РАЗОРВАНА"
+					failures += 1
+				print("  %-7s %-8s ур.%d  %5d  %5.1f%%  %5d  %5d  %6.1f%%%s" % [
+					loc, mode, level, r["total"], float(r["share"]) * 100.0,
+					r["crossings"], r["bridges"], walk * 100.0, mark])
 	print("проблем: %d" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
+
+## Доля проходимой земли, попавшей в главную связную область. Считается
+## заливкой от первой проходимой клетки: карта, распавшаяся на острова,
+## выглядит на глаз нормально и ломается только в игре.
+func _walkable_share(map: GameMap) -> float:
+	var total := 0
+	var start := Vector2i(-1, -1)
+	for r in map.rows:
+		for c in map.cols:
+			if GameMap.is_drivable_tile(map.get_tile(r, c)):
+				total += 1
+				if start.x < 0:
+					start = Vector2i(r, c)
+	if total == 0:
+		return 0.0
+	var dirs: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var seen := {}
+	var stack: Array[Vector2i] = [start]
+	seen[start.x * map.cols + start.y] = true
+	while not stack.is_empty():
+		var p: Vector2i = stack.pop_back()
+		for d in dirs:
+			var n: Vector2i = p + d
+			if n.x < 0 or n.y < 0 or n.x >= map.rows or n.y >= map.cols:
+				continue
+			var key: int = n.x * map.cols + n.y
+			if seen.has(key):
+				continue
+			if not GameMap.is_drivable_tile(map.get_tile(n.x, n.y)):
+				continue
+			seen[key] = true
+			stack.append(n)
+	return float(seen.size()) / float(total)
 
 ## Связность асфальта, число перекрёстков и мостов.
 func _road_stats(map: GameMap) -> Dictionary:

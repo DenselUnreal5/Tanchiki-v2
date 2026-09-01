@@ -14,32 +14,37 @@ class_name Districts
 extends RefCounted
 
 ## Раскладка квартала по типу района.
-static func paint(map: GameMap, rng: Rng, block: Dictionary) -> void:
+## @param loc правила локации: чем застелена земля и дворы
+static func paint(map: GameMap, rng: Rng, block: Dictionary,
+		loc: Dictionary = {}) -> void:
+	var ground: int = int(loc.get("ground_tile", Cfg.T_GRASS))
+	var yard: int = int(loc.get("yard_tile", Cfg.T_ROAD))
 	var r0: int = int(block["r0"])
 	var r1: int = int(block["r1"])
 	var c0: int = int(block["c0"])
 	var c1: int = int(block["c1"])
 	# Узкие полоски у кромки карты застраивать нечем — газон.
 	if r1 - r0 < 2 or c1 - c0 < 2:
-		_fill(map, r0, r1, c0, c1, Cfg.T_GRASS)
+		_fill(map, r0, r1, c0, c1, ground)
 		return
 
 	match String(block["district"]):
 		"downtown":
-			_downtown(map, rng, r0, r1, c0, c1)
+			_downtown(map, rng, r0, r1, c0, c1, yard)
 		"industrial":
-			_industrial(map, rng, r0, r1, c0, c1)
+			_industrial(map, rng, r0, r1, c0, c1, yard)
 		"park":
-			_park(map, rng, r0, r1, c0, c1)
+			_park(map, rng, r0, r1, c0, c1, ground)
 		_:
-			_residential(map, rng, r0, r1, c0, c1)
+			_residential(map, rng, r0, r1, c0, c1, ground)
 
 # --------------------------------------------------------------- деловой
 ## Центр: плотная застройка во всю глубину квартала, узкие дворы,
 ## изредка площадь. Здесь дерутся в упор.
-static func _downtown(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -> void:
+static func _downtown(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
+		yard: int) -> void:
 	if rng.nextf() < 0.14:
-		_plaza(map, rng, r0, r1, c0, c1)
+		_plaza(map, rng, r0, r1, c0, c1, yard)
 		return
 	_fill(map, r0, r1, c0, c1, Cfg.T_EMPTY)
 	var lots := _subdivide(rng, r0 + 1, r1 - 1, c0 + 1, c1 - 1, 6, 0.75)
@@ -68,8 +73,9 @@ static func _tower(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -
 # ----------------------------------------------------------------- жильё
 ## Жилой квартал: дома мельче, между ними сады и проезды. Боя в упор
 ## меньше, зато больше обходных путей.
-static func _residential(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -> void:
-	_fill(map, r0, r1, c0, c1, Cfg.T_GRASS)
+static func _residential(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
+		ground: int) -> void:
+	_fill(map, r0, r1, c0, c1, ground)
 	var lots := _subdivide(rng, r0 + 1, r1 - 1, c0 + 1, c1 - 1, 4, 0.55)
 	for lot in lots:
 		var lr0: int = int(lot[0])
@@ -89,8 +95,9 @@ static func _residential(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: 
 # --------------------------------------------------------- промышленность
 ## Промзона: длинные склады и открытые площадки под погрузку. Простреливается
 ## насквозь, укрытий мало — противоположность центру.
-static func _industrial(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -> void:
-	_fill(map, r0, r1, c0, c1, Cfg.T_ROAD)
+static func _industrial(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
+		yard: int) -> void:
+	_fill(map, r0, r1, c0, c1, yard)
 	var lots := _subdivide(rng, r0 + 1, r1 - 1, c0 + 1, c1 - 1, 7, 0.35)
 	for lot in lots:
 		if rng.nextf() < 0.35:
@@ -105,8 +112,9 @@ static func _industrial(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: i
 			map.set_tile(lr1, lc0 + (lc1 - lc0) / 2, Cfg.T_EMPTY)
 
 # ------------------------------------------------------------------ парк
-static func _park(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -> void:
-	_fill(map, r0, r1, c0, c1, Cfg.T_GRASS)
+static func _park(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
+		ground: int) -> void:
+	_fill(map, r0, r1, c0, c1, ground)
 	var mr := (r0 + r1) / 2
 	var mc := (c0 + c1) / 2
 	_fill(map, mr - 1, mr, c0, c1, Cfg.T_EMPTY)
@@ -114,7 +122,7 @@ static func _park(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) ->
 
 	for r in range(r0, r1 + 1):
 		for c in range(c0, c1 + 1):
-			if map.get_tile(r, c) != Cfg.T_GRASS:
+			if map.get_tile(r, c) != ground:
 				continue
 			var q := rng.nextf()
 			if q < 0.17:
@@ -128,8 +136,9 @@ static func _park(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) ->
 		_fill(map, pr, pr + 1, pc, pc + 2, Cfg.T_WATER)
 
 ## Площадь или парковка: сплошной асфальт с редкими киосками.
-static func _plaza(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -> void:
-	_fill(map, r0, r1, c0, c1, Cfg.T_ROAD)
+static func _plaza(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
+		yard: int) -> void:
+	_fill(map, r0, r1, c0, c1, yard)
 	for i in 1 + int(rng.nextf() * 3.0):
 		var kr := r0 + int(rng.nextf() * float(maxi(1, r1 - r0)))
 		var kc := c0 + int(rng.nextf() * float(maxi(1, c1 - c0)))

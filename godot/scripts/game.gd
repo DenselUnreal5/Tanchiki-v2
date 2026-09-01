@@ -38,6 +38,15 @@ var net_last_theirs := 0
 var net_stale := false
 ## Игрок, для которого сейчас открыт выбор перка.
 var perk_player = null
+
+## Своя случайность для интерфейса — отдельно от мировой.
+##
+## Раньше тройка перков тасовалась генератором мира. Список доступных перков
+## короче на один, когда перк уже взят, а тасовка вытягивает по одному числу
+## на элемент — значит после первого же выбора вся партия шла по другой ветке
+## случайности. Замер перков поймал это в лоб: перк, который на симуляцию
+## влиять не может вовсе, «давал» +1.3 убийства в минуту.
+var ui_rng := Rng.new(int(Time.get_ticks_usec()) & 0xFFFFFFFF)
 ## Суммарный урон за партию, для челленджа «Вампир».
 var match_damage := 0.0
 
@@ -236,6 +245,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		s["level"] = int(net_opts.get("level", s["level"]))
 		s["weather"] = String(net_opts.get("weather", "auto"))
 		s["daytime"] = String(net_opts.get("daytime", "auto"))
+		s["location"] = String(net_opts.get("location", "auto"))
 
 	# players — только местные игроки: по ним делится экран. Сетевые
 	# соперники живут в remote_players и в мир попадают наравне, но своего
@@ -272,7 +282,17 @@ func start_match(net_opts: Dictionary = {}) -> void:
 
 	_layout_viewports()
 
-	var level := LevelGen.generate(int(s["level"]), String(s["mode"]), seed_override)
+	# Локация разыгрывается ЗДЕСЬ и уже готовой уходит и в генератор, и в сеть.
+	# Тянуть жребий внутри генератора нельзя: карта уровня детерминирована,
+	# и «случайная» локация выпадала бы на нём всегда одна и та же.
+	var loc_setting := String(s.get("location", "auto"))
+	var match_location := loc_setting
+	if is_client:
+		match_location = String(net_opts.get("location", Locations.CITY))
+	elif not Locations.LIST.has(loc_setting):
+		match_location = Locations.pick_random(ui_rng)
+	var level := LevelGen.generate(int(s["level"]), String(s["mode"]), seed_override,
+		match_location)
 	Net.reset_tank_ids()
 	world = World.new({
 		"map": level["map"], "level": level, "mode": String(s["mode"]),
@@ -282,6 +302,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		"puppet": is_client,
 		"weather": String(s.get("weather", "auto")),
 		"daytime": String(s.get("daytime", "auto")),
+		"rng_seed": int(net_opts.get("rng_seed", -1)),
 	})
 	if is_client:
 		# Состав приходит от хоста: свои танки клиент не порождает.
@@ -295,6 +316,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 			"level": int(s["level"]),
 			"weather": String(s.get("weather", "auto")),
 			"daytime": String(s.get("daytime", "auto")),
+			"location": match_location,
 		}, int(level["seed"]), world.roster())
 	_bind_world_events(world)
 
@@ -328,7 +350,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 
 	# Стартовый выбор перка — по одному на игрока.
 	state = S_PLAYING
-	Mus.play_combat()
+	Mus.play_combat(String(world.level.get("location", Locations.CITY)))
 	for p in players:
 		p.pending_level_ups += 1
 	_process_perk_queue()
@@ -489,7 +511,7 @@ func _process_perk_queue() -> void:
 	var queue_left := -1
 	for p in players:
 		queue_left += p.pending_level_ups
-	ui.show_perk_select(next, maxi(0, queue_left), world.rng if world != null else Rng.new(1))
+	ui.show_perk_select(next, maxi(0, queue_left), ui_rng)
 
 func _on_perk_chosen(player, perk_id: String) -> void:
 	if perk_id != "":

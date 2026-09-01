@@ -46,12 +46,19 @@ const DISTRICTS := {
 ##   blocks  — кварталы: {r0, r1, c0, c1, district}
 ##   circles — кольцевые развязки: {r, c, radius}
 ##   seeds   — опорные точки районов: {r, c, type}
-static func build(rng: Rng, cols: int, rows: int) -> Dictionary:
-	var v := _axis(rng, cols, 9, 14)
-	var h := _axis(rng, rows, 7, 11)
-	var seeds := _district_seeds(rng, cols, rows)
+## @param loc правила локации (locations.gd): густота сетки, состав районов,
+##        бывают ли магистрали и кольца
+static func build(rng: Rng, cols: int, rows: int, loc: Dictionary) -> Dictionary:
+	var bmin: int = int(loc.get("block_min", 9))
+	var bmax: int = int(loc.get("block_max", 14))
+	var arterials: bool = bool(loc.get("arterials", true))
+	# Поперечные кварталы короче продольных: карта шире, чем выше, и при
+	# одинаковом шаге сетка выходила бы вытянутой.
+	var v := _axis(rng, cols, bmin, bmax, arterials)
+	var h := _axis(rng, rows, maxi(4, bmin - 2), maxi(6, bmax - 3), arterials)
+	var seeds := _district_seeds(rng, cols, rows, loc.get("districts", {}))
 	var blocks := _blocks(v, h, cols, rows, seeds)
-	var circles := _circles(rng, v, h)
+	var circles := _circles(rng, v, h) if bool(loc.get("circles", true)) else []
 	return {"v": v, "h": h, "blocks": blocks, "circles": circles, "seeds": seeds}
 
 # ------------------------------------------------------------------ улицы
@@ -61,17 +68,22 @@ static func build(rng: Rng, cols: int, rows: int) -> Dictionary:
 ## Потом между ними обычные улицы, и те, что подошли к магистрали вплотную,
 ## отбрасываются: две дороги впритык читаются как одна широкая и сбивают
 ## ощущение иерархии.
-static func _axis(rng: Rng, size: int, block_min: int, block_max: int) -> Array:
+##
+## В джунглях магистралей не бывает вовсе: там только узкие тропы, и широкая
+## четырёхполосная дорога посреди леса читалась бы как ошибка генерации.
+static func _axis(rng: Rng, size: int, block_min: int, block_max: int,
+		with_arterials: bool = true) -> Array:
 	var out := []
 
 	# Магистрали: одна почти всегда, вторая — если карта достаточно длинная.
 	var arterials := []
-	var first := int(size * (0.28 + rng.nextf() * 0.16))
-	arterials.append(first)
-	if size >= ARTERIAL_GAP * 2 + 10:
-		var second := int(size * (0.66 + rng.nextf() * 0.14))
-		if absi(second - first) >= ARTERIAL_GAP:
-			arterials.append(second)
+	if with_arterials:
+		var first := int(size * (0.28 + rng.nextf() * 0.16))
+		arterials.append(first)
+		if size >= ARTERIAL_GAP * 2 + 10:
+			var second := int(size * (0.66 + rng.nextf() * 0.14))
+			if absi(second - first) >= ARTERIAL_GAP:
+				arterials.append(second)
 	for pos in arterials:
 		if pos > 2 and pos + ARTERIAL_W < size - 2:
 			out.append({"pos": pos, "w": ARTERIAL_W, "rank": RANK_ARTERIAL})
@@ -108,18 +120,27 @@ static func gaps(streets: Array, size: int) -> Array:
 # ----------------------------------------------------------------- районы
 ## Опорные точки районов. Квартал получает тип ближайшей точки — это даёт
 ## связные зоны вместо чересполосицы, где склад стоит между парком и жильём.
-static func _district_seeds(rng: Rng, cols: int, rows: int) -> Array:
+##
+## Веса приходят из локации: в пустоши почти всё промзона, в джунглях — парк.
+static func _district_seeds(rng: Rng, cols: int, rows: int,
+		weights: Dictionary = {}) -> Array:
 	var count := 4 if cols < 80 else 6
-	var total := 0
+	var mix := {}
 	for k in DISTRICTS.keys():
-		total += int(DISTRICTS[k]["weight"])
+		mix[k] = int(weights.get(k, DISTRICTS[k]["weight"]))
+	var total := 0
+	for k in mix.keys():
+		total += int(mix[k])
+	if total <= 0:
+		mix = {"residential": 1}
+		total = 1
 
 	var out := []
 	for i in count:
 		var roll := rng.nextf() * float(total)
 		var pick := "residential"
-		for k in DISTRICTS.keys():
-			roll -= float(DISTRICTS[k]["weight"])
+		for k in mix.keys():
+			roll -= float(mix[k])
 			if roll <= 0.0:
 				pick = String(k)
 				break
@@ -128,9 +149,13 @@ static func _district_seeds(rng: Rng, cols: int, rows: int) -> Array:
 			"c": int(rng.nextf() * float(cols)),
 			"type": pick,
 		})
-	# Центр карты всегда деловой: там сходятся все режимы, и плотная
-	# застройка в середине даёт бой в упор, а не перестрелку через пустырь.
-	out.append({"r": rows / 2, "c": cols / 2, "type": "downtown"})
+	# Центр карты всегда самый плотный из доступных локации районов: там
+	# сходятся все режимы, и застройка в середине даёт бой в упор, а не
+	# перестрелку через пустырь. В джунглях «плотное» — это парк с деревьями.
+	var core := "downtown"
+	if int(mix.get("downtown", 0)) <= 0:
+		core = "park" if int(mix.get("park", 0)) > 0 else "residential"
+	out.append({"r": rows / 2, "c": cols / 2, "type": core})
 	return out
 
 static func _blocks(v: Array, h: Array, cols: int, rows: int, seeds: Array) -> Array:

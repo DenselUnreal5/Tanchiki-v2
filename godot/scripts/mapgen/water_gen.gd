@@ -15,12 +15,17 @@ const MAX_BRIDGES := 4
 ## Прокладывает реку и мосты. h_streets — горизонтальные улицы из плана:
 ## по ним и ставятся переправы, чтобы мост продолжал улицу, а не обрывался
 ## посреди квартала.
-static func carve(map: GameMap, rng: Rng, cols: int, rows: int, h_streets: Array) -> void:
+## @param width множитель ширины русла: 0 — реки нет вовсе (пустошь),
+##        больше единицы — река шире городской (джунгли)
+static func carve(map: GameMap, rng: Rng, cols: int, rows: int,
+		h_streets: Array, width: float = 1.0) -> void:
+	if width <= 0.0:
+		return
 	var base := float(cols) * (0.38 + rng.nextf() * 0.24)
 	var amp := float(cols) * (0.04 + rng.nextf() * 0.05)
 	var freq := 0.055 + rng.nextf() * 0.05
 	var phase := rng.nextf() * TAU
-	var half := 2 + int(rng.nextf() * 2.0)
+	var half := maxi(1, int(round(float(2 + int(rng.nextf() * 2.0)) * width)))
 
 	# Границы русла по строкам — по ним потом кладутся мосты.
 	var left := PackedInt32Array()

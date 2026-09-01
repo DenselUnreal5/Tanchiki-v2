@@ -24,8 +24,8 @@ const PERK_CHOICES := 3
 var settings := {
 	"game_type": "single", "mode": "ffa", "difficulty": "medium",
 	"level": 1, "color1": "p1", "color2": "p2",
-	# "auto" — погода и время суток идут своим чередом, как раньше.
-	"weather": "auto", "daytime": "auto",
+	# "auto" — погода, время суток и локация выбираются сами.
+	"weather": "auto", "daytime": "auto", "location": "auto",
 }
 
 var menu_scene: MenuScene
@@ -367,6 +367,12 @@ func _build_menu() -> void:
 	]))
 	_menu_settings.add_child(_make_group(I18n.t("menu.level", {}, "Уровень"), "level", [
 		[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"], [-1, "?"],
+	]))
+	_menu_settings.add_child(_make_group(I18n.t("menu.location", {}, "Локация"), "location", [
+		["auto", I18n.t("loc.auto", {}, "Жребий")],
+		["city", I18n.t("loc.city", {}, "🏙 Город")],
+		["dust", I18n.t("loc.dust", {}, "🏜 Пустошь")],
+		["jungle", I18n.t("loc.jungle", {}, "🌴 Джунгли")],
 	]))
 	_menu_settings.add_child(_make_group(I18n.t("menu.weather", {}, "Погода"), "weather", [
 		["auto", I18n.t("wx.auto", {}, "Своя")],

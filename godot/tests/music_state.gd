@@ -40,7 +40,13 @@ func _ready() -> void:
 	game.ui.settings["level"] = 1
 	game.start_match()
 	await _frames(4)
-	_check(Mus._current == "combat", "в бою играет боевая тема")
+	# Тема боя называется по локации, а не «combat» вообще: у пустоши
+	# и джунглей свои папки. Проверяем именно совпадение с картой —
+	# несовпадение означало бы, что игрок слышит чужую землю.
+	var loc := String(game.world.level.get("location", Locations.CITY))
+	var want := Locations.music_of(loc)
+	_check(Mus._current == want,
+		"в бою играет музыка локации: %s -> «%s» (играет «%s»)" % [loc, want, Mus._current])
 
 	# Старт партии сразу открывает выбор перка — это и есть проверяемый случай.
 	_check(game.state == "perk", "после старта открыт выбор перка")

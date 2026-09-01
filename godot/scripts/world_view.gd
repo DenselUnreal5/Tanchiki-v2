@@ -188,8 +188,12 @@ func _draw_tiles() -> void:
 	var snow_k := 0.0
 	if world.weather != null:
 		snow_k = clampf(world.weather.snow * Sets.weather_scale(), 0.0, 1.0) * 0.55
-	var g0: Color = Cfg.ground.lerp(Cfg.snow_ground, snow_k)
-	var g1: Color = Cfg.ground_alt.lerp(Cfg.snow_ground, snow_k)
+	# Цвет земли зависит от локации: по нему пустошь отличается от джунглей
+	# с первого взгляда, ещё до того, как игрок разглядит песок и деревья.
+	if not _loc_ready:
+		_read_location()
+	var g0: Color = _loc_ground.lerp(Cfg.snow_ground, snow_k)
+	var g1: Color = _loc_ground_alt.lerp(Cfg.snow_ground, snow_k)
 	for r in range(r0, r1 + 1):
 		for c in range(c0, c1 + 1):
 			_rect(c * Cfg.TILE, r * Cfg.TILE, Cfg.TILE, Cfg.TILE,
@@ -567,6 +571,18 @@ const RC_STREET := 1
 const RC_ARTERIAL := 2
 const RC_SQUARE := 3
 const RC_JUNCTION := 4
+
+## Цвет земли этой локации. Читается один раз на партию: цвет один и тот же
+## для всех тайлов кадра, а искать его в словаре на каждый — впустую.
+var _loc_ground := Cfg.ground
+var _loc_ground_alt := Cfg.ground_alt
+var _loc_ready := false
+
+func _read_location() -> void:
+	var loc := Locations.get_location(String(world.level.get("location", Locations.CITY)))
+	_loc_ground = loc["ground"]
+	_loc_ground_alt = loc["ground_alt"]
+	_loc_ready = true
 
 var _road_class: PackedByteArray = PackedByteArray()
 var _road_class_ready := false

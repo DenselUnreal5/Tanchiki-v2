@@ -74,6 +74,8 @@ func _draw() -> void:
 		var s := 4.0 if (is_viewer or tank.is_player_controlled) else 3.0
 		draw_rect(Rect2(tank.x * sx - s * 0.5, tank.y * sy - s * 0.5, s, s), col)
 
+	_draw_shot_pings(sx, sy, viewer)
+
 	# Рамка области просмотра.
 	var vp := player.viewport
 	draw_rect(Rect2(
@@ -82,11 +84,43 @@ func _draw() -> void:
 		vp.size.x * sx, vp.size.y * sy),
 		Color(0.47, 0.86, 0.47, 0.7), false, 1.0)
 
+## Отметки услышанных выстрелов — перк «Острый слух».
+##
+## Без перка отметок нет вовсе: иначе миникарта показывала бы всех стреляющих
+## всем и обесценила бы и прямую видимость, и «Тень». Точка гаснет за 2.5 с,
+## поэтому она говорит «там только что стреляли», а не «там стоит враг».
+func _draw_shot_pings(sx: float, sy: float, viewer) -> void:
+	if viewer == null or not viewer.alive:
+		return
+	var hearing: float = float(viewer.mods.get("hearingMult", 1.0))
+	if hearing <= 1.0:
+		return
+	for ping in world.shot_pings:
+		var age: int = world.tick - int(ping["tick"])
+		if age < 0 or age > World.PING_LIFE:
+			continue
+		if String(ping["team"]) == viewer.team:
+			continue
+		var reach: float = float(ping["reach"]) * hearing
+		var dx: float = float(ping["x"]) - viewer.x
+		var dy: float = float(ping["y"]) - viewer.y
+		if dx * dx + dy * dy > reach * reach:
+			continue
+		var fade := 1.0 - float(age) / float(World.PING_LIFE)
+		var px: float = float(ping["x"]) * sx
+		var py: float = float(ping["y"]) * sy
+		var col := Color(1.0, 0.85, 0.35, 0.85 * fade)
+		draw_arc(Vector2(px, py), 2.0 + 4.0 * (1.0 - fade), 0.0, TAU, 12, col, 1.0)
+		draw_rect(Rect2(px - 1.0, py - 1.0, 2.0, 2.0), col)
+
 func _render_cache() -> void:
 	var map := world.map
 	if _image == null or _image.get_width() != map.cols or _image.get_height() != map.rows:
 		_image = Image.create(map.cols, map.rows, false, Image.FORMAT_RGBA8)
-	_image.fill(Color("#20201a"))
+	# Земля на миникарте берётся у локации и притемняется: миникарта должна
+	# читаться как та же карта, только мельче.
+	var loc := Locations.get_location(String(world.level.get("location", Locations.CITY)))
+	_image.fill(Color(loc["ground"]).darkened(0.35))
 	for r in map.rows:
 		for c in map.cols:
 			var tile := map.get_tile(r, c)

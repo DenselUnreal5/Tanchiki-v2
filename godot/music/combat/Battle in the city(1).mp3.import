@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cjgfe7uftg6jf"
+path="res://.godot/imported/Battle in the city(1).mp3-031b08b4f92f9d22f2f145b865fa1fd7.mp3str"
+
+[deps]
+
+source_file="res://music/combat/Battle in the city(1).mp3"
+dest_files=["res://.godot/imported/Battle in the city(1).mp3-031b08b4f92f9d22f2f145b865fa1fd7.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4
