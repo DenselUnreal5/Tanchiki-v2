@@ -2,3 +2,15 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Сборки: пересобираются из исходников двумя командами.
+godot/build/
+
+# GodotSteam везёт бинарники под все платформы сразу — 107 МБ. В репозиторий
+# кладём только те, под которые есть пресет экспорта: win64 и linux64, 18 МБ.
+# Остальные остаются на диске и вернутся в git, если убрать эти строки.
+godot/addons/godotsteam/androidarm64/
+godot/addons/godotsteam/osx/
+godot/addons/godotsteam/linux32/
+godot/addons/godotsteam/linuxarm64/
+godot/addons/godotsteam/win32/
