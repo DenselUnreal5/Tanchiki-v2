@@ -70,7 +70,7 @@ static var LIST := [
 	},
 	{
 		"id": "smoke", "name": "Дымовая завеса", "icon": "🌫",
-		"desc": "5 с боты не видят вас дальше 150 px",
+		"desc": "5 с боты не видят вас дальше 19 м",
 		"color": Color("#cfd4da"), "cooldown": 720, "duration": 300,
 	},
 	{

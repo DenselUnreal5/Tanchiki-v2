@@ -52,11 +52,11 @@ static func base_modifiers() -> Dictionary:
 
 ## Категории перков. Порядок задаёт порядок разделов в галерее.
 static var CATEGORIES := [
-	{"id": "fire", "name": "Огонь", "color": Color("#ff8833")},
-	{"id": "defense", "name": "Защита", "color": Color("#44aaff")},
-	{"id": "speed", "name": "Скорость", "color": Color("#ffee55")},
-	{"id": "special", "name": "Особые", "color": Color("#ff55ff")},
-	{"id": "challenge", "name": "Челленджи", "color": Color("#ff4455")},
+	{"id": "fire", "name": "Огонь", "color": Color("#e2803a")},
+	{"id": "defense", "name": "Защита", "color": Color("#4d95c9")},
+	{"id": "speed", "name": "Скорость", "color": Color("#dcd15a")},
+	{"id": "special", "name": "Особые", "color": Color("#d966d9")},
+	{"id": "challenge", "name": "Челленджи", "color": Color("#d95a63")},
 ]
 
 ## Перки игрока. mods — числовые модификаторы, flags — поведенческие метки.
@@ -81,7 +81,8 @@ const LIST := [
 	},
 	{
 		"id": "explosive", "name": "Взрывные пули", "icon": "💥",
-		"desc": "Урон по площади 32 px и снос кирпича вокруг", "category": "fire",
+		# Дистанции в описаниях — в метрах, 8 px движка = 1 м на глаз игрока.
+		"desc": "Урон по площади 4 м и снос кирпича вокруг", "category": "fire",
 		"flags": ["explosive"],
 	},
 	{
@@ -170,7 +171,7 @@ const LIST := [
 		"id": "sniper", "name": "Снайпер", "icon": "🔭",
 		"desc": "Пули летят на 40% быстрее и наносят +15% урона", "category": "challenge",
 		"mods": {"bulletSpeedMult": 1.4, "dmgMult": 1.15},
-		"challenge": {"desc": "Убей 3 врагов с дистанции 400 px", "stat": "longKills", "need": 3},
+		"challenge": {"desc": "Убей 3 врагов с дистанции 50 м", "stat": "longKills", "need": 3},
 	},
 	{
 		"id": "berserk", "name": "Берсерк", "icon": "😤",
@@ -180,7 +181,7 @@ const LIST := [
 	},
 	{
 		"id": "kamikaze", "name": "Камикадзе", "icon": "💀",
-		"desc": "При смерти взрыв на 64 px", "category": "challenge",
+		"desc": "При смерти взрыв на 8 м", "category": "challenge",
 		"flags": ["kamikaze"],
 		"challenge": {"desc": "Умри 10 раз", "stat": "timesDied", "need": 10},
 	},
@@ -417,7 +418,7 @@ const EXTRA_ACTIVE := [
 	},
 	{
 		"id": "smoke", "name": "Дымовая завеса", "icon": "🌫",
-		"desc": "5 с боты не видят вас дальше 150 px", "category": "defense",
+		"desc": "5 с боты не видят вас дальше 19 м", "category": "defense",
 		"active": "smoke",
 	},
 	{

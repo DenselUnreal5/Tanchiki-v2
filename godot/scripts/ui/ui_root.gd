@@ -100,7 +100,7 @@ func _ready() -> void:
 	_build_gameover()
 	_gallery = _make_overlay(true)
 	_gallery_sub = UiKit.subtitle("")
-	_gallery_body = _overlay_body(_gallery, "gallery.title", "Галерея перков", _gallery_sub,
+	_gallery_body = _overlay_body(_gallery, "gallery.title", "🎖 Галерея перков", _gallery_sub,
 		func(): close_gallery())
 	_garage = _make_overlay(true)
 	_garage_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
@@ -108,7 +108,7 @@ func _ready() -> void:
 		func(): close_garage(), 880)
 	_stats = _make_overlay(true)
 	_stats_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_stats_body = _overlay_body(_stats, "stats.title", "Статистика", _stats_sub,
+	_stats_body = _overlay_body(_stats, "stats.title", "📊 Статистика", _stats_sub,
 		func(): close_stats(), 540)
 	_achievements = _make_overlay(true)
 	_achievements_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
@@ -221,6 +221,7 @@ func _overlay_body(root: Control, title_key: String, title_fallback: String,
 
 	var box := UiKit.vbox(10)
 	panel.add_child(box)
+	panel.add_child(UiKit.frame_overlay())
 
 	var title := UiKit.title(title_text, 24, Cfg.UI_TEXT)
 	box.add_child(title)
@@ -296,8 +297,9 @@ func _build_menu() -> void:
 	_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_menu)
 
-	# Анимированный фон: гроза над разбитым полем боя.
+	# Анимированный фон: сетка, развёртка радара и настоящий танк игрока.
 	menu_scene = MenuScene.new()
+	menu_scene._settings = settings
 	_menu.add_child(menu_scene)
 
 	# ---- заголовок ----
@@ -309,15 +311,15 @@ func _build_menu() -> void:
 	_menu_title_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_menu.add_child(_menu_title_box)
 
-	_menu_title = UiKit.title("ТЯНЧИКИ", 46, Color("#eaffea"))
+	_menu_title = UiKit.title("ТЯНЧИКИ", 46, Cfg.UI_TEXT)
 	_menu_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_menu_title_box.add_child(_menu_title)
-	var sub := UiKit.title("BATTLE TANKS", 12, Color(0.78, 0.84, 0.78, 0.75))
+	var sub := UiKit.title("BATTLE TANKS", 12, Color(Cfg.UI_MUTED, 0.75))
 	sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_menu_title_box.add_child(sub)
 
 	# ---- левая панель: профиль, старт, разделы ----
-	_menu_panel = _glass_panel()
+	_menu_panel = UiKit.panel()
 	_menu_panel.custom_minimum_size = Vector2(MENU_PANEL_W, 0)
 	# Минимальный размер панели контейнер вычисляет отложенно, поэтому
 	# позицию пересчитываем по сигналу, а не один раз при сборке.
@@ -326,11 +328,12 @@ func _build_menu() -> void:
 
 	var col := UiKit.vbox(12)
 	_menu_panel.add_child(col)
+	_menu_panel.add_child(UiKit.frame_overlay())
 
 	_menu_info = UiKit.rich("", 11, Cfg.UI_GOLD)
 	var info_panel := PanelContainer.new()
 	info_panel.add_theme_stylebox_override("panel",
-		UiKit.flat(Color(1, 0.93, 0.33, 0.06), 10, 1, Color(1, 0.93, 0.33, 0.18)))
+		UiKit.flat(Color(1, 0.93, 0.33, 0.06), Cfg.RADIUS_MD, 1, Color(1, 0.93, 0.33, 0.18)))
 	info_panel.add_child(_menu_info)
 	col.add_child(info_panel)
 
@@ -348,12 +351,12 @@ func _build_menu() -> void:
 	start.pressed.connect(func(): start_requested.emit())
 	col.add_child(start)
 
-	_hints = UiKit.rich("", 10, Color(0.76, 0.80, 0.76, 0.6))
+	_hints = UiKit.rich("", 10, Color(Cfg.UI_MUTED, 0.6))
 	col.add_child(_hints)
 
 	# Версия на виду. Без неё отчёт игрока не к чему привязать: «не работает»
 	# без номера сборки не отличить от «не работало в прошлой».
-	var ver := UiKit.label("v" + game_version(), 9, Color(0.60, 0.64, 0.60, 0.55))
+	var ver := UiKit.label("v" + game_version(), 9, Color(Cfg.UI_MUTED, 0.55))
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(ver)
 
@@ -410,7 +413,7 @@ func _build_menu() -> void:
 	col.add_child(reset_btn)
 
 	# ---- правая панель: настройки боя ----
-	_menu_settings_panel = _glass_panel()
+	_menu_settings_panel = UiKit.panel()
 	_menu_settings_panel.custom_minimum_size = Vector2(MENU_SETTINGS_W, 0)
 	_menu_settings_panel.visible = false
 	_menu_settings_panel.minimum_size_changed.connect(_layout_menu)
@@ -418,6 +421,7 @@ func _build_menu() -> void:
 
 	_menu_settings = UiKit.vbox(11)
 	_menu_settings_panel.add_child(_menu_settings)
+	_menu_settings_panel.add_child(UiKit.frame_overlay())
 
 	_build_menu_settings()
 
@@ -426,27 +430,10 @@ func _build_menu() -> void:
 	_refresh_mode_button()
 	_layout_menu.call_deferred()
 
-## Полупрозрачная «стеклянная» панель меню.
-func _glass_panel() -> PanelContainer:
-	var panel := PanelContainer.new()
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.043, 0.055, 0.043, 0.86)
-	st.set_corner_radius_all(18)
-	st.set_border_width_all(1)
-	st.border_color = Color(0.33, 0.8, 0.33, 0.22)
-	st.shadow_color = Color(0, 0, 0, 0.55)
-	st.shadow_size = 18
-	st.content_margin_left = 20
-	st.content_margin_right = 20
-	st.content_margin_top = 18
-	st.content_margin_bottom = 18
-	panel.add_theme_stylebox_override("panel", st)
-	return panel
-
 ## Группа кнопок-переключателей с одним активным значением.
 func _make_group(label_text: String, key: String, options: Array) -> VBoxContainer:
 	var box := UiKit.vbox(6)
-	var l := UiKit.label(label_text.to_upper(), 10, Color(0.73, 0.80, 0.73, 0.55))
+	var l := UiKit.label(label_text.to_upper(), 10, Cfg.UI_MUTED)
 	box.add_child(l)
 	var flow := HFlowContainer.new()
 	flow.add_theme_constant_override("h_separation", 6)
@@ -468,7 +455,7 @@ func _make_group(label_text: String, key: String, options: Array) -> VBoxContain
 
 func _make_color_group(label_text: String, key: String) -> VBoxContainer:
 	var box := UiKit.vbox(6)
-	box.add_child(UiKit.label(label_text.to_upper(), 10, Color(0.73, 0.80, 0.73, 0.55)))
+	box.add_child(UiKit.label(label_text.to_upper(), 10, Color(Cfg.UI_MUTED, 0.55)))
 	var flow := HFlowContainer.new()
 	flow.add_theme_constant_override("h_separation", 6)
 	flow.add_theme_constant_override("v_separation", 6)
@@ -574,6 +561,7 @@ func _build_pause() -> void:
 
 	var box := UiKit.vbox(10)
 	panel.add_child(box)
+	panel.add_child(UiKit.frame_overlay())
 	box.add_child(UiKit.title(I18n.t("pause.title", {}, "ПАУЗА"), 24))
 
 	var resume := UiKit.primary(I18n.t("pause.resume", {}, "Продолжить"), 15)
@@ -614,6 +602,7 @@ func _build_perk() -> void:
 
 	var box := UiKit.vbox(12)
 	panel.add_child(box)
+	panel.add_child(UiKit.frame_overlay(Cfg.UI_GOLD))
 	box.add_child(UiKit.title(I18n.t("perk.title", {}, "УРОВЕНЬ ПОВЫШЕН"), 24, Cfg.UI_GOLD))
 
 	_perk_body = UiKit.vbox(12)
@@ -722,8 +711,8 @@ func _perk_card(player, id: String) -> Control:
 	var perk := Perks.get_perk(id)
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(170, 130)
-	var normal := UiKit.flat(Color("#161616"), 10, 2, Color("#333333"))
-	var hover := UiKit.flat(Color("#1c1c1c"), 10, 2, Cfg.UI_GOLD)
+	var normal := UiKit.flat(Color("#161616"), Cfg.RADIUS_MD, 2, Cfg.UI_BORDER)
+	var hover := UiKit.flat(Color("#1c1c1c"), Cfg.RADIUS_MD, 2, Cfg.UI_GOLD)
 	btn.add_theme_stylebox_override("normal", normal)
 	btn.add_theme_stylebox_override("hover", hover)
 	btn.add_theme_stylebox_override("pressed", hover)
@@ -756,7 +745,7 @@ func _perk_card(player, id: String) -> Control:
 		badge.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		box.add_child(badge)
 
-	var desc := UiKit.label(I18n.dn(perk, "desc", "perk"), 10, Color("#8a8a8a"))
+	var desc := UiKit.label(I18n.dn(perk, "desc", "perk"), 10, Cfg.UI_MUTED)
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.custom_minimum_size = Vector2(150, 0)
@@ -798,7 +787,7 @@ func _gallery_card(perk: Dictionary) -> Control:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(168, 0)
 	card.add_theme_stylebox_override("panel",
-		UiKit.card_style(Cfg.UI_ACCENT_DIM if unlocked else Color("#2e2e2e")))
+		UiKit.card_style(Cfg.UI_ACCENT_DIM if unlocked else Cfg.UI_BORDER))
 	if not unlocked:
 		card.modulate.a = 0.65
 
@@ -806,7 +795,7 @@ func _gallery_card(perk: Dictionary) -> Control:
 	card.add_child(box)
 
 	if unlocked:
-		var badge := UiKit.label(I18n.t("gallery.open", {}, "Открыт"), 8, Color("#eaffea"), true)
+		var badge := UiKit.label(I18n.t("gallery.open", {}, "Открыт"), 8, Cfg.UI_ACCENT, true)
 		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		box.add_child(badge)
 
@@ -817,7 +806,7 @@ func _gallery_card(perk: Dictionary) -> Control:
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(name_label)
-	var desc := UiKit.label(I18n.dn(perk, "desc", "perk"), 9, Color("#7d7d7d"))
+	var desc := UiKit.label(I18n.dn(perk, "desc", "perk"), 9, Cfg.UI_MUTED)
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.custom_minimum_size = Vector2(148, 0)
@@ -876,11 +865,11 @@ func open_garage() -> void:
 		_garage_body.add_child(grid)
 
 	# ---- косметика ----
-	_garage_body.add_child(UiKit.section(I18n.t("garage.cosmetics", {}, "Косметика"), Color("#ff88dd")))
+	_garage_body.add_child(UiKit.section(I18n.t("garage.cosmetics", {}, "Косметика"), Cfg.UI_MUTED))
 	var type_names := {"camo": "Камуфляж", "hull": "Рисунок", "track": "Гусеницы", "turret": "Башня"}
 	for type in Cosmetics.TYPES:
 		var t2 := UiKit.label(I18n.t("cos." + type, {}, String(type_names[type])).to_upper(),
-			11, Color("#ff88dd"), true)
+			11, Cfg.UI_MUTED, true)
 		_garage_body.add_child(t2)
 		var grid := HFlowContainer.new()
 		grid.add_theme_constant_override("h_separation", 10)
@@ -899,7 +888,7 @@ func _upgrade_card(up: Dictionary) -> Control:
 
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(258, 0)
-	var border := Cfg.UI_ACCENT_DIM if maxed else (Color(1, 0.84, 0.29, 0.45) if can_buy else Color("#2e2e2e"))
+	var border := Cfg.UI_ACCENT_DIM if maxed else (Color(Cfg.UI_GOLD, 0.45) if can_buy else Cfg.UI_BORDER)
 	card.add_theme_stylebox_override("panel", UiKit.card_style(border))
 
 	var row := UiKit.hbox(10)
@@ -910,14 +899,14 @@ func _upgrade_card(up: Dictionary) -> Control:
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(info)
 	info.add_child(UiKit.label(I18n.dn(up, "name", "upg"), 11, Color.WHITE, true))
-	info.add_child(UiKit.label(I18n.dn(up, "desc", "upg"), 9, Color("#7d7d7d")))
+	info.add_child(UiKit.label(I18n.dn(up, "desc", "upg"), 9, Cfg.UI_MUTED))
 
 	# Полоска прогресса улучшения: заполненные сегменты = уровень.
 	var segs := UiKit.hbox(2)
 	for i in range(1, int(up["max_level"]) + 1):
 		var seg := ColorRect.new()
 		seg.custom_minimum_size = Vector2(12, 4)
-		seg.color = Cfg.UI_GOLD if i <= level else Color("#262626")
+		seg.color = Cfg.UI_GOLD if i <= level else Cfg.UI_BORDER
 		segs.add_child(seg)
 	info.add_child(segs)
 
@@ -940,7 +929,7 @@ func _cosmetic_card(c: Dictionary, type: String) -> Control:
 
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(258, 0)
-	var border := Cfg.UI_ACCENT_DIM if equipped else (Color(1, 0.84, 0.29, 0.45) if can_buy else Color("#2e2e2e"))
+	var border := Cfg.UI_ACCENT_DIM if equipped else (Color(Cfg.UI_GOLD, 0.45) if can_buy else Cfg.UI_BORDER)
 	card.add_theme_stylebox_override("panel", UiKit.card_style(border))
 
 	var row := UiKit.hbox(10)
@@ -956,7 +945,7 @@ func _cosmetic_card(c: Dictionary, type: String) -> Control:
 		state = I18n.t("cos.equipped", {}, "Надето") if equipped else I18n.t("cos.owned", {}, "Куплено")
 	else:
 		state = I18n.t("cos.price", {"price": c["price"]}, "Цена: %d 🪙" % int(c["price"]))
-	info.add_child(UiKit.label(state, 9, Color("#7d7d7d")))
+	info.add_child(UiKit.label(state, 9, Cfg.UI_MUTED))
 
 	if owned:
 		var equip := UiKit.small(I18n.t("cos.equipped", {}, "Надето") if equipped
@@ -1003,7 +992,7 @@ func open_stats() -> void:
 
 	for key in Prof.STAT_KEYS:
 		var label_text := I18n.t("stat." + key, {}, String(Prof.STAT_LABELS.get(key, key)))
-		var name_label := UiKit.label(label_text, 12, Color("#a8a8a8"))
+		var name_label := UiKit.label(label_text, 12, Cfg.UI_MUTED)
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(name_label)
 		var value := UiKit.label(str(Prof.stats.get(key, 0)), 12, Color.WHITE, true)
@@ -1047,7 +1036,7 @@ func open_achievements() -> void:
 		var card := PanelContainer.new()
 		card.custom_minimum_size = Vector2(168, 0)
 		card.add_theme_stylebox_override("panel",
-			UiKit.card_style(Cfg.UI_ACCENT_DIM if done else Color("#2e2e2e")))
+			UiKit.card_style(Cfg.UI_ACCENT_DIM if done else Cfg.UI_BORDER))
 		if not done:
 			card.modulate.a = 0.65
 		var box := UiKit.vbox(3)
@@ -1059,7 +1048,7 @@ func open_achievements() -> void:
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		box.add_child(name_label)
-		var desc := UiKit.label(I18n.dn(a, "desc", "ach"), 9, Color("#7d7d7d"))
+		var desc := UiKit.label(I18n.dn(a, "desc", "ach"), 9, Cfg.UI_MUTED)
 		desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		desc.custom_minimum_size = Vector2(148, 0)
@@ -1099,11 +1088,11 @@ func open_daily() -> void:
 	for q in quests:
 		var pr := Prof.daily_progress(String(q["id"]))
 		var card := PanelContainer.new()
-		var border := Color("#2e2e2e")
+		var border := Cfg.UI_BORDER
 		if bool(pr["claimed"]):
 			border = Cfg.UI_ACCENT_DIM
 		elif int(pr["current"]) >= int(pr["need"]):
-			border = Color(0.33, 0.8, 0.33, 0.5)
+			border = Color(Cfg.UI_ACCENT, 0.5)
 		card.add_theme_stylebox_override("panel", UiKit.card_style(border))
 		if bool(pr["claimed"]):
 			card.modulate.a = 0.6
@@ -1116,7 +1105,7 @@ func open_daily() -> void:
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(info)
 		info.add_child(UiKit.label(I18n.dn(q, "name", "daily"), 11, Color.WHITE, true))
-		info.add_child(UiKit.label(I18n.dn(q, "desc", "daily"), 9, Color("#7d7d7d")))
+		info.add_child(UiKit.label(I18n.dn(q, "desc", "daily"), 9, Cfg.UI_MUTED))
 		info.add_child(UiKit.label("%d / %d" % [pr["current"], pr["need"]], 9, Cfg.UI_MUTED))
 		info.add_child(UiKit.progress_bar(float(pr["current"]) / float(pr["need"]), 300, 3, Cfg.UI_WARN))
 
@@ -1197,7 +1186,7 @@ func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 	for c in _gameover_body.get_children():
 		c.queue_free()
 
-	var reason := UiKit.label(String(result["reason"]), 13, Color("#cccccc"))
+	var reason := UiKit.label(String(result["reason"]), 13, Cfg.UI_TEXT)
 	reason.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	reason.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_gameover_body.add_child(reason)
@@ -1224,16 +1213,16 @@ func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 		box.add_child(UiKit.label(player.name, 13, Color.WHITE, true))
 		box.add_child(UiKit.label("%s   %s" % [
 			I18n.t("go.frags", {"n": player.kills}, "Фраги: %d" % player.kills),
-			I18n.t("go.deaths", {"n": player.deaths}, "Смерти: %d" % player.deaths)], 11, Color("#b0b0b0")))
+			I18n.t("go.deaths", {"n": player.deaths}, "Смерти: %d" % player.deaths)], 11, Cfg.UI_MUTED))
 		if world.mode == "ctf":
 			box.add_child(UiKit.label(I18n.t("go.captures", {"n": player.captures},
-				"Захваты флага: %d" % player.captures), 11, Color("#b0b0b0")))
+				"Захваты флага: %d" % player.captures), 11, Cfg.UI_MUTED))
 		box.add_child(UiKit.label(I18n.t("go.score", {"n": player.score},
-			"Счёт: %d" % player.score), 11, Color("#b0b0b0")))
+			"Счёт: %d" % player.score), 11, Cfg.UI_MUTED))
 		box.add_child(UiKit.label(I18n.t("go.damage", {"n": int(round(player.damage_dealt))},
-			"Урона нанесено: %d" % int(round(player.damage_dealt))), 11, Color("#b0b0b0")))
+			"Урона нанесено: %d" % int(round(player.damage_dealt))), 11, Cfg.UI_MUTED))
 		box.add_child(UiKit.label(I18n.t("go.sessionLevel", {"n": player.session_level},
-			"Уровень в партии: %d" % player.session_level), 11, Color("#b0b0b0")))
+			"Уровень в партии: %d" % player.session_level), 11, Cfg.UI_MUTED))
 		var icons := ""
 		for id in player.perk_ids:
 			icons += Perks.perk_icon(id) + " "
@@ -1278,7 +1267,7 @@ func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 	var rows := world.scoreboard().slice(0, 8)
 	for i in rows.size():
 		var r: Dictionary = rows[i]
-		var color: Color = Color("#eaffea") if bool(r["is_human"]) else Cfg.UI_TEXT
+		var color: Color = Cfg.UI_ACCENT if bool(r["is_human"]) else Cfg.UI_TEXT
 		grid.add_child(UiKit.label(str(i + 1), 12, color))
 		grid.add_child(UiKit.label(String(r["name"]), 12, color))
 		grid.add_child(UiKit.label(str(r["kills"]), 12, color))
@@ -1360,7 +1349,7 @@ func open_settings() -> void:
 	_settings.visible = true
 
 func _build_video_section() -> void:
-	_settings_body.add_child(UiKit.section(I18n.t("set.video", {}, "Видео"), Color("#44aaff")))
+	_settings_body.add_child(UiKit.section(I18n.t("set.video", {}, "Видео"), Cfg.UI_MUTED))
 
 	_settings_body.add_child(UiKit.choice_row(
 		I18n.t("set.mode", {}, "Режим экрана"),
@@ -1405,7 +1394,7 @@ func _build_video_section() -> void:
 func _build_graphics_section() -> void:
 	# ---- управление -----------------------------------------------------
 	_settings_body.add_child(UiKit.section(
-		I18n.t("set.input", {}, "Управление"), Color("#ffcc44")))
+		I18n.t("set.input", {}, "Управление"), Cfg.UI_MUTED))
 
 	var devices := [
 		[Sets.DEV_AUTO, I18n.t("dev.auto", {}, "Как обычно")],
@@ -1461,7 +1450,7 @@ func _build_graphics_section() -> void:
 				Sets.pad_vibration = v
 				Sets.save()))
 
-	_settings_body.add_child(UiKit.section(I18n.t("set.graphics", {}, "Графика"), Color("#ff8833")))
+	_settings_body.add_child(UiKit.section(I18n.t("set.graphics", {}, "Графика"), Cfg.UI_MUTED))
 
 	_settings_body.add_child(UiKit.choice_row(
 		I18n.t("set.fx", {}, "Спецэффекты"),
@@ -1503,7 +1492,7 @@ func _build_graphics_section() -> void:
 			Sets.save()))
 
 func _build_audio_section() -> void:
-	_settings_body.add_child(UiKit.section(I18n.t("set.audio", {}, "Звук"), Color("#55ff88")))
+	_settings_body.add_child(UiKit.section(I18n.t("set.audio", {}, "Звук"), Cfg.UI_MUTED))
 
 	_settings_body.add_child(UiKit.slider_row(
 		I18n.t("set.master", {}, "Общая громкость"), Sets.master_volume,
@@ -1544,6 +1533,7 @@ func open_net() -> void:
 	if not Net.lobby_changed.is_connected(_refresh_net):
 		Net.lobby_changed.connect(_refresh_net)
 		Net.net_error.connect(_on_net_error)
+		Net.countdown_changed.connect(_on_countdown_changed)
 	_net.visible = true
 	_refresh_net()
 
@@ -1556,6 +1546,18 @@ var is_net_open: bool:
 func _on_net_error(text: String) -> void:
 	_net_error = text
 	_refresh_net()
+
+## Хост и клиент видят одни и те же секунды — рассылает их Net. Ноль это
+## именно тот момент, когда партия обязана начаться, и запускает её только
+## хост: у клиента она начнётся сама, когда придёт _rpc_match_start.
+##
+## Проверка на ноль не зависит от того, открыт ли ещё экран лобби: если
+## игрок вернулся в меню, не нажимая «Отключиться», отсчёт всё равно должен
+## доиграть до конца, а не зависнуть в фоне навсегда.
+func _on_countdown_changed(seconds_left: int) -> void:
+	_refresh_net()
+	if seconds_left == 0 and Net.role == "host":
+		start_requested.emit()
 
 func _refresh_net() -> void:
 	if _net == null or not _net.visible:
@@ -1601,7 +1603,7 @@ func _build_net_offline() -> void:
 			9, Cfg.UI_MUTED))
 	_apply_net_kind()
 
-	_net_body.add_child(UiKit.section(I18n.t("net.new", {}, "Своя игра"), Color("#44aaff")))
+	_net_body.add_child(UiKit.section(I18n.t("net.new", {}, "Своя игра"), Cfg.UI_MUTED))
 
 	var name_row := UiKit.hbox(8)
 	name_row.add_child(UiKit.label(I18n.t("net.name", {}, "Имя"), 12, Cfg.UI_TEXT))
@@ -1641,7 +1643,7 @@ func _build_net_offline() -> void:
 			I18n.t("net.host.hint", {}, "Порт 8124. В локальной сети остальным нужен ваш адрес, через интернет — проброс порта."),
 			9, Cfg.UI_MUTED))
 
-	_net_body.add_child(UiKit.section(I18n.t("net.join.title", {}, "Подключиться"), Color("#55ff88")))
+	_net_body.add_child(UiKit.section(I18n.t("net.join.title", {}, "Подключиться"), Cfg.UI_MUTED))
 	var addr_row := UiKit.hbox(8)
 	addr_row.add_child(UiKit.label(
 		I18n.t("net.steam.id", {}, "SteamID хоста") if _net_kind == "steam"
@@ -1664,7 +1666,7 @@ func _build_net_lobby() -> void:
 	var role_text := I18n.t("net.role.host", {}, "Вы хост")
 	if Net.role != "host":
 		role_text = I18n.t("net.role.client", {}, "Вы подключены")
-	_net_body.add_child(UiKit.section(role_text, Color("#ffaa33")))
+	_net_body.add_child(UiKit.section(role_text, Cfg.UI_ACCENT))
 
 	if Net.lobby.is_empty():
 		_net_body.add_child(UiKit.label(I18n.t("net.waiting", {}, "Соединение…"), 12, Cfg.UI_MUTED))
@@ -1681,11 +1683,25 @@ func _build_net_lobby() -> void:
 		row.add_child(chip)
 		_net_body.add_child(row)
 
-	if Net.role == "host":
+	# Идёт отсчёт — вместо кнопок старта список игроков дополняет большая
+	# цифра. Число, а не фраза с числом: «5 секунд»/«2 секунды» требует
+	# согласования по-русски, а голая цифра понятна без него на любом языке.
+	# «Отключиться» ниже остаётся доступной и здесь — передумать можно
+	# в любой момент, а не только пока отсчёт не начался.
+	if Net.countdown_left >= 0:
+		_net_body.add_child(UiKit.label(
+			I18n.t("net.countdown.title", {}, "Матч начинается…"), 12, Cfg.UI_MUTED))
+		var big := UiKit.label(str(Net.countdown_left), 48, Cfg.UI_TEXT, true)
+		big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		big.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_net_body.add_child(big)
+		if Net.role == "host":
+			var cancel_btn := UiKit.secondary(I18n.t("net.countdown.cancel", {}, "Отмена"), 12)
+			cancel_btn.pressed.connect(func(): Net.host_cancel_countdown())
+			_net_body.add_child(cancel_btn)
+	elif Net.role == "host":
 		var start_btn := UiKit.primary(I18n.t("net.start", {}, "Начать партию"), 13)
-		start_btn.pressed.connect(func():
-			close_net()
-			start_requested.emit())
+		start_btn.pressed.connect(func(): Net.host_begin_countdown())
 		_net_body.add_child(start_btn)
 		_net_body.add_child(UiKit.label(
 			I18n.t("net.start.hint", {}, "Режим, сложность и уровень берутся из вашего меню и объявляются всем."),

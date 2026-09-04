@@ -30,9 +30,9 @@ const STAT_KEYS := [
 	"rapidKills",     # лучший результат: убийств за 10 сек
 	"cleanStreak",    # лучшая серия убийств без урона
 	"damageInGame",   # лучший урон за одну партию
-	"longKills",      # убийства с дистанции ≥ 400 px
+	"longKills",      # убийства с дистанции ≥ 400 px (≈ 50 м в подписи игроку)
 	"lowHpKills",     # убийства при HP ≤ 40%
-	"sniperKills",    # убийства с дистанции ≥ 800 px
+	"sniperKills",    # убийства с дистанции ≥ 800 px (≈ 100 м в подписи игроку)
 	"bridgeKills",    # убийства, сделанные стоя на мосту
 	"concreteDestroyed",  # снесённые бетонные и железные постройки
 	"abilityUses",    # срабатывания активной способности
@@ -55,9 +55,9 @@ const STAT_LABELS := {
 	"rapidKills": "Лучшее: убийств за 10 сек",
 	"cleanStreak": "Лучшая серия без урона",
 	"damageInGame": "Лучший урон за партию",
-	"longKills": "Убийства с 400 px",
+	"longKills": "Убийства с 50 м",
 	"lowHpKills": "Убийства при HP ≤ 40%",
-	"sniperKills": "Убийства с 800 px",
+	"sniperKills": "Убийства с 100 м",
 	"bridgeKills": "Убийства на мосту",
 	"concreteDestroyed": "Снесено бетона и железа",
 	"abilityUses": "Способностей применено",

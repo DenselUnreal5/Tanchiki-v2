@@ -37,6 +37,9 @@ signal lobby_changed
 signal match_starting(settings: Dictionary)
 signal net_error(text: String)
 signal disconnected
+## -1 — отсчёта нет; иначе секунд до старта партии. Считает хост, клиенты
+## только показывают присланное число.
+signal countdown_changed(seconds_left: int)
 
 ## "" — офлайн, "host" — хозяин партии, "client" — присоединившийся.
 var role := ""
@@ -58,6 +61,12 @@ var _commands := {}
 var _snaps: Array = []
 var _roster := {}
 var _match_active := false
+## -1 — отсчёта нет; иначе секунд до старта. См. countdown_changed.
+var countdown_left := -1
+## Растёт при каждом запуске/отмене отсчёта — асинхронный цикл в
+## host_begin_countdown сверяется с ним и молча выходит, если отсчёт
+## успел смениться другим или отмениться, пока он спал между секундами.
+var _countdown_token := 0
 
 # ------------------------------------------------------------- диагностика
 ## Счётчики за партию. Без них про «потери и лаги» нечего сказать: сеть
@@ -228,6 +237,8 @@ func leave(notify: bool = true) -> void:
 	_delayed.clear()
 	_roster.clear()
 	_match_active = false
+	countdown_left = -1
+	_countdown_token += 1
 	_last_snap_seq = -1
 	_snap_seq = 0
 	last_snap_msec = 0
@@ -253,6 +264,9 @@ func _on_peer_connected(id: int) -> void:
 func _on_peer_disconnected(id: int) -> void:
 	if role != "host":
 		return
+	# Состав партии поменялся — отсчёт для прежнего состава уже не годится.
+	if countdown_left >= 0:
+		host_cancel_countdown()
 	lobby.erase(id)
 	# Ввод отключившегося стирается немедленно. Без этого его танк продолжал
 	# ехать по последней команде до конца партии — упирался в стену и жёг
@@ -280,6 +294,9 @@ func _on_server_disconnected() -> void:
 func _rpc_hello(info: Dictionary) -> void:
 	if role != "host":
 		return
+	# Новый игрок в разгар отсчёта — не тот состав, что отсчитывался.
+	if countdown_left >= 0:
+		host_cancel_countdown()
 	var id := multiplayer.get_remote_sender_id()
 	lobby[id] = info
 	_rpc_lobby.rpc(lobby)
@@ -290,6 +307,47 @@ func _rpc_lobby(list: Dictionary) -> void:
 	lobby = list
 	lobby_changed.emit()
 
+# --------------------------------------------------------------- обратный отсчёт
+## Хост запускает синхронный отсчёт перед стартом партии: обе стороны должны
+## увидеть одни и те же секунды, а не начать партию вразнобой. Ноль сам по
+## себе ничего не запускает — это дело UI, слушающего countdown_changed,
+## чтобы net.gd не знал ни про ui_root, ни про game.
+func host_begin_countdown(duration: int = 5) -> void:
+	if role != "host" or _match_active or countdown_left >= 0:
+		return
+	_countdown_token += 1
+	var token := _countdown_token
+	var left := duration
+	_broadcast_countdown(left)
+	while left > 0:
+		await get_tree().create_timer(1.0).timeout
+		# Отсчёт мог смениться другим или отмениться, пока мы спали секунду.
+		if token != _countdown_token or role != "host":
+			return
+		left -= 1
+		_broadcast_countdown(left)
+
+## Прерывает отсчёт: игрок передумал, состав поменялся, партия уже пошла.
+func host_cancel_countdown() -> void:
+	if role != "host" or countdown_left < 0:
+		return
+	_countdown_token += 1
+	_broadcast_countdown(-1)
+
+## Единственное место, которое пишет countdown_left: и у хоста, и у клиента
+## это отражение того, что реально разослано, а не отдельное состояние.
+func _broadcast_countdown(seconds_left: int) -> void:
+	_rpc_countdown.rpc(seconds_left)
+	# rpc() не выполняет функцию локально — хосту нужно обновить себя сам,
+	# как и в _rpc_hello.
+	countdown_left = seconds_left
+	countdown_changed.emit(seconds_left)
+
+@rpc("authority", "reliable")
+func _rpc_countdown(seconds_left: int) -> void:
+	countdown_left = seconds_left
+	countdown_changed.emit(seconds_left)
+
 # ------------------------------------------------------------------ партия
 ## Хост объявляет старт: клиенты соберут ту же карту по seed и тем же
 ## настройкам, поэтому передавать нечего, кроме двадцати байт.
@@ -297,6 +355,9 @@ func host_start_match(settings: Dictionary, seed_value: int, roster: Array) -> v
 	if role != "host":
 		return
 	_match_active = true
+	# Отсчёт своё дело сделал. Без сброса лобби, открытое после партии
+	# (реванш, разрыв на «Обороне»), встречало бы игрока замершим нулём.
+	countdown_left = -1
 	_roster.clear()
 	for info in roster:
 		_roster[int(info["id"])] = info
@@ -315,6 +376,7 @@ func _rpc_match_start(settings: Dictionary, seed_value: int, roster: Array) -> v
 		if _valid_tank_info(info):
 			_roster[int(info["id"])] = info
 	_match_active = true
+	countdown_left = -1
 	var s := settings.duplicate()
 	s["net_seed"] = seed_value
 	s["net_roster"] = roster

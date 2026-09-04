@@ -134,15 +134,34 @@ const PLAYER_SKINS := [
 ]
 
 # ---------------------------------------------------------------- палитра интерфейса
-static var UI_BG := Color("#0a0a0a")
-static var UI_PANEL := Color(0.031, 0.039, 0.031, 0.94)
+# Холодная гунметалл-схема: раньше UI_PANEL был нейтрально-серым, теперь
+# сдвинут в синеватый металл под «военно-технический» стиль оформления.
+# UI_ACCENT остаётся отдельной семантикой состояния (победа/открыто/готово/
+# здоровье) и не трогается — под декоративное свечение рамок и вкладок
+# заведён отдельный UI_GLOW, чтобы не путать смысл с состоянием.
+static var UI_BG := Color("#0a0d10")
+static var UI_PANEL := Color("#171b1f")
+static var UI_PANEL_ALPHA := 0.94
+static var UI_CARD := Color("#20262b")   # раньше захардкожен прямо в card_style()
+static var UI_BORDER := Color("#2b333a") # раньше разные "#2e2e2e"/"#333333" по месту
 static var UI_ACCENT := Color("#55cc55")
 static var UI_ACCENT_DIM := Color("#2f6b2f")
 static var UI_TEXT := Color("#d8d8d8")
-static var UI_MUTED := Color("#7a7a7a")
+static var UI_MUTED := Color("#8a8a8e")
 static var UI_WARN := Color("#ffaa33")
 static var UI_DANGER := Color("#cc4444")
 static var UI_GOLD := Color("#ffee55")
+## Декоративное свечение рамок/вкладок/уголков — отдельно от UI_ACCENT.
+static var UI_GLOW := Color("#33e6c9")
+static var UI_GLOW_DIM := Color("#175c50")
+
+## Радиусы скругления панелей/карточек — раньше по коду было 8 разных чисел
+## (4/6/8/10/12/14/18/999) без всякой системы. Кнопки в эту шкалу не сведены —
+## у них свой визуальный язык (см. UiKit.primary()).
+static var RADIUS_SM := 6.0
+static var RADIUS_MD := 10.0
+static var RADIUS_LG := 16.0
+static var RADIUS_PILL := 999.0
 
 # ---------------------------------------------------------------- физика
 ## Затухание скорости за тик. Предельная скорость = speed.

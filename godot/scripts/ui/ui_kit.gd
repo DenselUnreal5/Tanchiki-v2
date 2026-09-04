@@ -22,28 +22,41 @@ static func flat(bg: Color, radius: float = 8.0, border: float = 0.0,
 	s.content_margin_bottom = 6
 	return s
 
-static func panel_style(border_color: Color = Cfg.UI_ACCENT_DIM) -> StyleBoxFlat:
+static func panel_style(border_color: Color = Cfg.UI_GLOW_DIM, glow: bool = true) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	s.bg_color = Cfg.UI_PANEL
-	s.set_corner_radius_all(14)
+	s.bg_color = Color(Cfg.UI_PANEL, Cfg.UI_PANEL_ALPHA)
+	s.set_corner_radius_all(int(Cfg.RADIUS_LG))
 	s.set_border_width_all(2)
 	s.border_color = border_color
 	s.content_margin_left = 24
 	s.content_margin_right = 24
 	s.content_margin_top = 20
 	s.content_margin_bottom = 20
+	if glow:
+		s.shadow_color = Color(border_color, 0.35)
+		s.shadow_size = 8
 	return s
 
-static func card_style(border_color: Color = Color("#2e2e2e")) -> StyleBoxFlat:
+static func card_style(border_color: Color = Cfg.UI_BORDER) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color("#151515")
-	s.set_corner_radius_all(8)
+	s.bg_color = Cfg.UI_CARD
+	s.set_corner_radius_all(int(Cfg.RADIUS_MD))
 	s.set_border_width_all(1)
 	s.border_color = border_color
 	s.content_margin_left = 10
 	s.content_margin_right = 10
 	s.content_margin_top = 10
 	s.content_margin_bottom = 10
+	return s
+
+## Вариант панели/карточки со свечением рамки — тот же StyleBoxFlat.shadow_*,
+## что и panel_style(), но с настраиваемым радиусом и без больших отступов
+## карточки — под узкие элементы (вкладки, слоты дерева умений).
+static func glow_style(bg: Color, border_color: Color, radius: float = Cfg.RADIUS_MD,
+		glow_color: Color = Cfg.UI_GLOW, glow_size: float = 6.0) -> StyleBoxFlat:
+	var s := flat(bg, radius, 1.5, border_color)
+	s.shadow_color = Color(glow_color, 0.35)
+	s.shadow_size = int(glow_size)
 	return s
 
 # ---------------------------------------------------------------- надписи
@@ -56,6 +69,13 @@ static func label(text: String, font_size: int = 12, color: Color = Cfg.UI_TEXT,
 	l.add_theme_color_override("font_color", color)
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	return l
+
+## Подпись с иконкой-эмодзи впереди. Правило размера одно и без исключений:
+## иконка всегда того же кегля, что и текст рядом — отдельной шкалы размеров
+## для иконок нет и не нужно, только это наследование.
+static func icon_label(icon: String, text: String, font_size: int = 12,
+		color: Color = Cfg.UI_TEXT, bold: bool = false) -> Label:
+	return label("%s %s" % [icon, text], font_size, color, bold)
 
 static func rich(text: String, font_size: int = 12, color: Color = Cfg.UI_TEXT) -> RichTextLabel:
 	var r := RichTextLabel.new()
@@ -115,14 +135,15 @@ static func primary(text: String, font_size: int = 16) -> Button:
 	b.add_theme_font_override("font", Fonts.bold)
 	return b
 
-## Второстепенная «пилюля» (btn-secondary).
+## Второстепенная «пилюля» (btn-secondary) — навигация/хром, наведение
+## подсвечивается декоративным UI_GLOW, а не «положительным» UI_ACCENT.
 static func secondary(text: String, font_size: int = 12) -> Button:
 	var b := Button.new()
 	b.text = text
-	var normal := flat(Color(0.094, 0.106, 0.094, 0.85), 999, 1, Color(1, 1, 1, 0.1))
-	var hover := flat(Color(0.13, 0.15, 0.13, 0.9), 999, 1, Cfg.UI_ACCENT)
-	var pressed := flat(Color(0.16, 0.2, 0.16, 0.95), 999, 1, Cfg.UI_ACCENT)
-	_style_button(b, normal, hover, pressed, font_size, Color("#b3bcb3"))
+	var normal := flat(Color(0.086, 0.098, 0.102, 0.85), 999, 1, Color(1, 1, 1, 0.1))
+	var hover := flat(Color(0.11, 0.15, 0.15, 0.9), 999, 1, Cfg.UI_GLOW)
+	var pressed := flat(Color(0.13, 0.19, 0.18, 0.95), 999, 1, Cfg.UI_GLOW)
+	_style_button(b, normal, hover, pressed, font_size, Color("#b3bcbc"))
 	return b
 
 ## Опасное действие (btn-secondary.danger).
@@ -287,3 +308,78 @@ static func dimmer() -> ColorRect:
 	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	c.mouse_filter = Control.MOUSE_FILTER_STOP
 	return c
+
+# ---------------------------------------------------------------- «военный» декор
+## Уголки-скобы поверх готовой панели — добавлять последним ребёнком.
+static func frame_overlay(color: Color = Cfg.UI_GLOW, scanlines: bool = false) -> UiFrame:
+	var f := UiFrame.new()
+	f.color = color
+	f.scanlines = scanlines
+	return f
+
+## Полоска-сегмент вкладок сверху экрана (MAP / ABILITIES / ...): та же
+## идиома ButtonGroup + toggle, что и _make_group в ui_root.gd, но в
+## нерастягивающемся HBoxContainer — вкладки не переносятся строкой.
+## items — массив {"key": String, "label": String}.
+static func segmented_tabs(items: Array, active_key: String, on_change: Callable) -> HBoxContainer:
+	var row := hbox(4)
+	var group := ButtonGroup.new()
+	for item in items:
+		var btn := toggle(String(item["label"]), 12)
+		btn.custom_minimum_size = Vector2(0, 34)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.button_group = group
+		var key: String = item["key"]
+		btn.button_pressed = key == active_key
+		btn.add_theme_stylebox_override("hover", flat(Color(0.11, 0.14, 0.14, 0.8), 999, 1, Color(Cfg.UI_GLOW, 0.6)))
+		var active := flat(Color(Cfg.UI_GLOW_DIM, 0.55), 999, 1, Cfg.UI_GLOW)
+		btn.add_theme_stylebox_override("pressed", active)
+		btn.add_theme_stylebox_override("hover_pressed", active)
+		btn.add_theme_color_override("font_pressed_color", Color("#eafffb"))
+		btn.add_theme_color_override("font_hover_pressed_color", Color("#eafffb"))
+		btn.pressed.connect(func(): on_change.call(key))
+		row.add_child(btn)
+	return row
+
+## Состояние узла дерева умений — не кнопка покупки, а честная сводка
+## состояния: прогресс здесь всегда только по уровню профиля/задаче,
+## купить перк за деньги нельзя (в отличие от прототипа-референса).
+static func unlock_button(text: String, state: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.disabled = state == "locked"
+	b.mouse_filter = Control.MOUSE_FILTER_STOP if state != "locked" else Control.MOUSE_FILTER_IGNORE
+	var color := Cfg.UI_MUTED
+	var bg := Color(0.1, 0.1, 0.11, 0.6)
+	match state:
+		"unlocked":
+			color = Cfg.UI_ACCENT
+			bg = Color(Cfg.UI_ACCENT_DIM, 0.35)
+		"equipped":
+			color = Cfg.UI_GLOW
+			bg = Color(Cfg.UI_GLOW_DIM, 0.45)
+	var style := flat(bg, Cfg.RADIUS_SM, 1, color)
+	_style_button(b, style, style, style, 12, color)
+	b.add_theme_font_override("font", Fonts.bold)
+	return b
+
+## Полоска прогресса со свечёным контуром — тот же .gc-bar, но с рамкой
+## под общий военно-технический стиль баров HUD (HP/нагрев/опыт/кулдаун).
+static func glow_bar(width: float, height: float, fill: Color,
+		border_color: Color = Cfg.UI_GLOW_DIM) -> Dictionary:
+	var wrap := Control.new()
+	wrap.custom_minimum_size = Vector2(width, height)
+	var back := ColorRect.new()
+	back.color = Color(0, 0, 0, 0.6)
+	back.size = Vector2(width, height)
+	wrap.add_child(back)
+	var front := ColorRect.new()
+	front.color = fill
+	front.size = Vector2(0, height)
+	wrap.add_child(front)
+	var border := PanelContainer.new()
+	border.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	border.add_theme_stylebox_override("panel", flat(Color.TRANSPARENT, 2, 1, Color(border_color, 0.8)))
+	wrap.add_child(border)
+	return {"wrap": wrap, "bg": back, "fill": front}

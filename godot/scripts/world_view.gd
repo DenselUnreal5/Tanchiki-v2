@@ -1331,7 +1331,10 @@ func _draw_tank(tank: Tank) -> void:
 	var palette := Cfg.team_palette(tank.color_key)
 	var shape := TankArt.chassis(tank.chassis_id)
 	var is_viewer := player.tank == tank
-	var is_ally := player.tank != null and not world.are_hostile(player.tank, tank) and not is_viewer
+	# world == null — декоративный танк вне матча (см. menu_tank_view.gd):
+	# ни союзников, ни противников там не бывает.
+	var is_ally := world != null and player.tank != null \
+		and not world.are_hostile(player.tank, tank) and not is_viewer
 	var pos := Vector2(tank.x, tank.y)
 	var hw := tank.width * 0.5
 	var hh := tank.height * 0.5
@@ -1499,65 +1502,69 @@ func _draw_tank(tank: Tank) -> void:
 
 	draw_set_transform(view_off + pos)
 
-	# ---- состояние активной способности ---------------------------------
-	# У каждой длящейся способности свой знак: без него игрок видит только
-	# полоску кулдауна в углу и не понимает, работает ли перк прямо сейчас.
-	if tank.ability_timer > 0:
-		_draw_ability_state(tank)
+	# Всё ниже — боевые индикаторы (кулдауны, HP, имя, флаг): вне матча
+	# (world == null — декоративный танк, см. menu_tank_view.gd) им
+	# показывать нечего и не про кого, только чистый силуэт.
+	if world != null:
+		# ---- состояние активной способности -------------------------------
+		# У каждой длящейся способности свой знак: без него игрок видит
+		# только полоску кулдауна в углу и не понимает, работает ли перк.
+		if tank.ability_timer > 0:
+			_draw_ability_state(tank)
 
-	# ---- индикаторы -----------------------------------------------------
-	if tank.spawn_protect > 0:
-		draw_arc(Vector2.ZERO, 20, 0, TAU, 32,
-			Color(1, 1, 1, 0.4 + 0.3 * sin(world.tick * 0.3)), 2.0)
-	if tank.shield_hp > 0.0:
-		var sh := Cfg.shield
-		sh.a = 0.55
-		draw_arc(Vector2.ZERO, 18, 0, TAU, 32, sh, 2.0)
-	if tank.turbo_timer > 0:
-		for k in 3:
-			var a := tank.body_angle + PI + (k - 1) * 0.3
-			draw_circle(Vector2(cos(a) * 20.0, sin(a) * 20.0), 3, Color(1, 0.67, 0.2, 0.5))
+		# ---- индикаторы -----------------------------------------------------
+		if tank.spawn_protect > 0:
+			draw_arc(Vector2.ZERO, 20, 0, TAU, 32,
+				Color(1, 1, 1, 0.4 + 0.3 * sin(world.tick * 0.3)), 2.0)
+		if tank.shield_hp > 0.0:
+			var sh := Cfg.shield
+			sh.a = 0.55
+			draw_arc(Vector2.ZERO, 18, 0, TAU, 32, sh, 2.0)
+		if tank.turbo_timer > 0:
+			for k in 3:
+				var a := tank.body_angle + PI + (k - 1) * 0.3
+				draw_circle(Vector2(cos(a) * 20.0, sin(a) * 20.0), 3, Color(1, 0.67, 0.2, 0.5))
 
-	# Активное оружие — щиток над танком с иконкой и кольцом-таймером.
-	if tank.weapon != "" and tank.weapon_timer > 0:
-		var weapon := Weapons.get_weapon(tank.weapon)
-		if not weapon.is_empty():
-			var frac := maxf(0.0, float(tank.weapon_timer) / float(weapon["duration"]))
-			draw_circle(Vector2(0, -20), 10, Color(0.06, 0.08, 0.10, 0.9))
-			draw_arc(Vector2(0, -20), 10, 0, TAU, 24, weapon["color"], 1.5)
-			var ring: Color = weapon["color"]
-			ring.a = 0.8
-			draw_arc(Vector2(0, -20), 13, -PI / 2.0, -PI / 2.0 + frac * TAU, 32, ring, 2.0)
-			_text_center(String(weapon["icon"]), Vector2(0, -20), 10, Color.WHITE)
+		# Активное оружие — щиток над танком с иконкой и кольцом-таймером.
+		if tank.weapon != "" and tank.weapon_timer > 0:
+			var weapon := Weapons.get_weapon(tank.weapon)
+			if not weapon.is_empty():
+				var frac := maxf(0.0, float(tank.weapon_timer) / float(weapon["duration"]))
+				draw_circle(Vector2(0, -20), 10, Color(0.06, 0.08, 0.10, 0.9))
+				draw_arc(Vector2(0, -20), 10, 0, TAU, 24, weapon["color"], 1.5)
+				var ring: Color = weapon["color"]
+				ring.a = 0.8
+				draw_arc(Vector2(0, -20), 13, -PI / 2.0, -PI / 2.0 + frac * TAU, 32, ring, 2.0)
+				_text_center(String(weapon["icon"]), Vector2(0, -20), 10, Color.WHITE)
 
-	# Маркер «это ты» — важно в разделённом экране.
-	if is_viewer:
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(0, -26), Vector2(-5, -34), Vector2(5, -34)]), palette["trim"])
+		# Маркер «это ты» — важно в разделённом экране.
+		if is_viewer:
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(0, -26), Vector2(-5, -34), Vector2(5, -34)]), palette["trim"])
 
-	# ---- полоска HP и подпись (без поворота) ----------------------------
-	draw_set_transform(view_off)
-	var bar_w := 26.0
-	var ratio := maxf(0.0, tank.hp / tank.max_hp)
-	if ratio < 1.0 or not is_viewer:
-		_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w, 4, Color(0, 0, 0, 0.6))
-		var bar := Color("#44cc44") if ratio > 0.5 else (Color("#cccc44") if ratio > 0.25 else Color("#cc4444"))
-		_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w * ratio, 4, bar)
-	if tank.shield_hp > 0.0:
-		_rect(tank.x - bar_w * 0.5, tank.y - 26, bar_w * minf(1.0, tank.shield_hp / 30.0), 2, Cfg.shield)
+		# ---- полоска HP и подпись (без поворота) ----------------------------
+		draw_set_transform(view_off)
+		var bar_w := 26.0
+		var ratio := maxf(0.0, tank.hp / tank.max_hp)
+		if ratio < 1.0 or not is_viewer:
+			_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w, 4, Color(0, 0, 0, 0.6))
+			var bar := Color("#44cc44") if ratio > 0.5 else (Color("#cccc44") if ratio > 0.25 else Color("#cc4444"))
+			_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w * ratio, 4, bar)
+		if tank.shield_hp > 0.0:
+			_rect(tank.x - bar_w * 0.5, tank.y - 26, bar_w * minf(1.0, tank.shield_hp / 30.0), 2, Cfg.shield)
 
-	if not is_viewer:
-		var name_color := Color("#88ccff") if is_ally else (Color("#ffee55") if tank.is_player_controlled else Color("#ffaaaa"))
-		_text_center(tank.name, Vector2(tank.x, tank.y - 32), 10, name_color)
-		# Перки бота видно над именем — понятно, почему он вдруг стал опасным.
-		if not tank.perk_ids.is_empty():
-			var icons := ""
-			for id in tank.perk_ids:
-				icons += Perks.any_perk_icon(id)
-			_text_center(icons, Vector2(tank.x, tank.y - 43), 9, Color("#ffcc66"))
+		if not is_viewer:
+			var name_color := Color("#88ccff") if is_ally else (Color("#ffee55") if tank.is_player_controlled else Color("#ffaaaa"))
+			_text_center(tank.name, Vector2(tank.x, tank.y - 32), 10, name_color)
+			# Перки бота видно над именем — понятно, почему он вдруг стал опасным.
+			if not tank.perk_ids.is_empty():
+				var icons := ""
+				for id in tank.perk_ids:
+					icons += Perks.any_perk_icon(id)
+				_text_center(icons, Vector2(tank.x, tank.y - 43), 9, Color("#ffcc66"))
 
-	if tank.carrying_flag:
-		_text_center("⚑", Vector2(tank.x + 16, tank.y - 16), 14, Color("#ffee55"))
+		if tank.carrying_flag:
+			_text_center("⚑", Vector2(tank.x + 16, tank.y - 16), 14, Color("#ffee55"))
 
 func _draw_ellipse(center: Vector2, rx: float, ry: float, color: Color) -> void:
 	var pts := PackedVector2Array()

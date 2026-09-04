@@ -51,6 +51,19 @@ func _run_host() -> void:
 	game.ui.settings["game_type"] = "single"
 	game.ui.settings["difficulty"] = "medium"
 	game.ui.settings["level"] = 1
+
+	# Лобби прошло — дальше «Играть» запускает синхронный отсчёт, а не
+	# партию напрямую. Отсчёт идёт по реальным секундам (SceneTreeTimer), а
+	# безматчевая сцена в headless крутит process_frame гораздо чаще 60 Гц —
+	# поэтому ждём по настенным часам, а не по числу кадров.
+	Net.host_begin_countdown()
+	var cd_started := Time.get_ticks_msec()
+	while Net.countdown_left != 0 and Time.get_ticks_msec() - cd_started < 8000:
+		await _frames(1)
+	_check(Net.countdown_left == 0, "отсчёт хоста дошёл до нуля")
+	if Net.countdown_left != 0:
+		return
+
 	game.start_match()
 	_dismiss_perks()
 	_check(game.world != null, "мир создан")
@@ -91,9 +104,19 @@ func _run_client() -> void:
 	Net.my_name = "Клиент"
 	_check(Net.join_game("127.0.0.1"), "подключение начато")
 
-	var guard := 0
-	while game.world == null and guard < 1200:
-		guard += 1
+	# Лобби видно и хосту, и клиенту — а не только хосту, который сам себя
+	# в него сразу заносит. Это и есть проверка «оба видят друг друга».
+	var lobby_guard := 0
+	while Net.lobby.size() < 2 and lobby_guard < 900:
+		lobby_guard += 1
+		await _frames(1)
+	_check(Net.lobby.size() >= 2, "клиент видит обоих в лобби (у себя %d)" % Net.lobby.size())
+
+	# Хост держит пятисекундный отсчёт перед стартом, а до партии кадры
+	# в headless крутятся много чаще 60 Гц — ждём по настенным часам,
+	# иначе бюджет кадров кончится раньше, чем реальные пять секунд хоста.
+	var wait_started := Time.get_ticks_msec()
+	while game.world == null and Time.get_ticks_msec() - wait_started < 12000:
 		await _frames(1)
 	_check(game.world != null, "хост объявил партию, мир собран")
 	if game.world == null:

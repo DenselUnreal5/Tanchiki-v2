@@ -79,7 +79,7 @@ func build(players: Array, world: World) -> void:
 		hp_bg.size = Vector2(190, 14)
 		hp_wrap.add_child(hp_bg)
 		var hp_fill := ColorRect.new()
-		hp_fill.color = Color("#44cc44")
+		hp_fill.color = Cfg.UI_ACCENT
 		hp_fill.size = Vector2(190, 14)
 		hp_wrap.add_child(hp_fill)
 		var shield_fill := ColorRect.new()
@@ -89,7 +89,7 @@ func build(players: Array, world: World) -> void:
 		hp_wrap.add_child(shield_fill)
 		left.add_child(hp_wrap)
 
-		var hp_text := UiKit.label("", 10, Color("#b0b0b0"))
+		var hp_text := UiKit.label("", 10, Cfg.UI_MUTED)
 		left.add_child(hp_text)
 
 		# Строка состояния сети. В одиночной игре скрыта: пустое место
@@ -108,7 +108,7 @@ func build(players: Array, world: World) -> void:
 		heat_bg.size = Vector2(190, 5)
 		heat_wrap.add_child(heat_bg)
 		var heat_fill := ColorRect.new()
-		heat_fill.color = Color("#ff8833")
+		heat_fill.color = Cfg.UI_WARN
 		heat_fill.size = Vector2(0, 5)
 		heat_wrap.add_child(heat_fill)
 		left.add_child(heat_wrap)
@@ -121,7 +121,7 @@ func build(players: Array, world: World) -> void:
 		var score := UiKit.label("", 17, Cfg.UI_GOLD)
 		score.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		right.add_child(score)
-		var objective := UiKit.label("", 11, Color("#cccccc"))
+		var objective := UiKit.label("", 11, Cfg.UI_TEXT)
 		objective.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		right.add_child(objective)
 		var weather_label := UiKit.label("", 11, Color("#aabbdd"))
@@ -316,7 +316,7 @@ func update_hud(world: World) -> void:
 		var hp_fill: ColorRect = panel["hp_fill"]
 		var hp_full: float = (panel["hp_bg"] as ColorRect).size.x
 		hp_fill.size.x = hp_full * hp_ratio
-		hp_fill.color = Color("#44cc44") if hp_ratio > 0.5 else (Color("#cccc44") if hp_ratio > 0.25 else Color("#cc4444"))
+		hp_fill.color = Cfg.UI_ACCENT if hp_ratio > 0.5 else (Cfg.UI_WARN if hp_ratio > 0.25 else Cfg.UI_DANGER)
 		var shield: ColorRect = panel["shield_fill"]
 		shield.visible = tank.shield_hp > 0.0
 		shield.size.x = hp_full * minf(1.0, tank.shield_hp / 30.0)
@@ -396,7 +396,7 @@ func update_hud(world: World) -> void:
 				var k := 0.5 + 0.5 * sin(float(world.tick) * 0.35)
 				fill.color = Color(1.0, 0.35 + 0.25 * k, 0.2)
 			else:
-				fill.color = Color("#ff8833").lerp(Color("#ff3322"), heat)
+				fill.color = Cfg.UI_WARN.lerp(Cfg.UI_DANGER, heat)
 
 		_update_net(panel)
 
@@ -412,7 +412,7 @@ func update_hud(world: World) -> void:
 			for id in player.perk_ids:
 				var perk := Perks.get_perk(id)
 				var slot := PanelContainer.new()
-				var st := UiKit.flat(Color(0, 0, 0, 0.72), 4, 1, Color("#444444"))
+				var st := UiKit.flat(Color(0, 0, 0, 0.72), Cfg.RADIUS_SM, 1, Cfg.UI_BORDER)
 				st.content_margin_left = 7
 				st.content_margin_right = 7
 				st.content_margin_top = 2
@@ -434,7 +434,7 @@ func update_hud(world: World) -> void:
 # ------------------------------------------------------------------ лента
 func add_feed(text: String, color: Color = Color.WHITE) -> void:
 	var entry := PanelContainer.new()
-	var st := UiKit.flat(Color(0, 0, 0, 0.72), 3)
+	var st := UiKit.flat(Color(0, 0, 0, 0.72), Cfg.RADIUS_SM)
 	st.border_width_left = 3
 	st.border_color = color
 	st.content_margin_left = 10
@@ -525,7 +525,7 @@ func _render_scoreboard(world: World) -> void:
 	var rows := world.scoreboard()
 	for i in rows.size():
 		var r: Dictionary = rows[i]
-		var color: Color = Color("#eaffea") if bool(r["is_human"]) else Cfg.UI_TEXT
+		var color: Color = Cfg.UI_ACCENT if bool(r["is_human"]) else Cfg.UI_TEXT
 		grid.add_child(UiKit.label(str(i + 1), 12, color))
 		var palette := Cfg.team_palette(String(r["color_key"]))
 		var name_text: String = String(r["name"]) + ("" if bool(r["alive"]) else " †")

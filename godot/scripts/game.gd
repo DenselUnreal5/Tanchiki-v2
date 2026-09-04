@@ -92,6 +92,17 @@ func _ready() -> void:
 
 	get_viewport().size_changed.connect(_on_resize)
 	_on_resize()
+
+	# Сплэш с логотипом — только на настоящем запуске. Все тестовые сцены
+	# добавляют Game дочерним узлом под свой собственный корень, и тогда
+	# current_scene остаётся тестовой сценой, а не этим узлом: условие ниже
+	# ложно само по себе, без отдельного флага «мы в тесте».
+	if get_tree().current_scene == self:
+		var splash := Splash.new()
+		_root.add_child(splash)
+		await get_tree().create_timer(1.0).timeout
+		splash.queue_free()
+
 	ui.show_menu()
 	# Тема меню включится сама, как только соберётся в фоне.
 	Mus.play_menu()

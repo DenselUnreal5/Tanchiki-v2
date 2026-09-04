@@ -10,10 +10,10 @@ extends RefCounted
 
 ## Категории улучшений — порядок разделов в Гараже.
 static var CATEGORIES := [
-	{"id": "fire", "name": "Огонь", "color": Color("#ff8833")},
-	{"id": "defense", "name": "Защита", "color": Color("#44aaff")},
-	{"id": "speed", "name": "Скорость", "color": Color("#ffee55")},
-	{"id": "utility", "name": "Полезное", "color": Color("#55ff88")},
+	{"id": "fire", "name": "Огонь", "color": Color("#e2803a")},
+	{"id": "defense", "name": "Защита", "color": Color("#4d95c9")},
+	{"id": "speed", "name": "Скорость", "color": Color("#dcd15a")},
+	{"id": "utility", "name": "Полезное", "color": Color("#5fbf83")},
 ]
 
 ## cost_base/cost_step — цена уровня: base + (level - 1) * step.
