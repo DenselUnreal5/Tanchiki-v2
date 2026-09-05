@@ -217,10 +217,15 @@ static func progress_bar(value: float, width: float, height: float,
 	back.color = bg
 	back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	wrap.add_child(back)
+	# Анкерами, а не пиксельным size: контейнер (wrap) нередко растягивается
+	# шире переданного width (например VBoxContainer с EXPAND_FILL в карточке
+	# задания) — back это отражает через PRESET_FULL_RECT, а фиксированный
+	# по ширине front тогда не дотягивался бы до края даже при value = 1.0.
 	var front := ColorRect.new()
 	front.color = fill
-	front.position = Vector2.ZERO
-	front.size = Vector2(width * clampf(value, 0.0, 1.0), height)
+	front.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	front.anchor_right = clampf(value, 0.0, 1.0)
+	front.offset_right = 0.0
 	wrap.add_child(front)
 	return wrap
 

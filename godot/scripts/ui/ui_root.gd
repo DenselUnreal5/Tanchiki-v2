@@ -53,6 +53,13 @@ var _menu_settings_btn: Button
 var _hints: RichTextLabel
 var _lang_btn: Button
 
+## Крутящаяся подсказка об интерфейсе внизу меню (см. MenuTips) — отдельно
+## от _hints (те про раскладку клавиш/геймпада, не про сам интерфейс).
+var _menu_tip: RichTextLabel
+var _menu_tip_timer: Timer
+var _menu_tip_order: Array = []
+var _menu_tip_idx := 0
+
 var _net: Control
 var _net_body: VBoxContainer
 var _net_sub: RichTextLabel
@@ -444,10 +451,62 @@ func _build_menu() -> void:
 
 	_build_menu_settings()
 
+	# ---- подсказка об интерфейсе внизу экрана ----
+	# offset_right оставляет угол свободным от танка-декорации в menu_scene.
+	var tip_wrap := Control.new()
+	tip_wrap.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	tip_wrap.offset_left = 26.0
+	tip_wrap.offset_right = -220.0
+	tip_wrap.offset_top = -30.0
+	tip_wrap.offset_bottom = -10.0
+	tip_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_menu.add_child(tip_wrap)
+
+	_menu_tip = UiKit.rich("", 10, Color(Cfg.UI_MUTED, 0.6))
+	_menu_tip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_menu_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tip_wrap.add_child(_menu_tip)
+
+	_menu_tip_order = range(MenuTips.LIST.size())
+	_menu_tip_order.shuffle()
+	_menu_tip_idx = 0
+	_show_menu_tip(0)
+
+	_menu_tip_timer = Timer.new()
+	_menu_tip_timer.wait_time = 9.0
+	_menu_tip_timer.one_shot = false
+	_menu_tip_timer.timeout.connect(_advance_menu_tip)
+	_menu.add_child(_menu_tip_timer)
+	_menu_tip_timer.start()
+
 	_refresh_lang_btn()
 	_refresh_hints()
 	_refresh_mode_button()
 	_layout_menu.call_deferred()
+
+## Подсказка по индексу в перемешанном порядке (не в исходном списке —
+## иначе одна и та же подсказка каждый раз шла бы первой).
+func _show_menu_tip(order_idx: int) -> void:
+	if _menu_tip == null or MenuTips.LIST.is_empty():
+		return
+	var entry: Array = MenuTips.LIST[_menu_tip_order[order_idx]]
+	_menu_tip.text = "[center]" + I18n.t(String(entry[0]), {}, String(entry[1])) + "[/center]"
+
+## Следующая подсказка с плавной сменой — тот же приём затухания, что и
+## у баннера в hud.gd. Ранний выход, если меню сейчас не на экране (идёт
+## бой или открыт оверлей поверх него) — незачем твинить невидимый текст.
+func _advance_menu_tip() -> void:
+	if _menu == null or not _menu.visible or _menu_tip == null:
+		return
+	_menu_tip_idx += 1
+	if _menu_tip_idx >= _menu_tip_order.size():
+		_menu_tip_idx = 0
+		_menu_tip_order.shuffle()
+	var idx := _menu_tip_idx
+	var tw := create_tween()
+	tw.tween_property(_menu_tip, "modulate:a", 0.0, 0.35)
+	tw.tween_callback(func(): _show_menu_tip(idx))
+	tw.tween_property(_menu_tip, "modulate:a", 1.0, 0.35)
 
 ## Группа кнопок-переключателей с одним активным значением.
 func _make_group(label_text: String, key: String, options: Array) -> VBoxContainer:

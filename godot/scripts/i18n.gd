@@ -291,6 +291,21 @@ var EN := {
 	"hint.pause": "pause",
 	"hint.scoreboard": "scoreboard",
 
+	# --------------------------------------------------- подсказки меню
+	"tip.theme": "Change the UI theme in Settings → Interface: noir, military dossier or sci-fi",
+	"tip.weather_fx": "Weather effects and their intensity are in Settings → Graphics",
+	"tip.match_weather": "In \"Select Mode\" you can lock a specific weather, time of day and location instead of \"auto\"",
+	"tip.cosmetics": "The Garage sells cosmetics — camo, hull decal, tracks, turret. Purely visual, no stat effect",
+	"tip.garage_hotseat": "Garage upgrades apply to both players at once in Hot Seat mode",
+	"tip.daily": "\"Quests\" gives you a fresh set of daily goals with a coin reward",
+	"tip.achievements": "\"Achievements\" track long-term progress and pay out coins too",
+	"tip.gallery": "Browse every perk ahead of time in the \"Perk Gallery\" — they unlock as your profile levels up",
+	"tip.gamepad": "Gamepad is supported — the control scheme switches automatically",
+	"tip.hotseat": "Play two players on one screen with Hot Seat mode when starting a game",
+	"tip.net": "There's online multiplayer — the \"Online\" button on the main menu",
+	"tip.lang": "The interface language switches with the button in the corner of the menu",
+	"tip.mines": "Lay mines and detonate them once an enemy gets close",
+
 	# ------------------------------------------------------------- HUD
 	"hud.shield": " +{n} shield",
 	"hud.score": "Score {n}",
