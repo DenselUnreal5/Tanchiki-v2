@@ -52,6 +52,10 @@ var pad_deadzone := 0.22
 ## Отдача геймпада на попаданиях и взрывах.
 var pad_vibration := true
 
+# ---------------------------------------------------------------- интерфейс
+## Визуальная тема интерфейса: noir | military | scifi. См. Cfg.THEMES.
+var ui_theme := "military"
+
 ## Подключённые геймпады: [{id, name}]. Спрашивается интерфейсом настроек.
 func pads() -> Array:
 	var out := []
@@ -81,6 +85,7 @@ const RESOLUTIONS := [
 
 func _ready() -> void:
 	load_settings()
+	Cfg.apply_theme(ui_theme)
 	# Видео применяем отложенно: окно на старте ещё не готово к смене режима.
 	apply_video.call_deferred()
 	apply_audio()
@@ -110,6 +115,9 @@ func load_settings() -> void:
 	p2_device = String(cfg.get_value("input", "p2_device", p2_device))
 	pad_deadzone = clampf(float(cfg.get_value("input", "pad_deadzone", pad_deadzone)), 0.0, 0.6)
 	pad_vibration = bool(cfg.get_value("input", "pad_vibration", pad_vibration))
+	ui_theme = String(cfg.get_value("ui", "theme", ui_theme))
+	if not Cfg.THEMES.has(ui_theme):
+		ui_theme = "military"
 
 func save() -> void:
 	var cfg := ConfigFile.new()
@@ -129,6 +137,7 @@ func save() -> void:
 	cfg.set_value("input", "p2_device", p2_device)
 	cfg.set_value("input", "pad_deadzone", pad_deadzone)
 	cfg.set_value("input", "pad_vibration", pad_vibration)
+	cfg.set_value("ui", "theme", ui_theme)
 	cfg.save(SAVE_PATH)
 	changed.emit()
 
@@ -150,6 +159,8 @@ func reset() -> void:
 	display_mode = MODE_WINDOWED
 	resolution = Vector2i(1280, 720)
 	vsync = true
+	ui_theme = "military"
+	Cfg.apply_theme(ui_theme)
 	apply_audio()
 	apply_video()
 	save()

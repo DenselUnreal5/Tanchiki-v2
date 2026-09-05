@@ -43,12 +43,12 @@ const MENU_PANEL_W := 400.0
 const MENU_SETTINGS_W := 430.0
 
 var _menu: Control
-var _menu_panel: PanelContainer
+var _menu_panel: ThemedPanel
 var _menu_title_box: VBoxContainer
 var _menu_title: Label
 var _menu_info: RichTextLabel
 var _menu_settings: Control
-var _menu_settings_panel: PanelContainer
+var _menu_settings_panel: ThemedPanel
 var _menu_settings_btn: Button
 var _hints: RichTextLabel
 var _lang_btn: Button
@@ -67,22 +67,29 @@ var _pause: Control
 var _perk: Control
 var _perk_body: VBoxContainer
 var _gameover: Control
-var _gameover_panel: PanelContainer
+var _gameover_panel: ThemedPanel
 var _gameover_title: Label
 var _gameover_body: VBoxContainer
 
-var _gallery: Control
-var _gallery_body: VBoxContainer
-var _gallery_sub: Label
-var _garage: Control
-var _garage_body: VBoxContainer
-var _garage_sub: RichTextLabel
+## Галерея перков, Гараж и Достижения объединены в одну вкладочную оболочку —
+## см. _build_hub(). Раньше это были три раздельных оверлея.
+var _hub: Control
+var _hub_tabs_row: HBoxContainer
+var _hub_sub: RichTextLabel
+var _hub_body: VBoxContainer
+var _hub_active_tab := "gallery"
+var _gallery_selected_id := ""
+## Узлы дерева и панель описания текущей вкладки галереи — храним, чтобы
+## клик по перку (_select_gallery_perk) мог обновить только подсветку и
+## описание, не пересобирая список: пересборка создаёт новый list_scroll
+## и сбрасывает прокрутку на верх (см. _fill_gallery_tab).
+var _gallery_nodes: Dictionary = {}
+var _gallery_row: HBoxContainer
+var _gallery_detail_panel: Control
+
 var _stats: Control
 var _stats_body: VBoxContainer
 var _stats_sub: RichTextLabel
-var _achievements: Control
-var _achievements_body: VBoxContainer
-var _achievements_sub: RichTextLabel
 var _daily: Control
 var _daily_body: VBoxContainer
 var _daily_sub: RichTextLabel
@@ -98,22 +105,11 @@ func _ready() -> void:
 	_build_pause()
 	_build_perk()
 	_build_gameover()
-	_gallery = _make_overlay(true)
-	_gallery_sub = UiKit.subtitle("")
-	_gallery_body = _overlay_body(_gallery, "gallery.title", "🎖 Галерея перков", _gallery_sub,
-		func(): close_gallery())
-	_garage = _make_overlay(true)
-	_garage_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_garage_body = _overlay_body(_garage, "garage.title", "🔧 Гараж", _garage_sub,
-		func(): close_garage(), 880)
+	_build_hub()
 	_stats = _make_overlay(true)
 	_stats_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
 	_stats_body = _overlay_body(_stats, "stats.title", "📊 Статистика", _stats_sub,
 		func(): close_stats(), 540)
-	_achievements = _make_overlay(true)
-	_achievements_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_achievements_body = _overlay_body(_achievements, "achievements.title", "🏅 Достижения",
-		_achievements_sub, func(): close_achievements())
 	_daily = _make_overlay(true)
 	_daily_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
 	_daily_body = _overlay_body(_daily, "daily.title", "📅 Ежедневные задания",
@@ -221,7 +217,6 @@ func _overlay_body(root: Control, title_key: String, title_fallback: String,
 
 	var box := UiKit.vbox(10)
 	panel.add_child(box)
-	panel.add_child(UiKit.frame_overlay())
 
 	var title := UiKit.title(title_text, 24, Cfg.UI_TEXT)
 	box.add_child(title)
@@ -243,13 +238,39 @@ func _overlay_body(root: Control, title_key: String, title_fallback: String,
 	root.set_meta("scroll", scroll)
 	return body
 
+## Шапка хаба (вкладки + подзаголовок) больше не входит в scroll (см.
+## _build_hub) — из общего бюджета высоты для неё нужно вычесть примерное
+## место, иначе панель хаба вылезет за экран на ту же величину.
+const HUB_HEADER_H := 90.0
+
+## Общий бюджет высоты тела хаба (одинаковый на всех трёх вкладках, см.
+## _resize_hub_scroll) — используется и для внешнего hub_scroll, и для
+## внутреннего list_scroll галереи (_fill_gallery_tab), чтобы список перков
+## занимал ровно ту же высоту, а не оставлял пустой промежуток перед «Закрыть».
+func _hub_body_budget() -> float:
+	var screen := get_viewport_rect().size
+	return maxf(minf(screen.y * 0.86, 900.0) - HUB_HEADER_H, 200.0)
+
 func _resize_overlays() -> void:
 	var screen := get_viewport_rect().size
-	for root in [_gallery, _garage, _stats, _achievements, _daily, _settings, _net, _gameover]:
+	for root in [_stats, _daily, _settings, _net, _gameover]:
 		if root == null or not root.has_meta("scroll"):
 			continue
 		var scroll: ScrollContainer = root.get_meta("scroll")
 		scroll.custom_minimum_size.y = minf(screen.y * 0.86, 900.0)
+	_resize_hub_scroll()
+
+## Высота тела хаба — фиксированный бюджет, ОДИНАКОВЫЙ для всех трёх
+## вкладок (не зависит от содержимого конкретной вкладки): панель не должна
+## менять размер и прыгать при переключении вкладок или выборе перка —
+## только один и тот же прямоугольник, внутри которого короткие вкладки
+## оставляют немного пустого места снизу списка, а длинные прокручиваются.
+## Вызывается и при ресайзе окна, и после перестройки вкладки.
+func _resize_hub_scroll() -> void:
+	if _hub == null or not _hub.has_meta("scroll"):
+		return
+	var scroll: ScrollContainer = _hub.get_meta("scroll")
+	scroll.custom_minimum_size.y = _hub_body_budget()
 
 ## Раскладка главного меню.
 ##
@@ -328,7 +349,6 @@ func _build_menu() -> void:
 
 	var col := UiKit.vbox(12)
 	_menu_panel.add_child(col)
-	_menu_panel.add_child(UiKit.frame_overlay())
 
 	_menu_info = UiKit.rich("", 11, Cfg.UI_GOLD)
 	var info_panel := PanelContainer.new()
@@ -421,7 +441,6 @@ func _build_menu() -> void:
 
 	_menu_settings = UiKit.vbox(11)
 	_menu_settings_panel.add_child(_menu_settings)
-	_menu_settings_panel.add_child(UiKit.frame_overlay())
 
 	_build_menu_settings()
 
@@ -543,8 +562,7 @@ func refresh_profile() -> void:
 	_refresh_menu_info()
 
 func hide_all_overlays() -> void:
-	for c in [_menu, _pause, _perk, _gameover, _gallery, _garage, _stats,
-			_achievements, _daily, _settings, _net]:
+	for c in [_menu, _pause, _perk, _gameover, _hub, _stats, _daily, _settings, _net]:
 		if c != null:
 			c.visible = false
 
@@ -561,7 +579,6 @@ func _build_pause() -> void:
 
 	var box := UiKit.vbox(10)
 	panel.add_child(box)
-	panel.add_child(UiKit.frame_overlay())
 	box.add_child(UiKit.title(I18n.t("pause.title", {}, "ПАУЗА"), 24))
 
 	var resume := UiKit.primary(I18n.t("pause.resume", {}, "Продолжить"), 15)
@@ -602,7 +619,6 @@ func _build_perk() -> void:
 
 	var box := UiKit.vbox(12)
 	panel.add_child(box)
-	panel.add_child(UiKit.frame_overlay(Cfg.UI_GOLD))
 	box.add_child(UiKit.title(I18n.t("perk.title", {}, "УРОВЕНЬ ПОВЫШЕН"), 24, Cfg.UI_GOLD))
 
 	_perk_body = UiKit.vbox(12)
@@ -756,15 +772,156 @@ func _perk_card(player, id: String) -> Control:
 func hide_perk_select() -> void:
 	_perk.visible = false
 
-# ================================================================== ГАЛЕРЕЯ
+# ============================================================ АРСЕНАЛ (вкладки)
+## Галерея перков, Гараж и Достижения были тремя разными оверлеями — теперь
+## это вкладки одной панели, оформленной по военно-технической рамке (см.
+## план реформы интерфейса): верхняя строка вкладок, тело меняется по клику.
+func _build_hub() -> void:
+	_hub = _make_overlay(true)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_hub.add_child(center)
+
+	# Панель без общего скролла вокруг всего: вкладки и подзаголовок должны
+	# остаться на месте, пока прокручивается только тело (см. _hub_scroll
+	# ниже) — иначе при длинном содержимом (Гараж/Достижения) заголовок
+	# уезжает вместе с ним.
+	var panel := UiKit.panel()
+	panel.custom_minimum_size = Vector2(900, 0)
+	center.add_child(panel)
+
+	var box := UiKit.vbox(10)
+	panel.add_child(box)
+
+	_hub_tabs_row = HBoxContainer.new()
+	box.add_child(_hub_tabs_row)
+
+	_hub_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
+	box.add_child(_hub_sub)
+
+	var hub_scroll := ScrollContainer.new()
+	hub_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(hub_scroll)
+
+	_hub_body = UiKit.vbox(8)
+	_hub_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hub_scroll.add_child(_hub_body)
+
+	var close := UiKit.secondary(I18n.t("btn.close", {}, "Закрыть"))
+	close.pressed.connect(func(): close_hub())
+	var wrap := CenterContainer.new()
+	wrap.add_child(close)
+	box.add_child(wrap)
+
+	_hub.set_meta("close_button", close)
+	_hub.set_meta("scroll", hub_scroll)
+
+	_rebuild_hub_tabs()
+
+## Подписи вкладок собираются заново при каждой перестройке: язык мог
+## смениться, отдельно кэшировать их незачем.
+func _hub_tab_items() -> Array:
+	return [
+		{"key": "gallery", "label": I18n.t("menu.gallery", {}, "Галерея перков")},
+		{"key": "garage", "label": I18n.t("menu.garage", {}, "🔧 Гараж")},
+		{"key": "achievements", "label": I18n.t("menu.achievements", {}, "🏅 Достижения")},
+	]
+
+func _rebuild_hub_tabs() -> void:
+	var idx := _hub_tabs_row.get_index()
+	var parent := _hub_tabs_row.get_parent()
+	var new_row := UiKit.plain_tabs(_hub_tab_items(), _hub_active_tab,
+		func(key): _switch_hub_tab(key))
+	parent.add_child(new_row)
+	parent.move_child(new_row, idx)
+	_hub_tabs_row.queue_free()
+	_hub_tabs_row = new_row
+
+func _switch_hub_tab(key: String) -> void:
+	_hub_active_tab = key
+	_rebuild_hub_tabs()
+	_fill_hub_tab(key)
+
+func _fill_hub_tab(key: String) -> void:
+	for c in _hub_body.get_children():
+		c.queue_free()
+	match key:
+		"gallery": _fill_gallery_tab()
+		"garage": _fill_garage_tab()
+		"achievements": _fill_achievements_tab()
+	_resize_hub_scroll()
+
+func _open_hub_tab(key: String) -> void:
+	_hub.visible = true
+	_switch_hub_tab(key)
+
+func close_hub() -> void:
+	_hub.visible = false
+
+## Перевод хаба на смену языка: заголовки вкладок и тело активной вкладки.
+## Отдельно от общего цикла в _on_language_changed — у хаба нет единого
+## title_key, три экрана внутри него переводятся вместе одним проходом.
+func _refresh_hub_language() -> void:
+	if _hub == null:
+		return
+	var btn := _hub.get_meta("close_button") as Button
+	if btn != null:
+		btn.text = I18n.t("btn.close", {}, "Закрыть")
+	_rebuild_hub_tabs()
+	if _hub.visible:
+		_fill_hub_tab(_hub_active_tab)
+
+# ------------------------------------------------------------ ГАЛЕРЕЯ ПЕРКОВ
 func open_gallery() -> void:
-	_gallery_sub.text = I18n.t("gallery.sub",
+	_open_hub_tab("gallery")
+
+func close_gallery() -> void:
+	if _hub_active_tab == "gallery":
+		close_hub()
+
+var is_gallery_open: bool:
+	get: return _hub != null and _hub.visible and _hub_active_tab == "gallery"
+
+## Дерево умений: колонка на категорию (см. Perks.CATEGORIES), узлы сверху
+## вниз в порядке открытия по уровню профиля (Perks.unlock_level_of) —
+## настоящих рёбер-предпосылок между отдельными перками в данных нет,
+## только уровень открытия, поэтому колонка — прямая линейная цепочка,
+## а не граф. Категория с более чем тремя перками не растягивается в одну
+## длинную колонку, а делится на две узкие рядом (первая половина по
+## уровню открытия — в левую, вторая — в правую).
+const _GALLERY_MAX_PER_COL := 3
+
+func _fill_gallery_tab() -> void:
+	_hub_sub.text = I18n.t("gallery.sub",
 		{"lvl": Prof.global_level, "n": Prof.unlocked.size(), "total": Perks.all().size()},
 		"Уровень профиля %d · открыто %d из %d" % [Prof.global_level, Prof.unlocked.size(), Perks.all().size()])
 
-	for c in _gallery_body.get_children():
-		c.queue_free()
+	_gallery_nodes.clear()
+	var row := UiKit.hbox(16)
+	_gallery_row = row
+	_hub_body.add_child(row)
 
+	# Список перков — в своём ScrollContainer с ограниченной высотой, а не
+	# в общем скролле всего хаба: у категории «Огонь» одной 17 перков,
+	# и если бы список и панель описания прокручивались вместе, при
+	# просмотре нижних категорий панель описания уезжала бы за край экрана
+	# вместе со списком. Так список гуляет сам по себе, а описание справа
+	# остаётся на месте и читается при любой прокрутке.
+	var list_scroll := ScrollContainer.new()
+	list_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Та же высота, что и у тела хаба целиком (_hub_body_budget) — иначе
+	# список перков (короче панели описания) оставляет пустой промежуток
+	# перед кнопкой «Закрыть», а высота вкладки не совпадает с Гаражом/
+	# Достижениями.
+	list_scroll.custom_minimum_size = Vector2(0, _hub_body_budget())
+	row.add_child(list_scroll)
+
+	var left_col := UiKit.vbox(16)
+	left_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_scroll.add_child(left_col)
+
+	var first_id := ""
 	for cat in Perks.CATEGORIES:
 		var perks := []
 		for p in Perks.all():
@@ -772,82 +929,155 @@ func open_gallery() -> void:
 				perks.append(p)
 		if perks.is_empty():
 			continue
-		_gallery_body.add_child(UiKit.section(I18n.t("cat." + String(cat["id"]), {}, String(cat["name"])), cat["color"]))
-		var grid := HFlowContainer.new()
-		grid.add_theme_constant_override("h_separation", 8)
-		grid.add_theme_constant_override("v_separation", 8)
-		for perk in perks:
-			grid.add_child(_gallery_card(perk))
-		_gallery_body.add_child(grid)
+		perks.sort_custom(func(a, b): return Perks.unlock_level_of(a["id"]) < Perks.unlock_level_of(b["id"]))
+		if first_id == "":
+			first_id = String(perks[0]["id"])
 
-	_gallery.visible = true
+		var band := UiKit.vbox(8)
+		left_col.add_child(band)
 
-func _gallery_card(perk: Dictionary) -> Control:
-	var unlocked := Prof.is_unlocked(String(perk["id"]))
-	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(168, 0)
-	card.add_theme_stylebox_override("panel",
-		UiKit.card_style(Cfg.UI_ACCENT_DIM if unlocked else Cfg.UI_BORDER))
-	if not unlocked:
-		card.modulate.a = 0.65
+		var head := UiKit.section(I18n.t("cat." + String(cat["id"]), {}, String(cat["name"])), cat["color"])
+		band.add_child(head)
 
-	var box := UiKit.vbox(3)
-	card.add_child(box)
+		var subcols := UiKit.hbox(14)
+		band.add_child(subcols)
 
-	if unlocked:
-		var badge := UiKit.label(I18n.t("gallery.open", {}, "Открыт"), 8, Cfg.UI_ACCENT, true)
-		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		box.add_child(badge)
+		var num_cols := ceili(float(perks.size()) / float(_GALLERY_MAX_PER_COL))
+		var rows := ceili(float(perks.size()) / float(num_cols))
+		for c in num_cols:
+			var sub := UiKit.vbox(8)
+			subcols.add_child(sub)
+			for r in rows:
+				var idx := c * rows + r
+				if idx >= perks.size():
+					break
+				if r > 0:
+					sub.add_child(_gallery_spine())
+				sub.add_child(_gallery_node(perks[idx]))
 
-	var icon := UiKit.label(String(perk["icon"]), 24)
-	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(icon)
-	var name_label := UiKit.label(I18n.dn(perk, "name", "perk"), 11, Color.WHITE, true)
+	if _gallery_selected_id == "" or Perks.get_perk(_gallery_selected_id).is_empty():
+		_gallery_selected_id = first_id
+
+	_gallery_detail_panel = _gallery_detail(Perks.get_perk(_gallery_selected_id))
+	row.add_child(_gallery_detail_panel)
+
+## Прямая вертикальная связь между двумя узлами одной колонки.
+func _gallery_spine() -> Control:
+	var wrap := CenterContainer.new()
+	var line := ColorRect.new()
+	line.color = Color(Cfg.UI_BORDER, 0.85)
+	line.custom_minimum_size = Vector2(2, 14)
+	wrap.add_child(line)
+	return wrap
+
+## Узел дерева — форма зависит от активной темы (см. skill_node.gd), значок
+## общий для всех тем (см. perk_icons.gd). Полное описание живёт в панели
+## справа (_gallery_detail), сам узел показывает только иконку.
+func _gallery_node(perk: Dictionary) -> Control:
+	var id := String(perk["id"])
+	var unlocked := Prof.is_unlocked(id)
+	var node := SkillNode.new()
+	node.perk_id = id
+	node.locked = not unlocked
+	node.selected = id == _gallery_selected_id
+	if not perk.has("challenge"):
+		node.need_level = Perks.unlock_level_of(id)
+	_gallery_nodes[id] = node
+	node.picked.connect(func(picked_id: String): _select_gallery_perk(picked_id))
+	return node
+
+## Выбор перка без пересборки списка: полная пересборка (_fill_hub_tab)
+## создаёт новый list_scroll и сбрасывает прокрутку на верх (см.
+## _fill_gallery_tab) — при простом клике по перку список не должен
+## прыгать, меняются только подсветка узла и панель описания справа.
+func _select_gallery_perk(id: String) -> void:
+	if id == _gallery_selected_id:
+		return
+	if _gallery_nodes.has(_gallery_selected_id):
+		_gallery_nodes[_gallery_selected_id].selected = false
+	_gallery_selected_id = id
+	if _gallery_nodes.has(id):
+		_gallery_nodes[id].selected = true
+	if _gallery_row == null:
+		return
+	if _gallery_detail_panel != null:
+		_gallery_detail_panel.queue_free()
+	_gallery_detail_panel = _gallery_detail(Perks.get_perk(id))
+	_gallery_row.add_child(_gallery_detail_panel)
+	_resize_hub_scroll()
+
+## Правая панель: выбранный узел целиком — иконка, название, описание и
+## честное состояние (открыт / прогресс задачи / нужный уровень профиля).
+## Купить перк за деньги нельзя (в отличие от прообраза-референса) —
+## поэтому кнопка тут читается как индикатор состояния, а не CTA.
+func _gallery_detail(perk: Dictionary) -> Control:
+	var panel := UiKit.panel()
+	panel.custom_minimum_size = Vector2(240, 0)
+	if perk.is_empty():
+		return panel
+	var id := String(perk["id"])
+	var unlocked := Prof.is_unlocked(id)
+
+	var box := UiKit.vbox(6)
+	panel.add_child(box)
+
+	var icon_center := CenterContainer.new()
+	icon_center.custom_minimum_size = Vector2(0, 92)
+	var icon := PerkIconView.new()
+	icon.custom_minimum_size = Vector2(80, 80)
+	icon.perk_id = id
+	icon.icon_color = Cfg.UI_TEXT if unlocked else Cfg.UI_MUTED
+	icon.rough = true
+	icon_center.add_child(icon)
+	box.add_child(icon_center)
+	var name_label := UiKit.label(I18n.dn(perk, "name", "perk"), 15, Color.WHITE, true)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_label.custom_minimum_size = Vector2(208, 0)
 	box.add_child(name_label)
-	var desc := UiKit.label(I18n.dn(perk, "desc", "perk"), 9, Cfg.UI_MUTED)
+	var desc := UiKit.label(I18n.dn(perk, "desc", "perk"), 11, Cfg.UI_MUTED)
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.custom_minimum_size = Vector2(148, 0)
+	desc.custom_minimum_size = Vector2(208, 0)
 	box.add_child(desc)
 
-	if not unlocked:
-		if perk.has("challenge"):
-			var pr := Prof.challenge_progress(String(perk["id"]))
-			var task := I18n.t("perk." + String(perk["id"]) + ".challenge", {}, String(pr["desc"]))
-			var task_label := UiKit.label(task, 9, Cfg.UI_WARN)
-			task_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			task_label.custom_minimum_size = Vector2(148, 0)
-			box.add_child(task_label)
-			var prog := UiKit.label("%d / %d" % [pr["current"], pr["need"]], 9, Cfg.UI_MUTED)
-			prog.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			box.add_child(prog)
-			box.add_child(UiKit.progress_bar(float(pr["current"]) / float(pr["need"]), 148, 3, Cfg.UI_WARN))
-		else:
-			var lvl := Perks.unlock_level_of(String(perk["id"]))
-			var l := UiKit.label(I18n.t("gallery.unlockAt", {"lvl": lvl},
-				"Откроется на уровне профиля %d" % lvl), 9, Cfg.UI_WARN)
-			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			l.custom_minimum_size = Vector2(148, 0)
-			box.add_child(l)
-	return card
+	box.add_child(HSeparator.new())
 
-func close_gallery() -> void:
-	_gallery.visible = false
+	if unlocked:
+		box.add_child(UiKit.unlock_button(I18n.t("gallery.open", {}, "ОТКРЫТ"), "unlocked"))
+	elif perk.has("challenge"):
+		var pr := Prof.challenge_progress(id)
+		var task := I18n.t("perk." + id + ".challenge", {}, String(pr["desc"]))
+		var task_label := UiKit.label(task, 10, Cfg.UI_WARN)
+		task_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		task_label.custom_minimum_size = Vector2(208, 0)
+		box.add_child(task_label)
+		box.add_child(UiKit.progress_bar(float(pr["current"]) / float(pr["need"]), 200, 5, Cfg.UI_WARN))
+		var prog := UiKit.label("%d / %d" % [pr["current"], pr["need"]], 10, Cfg.UI_MUTED)
+		prog.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		box.add_child(prog)
+	else:
+		var lvl := Perks.unlock_level_of(id)
+		box.add_child(UiKit.unlock_button(
+			I18n.t("gallery.unlockAt", {"lvl": lvl}, "Откроется на уровне профиля %d" % lvl), "locked"))
 
-var is_gallery_open: bool:
-	get: return _gallery != null and _gallery.visible
+	return panel
 
 # ================================================================== ГАРАЖ
 func open_garage() -> void:
-	_garage_sub.text = "[center]" + I18n.t("garage.sub", {"money": Prof.money},
-		"Монеты: [b]%d[/b] 🪙 · Улучшения танка действуют на обоих игроков в партии" % Prof.money) + "[/center]"
+	_open_hub_tab("garage")
 
-	for c in _garage_body.get_children():
-		c.queue_free()
+func close_garage() -> void:
+	if _hub_active_tab == "garage":
+		close_hub()
+
+var is_garage_open: bool:
+	get: return _hub != null and _hub.visible and _hub_active_tab == "garage"
+
+func _fill_garage_tab() -> void:
+	_hub_sub.text = "[center]" + I18n.t("garage.sub", {"money": Prof.money},
+		"Монеты: [b]%d[/b] 🪙 · Улучшения танка действуют на обоих игроков в партии" % Prof.money) + "[/center]"
 
 	for cat in Upgrades.CATEGORIES:
 		var ups := []
@@ -856,29 +1086,27 @@ func open_garage() -> void:
 				ups.append(u)
 		if ups.is_empty():
 			continue
-		_garage_body.add_child(UiKit.section(I18n.t("cat." + String(cat["id"]), {}, String(cat["name"])), cat["color"]))
+		_hub_body.add_child(UiKit.section(I18n.t("cat." + String(cat["id"]), {}, String(cat["name"])), cat["color"]))
 		var grid := HFlowContainer.new()
 		grid.add_theme_constant_override("h_separation", 10)
 		grid.add_theme_constant_override("v_separation", 10)
 		for up in ups:
 			grid.add_child(_upgrade_card(up))
-		_garage_body.add_child(grid)
+		_hub_body.add_child(grid)
 
 	# ---- косметика ----
-	_garage_body.add_child(UiKit.section(I18n.t("garage.cosmetics", {}, "Косметика"), Cfg.UI_MUTED))
+	_hub_body.add_child(UiKit.section(I18n.t("garage.cosmetics", {}, "Косметика"), Cfg.UI_MUTED))
 	var type_names := {"camo": "Камуфляж", "hull": "Рисунок", "track": "Гусеницы", "turret": "Башня"}
 	for type in Cosmetics.TYPES:
 		var t2 := UiKit.label(I18n.t("cos." + type, {}, String(type_names[type])).to_upper(),
 			11, Cfg.UI_MUTED, true)
-		_garage_body.add_child(t2)
+		_hub_body.add_child(t2)
 		var grid := HFlowContainer.new()
 		grid.add_theme_constant_override("h_separation", 10)
 		grid.add_theme_constant_override("v_separation", 10)
 		for c in Cosmetics.by_type(type):
 			grid.add_child(_cosmetic_card(c, type))
-		_garage_body.add_child(grid)
-
-	_garage.visible = true
+		_hub_body.add_child(grid)
 
 func _upgrade_card(up: Dictionary) -> Control:
 	var level := Prof.upgrade_level(String(up["id"]))
@@ -893,7 +1121,11 @@ func _upgrade_card(up: Dictionary) -> Control:
 
 	var row := UiKit.hbox(10)
 	card.add_child(row)
-	row.add_child(UiKit.label(String(up["icon"]), 22))
+	var icon := PerkIconView.new()
+	icon.perk_id = "upg_" + String(up["id"])
+	icon.icon_color = Cfg.UI_TEXT
+	icon.custom_minimum_size = Vector2(26, 26)
+	row.add_child(icon)
 
 	var info := UiKit.vbox(3)
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -934,7 +1166,11 @@ func _cosmetic_card(c: Dictionary, type: String) -> Control:
 
 	var row := UiKit.hbox(10)
 	card.add_child(row)
-	row.add_child(UiKit.label(String(c["icon"]), 22))
+	var icon := PerkIconView.new()
+	icon.perk_id = "cos_%s_%s" % [type, String(c["id"])]
+	icon.icon_color = c.get("color", c.get("a", Cfg.UI_TEXT))
+	icon.custom_minimum_size = Vector2(26, 26)
+	row.add_child(icon)
 
 	var info := UiKit.vbox(3)
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -965,12 +1201,6 @@ func _cosmetic_card(c: Dictionary, type: String) -> Control:
 				open_garage())
 		row.add_child(buy)
 	return card
-
-func close_garage() -> void:
-	_garage.visible = false
-
-var is_garage_open: bool:
-	get: return _garage != null and _garage.visible
 
 # ================================================================ СТАТИСТИКА
 func open_stats() -> void:
@@ -1010,24 +1240,31 @@ var is_stats_open: bool:
 
 # ================================================================ ДОСТИЖЕНИЯ
 func open_achievements() -> void:
+	_open_hub_tab("achievements")
+
+func close_achievements() -> void:
+	if _hub_active_tab == "achievements":
+		close_hub()
+
+var is_achievements_open: bool:
+	get: return _hub != null and _hub.visible and _hub_active_tab == "achievements"
+
+func _fill_achievements_tab() -> void:
 	var unlocked := []
 	var total_reward := 0
 	for a in Achievements.LIST:
 		if Prof.achievements.has(a["id"]):
 			unlocked.append(a)
 			total_reward += int(a["reward"])
-	_achievements_sub.text = "[center]" + I18n.t("achievements.sub",
+	_hub_sub.text = "[center]" + I18n.t("achievements.sub",
 		{"n": unlocked.size(), "total": Achievements.LIST.size(), "reward": total_reward},
 		"Открыто [b]%d[/b] из %d · награда всего [b]%d 🪙[/b]" % [
 			unlocked.size(), Achievements.LIST.size(), total_reward]) + "[/center]"
 
-	for c in _achievements_body.get_children():
-		c.queue_free()
-
 	var grid := HFlowContainer.new()
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
-	_achievements_body.add_child(grid)
+	_hub_body.add_child(grid)
 
 	for a in Achievements.LIST:
 		var done := Prof.achievements.has(a["id"])
@@ -1041,8 +1278,11 @@ func open_achievements() -> void:
 			card.modulate.a = 0.65
 		var box := UiKit.vbox(3)
 		card.add_child(box)
-		var icon := UiKit.label(String(a["icon"]), 24)
-		icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var icon := PerkIconView.new()
+		icon.perk_id = "ach_" + String(a["id"])
+		icon.icon_color = Cfg.UI_TEXT
+		icon.custom_minimum_size = Vector2(28, 28)
+		icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		box.add_child(icon)
 		var name_label := UiKit.label(I18n.dn(a, "name", "ach"), 11, Color.WHITE, true)
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1063,14 +1303,6 @@ func open_achievements() -> void:
 			box.add_child(prog)
 			box.add_child(UiKit.progress_bar(float(cur) / float(need), 148, 3, Cfg.UI_WARN))
 		grid.add_child(card)
-
-	_achievements.visible = true
-
-func close_achievements() -> void:
-	_achievements.visible = false
-
-var is_achievements_open: bool:
-	get: return _achievements != null and _achievements.visible
 
 # ============================================================ ЕЖЕДНЕВНЫЕ
 func open_daily() -> void:
@@ -1171,8 +1403,8 @@ func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 	_last_gameover = {"result": result, "world": world, "hotseat": hotseat}
 	var win := bool(result["victory"])
 	_gameover.visible = true
-	_gameover_panel.add_theme_stylebox_override("panel",
-		UiKit.panel_style(Cfg.UI_ACCENT if win else Cfg.UI_DANGER))
+	_gameover_panel.border_color = Cfg.UI_ACCENT if win else Cfg.UI_DANGER
+	_gameover_panel.queue_redraw()
 
 	var winner_index := int(result["winner_player_index"])
 	if hotseat and winner_index >= 0:
@@ -1281,8 +1513,7 @@ func _on_language_changed() -> void:
 	# Заголовки окон и кнопка «Закрыть» живут вне меню: они собираются один
 	# раз в _ready и пересборкой меню не затрагиваются. Поэтому в английской
 	# игре над сетевым окном оставалась надпись «Сетевая игра».
-	for root in [_gallery, _garage, _stats, _achievements, _daily, _settings,
-			_net, _gameover]:
+	for root in [_stats, _daily, _settings, _net, _gameover]:
 		if root == null or not root.has_meta("title_key"):
 			continue
 		var label := root.get_meta("title_label") as Label
@@ -1292,11 +1523,24 @@ func _on_language_changed() -> void:
 		var btn := root.get_meta("close_button") as Button
 		if btn != null:
 			btn.text = I18n.t("btn.close", {}, "Закрыть")
+	_refresh_hub_language()
+	_refresh_screens()
 
-	# Полная пересборка меню — самый надёжный способ применить перевод
-	# ко всем подписям сразу.
+## Общая пересборка после смены языка или темы интерфейса. Главное меню и
+## пауза строятся заново — их кнопки несут цвет, запечённый в StyleBox при
+## постройке, одной перерисовки мало; окна вроде настроек/статистики просто
+## переоткрываются — они и так собирают тело с нуля при каждом открытии.
+func _refresh_screens() -> void:
 	var was_menu := _menu.visible
 	var settings_open := _menu_settings_panel.visible
+	# queue_free() освобождает узел только в конце кадра — до этого старое
+	# меню остаётся в дереве. move_child(_menu, 0) ниже кладёт НОВОЕ меню
+	# на дно z-порядка (как и задумано, чтобы оверлеи были поверх), но это
+	# заодно поднимает ещё живое старое меню НАД новым: на один кадр экран
+	# рисует старое (сейчас будет удалено) меню поверх нового, а клик может
+	# попасть между ними — по кнопке, которой уже фактически нет. Прячем
+	# старое сразу, а не ждём его освобождения.
+	_menu.visible = false
 	_menu.queue_free()
 	_build_menu()
 	# Новое меню должно остаться под оверлеями.
@@ -1304,25 +1548,46 @@ func _on_language_changed() -> void:
 	_menu_settings_panel.visible = settings_open
 	_refresh_mode_button()
 	_menu.visible = was_menu
+	# Позиция левой панели меню считается от get_combined_minimum_size(),
+	# который обновляется отложенно через сигнал minimum_size_changed —
+	# раскладываем сразу, иначе кнопки на кадр-другой остаются на (0, 0)
+	# и не попадают под клик.
+	_layout_menu()
+	_layout_menu.call_deferred()
+
+	var pause_open := _pause.visible
+	_pause.visible = false
+	_pause.queue_free()
+	_build_pause()
+	_pause.visible = pause_open
+
 	refresh_profile()
 	if is_settings_open:
 		open_settings()
-	if is_gallery_open:
-		open_gallery()
-	if is_garage_open:
-		open_garage()
 	if is_stats_open:
 		open_stats()
-	if is_achievements_open:
-		open_achievements()
 	if is_daily_open:
 		open_daily()
 	# Сетевого окна в этом списке не было — оно единственное оставалось
-	# на прежнем языке до закрытия и повторного открытия.
+	# на прежнем языке/теме до закрытия и повторного открытия.
 	if _net != null and _net.visible:
 		_refresh_net()
 	if not _last_gameover.is_empty() and _gameover.visible:
 		show_game_over(_last_gameover["result"], _last_gameover["world"], _last_gameover["hotseat"])
+
+## Смена темы интерфейса вживую (см. Sets.ui_theme / Cfg.apply_theme) —
+## галерея/гараж/достижения пересобираются полностью (форма узлов дерева
+## умений зависит от темы), остальные экраны — через общий _refresh_screens().
+func _on_theme_changed() -> void:
+	var hub_open := _hub.visible
+	var hub_tab := _hub_active_tab
+	_hub.visible = false
+	_hub.queue_free()
+	_hub_active_tab = hub_tab
+	_build_hub()
+	if hub_open:
+		_open_hub_tab(hub_tab)
+	_refresh_screens()
 
 # ================================================================ НАСТРОЙКИ
 ## Собирает экран настроек заново при каждом открытии: значения берутся
@@ -1334,6 +1599,7 @@ func open_settings() -> void:
 	for c in _settings_body.get_children():
 		c.queue_free()
 
+	_build_interface_section()
 	_build_video_section()
 	_build_graphics_section()
 	_build_audio_section()
@@ -1347,6 +1613,27 @@ func open_settings() -> void:
 	_settings_body.add_child(wrap)
 
 	_settings.visible = true
+
+## Тема интерфейса переключается вживую и сразу сохраняется — как и все
+## остальные настройки здесь (см. README «каждое изменение применяется
+## сразу»). Смена формы узлов дерева умений и панелей происходит через
+## _on_theme_changed(), которая пересобирает открытые экраны.
+func _build_interface_section() -> void:
+	_settings_body.add_child(UiKit.section(I18n.t("set.interface", {}, "Интерфейс"), Cfg.UI_MUTED))
+	var theme_keys := ["noir", "military", "scifi"]
+	var theme_labels := [
+		I18n.t("theme.noir", {}, "Нуар"),
+		I18n.t("theme.military", {}, "Военное досье"),
+		I18n.t("theme.scifi", {}, "Sci-Fi"),
+	]
+	var idx := maxi(0, theme_keys.find(Sets.ui_theme))
+	_settings_body.add_child(UiKit.choice_row(
+		I18n.t("set.theme", {}, "Тема интерфейса"), theme_labels, idx,
+		func(v: int):
+			Sets.ui_theme = theme_keys[v]
+			Sets.save()
+			Cfg.apply_theme(Sets.ui_theme)
+			_on_theme_changed()))
 
 func _build_video_section() -> void:
 	_settings_body.add_child(UiKit.section(I18n.t("set.video", {}, "Видео"), Cfg.UI_MUTED))

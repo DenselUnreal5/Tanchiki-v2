@@ -23,7 +23,7 @@ var _map_aspect := 200.0 / 114.0
 var _feed_box: VBoxContainer
 var _banner: Label
 var _banner_timer := 0
-var _scoreboard: PanelContainer
+var _scoreboard: ThemedPanel
 var _scoreboard_body: VBoxContainer
 var scoreboard_visible := false
 
@@ -72,16 +72,10 @@ func build(players: Array, world: World) -> void:
 		var name_label := UiKit.label(player.name, 12, palette["trim"], true)
 		left.add_child(name_label)
 
-		var hp_wrap := Control.new()
-		hp_wrap.custom_minimum_size = Vector2(190, 14)
-		var hp_bg := ColorRect.new()
-		hp_bg.color = Color(0, 0, 0, 0.65)
-		hp_bg.size = Vector2(190, 14)
-		hp_wrap.add_child(hp_bg)
-		var hp_fill := ColorRect.new()
-		hp_fill.color = Cfg.UI_ACCENT
-		hp_fill.size = Vector2(190, 14)
-		hp_wrap.add_child(hp_fill)
+		var hp_bar := UiKit.rounded_bar(190, 14, Cfg.UI_ACCENT)
+		var hp_wrap: Control = hp_bar["wrap"]
+		var hp_bg: ColorRect = hp_bar["bg"]
+		var hp_fill: ColorRect = hp_bar["fill"]
 		var shield_fill := ColorRect.new()
 		shield_fill.color = Cfg.shield
 		shield_fill.position = Vector2(0, 10)
@@ -101,16 +95,9 @@ func build(players: Array, world: World) -> void:
 		# ---- нагрев ствола ----
 		# Узкая полоска прямо под здоровьем: она нужна в те же моменты,
 		# что и HP, и разносить их по разным углам экрана нельзя.
-		var heat_wrap := Control.new()
-		heat_wrap.custom_minimum_size = Vector2(190, 5)
-		var heat_bg := ColorRect.new()
-		heat_bg.color = Color(0, 0, 0, 0.55)
-		heat_bg.size = Vector2(190, 5)
-		heat_wrap.add_child(heat_bg)
-		var heat_fill := ColorRect.new()
-		heat_fill.color = Cfg.UI_WARN
-		heat_fill.size = Vector2(0, 5)
-		heat_wrap.add_child(heat_fill)
+		var heat_bar := UiKit.rounded_bar(190, 5, Cfg.UI_WARN)
+		var heat_wrap: Control = heat_bar["wrap"]
+		var heat_fill: ColorRect = heat_bar["fill"]
 		left.add_child(heat_wrap)
 
 		# ---- верхняя правая часть: счёт, задача, погода ----
@@ -135,16 +122,9 @@ func build(players: Array, world: World) -> void:
 
 		var xp_label := UiKit.label("", 10, Cfg.UI_GOLD)
 		bottom.add_child(xp_label)
-		var xp_wrap := Control.new()
-		xp_wrap.custom_minimum_size = Vector2(220, 6)
-		var xp_bg := ColorRect.new()
-		xp_bg.color = Color(0, 0, 0, 0.65)
-		xp_bg.size = Vector2(220, 6)
-		xp_wrap.add_child(xp_bg)
-		var xp_fill := ColorRect.new()
-		xp_fill.color = Cfg.UI_GOLD
-		xp_fill.size = Vector2(0, 6)
-		xp_wrap.add_child(xp_fill)
+		var xp_bar := UiKit.rounded_bar(220, 6, Cfg.UI_GOLD)
+		var xp_wrap: Control = xp_bar["wrap"]
+		var xp_fill: ColorRect = xp_bar["fill"]
 		bottom.add_child(xp_wrap)
 
 		# ---- активная способность: иконка, подсказка клавиши и кулдаун ----
@@ -153,16 +133,9 @@ func build(players: Array, world: World) -> void:
 		bottom.add_child(ability_row)
 		var ability_label := UiKit.label("", 10, Cfg.UI_TEXT)
 		ability_row.add_child(ability_label)
-		var cd_wrap := Control.new()
-		cd_wrap.custom_minimum_size = Vector2(90, 6)
-		var cd_bg := ColorRect.new()
-		cd_bg.color = Color(0, 0, 0, 0.65)
-		cd_bg.size = Vector2(90, 6)
-		cd_wrap.add_child(cd_bg)
-		var cd_fill := ColorRect.new()
-		cd_fill.color = Cfg.UI_ACCENT
-		cd_fill.size = Vector2(0, 6)
-		cd_wrap.add_child(cd_fill)
+		var cd_bar := UiKit.rounded_bar(90, 6, Cfg.UI_ACCENT)
+		var cd_wrap: Control = cd_bar["wrap"]
+		var cd_fill: ColorRect = cd_bar["fill"]
 		ability_row.add_child(cd_wrap)
 
 		var perks := UiKit.hbox(4)
@@ -176,7 +149,7 @@ func build(players: Array, world: World) -> void:
 
 		panels[player.index] = {
 			"root": root, "left": left, "right": right, "bottom": bottom,
-			"name": name_label, "hp_fill": hp_fill, "hp_bg": hp_bg,
+			"name": name_label, "hp_wrap": hp_wrap, "hp_fill": hp_fill, "hp_bg": hp_bg,
 			"shield_fill": shield_fill, "hp_text": hp_text,
 			"heat_fill": heat_fill, "heat_wrap": heat_wrap,
 			"net": net_label,
@@ -217,6 +190,9 @@ func layout(players: Array) -> void:
 		var hp_w := 150.0 if split else 190.0
 		(panel["hp_bg"] as ColorRect).size.x = hp_w
 		(panel["hp_fill"] as ColorRect).size.x = hp_w
+		# Обёртка несёт рамку (UiKit.rounded_bar) — без этого рамка
+		# оставалась бы шириной первой сборки, не совпадая с укороченным баром.
+		(panel["hp_wrap"] as Control).custom_minimum_size.x = hp_w
 
 	# Размер берём у окна: собственный size у Control может быть ещё не пересчитан
 	# в тот кадр, когда HUD только собран.

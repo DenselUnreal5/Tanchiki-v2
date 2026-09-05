@@ -134,26 +134,81 @@ const PLAYER_SKINS := [
 ]
 
 # ---------------------------------------------------------------- палитра интерфейса
-# Холодная гунметалл-схема: раньше UI_PANEL был нейтрально-серым, теперь
-# сдвинут в синеватый металл под «военно-технический» стиль оформления.
-# UI_ACCENT остаётся отдельной семантикой состояния (победа/открыто/готово/
-# здоровье) и не трогается — под декоративное свечение рамок и вкладок
-# заведён отдельный UI_GLOW, чтобы не путать смысл с состоянием.
-static var UI_BG := Color("#0a0d10")
-static var UI_PANEL := Color("#171b1f")
-static var UI_PANEL_ALPHA := 0.94
-static var UI_CARD := Color("#20262b")   # раньше захардкожен прямо в card_style()
-static var UI_BORDER := Color("#2b333a") # раньше разные "#2e2e2e"/"#333333" по месту
-static var UI_ACCENT := Color("#55cc55")
-static var UI_ACCENT_DIM := Color("#2f6b2f")
-static var UI_TEXT := Color("#d8d8d8")
-static var UI_MUTED := Color("#8a8a8e")
-static var UI_WARN := Color("#ffaa33")
-static var UI_DANGER := Color("#cc4444")
-static var UI_GOLD := Color("#ffee55")
-## Декоративное свечение рамок/вкладок/уголков — отдельно от UI_ACCENT.
-static var UI_GLOW := Color("#33e6c9")
-static var UI_GLOW_DIM := Color("#175c50")
+# Три темы оформления (Sets.ui_theme), переключаются вживую из настроек.
+# Все static var ниже — «текущая» палитра: apply_theme() перезаписывает их
+# значениями выбранной темы, а весь остальной код по-прежнему читает их как
+# простые Cfg.UI_XXX, не заботясь о том, какая тема сейчас активна. Форма
+# элементов (ромб/шестигранник/скруглённый квадрат, панель — рваная бумага/
+# клёпаный металл/скошенное стекло) не хранится здесь — её выбирают на месте
+# отрисовки по Sets.ui_theme (см. skill_node.gd, themed_panel.gd).
+static var UI_BG := Color("#0d0f08")
+static var UI_PANEL := Color("#262c17")
+static var UI_PANEL_ALPHA := 0.96
+static var UI_CARD := Color("#303619")
+static var UI_BORDER := Color("#767c54")
+static var UI_ACCENT := Color("#a8c065")
+static var UI_ACCENT_DIM := Color("#465a2e")
+static var UI_TEXT := Color("#f3f5e4")
+static var UI_MUTED := Color("#9a9c7c")
+static var UI_WARN := Color("#e2a747")
+static var UI_DANGER := Color("#c05a44")
+static var UI_GOLD := Color("#dcc178")
+## Вторичная декоративная поверхность — жетон/полоска статуса, вторая метка.
+static var UI_TAG := Color("#d4d0b4")
+static var UI_TAG_INK := Color("#1a1c0e")
+
+## Полные палитры трёх тем. Ключи совпадают с именами полей выше (без UI_,
+## в нижнем регистре) — apply_theme() просто копирует значения по ключу.
+## Панель заметно светлее фона на всех трёх — иначе на реальном экране
+## (не всегда откалиброванном, как у автора) панель сливается с фоном
+## в одно тёмное пятно, а рамки/кнопки становится не видно вовсе.
+static var THEMES := {
+	"noir": {
+		"bg": Color("#0c0b07"), "panel": Color("#231f15"), "panel_alpha": 0.95,
+		"card": Color("#2c2718"), "border": Color("#6e6650"),
+		"accent": Color("#a8c084"), "accent_dim": Color("#4a5c38"),
+		"text": Color("#f4efe2"), "muted": Color("#9d9478"),
+		"warn": Color("#d4a860"), "danger": Color("#b56652"), "gold": Color("#d9c495"),
+		"tag": Color("#d9c495"), "tag_ink": Color("#231f15"),
+	},
+	"military": {
+		"bg": Color("#0d0f08"), "panel": Color("#262c17"), "panel_alpha": 0.96,
+		"card": Color("#303619"), "border": Color("#767c54"),
+		"accent": Color("#a8c065"), "accent_dim": Color("#465a2e"),
+		"text": Color("#f3f5e4"), "muted": Color("#9a9c7c"),
+		"warn": Color("#e2a747"), "danger": Color("#c05a44"), "gold": Color("#dcc178"),
+		"tag": Color("#d4d0b4"), "tag_ink": Color("#1a1c0e"),
+	},
+	"scifi": {
+		"bg": Color("#060a0c"), "panel": Color("#122228"), "panel_alpha": 0.94,
+		"card": Color("#183036"), "border": Color("#3a827a"),
+		"accent": Color("#4ff2d2"), "accent_dim": Color("#1e6a5f"),
+		"text": Color("#eafffa"), "muted": Color("#82a8a4"),
+		"warn": Color("#eeb75c"), "danger": Color("#ea6a5e"), "gold": Color("#a2f0dc"),
+		"tag": Color("#1a4038"), "tag_ink": Color("#a2f0dc"),
+	},
+}
+
+## Переключает активную тему: копирует палитру THEMES[name] в static var
+## выше. Вызывается один раз при старте (Sets._ready) и заново при каждой
+## смене темы в настройках — экраны, построенные заново после этого,
+## подхватывают новые цвета сами, потому что читают те же Cfg.UI_XXX.
+static func apply_theme(name: String) -> void:
+	var t: Dictionary = THEMES.get(name, THEMES["military"])
+	UI_BG = t["bg"]
+	UI_PANEL = t["panel"]
+	UI_PANEL_ALPHA = t["panel_alpha"]
+	UI_CARD = t["card"]
+	UI_BORDER = t["border"]
+	UI_ACCENT = t["accent"]
+	UI_ACCENT_DIM = t["accent_dim"]
+	UI_TEXT = t["text"]
+	UI_MUTED = t["muted"]
+	UI_WARN = t["warn"]
+	UI_DANGER = t["danger"]
+	UI_GOLD = t["gold"]
+	UI_TAG = t["tag"]
+	UI_TAG_INK = t["tag_ink"]
 
 ## Радиусы скругления панелей/карточек — раньше по коду было 8 разных чисел
 ## (4/6/8/10/12/14/18/999) без всякой системы. Кнопки в эту шкалу не сведены —
