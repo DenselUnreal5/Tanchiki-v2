@@ -47,6 +47,9 @@ var location := Locations.CITY
 var road_kind := "asphalt"
 
 var tanks: Array = []
+## Кто рядом с кем — перестраивается раз за тик (см. step()), читают
+## _separate_tanks/Tank._try_ram/BotBrain.count_nearby/Bullet._hit_tanks.
+var tank_grid := SpatialGrid.new()
 var bullets: Array = []
 var mines: Array = []
 var perk_drops: Array = []
@@ -78,6 +81,9 @@ var base = null            # {x, y, max_hp, hp, radius}
 var wave := 0
 var wave_state := "delay"  # delay — пауза, active — враги на поле
 var wave_timer := 0
+## Сколько врагов вышло в текущей волне — от этого зависит штраф точности
+## (см. _spawn_bot): чем плотнее перекрёстный огонь, тем крупнее штраф.
+var defense_wave_size := 0
 
 ## Авиаудар («Оборона»): тиков до готовности, 0 — доступен.
 var airstrike_cooldown := 0
@@ -420,10 +426,13 @@ func _spawn_combatants() -> void:
 			_spawn_bot("bot_%d" % i, "enemy")
 
 func _spawn_bot_team(team: String, count: int, color_key: String) -> void:
-	# Союзники в CTF — только рядовые: сбалансированная помощь людям.
-	var forced := "grunt" if team == "player" else ""
+	# Раньше союзники были принудительно только рядовыми, а противники брались
+	# из общего пула по рампе — к концу долгой партии у врага уже были
+	# громилы и снайперы, а союзники оставались рядовыми навсегда. Теперь
+	# обе команды тянут состав из одного и того же пула по одной и той же
+	# рампе — сильнее враг, сильнее и подмога.
 	for i in count:
-		_spawn_bot(team, color_key, forced)
+		_spawn_bot(team, color_key)
 
 ## Создаёт бота. Тип выбирается по рампе сложности.
 ##
@@ -454,10 +463,14 @@ func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Ta
 	if bool(type["boss"]):
 		boss_alive = true
 	# В «Обороне» враги метят чуть хуже: их много, и перекрёстный огонь
-	# из всех стволов убивал защитника ещё до подхода к базе.
+	# из всех стволов убивал защитника ещё до подхода к базе. Штраф растёт
+	# вместе с волной — на 30 врагах плотность огня совсем не та, что на
+	# первых пяти, и константа тут стала занижать позднюю оборону.
 	var acc_bonus := float(type["accuracy_bonus"])
-	if mode == "defense":
-		acc_bonus -= Cfg.DEFENSE_ENEMY_ACCURACY_PENALTY
+	if mode == "defense" and defense_wave_size > 0:
+		var wave_factor := float(defense_wave_size) / float(Cfg.DEFENSE_FIRST_WAVE)
+		acc_bonus -= clampf(Cfg.DEFENSE_ENEMY_ACCURACY_PENALTY * wave_factor,
+			Cfg.DEFENSE_ENEMY_ACCURACY_PENALTY, Cfg.DEFENSE_ACCURACY_PENALTY_MAX)
 	tank.brain = BotBrain.new({
 		"accuracy": minf(0.98, float(diff["enemy_accuracy"]) + acc_bonus),
 		"react_time": int(round(float(diff["enemy_react_time"]) * float(type["react_mult"]))),
@@ -531,20 +544,32 @@ func _setup_wave(n: int) -> void:
 	# «Средне» оборона держалась почти без усилий.
 	var wave_growth := n - 1
 	var size := mini(Cfg.DEFENSE_WAVE_CAP, base_size + level_bonus + wave_growth)
+	defense_wave_size = size
 	# Волна сложнее — типы врагов становятся злее.
 	ramp = minf(Cfg.RAMP_MAX, 1.0 + float(n - 1) * Cfg.DEFENSE_RAMP_STEP)
 	for i in size:
 		# Вся волна — одна команда «enemy»: враги воюют только с защитниками.
 		_spawn_bot("enemy", "enemy")
-	if Cfg.DEFENSE_BOSS_WAVES.has(n):
+	var total_waves := int(Cfg.MODES["defense"]["waves"])
+	# После стандартных волн босс возвращается регулярно, а не только на
+	# волнах из DEFENSE_BOSS_WAVES — иначе бесконечное продолжение быстро
+	# стало бы однообразной толпой рядовых без всякой кульминации.
+	var endless_boss := n > total_waves and (n - total_waves) % Cfg.DEFENSE_ENDLESS_BOSS_EVERY == 0
+	if Cfg.DEFENSE_BOSS_WAVES.has(n) or endless_boss:
 		_spawn_boss()
 	# Волна не ждёт полной зачистки: по истечении таймаута выходит следующая.
 	wave_timer = Cfg.DEFENSE_WAVE_TIMEOUT
-	feed.emit(I18n.t("feed.wave",
-		{"cur": n, "total": Cfg.MODES["defense"]["waves"], "n": size},
-		"🌊 Волна %d из %d: %d %s" % [n, Cfg.MODES["defense"]["waves"], size,
-			I18n.plural(size, "враг", "врага", "врагов")]),
-		Color("#ff8833"))
+	if n <= total_waves:
+		feed.emit(I18n.t("feed.wave",
+			{"cur": n, "total": total_waves, "n": size},
+			"🌊 Волна %d из %d: %d %s" % [n, total_waves, size,
+				I18n.plural(size, "враг", "врага", "врагов")]),
+			Color("#ff8833"))
+	else:
+		# Бесконечное продолжение — «из скольки» тут больше нет.
+		feed.emit(I18n.t("feed.wave.endless", {"cur": n, "n": size},
+			"🌊 Волна %d: %d %s" % [n, size, I18n.plural(size, "враг", "врага", "врагов")]),
+			Color("#ff8833"))
 
 ## Гарантированный босс: даже если с ранних волн жив ещё один.
 func _spawn_boss() -> Tank:
@@ -572,10 +597,12 @@ func _update_defense() -> void:
 		if attackers > 0:
 			base["hp"] = maxf(0.0, float(base["hp"]) - attackers * float(Cfg.MODES["defense"]["base_dps"]))
 
-	# Режим проигран — база уничтожена.
+	# Режим проигран — база уничтожена. Побеждать «Оборона» больше не умеет —
+	# только сколько волн продержались, вот и итог.
 	if float(base["hp"]) <= 0.0:
 		_finish(I18n.t("winner.horde", {}, "Орда"), -1, "",
-			I18n.t("reason.defenseBase", {}, "База уничтожена — оборона пала"))
+			I18n.t("reason.defenseBase", {"n": wave},
+				"База уничтожена на волне %d — оборона пала" % wave))
 		return
 
 	# В паузе база лечится (пока её никто не бьёт), потом ждём следующую волну.
@@ -588,24 +615,27 @@ func _update_defense() -> void:
 			_setup_wave(wave + 1)
 		return
 
-	# В активной фазе: когда все враги волны мертвы — короткая пауза,
-	# а после последней волны — победа.
+	# В активной фазе: когда все враги волны мертвы — короткая пауза, потом
+	# следующая волна. Стандартных волн когда-то было ровно 7 и на этом
+	# «Оборона» заканчивалась победой; теперь по их исчерпании она просто
+	# продолжается — правильный вопрос не «отбились ли вы», а «докуда
+	# дотянули». Разовая награда за волну 7 — как раньше была награда
+	# за победу, чтобы это не осталось вовсе без отдачи.
 	if _alive_enemy_count() > 0:
 		# Затянувшуюся волну подпирает следующая: без этого осторожный игрок
 		# отстреливал врагов по одному сколько угодно долго.
 		wave_timer -= 1
-		if wave_timer <= 0 and wave < int(Cfg.MODES["defense"]["waves"]):
+		if wave_timer <= 0:
 			_setup_wave(wave + 1)
 		return
 
-	if wave >= int(Cfg.MODES["defense"]["waves"]):
-		_finish(I18n.t("winner.defenders", {}, "Защитники"),
-			players[0].index if players.size() > 0 else 0, "player",
-			I18n.t("reason.defenseWon", {"n": Cfg.MODES["defense"]["waves"]},
-				"Все %d волн отбиты — оборона устояла" % Cfg.MODES["defense"]["waves"]))
-	else:
-		wave_state = "delay"
-		wave_timer = int(Cfg.MODES["defense"]["wave_delay"])
+	if wave == int(Cfg.MODES["defense"]["waves"]):
+		match_rewards["wins"] += Cfg.REWARD_WIN
+		reward.emit("win", Cfg.REWARD_WIN, players[0].name if players.size() > 0 else "")
+		feed.emit(I18n.t("feed.defenseEndless", {"n": wave},
+			"🌊 Все %d волн отбиты — оборона продолжается без конца!" % wave), Color("#ffee55"))
+	wave_state = "delay"
+	wave_timer = int(Cfg.MODES["defense"]["wave_delay"])
 
 func _alive_enemy_count() -> int:
 	var n := 0
@@ -759,8 +789,13 @@ func step() -> void:
 		_update_flood()
 	_update_storm()
 
+	# До хода: _try_ram/count_nearby читают её изнутри Tank.update() ниже.
+	tank_grid.rebuild(tanks)
 	for tank in tanks:
 		tank.update(self)
+	# После хода: позиции обновились у всех — пересчитываем для расталкивания
+	# и для проверок попаданий пуль дальше по тику.
+	tank_grid.rebuild(tanks)
 	_separate_tanks()
 
 	for b in bullets:
@@ -819,14 +854,18 @@ func step() -> void:
 		_check_victory()
 
 ## Мягкое расталкивание: без него боты слипаются в кучу в узких проходах.
+##
+## separate_from() толкает сразу обе стороны пары (tank.gd), поэтому важно
+## обработать каждую пару ровно один раз — раньше это давал перебор i<j по
+## индексу массива, здесь ту же роль играет сравнение по id: устойчивая
+## личность танка, в отличие от индекса, не зависящая от порядка обхода
+## ячеек сетки.
 func _separate_tanks() -> void:
-	for i in tanks.size():
-		var a = tanks[i]
+	for a in tanks:
 		if not a.alive:
 			continue
-		for j in range(i + 1, tanks.size()):
-			var b = tanks[j]
-			if not b.alive:
+		for b in tank_grid.query(a.x, a.y, 32.0):
+			if b.id <= a.id or not b.alive:
 				continue
 			var dx: float = a.x - b.x
 			var dy: float = a.y - b.y

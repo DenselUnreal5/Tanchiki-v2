@@ -503,7 +503,7 @@ func _build_menu() -> AudioStreamWAV:
 ## раз на инструмент, а не на удар.
 func _drive(b: PackedFloat32Array, amount: float, out_gain: float) -> PackedFloat32Array:
 	for i in b.size():
-		b[i] = tanh(b[i] * amount) * out_gain
+		b[i] = Synth._fast_tanh(b[i] * amount) * out_gain
 	return b
 
 func _kick() -> PackedFloat32Array:

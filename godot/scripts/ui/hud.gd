@@ -320,9 +320,17 @@ func update_hud(world: World) -> void:
 						strike = I18n.t("hud.strikeCd", {"n": secs}, "  ✈ %dс" % secs)
 					else:
 						strike = I18n.t("hud.strikeReady", {}, "  ✈ ГОТОВ (F)")
-				objective.text = I18n.t("hud.wave",
-					{"cur": world.wave, "total": Cfg.MODES["defense"]["waves"], "hp": base_hp, "state": state},
-					"Волна %d / %d   🏰 %d HP   (%s)" % [world.wave, Cfg.MODES["defense"]["waves"], base_hp, state]) + strike
+				var total_waves := int(Cfg.MODES["defense"]["waves"])
+				if world.wave > total_waves:
+					# Стандартные волны позади — дальше без предела: «из скольки»
+					# тут больше не имеет смысла.
+					objective.text = I18n.t("hud.wave.endless",
+						{"cur": world.wave, "hp": base_hp, "state": state},
+						"Волна %d ∞   🏰 %d HP   (%s)" % [world.wave, base_hp, state]) + strike
+				else:
+					objective.text = I18n.t("hud.wave",
+						{"cur": world.wave, "total": total_waves, "hp": base_hp, "state": state},
+						"Волна %d / %d   🏰 %d HP   (%s)" % [world.wave, total_waves, base_hp, state]) + strike
 			"koth":
 				var left_ticks := maxi(0, world.time_limit - world.tick)
 				var sec := int(ceil(float(left_ticks) / 60.0))
@@ -472,8 +480,13 @@ func _render_scoreboard(world: World) -> void:
 	var head := ""
 	match world.mode:
 		"defense":
-			head = I18n.t("sb.defense", {"cur": world.wave, "total": Cfg.MODES["defense"]["waves"]},
-				"Оборона — волна %d из %d" % [world.wave, Cfg.MODES["defense"]["waves"]])
+			var total_waves: int = Cfg.MODES["defense"]["waves"]
+			if world.wave > total_waves:
+				head = I18n.t("sb.defense.endless", {"cur": world.wave},
+					"Оборона — волна %d (бесконечная)" % world.wave)
+			else:
+				head = I18n.t("sb.defense", {"cur": world.wave, "total": total_waves},
+					"Оборона — волна %d из %d" % [world.wave, total_waves])
 		"koth":
 			head = I18n.t("sb.koth", {}, "Царь горы — побеждает последний выживший")
 		"ffa":

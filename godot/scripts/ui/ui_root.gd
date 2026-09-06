@@ -484,6 +484,18 @@ func _build_menu() -> void:
 	_refresh_mode_button()
 	_layout_menu.call_deferred()
 
+	_wire_menu_click_sfx(_menu)
+
+## Звук клика на всех кнопках главного меню — один проход по дереву _menu
+## (панель настроек боя тоже его ребёнок). Новые кнопки экрана получают звук
+## сами, без правки каждого вызова UiKit.*. Меню пересобирается при смене
+## темы, поэтому проход повторяется на свежих узлах.
+func _wire_menu_click_sfx(node: Node) -> void:
+	if node is BaseButton:
+		(node as BaseButton).pressed.connect(Sfx.play_ui)
+	for child in node.get_children():
+		_wire_menu_click_sfx(child)
+
 ## Подсказка по индексу в перемешанном порядке (не в исходном списке —
 ## иначе одна и та же подсказка каждый раз шла бы первой).
 func _show_menu_tip(order_idx: int) -> void:
@@ -610,7 +622,9 @@ func show_menu() -> void:
 func _refresh_menu_info() -> void:
 	var need := Prof.xp_to_next_level()
 	var pct := minf(100.0, float(Prof.global_xp) / float(need) * 100.0)
-	_menu_info.text = "[center]%s [b]%d[/b]  ·  %d / %d XP  ·  %s [b]%d[/b] из %d  ·  %s [b]%d 🪙[/b][/center]" % [
+	var rank := Ranks.for_level(Prof.global_level)
+	_menu_info.text = "[center]%s %s  ·  %s [b]%d[/b]  ·  %d / %d XP  ·  %s [b]%d[/b] из %d  ·  %s [b]%d 🪙[/b][/center]" % [
+		String(rank.get("icon", "")), I18n.dn(rank, "name", "rank"),
 		I18n.t("menu.profile", {}, "Профиль: уровень"), Prof.global_level,
 		Prof.global_xp, need,
 		I18n.t("menu.perks", {}, "перков открыто"), Prof.unlocked.size(), Perks.all().size(),

@@ -15,6 +15,7 @@ signal levelup(levels: Array)
 signal unlock(ids: Array, reason: String)
 signal achievement(ids: Array, reward: int)
 signal daily_claimed(id: String, reward: int)
+signal rank_up(ids: Array, reward: int)
 
 ## Список отслеживаемых статистик.
 const STAT_KEYS := [
@@ -70,6 +71,7 @@ var stats := {}
 var money := 0
 var upgrades := {}          # id -> уровень
 var achievements := {}      # Set<String>
+var ranks_claimed := {}     # Set<String> — какие звания уже выплачены
 var daily := {"date": "", "progress": {}, "claimed": []}
 var cosmetic_owned := {}    # Set<"тип:id">
 var cosmetics := {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
@@ -132,6 +134,12 @@ func _apply(data: Dictionary) -> void:
 	for id in data.get("achievements", []):
 		if known_ach.has(id):
 			achievements[id] = true
+	var known_ranks := {}
+	for r in Ranks.LIST:
+		known_ranks[r["id"]] = true
+	for id in data.get("ranksClaimed", []):
+		if known_ranks.has(id):
+			ranks_claimed[id] = true
 	var d = data.get("daily", null)
 	if d is Dictionary and d.has("date"):
 		daily = {
@@ -163,6 +171,7 @@ func save_profile() -> void:
 		"money": money,
 		"upgrades": upgrades,
 		"achievements": achievements.keys(),
+		"ranksClaimed": ranks_claimed.keys(),
 		"daily": daily,
 		"cosmeticOwned": cosmetic_owned.keys(),
 		"cosmetics": cosmetics,
@@ -180,6 +189,7 @@ func reset() -> void:
 	money = 0
 	_empty_upgrades()
 	achievements.clear()
+	ranks_claimed.clear()
 	daily = {"date": Daily.today_key(), "progress": {}, "claimed": []}
 	cosmetic_owned.clear()
 	cosmetics = {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
@@ -208,6 +218,7 @@ func add_xp(amount: int) -> void:
 				unlocked[id] = true
 				newly.append(id)
 	if not levels.is_empty():
+		check_ranks()
 		save_profile()
 		levelup.emit(levels)
 		if not newly.is_empty():
@@ -246,6 +257,28 @@ func check_achievements() -> Array:
 		for id in newly:
 			SteamStats.unlock(String(id))
 		achievement.emit(newly, total)
+	return newly
+
+## Проверяет звания по текущему уровню и выплачивает разово за новые.
+## Вызывается и при наборе уровня, и при загрузке — старый профиль,
+## успевший дорасти до высокого уровня ещё до появления званий, получит
+## пропущенные при первой же загрузке, а не будет ждать следующего уровня.
+func check_ranks() -> Array:
+	var newly := []
+	for r in Ranks.LIST:
+		if ranks_claimed.has(r["id"]):
+			continue
+		if global_level < int(r["level"]):
+			continue
+		ranks_claimed[r["id"]] = true
+		newly.append(r["id"])
+	if not newly.is_empty():
+		var total := 0
+		for id in newly:
+			total += int(Ranks.get_rank(id).get("reward", 0))
+		money += total
+		save_profile()
+		rank_up.emit(newly, total)
 	return newly
 
 ## Проверяет все челленджи и открывает выполненные.
@@ -458,3 +491,4 @@ func _sync_level_unlocks() -> void:
 			for id in Perks.UNLOCK_TABLE[lvl]:
 				unlocked[id] = true
 	check_challenges()
+	check_ranks()

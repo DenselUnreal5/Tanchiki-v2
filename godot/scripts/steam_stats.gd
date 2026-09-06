@@ -27,9 +27,16 @@ const STAT_KEYS := [
 	"ramKills", "longKills", "lowHpKills", "healthPacksCollected",
 ]
 
-## Имя таблицы рекордов. Создаётся в Steamworks; findOrCreateLeaderboard
-## заводит её на лету только для App ID, где это разрешено.
-const LEADERBOARD := "HighScore"
+## Таблицы рекордов — отдельная на каждый режим: очки в «Каждый за себя»
+## и число волн в «Обороне» несравнимы, а раньше делили одну таблицу
+## на всех. Заводятся в Steamworks; findOrCreateLeaderboard создаёт их
+## на лету только для App ID, где это разрешено.
+const LEADERBOARDS := {
+	"ffa": "HighScore_FFA",
+	"ctf": "HighScore_CTF",
+	"koth": "HighScore_KOTH",
+	"defense": "HighScore_Defense",
+}
 
 static var _warned := false
 
@@ -94,14 +101,16 @@ static func push_stats(stats: Dictionary) -> int:
 	return sent
 
 # ---------------------------------------------------------- таблица рекордов
-## Кладёт счёт в таблицу. Steam сам оставит лучший результат игрока.
+## Кладёт счёт в таблицу своего режима. Steam сам оставит лучший результат
+## игрока. Неизвестный режим падает в общую "HighScore" — на случай, если
+## появится режим без своей записи в LEADERBOARDS.
 ##
 ## Поиск таблицы асинхронный: ответ приходит колбэком, поэтому загрузка идёт
 ## следом за ним, а не сразу. Здесь только запуск поиска.
-static func push_score(score: int) -> bool:
+static func push_score(score: int, mode: String) -> bool:
 	if not ready() or score <= 0:
 		return false
-	_steam().findLeaderboard(LEADERBOARD)
+	_steam().findLeaderboard(String(LEADERBOARDS.get(mode, "HighScore")))
 	_pending_score = score
 	return true
 

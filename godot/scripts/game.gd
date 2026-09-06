@@ -161,6 +161,22 @@ func _bind_profile_events() -> void:
 		Sfx.play("unlock")
 		ui.refresh_profile())
 
+	# Звания — не бонус к танку, а видимая метка того, что происходило после
+	# 20 уровня, когда все перки уже открыты (Perks.UNLOCK_TABLE) и расти
+	# формально уже некуда.
+	Prof.rank_up.connect(func(ids: Array, reward: int):
+		var names := []
+		for id in ids:
+			var r := Ranks.get_rank(id)
+			names.append("%s %s" % [r.get("icon", ""), I18n.dn(r, "name", "rank")] if not r.is_empty() else id)
+		hud.add_feed(I18n.t("feed.rankUp", {"names": ", ".join(names)},
+			"Новое звание: %s" % ", ".join(names)), Cfg.UI_GOLD)
+		if reward > 0:
+			hud.banner(I18n.t("feed.rankReward", {"n": reward},
+				"Новое звание! +%d 🪙" % reward), Cfg.UI_GOLD)
+		Sfx.play("unlock")
+		ui.refresh_profile())
+
 func _reset_progress() -> void:
 	Prof.reset()
 	ui.refresh_profile()
@@ -505,7 +521,10 @@ func _on_finish(result: Dictionary) -> void:
 	var best := 0
 	for p in players:
 		best = maxi(best, p.score)
-	SteamStats.push_score(best)
+	# «Оборона» бесконечна — там соревнуются не очками, а тем, сколько волн
+	# продержались; для остальных режимов счёт как и был, лучший из игроков.
+	var board_score := world.wave if world.mode == "defense" else best
+	SteamStats.push_score(board_score, world.mode)
 	hud.hide_hud()
 	ui.refresh_profile()
 	ui.show_game_over(result, world, players.size() > 1)
@@ -660,6 +679,7 @@ func _process(delta: float) -> void:
 					break
 
 	_update_listeners()
+	_update_engines()
 	if state == S_PLAYING or state == S_PAUSED or state == S_PERK:
 		hud.update_hud(world)
 	_update_post_fx()
@@ -927,6 +947,18 @@ func _update_listeners() -> void:
 	# потому что слушает именно он.
 	var t0 = players[0].tank if not players.is_empty() else null
 	Sfx.hear_scale = float(t0.mods["hearingMult"]) if t0 != null else 1.0
+
+## Гул мотора у танков живых игроков (боты — нет, как и со звуком трака).
+## Вне боя массив пустой — Sfx глушит лупы сам.
+func _update_engines() -> void:
+	var rigs: Array = []
+	if state == S_PLAYING:
+		for p in players:
+			if p.tank == null:
+				continue
+			var t = p.tank
+			rigs.append([t.x, t.y, sqrt(t.vx * t.vx + t.vy * t.vy)])
+	Sfx.update_engines(rigs)
 
 ## Параметры постобработки ведёт погода: время суток, дождь, туман, молния.
 func _update_post_fx() -> void:

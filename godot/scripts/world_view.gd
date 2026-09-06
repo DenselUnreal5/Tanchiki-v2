@@ -19,6 +19,25 @@ var view_off := Vector2.ZERO
 var ao: AoLayer = null
 var _view := Rect2()
 
+# ------------------------------------------------------- кэш тайлов карты
+# Раньше каждый видимый тайл (при 1280×720 это около тысячи) заново получал
+# весь свой декор — шашечки грунта, трещины крыш, разметку дорог — 60 раз
+# в секунду, хотя меняется в среднем кадре только фаза воды и зыбучих
+# песков да разрушенный кирпич. Статика теперь печётся в текстуру в
+# отдельном SubViewport (TileBakeView — тот же _draw_tiles(), просто на
+# весь мир, а не на видимый игроку кусок) и просто накладывается как
+# картинка; перезаливка — по разрушению (map.version) и, отдельно, по
+# таймеру — только чтобы вода и зыбучка не застывали совсем.
+const TILE_CACHE_ANIM_TICKS := 6
+var _tile_cache_viewport: SubViewport
+var _tile_cache_view: TileBakeView
+var _tile_cache_version := -1
+var _tile_cache_timer := 0
+## SubViewport рендерит с задержкой в кадр: до первого настоящего рендера
+## текстура пуста, и её ещё нельзя показывать — иначе первый кадр партии
+## мигнёт пустой картой.
+var _tile_cache_ready := false
+
 func _ready() -> void:
 	# Тайлы, танки и частицы рисуются примитивами без текстур, поэтому
 	# линейная фильтрация им безразлична — зато она мягко растягивает
@@ -51,7 +70,14 @@ func _draw() -> void:
 		size.y + Cfg.TILE * 2.0)
 
 	draw_set_transform(view_off)
-	_draw_tiles()
+	_update_tile_cache()
+	if _tile_cache_ready:
+		draw_texture_rect(_tile_cache_viewport.get_texture(),
+			Rect2(0.0, 0.0, world.map.width, world.map.height), false)
+	else:
+		# Кадр до готовности SubViewport (самое начало партии) — без кэша,
+		# чтобы карта не мигнула пустотой, пока текстура ещё не готова.
+		_draw_tiles()
 	_draw_scorches()
 	_draw_ao()
 	_draw_pickups()
@@ -177,6 +203,32 @@ func _draw_weather(size: Vector2) -> void:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.86, 0.92, 1.0, w.flash * k * 0.35))
 
 # ------------------------------------------------------------------ тайлы
+## Заводит SubViewport с TileBakeView при первом вызове и решает, пора ли
+## перезалить кэш: карта изменилась (кирпич снесён — map.version вырос)
+## или истёк таймер, который держит воду и зыбучку хоть немного живыми.
+func _update_tile_cache() -> void:
+	if _tile_cache_viewport == null:
+		_tile_cache_viewport = SubViewport.new()
+		_tile_cache_viewport.size = Vector2i(
+			maxi(1, int(ceil(world.map.width))), maxi(1, int(ceil(world.map.height))))
+		_tile_cache_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+		_tile_cache_viewport.transparent_bg = false
+		add_child(_tile_cache_viewport)
+		_tile_cache_view = TileBakeView.new()
+		_tile_cache_view.world = world
+		_tile_cache_viewport.add_child(_tile_cache_view)
+		_tile_cache_version = world.map.version
+		_tile_cache_timer = TILE_CACHE_ANIM_TICKS
+		return
+
+	_tile_cache_ready = true
+	_tile_cache_timer -= 1
+	if world.map.version != _tile_cache_version or _tile_cache_timer <= 0:
+		_tile_cache_version = world.map.version
+		_tile_cache_timer = TILE_CACHE_ANIM_TICKS
+		_tile_cache_view.queue_redraw()
+		_tile_cache_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+
 func _draw_tiles() -> void:
 	var map := world.map
 	var c0 := maxi(0, int(floor(_view.position.x / Cfg.TILE)))

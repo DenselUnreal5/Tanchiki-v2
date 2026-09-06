@@ -373,11 +373,20 @@ const DEFENSE_FIRST_WAVE := 5
 const DEFENSE_LEVEL_BONUS_CAP := 1
 const DEFENSE_PLAYER_LEVEL_BONUS := true
 const DEFENSE_WAVE_CAP := 30
-## Волны с гарантированным боссом: середина и финал.
+## Волны с гарантированным боссом: середина и финал стандартных семи волн.
 const DEFENSE_BOSS_WAVES := [4, 7]
+## После стандартных волн «Оборона» не заканчивается: каждая следующая
+## волна крупнее (до DEFENSE_WAVE_CAP), а босс возвращается регулярно,
+## а не только на объявленных волнах 4 и 7 — см. world.gd:_setup_wave().
+const DEFENSE_ENDLESS_BOSS_EVERY := 3
 const DEFENSE_RAMP_STEP := 0.12
 const DEFENSE_PLAYER_HP_MULT := 1.6
+## Штраф точности при DEFENSE_FIRST_WAVE врагов на поле (волна 1) — дальше
+## растёт пропорционально размеру волны, см. world.gd:_spawn_bot().
 const DEFENSE_ENEMY_ACCURACY_PENALTY := 0.12
+## Потолок штрафа: без него на предельной волне (DEFENSE_WAVE_CAP = 30)
+## штраф ушёл бы в 6 раз выше базового и топил бы точность вплоть до нуля.
+const DEFENSE_ACCURACY_PENALTY_MAX := 0.30
 ## База лечится в паузе между волнами, но уже не «до полной» за одну паузу.
 const DEFENSE_BASE_REGEN_PER_TICK := 0.0006
 ## Если волну не зачистили за это время, следующая выходит всё равно —

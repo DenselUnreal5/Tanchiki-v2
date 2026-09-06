@@ -59,6 +59,12 @@ var _next_tank_id := 1
 var _commands := {}
 ## Буфер снапшотов у клиента: [{t, data}].
 var _snaps: Array = []
+## Кэш словаря «id танка -> запись» для младшего снапшота интерполяции —
+## ключ по его "t". render_state() вызывается на частоте кадра (до 144 Гц),
+## а сама пара снапшотов меняется на частоте их прихода (20 Гц): без кэша
+## словарь пересобирался в разы чаще, чем менялась пара, которую он описывает.
+var _interp_cache_t := -1.0
+var _interp_cache_prev := {}
 var _roster := {}
 var _match_active := false
 ## -1 — отсчёта нет; иначе секунд до старта. См. countdown_changed.
@@ -234,6 +240,8 @@ func leave(notify: bool = true) -> void:
 	_commands.clear()
 	_cmd_last.clear()
 	_snaps.clear()
+	_interp_cache_t = -1.0
+	_interp_cache_prev = {}
 	_delayed.clear()
 	_roster.clear()
 	_match_active = false
@@ -370,6 +378,8 @@ func _rpc_match_start(settings: Dictionary, seed_value: int, roster: Array) -> v
 			"Хост прислал непонятный старт партии"))
 		return
 	_snaps.clear()
+	_interp_cache_t = -1.0
+	_interp_cache_prev = {}
 	_last_snap_seq = -1
 	_roster.clear()
 	for info in roster:
@@ -517,10 +527,18 @@ func render_state() -> Dictionary:
 	var span: float = maxf(0.001, float(newer["t"]) - float(older["t"]))
 	var k: float = clampf((target - float(older["t"])) / span, 0.0, 1.0)
 
+	# Пара снапшотов меняется на частоте их прихода (20 Гц), а этот метод —
+	# на частоте кадра (до 144 Гц): пересобирать словарь на каждый вызов,
+	# когда пара обычно та же самая, что и в прошлый раз, — чистые потери.
+	var older_t: float = float(older["t"])
+	if older_t != _interp_cache_t:
+		_interp_cache_t = older_t
+		_interp_cache_prev = {}
+		for t in older["data"]["tanks"]:
+			_interp_cache_prev[int(t["id"])] = t
+	var prev_by_id: Dictionary = _interp_cache_prev
+
 	var tanks := {}
-	var prev_by_id := {}
-	for t in older["data"]["tanks"]:
-		prev_by_id[int(t["id"])] = t
 	for t in newer["data"]["tanks"]:
 		var id := int(t["id"])
 		var p: Dictionary = prev_by_id.get(id, t)

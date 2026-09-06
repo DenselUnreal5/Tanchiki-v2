@@ -70,6 +70,10 @@ var waypoint_stall := 0
 var path_cooldown := 0
 ## Тиков до следующего пересмотра цели.
 var perception_timer := 0
+## Видимость до текущей цели — считается вместе с пересмотром цели, не
+## каждый тик (см. update()): та же по духу экономия, что и у самого
+## пересмотра, для того же самого дорогого вызова.
+var _los_cache := false
 
 ## Углы обхода препятствия: сначала почти прямо, затем всё круче.
 const STEER_OFFSETS := [
@@ -161,12 +165,19 @@ func update(tank: Tank, world) -> void:
 	if perception_timer <= 0 or target == null or not _target_valid(tank, world, target):
 		target = find_best_threat(tank, world)
 		perception_timer = 3 + int(rng.nextf() * 3.0)
+		# Видимость пересчитывается вместе с целью, а не каждый тик: то же
+		# рассуждение, что и у самого пересмотра выше — 40 ботов в «Царе горы»
+		# держали видимость до цели самой частой трассировкой в кадре, хотя
+		# «вижу ли ещё» устаревает не быстрее, чем «та ли это ещё цель».
+		_los_cache = false
+		if target != null:
+			_los_cache = world.map.has_line_of_sight(tank.x, tank.y, target.x, target.y)
 	var tgt = target
 	var target_dist := INF
 	var has_shot := false
 	if tgt != null:
 		target_dist = Vector2(tgt.x - tank.x, tgt.y - tank.y).length()
-		has_shot = world.map.has_line_of_sight(tank.x, tank.y, tgt.x, tgt.y)
+		has_shot = _los_cache
 
 	# ---- активная способность --------------------------------------------
 	_maybe_use_ability(tank, world, target_dist, has_shot)
@@ -796,10 +807,18 @@ static func find_best_threat(tank: Tank, world):
 			best = other
 	return best
 
+## Пуля дальше этого от танка не долетит за 40 тиков прогноза (см. ниже)
+## ни при каком реалистичном апгрейде скорости — грубый, заведомо безопасный
+## отсев перед дорогой проекцией на курс. При 40 танках и заметном числе
+## пуль в полёте каждый тик это самый частый ранний выход из цикла.
+const INCOMING_BULLET_MAX_RANGE := 600.0
+
 ## Ближайшая пуля, которая по курсу попадёт в танк.
 static func find_incoming_bullet(tank: Tank, world, radius: float):
 	var best = null
 	var best_t := INF
+	var reject_r: float = radius + INCOMING_BULLET_MAX_RANGE
+	var reject_r2: float = reject_r * reject_r
 	for b in world.bullets:
 		if not b.alive:
 			continue
@@ -808,6 +827,8 @@ static func find_incoming_bullet(tank: Tank, world, radius: float):
 		# Время сближения по прямой (проекция на направление пули).
 		var dx: float = tank.x - b.x
 		var dy: float = tank.y - b.y
+		if dx * dx + dy * dy > reject_r2:
+			continue
 		var speed2: float = b.vx * b.vx + b.vy * b.vy
 		if speed2 == 0.0:
 			continue
@@ -827,7 +848,7 @@ static func find_incoming_bullet(tank: Tank, world, radius: float):
 static func count_nearby(world, tank: Tank, radius: float, hostile: bool) -> int:
 	var r2 := radius * radius
 	var n := 0
-	for other in world.tanks:
+	for other in world.tank_grid.query(tank.x, tank.y, radius):
 		if other == tank or not other.alive:
 			continue
 		if world.are_hostile(tank, other) != hostile:

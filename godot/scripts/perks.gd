@@ -64,11 +64,11 @@ const LIST := [
 	# ---------------------------------------------------------------- огонь
 	{
 		"id": "double_shot", "name": "Двойной выстрел", "icon": "🔫",
-		"desc": "2 пули параллельно", "category": "fire", "flags": ["doubleShot"],
+		"desc": "Каждый выстрел — залп из двух пуль, летящих параллельно", "category": "fire", "flags": ["doubleShot"],
 	},
 	{
 		"id": "fan_shot", "name": "Выстрел веером", "icon": "🌊",
-		"desc": "3 пули веером, каждая 45% урона", "category": "fire", "flags": ["fanShot"],
+		"desc": "3 пули летят веером, каждая наносит 45% урона", "category": "fire", "flags": ["fanShot"],
 	},
 	{
 		"id": "rapid_fire", "name": "Скорострельность", "icon": "⚡",
@@ -80,126 +80,126 @@ const LIST := [
 		"mods": {"fireRateMult": 0.6, "heatPerShotMult": 0.7},
 	},
 	{
+		"id": "quick_reload", "name": "Быстрая перезарядка", "icon": "🔄",
+		"desc": "Отработанная рука заряжающего: перезарядка быстрее на 30%, ствол греется меньше", "category": "fire",
+		# То же, что и у «Скорострельности»: замер давал −1 урона в секунду.
+		"mods": {"fireRateMult": 0.7, "heatPerShotMult": 0.8},
+	},
+	{
 		"id": "explosive", "name": "Взрывные пули", "icon": "💥",
 		# Дистанции в описаниях — в метрах, 8 px движка = 1 м на глаз игрока.
-		"desc": "Урон по площади 4 м и снос кирпича вокруг", "category": "fire",
+		"desc": "Каждое попадание — взрыв: урон по площади 4 м вокруг точки удара, кирпичная кладка рассыпается", "category": "fire",
 		"flags": ["explosive"],
 	},
 	{
 		"id": "piercing", "name": "Пробивной выстрел", "icon": "🎯",
-		"desc": "Пуля пробивает одну стену", "category": "fire", "flags": ["piercing"],
+		"desc": "Бронебойный сердечник прошивает первую стену насквозь и летит дальше", "category": "fire", "flags": ["piercing"],
 	},
 
 	# ---------------------------------------------------------------- защита
 	{
 		"id": "heavy_armor", "name": "Тяжёлая броня", "icon": "🛡",
-		"desc": "Максимум HP +50%", "category": "defense", "mods": {"maxHPMult": 1.5},
+		"desc": "Дополнительные бронеплиты поднимают запас прочности на 50%", "category": "defense", "mods": {"maxHPMult": 1.5},
 	},
 	{
 		"id": "regen", "name": "Регенерация", "icon": "❤",
-		"desc": "60 HP в минуту (1 HP/сек)", "category": "defense",
+		"desc": "Ремонтные нанониты затягивают повреждения — 60 HP в минуту, по одному каждую секунду", "category": "defense",
 		"mods": {"regenPerMinute": 60.0},
 	},
 	{
 		"id": "reflect", "name": "Отражение", "icon": "🪞",
-		"desc": "20% полученного урона возвращается атакующему", "category": "defense",
+		"desc": "Реактивная броня возвращает обидчику пятую часть полученного урона", "category": "defense",
 		"mods": {"reflectFraction": 0.2},
 	},
 	{
 		"id": "evasion", "name": "Уклонение", "icon": "💨",
-		"desc": "15% шанс полностью избежать урона", "category": "defense",
+		"desc": "Отточенные манёвры: 15% шанс полностью уйти от удара", "category": "defense",
 		"mods": {"evasionChance": 0.15},
 	},
 	{
 		"id": "shield", "name": "Энергощит", "icon": "🔵",
-		"desc": "Щит на 30 HP, восстанавливается раз в 30 сек", "category": "defense",
+		"desc": "Персональный энергощит держит 30 HP и восстанавливается раз в 30 секунд", "category": "defense",
 		"flags": ["shield"],
 	},
 
 	# ---------------------------------------------------------------- скорость
 	{
 		"id": "sprinter", "name": "Спринтер", "icon": "👟",
-		"desc": "Скорость +25%", "category": "speed", "mods": {"speedMult": 1.25},
-	},
-	{
-		"id": "quick_reload", "name": "Быстрая перезарядка", "icon": "🔄",
-		"desc": "Перезарядка быстрее на 30%, ствол греется меньше", "category": "speed",
-		# То же, что и у «Скорострельности»: замер давал −1 урона в секунду.
-		"mods": {"fireRateMult": 0.7, "heatPerShotMult": 0.8},
+		"desc": "Форсированная трансмиссия поднимает предельную скорость на 25%", "category": "speed", "mods": {"speedMult": 1.25},
 	},
 
 	# ---------------------------------------------------------------- особые
 	{
 		"id": "mines", "name": "Миноукладчик", "icon": "💣",
-		"desc": "До 3 мин на карте, ставятся клавишей мины", "category": "special",
+		"desc": "Несёт до 3 мин одновременно — ставятся клавишей мины", "category": "special",
 		"flags": ["mines"],
 	},
 
 	# ------------------------------------------------------- челленджи
 	{
 		"id": "ram", "name": "Таран", "icon": "🚛",
-		"desc": "Урон при столкновении x2", "category": "challenge",
+		"desc": "Удвоенный урон при столкновении — тараньте смело", "category": "challenge",
 		"mods": {"ramMult": 2.0},
 		"challenge": {"desc": "Уничтожь 3 танка тараном", "stat": "ramKills", "need": 3},
 	},
 	{
 		"id": "thick_armor", "name": "Толстая броня", "icon": "🧱",
-		"desc": "Получаемый урон −20%, но ваши пули не ломают кирпич",
+		"desc": "Дополнительный лист брони снижает получаемый урон на 20%, но ваши снаряды больше не крошат кирпич",
 		"category": "challenge",
 		"mods": {"damageTakenMult": 0.8}, "flags": ["keepBricks"],
 		"challenge": {"desc": "Разбей 15 кирпичей", "stat": "bricksDestroyed", "need": 15},
 	},
 	{
 		"id": "amphibious", "name": "Амфибия", "icon": "🐸",
-		"desc": "В воде только замедление, без урона", "category": "challenge",
+		"desc": "Вода вам не враг — только замедляет, урона больше не наносит", "category": "challenge",
 		"flags": ["amphibious"],
 		"challenge": {"desc": "Войди в воду 5 раз", "stat": "waterEntries", "need": 5},
 	},
 	{
 		"id": "forest", "name": "Лесной житель", "icon": "🌲",
-		"desc": "Проезд через деревья, не уничтожая их", "category": "challenge",
+		"desc": "Корпус проходит сквозь деревья, не ломая их", "category": "challenge",
 		"flags": ["forest"],
 		"challenge": {"desc": "Проедь через 5 деревьев", "stat": "treesDriven", "need": 5},
 	},
 	{
 		"id": "magnet", "name": "Магнит", "icon": "🧲",
-		"desc": "Радиус подбора аптечек x2", "category": "challenge",
+		"desc": "Встроенный магнит удваивает радиус подбора аптечек", "category": "challenge",
 		"mods": {"pickupRadiusMult": 2.0},
 		"challenge": {"desc": "Собери 20 аптечек", "stat": "healthPacksCollected", "need": 20},
 	},
 	{
 		"id": "sniper", "name": "Снайпер", "icon": "🔭",
-		"desc": "Пули летят на 40% быстрее и наносят +15% урона", "category": "challenge",
+		"desc": "Снаряды летят на 40% быстрее и бьют на 15% сильнее", "category": "challenge",
 		"mods": {"bulletSpeedMult": 1.4, "dmgMult": 1.15},
 		"challenge": {"desc": "Убей 3 врагов с дистанции 50 м", "stat": "longKills", "need": 3},
 	},
 	{
 		"id": "berserk", "name": "Берсерк", "icon": "😤",
-		"desc": "Урон ×1.6, пока ваше HP ≤ 40%", "category": "challenge",
+		"desc": "Пока HP не выше 40% — урон вырастает в 1.6 раза", "category": "challenge",
 		"flags": ["berserk"],
 		"challenge": {"desc": "Убей 5 врагов при HP ≤ 40%", "stat": "lowHpKills", "need": 5},
 	},
 	{
 		"id": "kamikaze", "name": "Камикадзе", "icon": "💀",
-		"desc": "При смерти взрыв на 8 м", "category": "challenge",
+		"desc": "Гибель танка не проходит бесследно: взрыв на 8 метров вокруг", "category": "challenge",
 		"flags": ["kamikaze"],
 		"challenge": {"desc": "Умри 10 раз", "stat": "timesDied", "need": 10},
 	},
 	{
 		"id": "turbo", "name": "Турбо", "icon": "🚀",
-		"desc": "Ускорение x1.5 на 3 сек после убийства", "category": "challenge",
+		"desc": "Каждое убийство даёт 3 секунды ускорения ×1.5", "category": "challenge",
 		"mods": {"turboOnKill": 180.0},
 		"challenge": {"desc": "Убей 5 врагов за 10 секунд", "stat": "rapidKills", "need": 5},
 	},
 	{
 		"id": "shadow", "name": "Тень", "icon": "🌑",
-		"desc": "Невидимость на миникарте 3 сек после убийства", "category": "challenge",
+		"desc": "После убийства 3 секунды вас не видно на миникарте", "category": "challenge",
 		"mods": {"shadowOnKill": 180.0},
 		"challenge": {"desc": "3 убийства подряд без урона", "stat": "cleanStreak", "need": 3},
 	},
 	{
 		"id": "vampire", "name": "Вампир", "icon": "🧛",
-		"desc": "15% нанесённого урона возвращается как HP", "category": "challenge",
+		"desc": "15% нанесённого урона возвращается вам как HP", "category": "challenge",
 		"mods": {"lifestealFraction": 0.15},
 		"challenge": {"desc": "Нанеси 5000 урона за партию", "stat": "damageInGame", "need": 5000},
 	},
@@ -270,27 +270,27 @@ static func any_perk_icon(id: String) -> String:
 const ACTIVE_LIST := [
 	{
 		"id": "siege", "name": "Осадные снаряды", "icon": "🏗",
-		"desc": "Урон по постройкам x2.2", "category": "fire",
+		"desc": "Снаряды заточены под кладку: урон по постройкам увеличен в 2.2 раза", "category": "fire",
 		"mods": {"buildingDmgMult": 2.2},
 	},
 	{
 		"id": "nitro", "name": "Нитро", "icon": "🚀",
-		"desc": "рывок скорости на 2.5 с", "category": "speed",
+		"desc": "Впрыск нитро даёт резкий рывок скорости на 2.5 секунды", "category": "speed",
 		"active": "nitro",
 	},
 	{
 		"id": "overdrive", "name": "Форсаж", "icon": "🔥",
-		"desc": "4 с двойной скорострельности", "category": "fire",
+		"desc": "4 секунды двигатель работает на пределе — темп стрельбы удвоен", "category": "fire",
 		"active": "overdrive",
 	},
 	{
 		"id": "bulwark", "name": "Бастион", "icon": "🛡",
-		"desc": "3 с урон по вам снижен на 60%", "category": "defense",
+		"desc": "3 секунды брони на пределе — входящий урон срезан на 60%", "category": "defense",
 		"active": "bulwark",
 	},
 	{
 		"id": "shockwave", "name": "Ударная волна", "icon": "💠",
-		"desc": "взрыв вокруг танка, сносит постройки", "category": "special",
+		"desc": "Взрыв вокруг корпуса — сносит постройки и отбрасывает врагов", "category": "special",
 		"active": "shockwave",
 	},
 ]
@@ -311,44 +311,44 @@ const EXTRA_LIST := [
 	# ------------------------------------------------------------ ствол
 	{
 		"id": "heat_sink", "name": "Радиатор", "icon": "❄",
-		"desc": "Ствол остывает в 1.6 раза быстрее", "category": "fire",
+		"desc": "Улучшенное охлаждение: ствол остывает в 1.6 раза быстрее", "category": "fire",
 		"mods": {"heatCoolMult": 1.6},
 	},
 	{
 		"id": "thermal", "name": "Термостойкость", "icon": "🌡",
-		"desc": "Нагрев за выстрел на четверть меньше", "category": "fire",
+		"desc": "Термостойкая сталь ствола: нагрев за выстрел ниже на четверть", "category": "fire",
 		"mods": {"heatPerShotMult": 0.75},
 	},
 	{
 		"id": "quick_vent", "name": "Быстрый сброс", "icon": "💨",
-		"desc": "После перегрева огонь возобновляется вдвое раньше", "category": "fire",
+		"desc": "Форсированная продувка: после перегрева огонь возобновляется вдвое раньше обычного", "category": "fire",
 		"mods": {"heatResumeAdd": 0.25},
 	},
 	{
 		"id": "heavy_shell", "name": "Тяжёлый снаряд", "icon": "🏋",
-		"desc": "Урон +25%, но снаряд летит медленнее", "category": "fire",
+		"desc": "Утяжелённый снаряд бьёт на четверть сильнее, но летит медленнее", "category": "fire",
 		"mods": {"dmgMult": 1.25, "bulletSpeedMult": 0.85},
 	},
 	{
 		"id": "light_shell", "name": "Лёгкий снаряд", "icon": "🪶",
-		"desc": "Снаряд быстрее на треть, ствол греется меньше", "category": "fire",
+		"desc": "Облегчённый снаряд летит на треть быстрее, а ствол греется меньше", "category": "fire",
 		"mods": {"bulletSpeedMult": 1.3, "heatPerShotMult": 0.8},
 	},
 	# ---------------------------------------------------------- покрытие
 	{
 		"id": "road_king", "name": "Асфальтоукладчик", "icon": "🛣",
-		"desc": "По асфальту и мостам ход быстрее на 18%", "category": "speed",
+		"desc": "На асфальте и мостах гусеницы держат ход на 18% быстрее", "category": "speed",
 		"mods": {"roadSpeedMult": 1.18},
 	},
 	{
 		"id": "all_terrain", "name": "Вездеход", "icon": "🌾",
-		"desc": "Трава и песок больше не тормозят", "category": "speed",
+		"desc": "Широкие гусеницы: трава и песок больше не тормозят", "category": "speed",
 		"mods": {"softGrip": 1.0},
 	},
 	# --------------------------------------------------------- материалы
 	{
 		"id": "lumberjack", "name": "Лесоруб", "icon": "🪓",
-		"desc": "Снаряд прошивает деревянные постройки насквозь", "category": "fire",
+		"desc": "Снаряд не вязнет в дереве — прошивает деревянные постройки насквозь", "category": "fire",
 		# Было «урон по дереву ×2.5». Это не работало и не могло: пуля игрока
 		# наносит постройке 37.5, дерево держит 30 HP при сопротивлении пуле
 		# ×1.15 — то есть 43 урона по 30, один выстрел в любом случае. Замер
@@ -358,28 +358,28 @@ const EXTRA_LIST := [
 	},
 	{
 		"id": "concrete_breaker", "name": "Бетонолом", "icon": "🧱",
-		"desc": "Урон по бетону ×2.2", "category": "fire",
+		"desc": "Кумулятивная насадка под бетон: урон по бетонным постройкам ×2.2", "category": "fire",
 		"mods": {"concreteDmgMult": 2.2},
 	},
 	{
 		"id": "can_opener", "name": "Консервный нож", "icon": "🔩",
-		"desc": "Урон по железу ×2.5 — иначе пули его почти не берут", "category": "fire",
+		"desc": "Бронебойный наконечник вскрывает металл, как консервную банку: урон по железу ×2.5", "category": "fire",
 		"mods": {"metalDmgMult": 2.5},
 	},
 	{
 		"id": "scavenger", "name": "Мародёр", "icon": "🧰",
-		"desc": "Каждая снесённая рядом постройка чинит на 3 HP", "category": "special",
+		"desc": "Обломки идут в дело: каждая снесённая рядом постройка чинит 3 HP", "category": "special",
 		"mods": {"scavengeHeal": 3.0},
 	},
 	# -------------------------------------------------------- слышимость
 	{
 		"id": "keen_ear", "name": "Острый слух", "icon": "👂",
-		"desc": "Дальние выстрелы слышны и отмечаются на миникарте", "category": "special",
+		"desc": "Улучшенные микрофоны слышат дальние выстрелы и отмечают их на миникарте", "category": "special",
 		"mods": {"hearingMult": 1.7},
 	},
 	{
 		"id": "muffler", "name": "Глушение", "icon": "🤫",
-		"desc": "Выстрелы слышны вдвое ближе, урон по незаметившим +50%",
+		"desc": "Тихий выстрел слышен вдвое ближе, зато урон по врагу, который вас не заметил, выше на 50%",
 		"category": "special",
 		# Одна тишина была чистым минусом: боты не сбегаются, целей меньше,
 		# замер показал −1.0 убийства и −217 урона в минуту при том, что
@@ -393,37 +393,37 @@ const EXTRA_LIST := [
 const EXTRA_ACTIVE := [
 	{
 		"id": "coolant", "name": "Продувка ствола", "icon": "🧊",
-		"desc": "Мгновенно сбрасывает весь жар", "category": "fire",
+		"desc": "Хладагент мгновенно сбрасывает весь накопленный жар ствола", "category": "fire",
 		"active": "coolant",
 	},
 	{
 		"id": "overclock", "name": "Разгон", "icon": "⚙",
-		"desc": "2.5 с двойной темп стрельбы, ствол не греется",
+		"desc": "2.5 секунды форсажа: темп стрельбы удвоен, а ствол не греется вовсе",
 		"category": "fire", "active": "overclock",
 	},
 	{
 		"id": "grip", "name": "Шипы", "icon": "🕸",
-		"desc": "5 с любое покрытие держит как асфальт", "category": "speed",
+		"desc": "5 секунд шипованные гусеницы держат любое покрытие не хуже асфальта", "category": "speed",
 		"active": "grip",
 	},
 	{
 		"id": "breaker", "name": "Кумулятив", "icon": "🧨",
-		"desc": "5 с пули проходят постройки насквозь и рвут их вчетверо",
+		"desc": "5 секунд снаряды прошивают постройки насквозь, разнося их вчетверо сильнее",
 		"category": "fire", "active": "breaker",
 	},
 	{
 		"id": "silencer", "name": "Глушитель", "icon": "🔇",
-		"desc": "6 с ваши выстрелы боты не слышат вовсе", "category": "special",
+		"desc": "6 секунд ваши выстрелы совсем не слышны ботам", "category": "special",
 		"active": "silencer",
 	},
 	{
 		"id": "smoke", "name": "Дымовая завеса", "icon": "🌫",
-		"desc": "5 с боты не видят вас дальше 19 м", "category": "defense",
+		"desc": "Дымовая шашка на 5 секунд прячет вас от ботов дальше 19 метров", "category": "defense",
 		"active": "smoke",
 	},
 	{
 		"id": "repair", "name": "Полевой ремонт", "icon": "🔧",
-		"desc": "Мгновенно чинит на треть запаса", "category": "defense",
+		"desc": "Аптечка экипажа мгновенно восстанавливает треть запаса прочности", "category": "defense",
 		"active": "repair",
 	},
 ]

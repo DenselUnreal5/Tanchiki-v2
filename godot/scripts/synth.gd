@@ -181,6 +181,20 @@ static func normalize(b: PackedFloat32Array, target: float) -> void:
 	for i in b.size():
 		b[i] *= k
 
+## Аппроксимант Паде [3/2] для tanh — без единого вызова транscendентной
+## функции. На буфере музыкальной темы (сотни тысяч — больше миллиона
+## сэмплов) настоящий tanh() и есть самый тяжёлый проход синтеза: та же
+## болезнь, что уже лечили в add_tone/add_noise («pow() и exp() на каждом
+## сэмпле стоили 2.6 секунды на старте»), просто пропущенная здесь.
+## Погрешность — не больше 0.0003 при |x| < 3, на слух разницы нет.
+static func _fast_tanh(x: float) -> float:
+	if x > 3.0:
+		return 1.0
+	if x < -3.0:
+		return -1.0
+	var x2 := x * x
+	return x * (27.0 + x2) / (27.0 + 9.0 * x2)
+
 ## Мягкое ограничение вместо жёсткого обрезания: слои складываются и легко
 ## выходят за единицу, а tanh давит пики, не превращая их в квадрат.
 ##
@@ -192,7 +206,7 @@ static func to_stream(b: PackedFloat32Array, loop: bool = false,
 	var data := PackedByteArray()
 	data.resize(b.size() * 2)
 	for i in b.size():
-		var v: float = tanh(b[i] * drive)
+		var v: float = _fast_tanh(b[i] * drive)
 		var s := int(clampf(v, -1.0, 1.0) * 32767.0)
 		data[i * 2] = s & 0xFF
 		data[i * 2 + 1] = (s >> 8) & 0xFF

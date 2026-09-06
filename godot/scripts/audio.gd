@@ -22,6 +22,25 @@ const HEAR_RANGE := 1800.0
 ## Срез фильтра на максимальной дистанции — «за холмом».
 const FAR_CUTOFF := 1100.0
 
+## Файловые звуки. Остальное в этом файле синтезируется, но сведённую живую
+## запись синтезатором на GDScript не догнать: выстрел, взрыв и гул мотора
+## звучат записями. Клик меню — тоже (см. play_ui).
+const _UI_CLICK: AudioStreamWAV = preload("res://sfx/menu_click.wav")
+const _SHOOT_WAV: AudioStreamWAV = preload("res://sfx/shoot.wav")
+const _SHOOT_HEAVY_WAV: AudioStreamWAV = preload("res://sfx/shoot_heavy.wav")
+const _EXPLOSION_WAV: AudioStreamWAV = preload("res://sfx/explosion.wav")
+const _ENGINE_WAV: AudioStreamWAV = preload("res://sfx/engine.wav")
+
+## Гул двигателя — непрерывный луп на каждого живого игрока (в «горячем
+## стуле» их двое). Громкость и тон ползут от скорости хода.
+const ENGINE_VOICES := 2
+## Скорость (px/тик), на которой мотор звучит «в полный ход». ~Cfg.PLAYER_SPEED.
+const ENGINE_SPEED_REF := 1.3
+const ENGINE_IDLE_DB := -28.0
+const ENGINE_MOVE_DB := -13.0
+const ENGINE_IDLE_PITCH := 0.82
+const ENGINE_MOVE_PITCH := 1.18
+
 ## Не более чем один звук данного типа за столько тиков.
 const THROTTLE := {
 	"shoot": 2,
@@ -50,7 +69,8 @@ const LEVEL := {
 	"shoot": -7.0,
 	"shoot_heavy": -5.0,
 	"hit": -11.0,
-	"explosion": -4.0,
+	# +6 дБ к прежним -4: записанный взрыв в бою читался слабо, теперь вдвое громче.
+	"explosion": 2.0,
 	"airstrike": -8.0,
 	"crack": -10.0,
 	"crumble": -9.0,
@@ -89,6 +109,13 @@ var _streams := {}
 var _players: Array[AudioStreamPlayer] = []
 var _voice_bus: PackedInt32Array = PackedInt32Array()
 var _next_player := 0
+## Отдельный плеер под клик меню и метка времени последнего клика: без
+## антидребезга частые нажатия (и двойной «бип» самого сэмпла) строчат.
+var _ui_player: AudioStreamPlayer = null
+var _ui_last := 0
+## Лупы мотора и их шины с панорамой — по одному на живого игрока.
+var _engines: Array[AudioStreamPlayer] = []
+var _engine_bus: PackedInt32Array = PackedInt32Array()
 var _rng := RandomNumberGenerator.new()
 ## Номер фоновой задачи синтеза: при выходе её надо дождаться, иначе она
 ## обращается к уже удалённой автозагрузке.
@@ -112,6 +139,20 @@ func _ready() -> void:
 		p.bus = "SfxV%d" % i
 		add_child(p)
 		_players.append(p)
+	# Клик меню идёт мимо пула голосов, прямо на шину SFX: своей панорамы и
+	# фильтра дистанции ему не нужно, а громкость и mute — от ползунка «Звук».
+	_ui_player = AudioStreamPlayer.new()
+	_ui_player.bus = "SFX"
+	_ui_player.stream = _UI_CLICK
+	add_child(_ui_player)
+	# Моторы: непрерывные лупы, каждый на своей шине с панорамой. Молчат,
+	# пока update_engines() не получит танки живых игроков.
+	for i in ENGINE_VOICES:
+		var e := AudioStreamPlayer.new()
+		e.bus = "SfxEngine%d" % i
+		e.stream = _ENGINE_WAV
+		add_child(e)
+		_engines.append(e)
 
 ## Раздельные шины, чтобы громкость эффектов и музыки регулировалась
 ## независимо от общей. Создаются кодом: в проекте нет файла раскладки шин,
@@ -131,6 +172,13 @@ func _ensure_buses() -> void:
 			var lp := AudioEffectLowPassFilter.new()
 			lp.cutoff_hz = 20000.0
 			AudioServer.add_bus_effect(idx, lp, 1)
+	# Шины моторов: только панорама, фильтр дистанции им не нужен.
+	_engine_bus.resize(ENGINE_VOICES)
+	for i in ENGINE_VOICES:
+		var idx := _add_bus("SfxEngine%d" % i, "SFX")
+		_engine_bus[i] = idx
+		if AudioServer.get_bus_effect_count(idx) == 0:
+			AudioServer.add_bus_effect(idx, AudioEffectPanner.new(), 0)
 
 func _exit_tree() -> void:
 	if _task >= 0:
@@ -162,6 +210,9 @@ func set_listeners(points: PackedVector2Array, pan_half: float) -> void:
 
 func clear_listeners() -> void:
 	_listeners = PackedVector2Array()
+	for e in _engines:
+		if e.playing:
+			e.stop()
 
 # ------------------------------------------------------------------ проигрывание
 ## Без координат звук считается «своим» (интерфейс, события режима) и играет
@@ -213,6 +264,52 @@ func play(type: String, x: float = INF, y: float = INF) -> void:
 	player.volume_db = float(LEVEL.get(type, -8.0)) + att
 	player.play()
 
+## Клик по кнопке интерфейса. Файловый звук, а не синтез, поэтому работает
+## и до того, как _build_async достроит процедурные эффекты.
+func play_ui() -> void:
+	if not enabled or _ui_player == null:
+		return
+	var now := Time.get_ticks_msec()
+	if now - _ui_last < 60:
+		return
+	_ui_last = now
+	_ui_player.pitch_scale = 1.0 + (_rng.randf() * 2.0 - 1.0) * 0.02
+	_ui_player.volume_db = -3.0
+	_ui_player.play()
+
+## Гул моторов живых игроков. rigs — массив [x, y, speed_px_per_tick] по
+## танкам; вызывать каждый кадр из game._process. Пустой массив (меню, пауза,
+## гибель, конец матча) глушит все лупы. Громкость/тон — от скорости хода,
+## затухание и панорама — от ближайшей камеры, как в play().
+func update_engines(rigs: Array) -> void:
+	for i in _engines.size():
+		var e := _engines[i]
+		if not enabled or i >= rigs.size():
+			if e.playing:
+				e.stop()
+			continue
+		var r: Array = rigs[i]
+		var pos := Vector2(r[0], r[1])
+		var att := 0.0
+		var pan := 0.0
+		if not _listeners.is_empty():
+			var best: Vector2 = _listeners[0]
+			var best_d: float = best.distance_to(pos)
+			for k in range(1, _listeners.size()):
+				var d: float = _listeners[k].distance_to(pos)
+				if d < best_d:
+					best_d = d
+					best = _listeners[k]
+			att = linear_to_db(1.0 / (1.0 + pow(best_d / NEAR_RANGE, 1.2)))
+			pan = clampf((pos.x - best.x) / _pan_half, -1.0, 1.0) * 0.7
+		var move := clampf(float(r[2]) / ENGINE_SPEED_REF, 0.0, 1.0)
+		if not e.playing:
+			e.play()
+		e.volume_db = lerpf(ENGINE_IDLE_DB, ENGINE_MOVE_DB, move) + att
+		e.pitch_scale = lerpf(ENGINE_IDLE_PITCH, ENGINE_MOVE_PITCH, move)
+		var panner: AudioEffectPanner = AudioServer.get_bus_effect(_engine_bus[i], 0)
+		panner.pan = pan
+
 # ---------------------------------------------------------------- генерация
 func _build_async() -> void:
 	var t0 := Time.get_ticks_msec()
@@ -227,12 +324,12 @@ func _on_built(built: Dictionary, ms: int) -> void:
 	print("[Sfx] звуки собраны за %d мс" % ms)
 
 func _build_streams(_streams: Dictionary) -> void:
-	# --- Выстрел танковой пушки. Не «пиу», а тяжёлый калибр: щелчок дульного
-	# среза, тело выстрела, низкий гул и докатывающийся раскат.
-	_streams["shoot"] = [_cannon(0), _cannon(1), _cannon(2)]
-	# Спецоружие бьёт крупнее — тот же выстрел ниже и длиннее.
-	_streams["shoot_heavy"] = [_cannon(3), _cannon(4)]
-	_streams["explosion"] = [_explosion(0), _explosion(1), _explosion(2)]
+	# --- Выстрел и взрыв — живые записи (см. константы вверху файла).
+	# Разнообразие повторных выстрелов даёт разброс тона в play() (PITCH_VARY).
+	_streams["shoot"] = [_SHOOT_WAV]
+	# Спецоружие — тот же выстрел, тоном ниже (отдельный файл).
+	_streams["shoot_heavy"] = [_SHOOT_HEAVY_WAV]
+	_streams["explosion"] = [_EXPLOSION_WAV]
 	_streams["hit"] = [_hit(0), _hit(1), _hit(2)]
 	_streams["airstrike"] = [_airstrike()]
 
@@ -254,37 +351,6 @@ func _build_streams(_streams: Dictionary) -> void:
 	_streams["levelup"] = [_fanfare([523.25, 659.25, 783.99, 1046.5], 0.75)]
 	_streams["unlock"] = [_fanfare([659.25, 830.61, 987.77, 1318.5], 0.85)]
 	_streams["flag"] = [_horn()]
-
-## Выстрел. Варианты 0–2 — обычная пушка, 3–4 — спецоружие покрупнее.
-func _cannon(variant: int) -> AudioStreamWAV:
-	var pitch: float = [1.06, 1.0, 0.94, 0.84, 0.79][variant]
-	var heavy := variant >= 3
-	var b := Synth.buf(0.75 if heavy else 0.62)
-	var s := 900 + variant * 17
-
-	# 1. Дульный щелчок. Без него выстрел звучит как «пуф» в подушку.
-	Synth.add_noise(b, 0.0, 0.05, 11000.0 * pitch, 3000.0 * pitch, 0.50, 26.0, s)
-	# 2. Тело выстрела: резкий свип шума сверху вниз.
-	Synth.add_noise(b, 0.004, 0.34, 3200.0 * pitch, 240.0, 0.80, 8.0, s + 1)
-	# 3. Низкий гул — именно он читается ухом как калибр.
-	Synth.add_tone(b, 0.002, 0.48, "sine", 140.0 * pitch, 33.0, 0.95, 5.5)
-	Synth.add_tone(b, 0.0, 0.30, "triangle", 230.0 * pitch, 72.0, 0.34, 9.0)
-	# 4. Лязг затвора — отдельным слоем через сотую долю секунды.
-	Synth.add_partials(b, 0.03, 0.16, 760.0 * pitch, [1.0, 2.3, 3.7], 0.09, 16.0)
-	# 5. Раскат: докатывается уже после самого выстрела.
-	Synth.add_noise(b, 0.06, 0.60 if heavy else 0.45, 560.0, 120.0, 0.28, 4.5, s + 2)
-	return Synth.to_stream(b)
-
-func _explosion(variant: int) -> AudioStreamWAV:
-	var pitch: float = [1.0, 0.9, 1.1][variant]
-	var s := 2100 + variant * 31
-	var b := Synth.buf(0.9)
-	Synth.add_noise(b, 0.0, 0.07, 12000.0, 4000.0, 0.45, 22.0, s)
-	Synth.add_noise(b, 0.0, 0.62, 4200.0 * pitch, 190.0, 0.85, 6.0, s + 1)
-	Synth.add_tone(b, 0.0, 0.60, "sine", 120.0 * pitch, 30.0, 0.90, 4.5)
-	# Крошево: сыплется уже после вспышки.
-	Synth.add_noise(b, 0.10, 0.55, 2600.0, 800.0, 0.20, 9.0, s + 2)
-	return Synth.to_stream(b)
 
 ## Пуля по броне: короткий металлический цок, а не «бип».
 func _hit(variant: int) -> AudioStreamWAV:

@@ -549,7 +549,7 @@ func _try_ram(world) -> void:
 	if spd <= Cfg.RAM_MIN_SPEED:
 		return
 	var r2 := Cfg.TANK_BODY_R * Cfg.TANK_BODY_R
-	for other in world.tanks:
+	for other in world.tank_grid.query(x, y, Cfg.TANK_BODY_R):
 		if other == self or not other.alive:
 			continue
 		if not world.are_hostile(self, other):

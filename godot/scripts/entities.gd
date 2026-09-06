@@ -240,10 +240,15 @@ class Bullet extends RefCounted:
 		alive = false
 		return false
 
+	## Больше самого большого возможного tank.hit_r (у босса — около 18.5 px) —
+	## это только черновой отбор кандидатов, точную проверку по настоящему
+	## hit_r каждого танка цикл всё равно делает сам.
+	const HIT_QUERY_RADIUS := 40.0
+
 	func _hit_tanks(world) -> bool:
 		# Радиус берётся у самого танка: силуэт и хитбокс должны совпадать,
 		# иначе крупный корпус врал бы игроку.
-		for tank in world.tanks:
+		for tank in world.tank_grid.query(x, y, HIT_QUERY_RADIUS):
 			if tank == owner or not tank.alive:
 				continue
 			if not world.are_hostile(owner, tank):
@@ -268,7 +273,7 @@ class Bullet extends RefCounted:
 
 	func _explode(world, direct_target, base_damage: float) -> void:
 		var r2 := Cfg.EXPLOSIVE_R * Cfg.EXPLOSIVE_R
-		for other in world.tanks:
+		for other in world.tank_grid.query(x, y, Cfg.EXPLOSIVE_R):
 			if other == direct_target or other == owner or not other.alive:
 				continue
 			if not world.are_hostile(owner, other):
