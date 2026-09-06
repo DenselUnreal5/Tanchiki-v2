@@ -1007,18 +1007,26 @@ func _fill_gallery_tab() -> void:
 			first_id = String(perks[0]["id"])
 
 		var band := UiKit.vbox(8)
+		band.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		left_col.add_child(band)
 
 		var head := UiKit.section(I18n.t("cat." + String(cat["id"]), {}, String(cat["name"])), cat["color"])
 		band.add_child(head)
 
+		# Колонки распределены по всей ширине списка (до панели описания
+		# справа), а не сжаты к левому краю — иначе при малом числе колонок
+		# в категории остаётся пустая полоса перед описанием перка.
 		var subcols := UiKit.hbox(14)
+		subcols.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		subcols.alignment = BoxContainer.ALIGNMENT_CENTER
 		band.add_child(subcols)
 
 		var num_cols := ceili(float(perks.size()) / float(_GALLERY_MAX_PER_COL))
 		var rows := ceili(float(perks.size()) / float(num_cols))
 		for c in num_cols:
 			var sub := UiKit.vbox(8)
+			sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			sub.alignment = BoxContainer.ALIGNMENT_CENTER
 			subcols.add_child(sub)
 			for r in rows:
 				var idx := c * rows + r
@@ -1026,7 +1034,9 @@ func _fill_gallery_tab() -> void:
 					break
 				if r > 0:
 					sub.add_child(_gallery_spine())
-				sub.add_child(_gallery_node(perks[idx]))
+				var node_wrap := CenterContainer.new()
+				node_wrap.add_child(_gallery_node(perks[idx]))
+				sub.add_child(node_wrap)
 
 	if _gallery_selected_id == "" or Perks.get_perk(_gallery_selected_id).is_empty():
 		_gallery_selected_id = first_id
