@@ -28,13 +28,10 @@ static var ICONS := {
 	],
 
 	# ================================================================ ОГОНЬ
-	"rapid_fire": [ # тройная стрела — Rapid Fire
-		{"op": "line", "a": Vector2(8,16), "b": Vector2(42,16), "w": 6},
-		{"op": "poly", "pts": [Vector2(38,8), Vector2(56,16), Vector2(38,24)]},
-		{"op": "line", "a": Vector2(8,32), "b": Vector2(42,32), "w": 6},
-		{"op": "poly", "pts": [Vector2(38,24), Vector2(56,32), Vector2(38,40)]},
-		{"op": "line", "a": Vector2(8,48), "b": Vector2(42,48), "w": 6},
-		{"op": "poly", "pts": [Vector2(38,40), Vector2(56,48), Vector2(38,56)]},
+	"rapid_fire": [ # тройной шеврон — Rapid Fire
+		{"op": "poly", "pts": [Vector2(6,4), Vector2(26,4), Vector2(44,12), Vector2(26,20), Vector2(6,20), Vector2(18,12)]},
+		{"op": "poly", "pts": [Vector2(6,24), Vector2(26,24), Vector2(44,32), Vector2(26,40), Vector2(6,40), Vector2(18,32)]},
+		{"op": "poly", "pts": [Vector2(6,44), Vector2(26,44), Vector2(44,52), Vector2(26,60), Vector2(6,60), Vector2(18,52)]},
 	],
 	"double_shot": [ # расходящаяся двойная стрела — Double Shot
 		{"op": "line", "a": Vector2(10,32), "b": Vector2(38,18), "w": 6},
@@ -46,8 +43,9 @@ static var ICONS := {
 		{"op": "circle", "c": Vector2(32,32), "r": 6, "fill": true},
 		{"op": "ring", "c": Vector2(32,32), "n": 3, "pts": [Vector2(32,32), Vector2(32,6), Vector2(44,16)]},
 	],
-	"explosive": [ # звезда-вспышка — HEAT Round
-		{"op": "poly", "pts": [Vector2(32,4), Vector2(38,24), Vector2(58,24), Vector2(42,36), Vector2(48,56), Vector2(32,44), Vector2(16,56), Vector2(22,36), Vector2(6,24), Vector2(26,24)]},
+	"explosive": [ # бронебойно-фугасный снаряд со вспышкой — HEAT Round
+		{"op": "poly", "pts": [Vector2(34,4), Vector2(46,22), Vector2(46,56), Vector2(22,56), Vector2(22,22)]},
+		{"op": "poly", "pts": [Vector2(4,24), Vector2(14,16), Vector2(14,32), Vector2(4,40)]},
 	],
 	"piercing": [ # пуля со следом скорости — Piercing Shot
 		{"op": "poly", "pts": [Vector2(40,24), Vector2(56,32), Vector2(40,40), Vector2(28,40), Vector2(28,24)]},
@@ -72,12 +70,14 @@ static var ICONS := {
 		{"op": "poly", "pts": [Vector2(22,10), Vector2(48,2), Vector2(58,18), Vector2(48,32), Vector2(22,24)]},
 		{"op": "rect", "c": Vector2(16,50), "size": Vector2(8,46), "rot": -8},
 	],
-	"concrete_breaker": [ # клин, вскрывающий бетон — Concrete Breaker
-		{"op": "poly", "pts": [Vector2(46,6), Vector2(58,18), Vector2(24,52), Vector2(16,44)]},
-		{"op": "line", "a": Vector2(16,44), "b": Vector2(8,58), "w": 6},
+	"concrete_breaker": [ # бур с ушком — Concrete Breaker
+		{"op": "rect", "c": Vector2(32,8), "size": Vector2(8,14), "rot": 0},
+		{"op": "poly", "pts": [Vector2(32,14), Vector2(44,30), Vector2(32,58), Vector2(20,30)]},
+		{"op": "circle", "c": Vector2(32,26), "r": 4, "shade": true},
 	],
-	"can_opener": [ # нож — Armor-Peeling Knife
+	"can_opener": [ # кинжал с гардой — Armor-Peeling Knife
 		{"op": "poly", "pts": [Vector2(46,6), Vector2(56,16), Vector2(24,48), Vector2(18,42)]},
+		{"op": "rect", "c": Vector2(20,46), "size": Vector2(18,4), "rot": -45},
 		{"op": "rect", "c": Vector2(14,52), "size": Vector2(14,10), "rot": 45},
 	],
 	"coolant": [ # раструб с потоком — Nozzle Blow
@@ -218,8 +218,8 @@ static var ICONS := {
 		{"op": "line", "a": Vector2(32,32), "b": Vector2(4,32), "w": 6},
 		{"op": "line", "a": Vector2(32,32), "b": Vector2(11,11), "w": 6},
 	],
-	"scavenger": [ # маска мародёра — Marauder
-		{"op": "poly", "pts": [Vector2(32,6), Vector2(50,20), Vector2(50,38), Vector2(40,54), Vector2(24,54), Vector2(14,38), Vector2(14,20)]},
+	"scavenger": [ # рогатая маска мародёра — Marauder
+		{"op": "poly", "pts": [Vector2(20,10), Vector2(26,2), Vector2(30,14), Vector2(34,14), Vector2(38,2), Vector2(44,10), Vector2(50,20), Vector2(50,38), Vector2(40,54), Vector2(24,54), Vector2(14,38), Vector2(14,20)]},
 		{"op": "poly", "pts": [Vector2(20,26), Vector2(28,26), Vector2(24,34)], "shade": true},
 		{"op": "poly", "pts": [Vector2(36,26), Vector2(44,26), Vector2(40,34)], "shade": true},
 	],
@@ -274,8 +274,10 @@ static var ICONS := {
 		{"op": "rect", "c": Vector2(40,24), "size": Vector2(4,14), "rot": 0},
 		{"op": "rect", "c": Vector2(40,17), "size": Vector2(18,6), "rot": 0},
 	],
-	"berserk": [ # разъярённая маска — Berserk
-		{"op": "poly", "pts": [Vector2(32,6), Vector2(50,20), Vector2(50,38), Vector2(40,54), Vector2(24,54), Vector2(14,38), Vector2(14,20)]},
+	"berserk": [ # разъярённая горилла с ушами — Berserk
+		{"op": "poly", "pts": [Vector2(24,6), Vector2(40,6), Vector2(50,20), Vector2(50,40), Vector2(38,56), Vector2(26,56), Vector2(14,40), Vector2(14,20)]},
+		{"op": "circle", "c": Vector2(12,22), "r": 7},
+		{"op": "circle", "c": Vector2(52,22), "r": 7},
 		{"op": "poly", "pts": [Vector2(18,24), Vector2(28,20), Vector2(28,26)], "shade": true},
 		{"op": "poly", "pts": [Vector2(46,24), Vector2(36,20), Vector2(36,26)], "shade": true},
 		{"op": "rect", "c": Vector2(32,42), "size": Vector2(18,5), "rot": 0, "shade": true},
