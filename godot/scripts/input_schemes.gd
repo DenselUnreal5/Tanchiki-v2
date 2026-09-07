@@ -204,6 +204,10 @@ class GamepadScheme extends RefCounted:
 	## раньше, чем тронуть стики, aim так и останется Vector2.ZERO (мировой
 	## центр, а не танк). Дальше, пока стреляешь, он просто не обновляется.
 	var _move_aim_set := false
+	## Жёсткий лок по R3 (см. ниже) — цель захвата и состояние кнопки на
+	## прошлом кадре (для отслеживания фронта нажатия).
+	var locked_target = null
+	var _r3_prev := false
 	## Мир партии. Ставится игрой каждый кадр (game.gd:_process) и нужен
 	## автоприцелу: список танков, проверка вражды и линия видимости.
 	var world = null
@@ -228,6 +232,16 @@ class GamepadScheme extends RefCounted:
 	const ASSIST_CONE := 35.0
 	const ASSIST_PULL := 0.6
 
+	# ---- жёсткий лок по R3 --------------------------------------------------
+	## Нажатие правого стика (клик, R3) — полный захват ближайшей цели в
+	## LOCK_RANGE, без конуса направления (в отличие от мягкого автоприцела
+	## выше — R3 разовая команда «ближайшего», а не привязка к тому, куда
+	## сейчас смотрит стик). Держится, пока цель жива и не дальше
+	## LOCK_BREAK_RANGE — это отдельное, более сильное действие игрока, не
+	## гейтится Sets.pad_aim_assist (тот тумблер только про мягкую доводку).
+	const LOCK_RANGE := 600.0
+	const LOCK_BREAK_RANGE := 800.0
+
 	func _init(device_: int = 0) -> void:
 		device = device_
 
@@ -240,6 +254,7 @@ class GamepadScheme extends RefCounted:
 			"[LB] рывок-таран",
 			"[Y] способность перка",
 			"[RB] авиаудар (Оборона)",
+			"[R3] жёсткий лок на ближайшую цель",
 		]
 		if Sets.pad_aim_assist:
 			h.append("автоприцел: доводка к ближайшему врагу")
@@ -268,9 +283,34 @@ class GamepadScheme extends RefCounted:
 		var lt := Input.get_joy_axis(device, JOY_AXIS_TRIGGER_LEFT) > 0.5
 		var firing := rt or Input.is_joy_button_pressed(device, JOY_BUTTON_A)
 
+		# Клик правого стика (R3) — по фронту нажатия: is_joy_button_pressed
+		# отдаёт «держится сейчас», для «только что нажали» сверяем с прошлым
+		# кадром, как и Sets._input делает для режима навигации.
+		var r3 := Input.is_joy_button_pressed(device, JOY_BUTTON_RIGHT_STICK)
+		var r3_pressed := r3 and not _r3_prev
+		_r3_prev = r3
+		if tank != null and r3_pressed:
+			# Повторное нажатие тоже действует — можно перецепиться на другую
+			# ближайшую цель, если уже кто-то залочен.
+			var tgt = _find_lock_target(tank)
+			if tgt != null:
+				locked_target = tgt
+		if locked_target != null:
+			if not is_instance_valid(locked_target) or not locked_target.alive:
+				locked_target = null
+			elif tank != null and Vector2(locked_target.x - tank.x, locked_target.y - tank.y).length() > LOCK_BREAK_RANGE:
+				locked_target = null
+
 		var ax := _axis(JOY_AXIS_RIGHT_X)
 		var ay := _axis(JOY_AXIS_RIGHT_Y)
-		if tank != null:
+		if tank != null and locked_target != null:
+			# Жёсткий лок — точка прицела ставится прямо в цель, без подмешивания
+			# стика (в отличие от мягкого автоприцела ниже). _aim_ready = true,
+			# чтобы после снятия лока прицел остался там же, а не прыгнул на
+			# «целимся по движению».
+			aim = Vector2(locked_target.x, locked_target.y)
+			_aim_ready = true
+		elif tank != null:
 			var dir := Vector2(ax, ay)
 			if dir.length() > 0.2:
 				var sdir := dir.normalized()
@@ -329,6 +369,29 @@ class GamepadScheme extends RefCounted:
 			if d > best_d or d < 1.0:
 				continue
 			if off.normalized().dot(stick_dir) < cone_cos:
+				continue
+			if not world.map.has_line_of_sight(tank.x, tank.y, t.x, t.y):
+				continue
+			best_d = d
+			best = t
+		return best
+
+	## Ближайший видимый враг в радиусе LOCK_RANGE для жёсткого лока по R3 —
+	## в отличие от _nearest_target, без фильтра по конусу направления стика:
+	## R3 — разовая команда «ближайшего», не привязана к тому, куда сейчас
+	## показывает стик.
+	func _find_lock_target(tank):
+		if world == null or not ("tanks" in world):
+			return null
+		var best = null
+		var best_d := LOCK_RANGE
+		for t in world.tanks:
+			if t == tank or not t.alive:
+				continue
+			if not world.are_hostile(tank, t):
+				continue
+			var d := Vector2(t.x - tank.x, t.y - tank.y).length()
+			if d > best_d:
 				continue
 			if not world.map.has_line_of_sight(tank.x, tank.y, t.x, t.y):
 				continue
