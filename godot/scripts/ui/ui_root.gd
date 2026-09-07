@@ -660,8 +660,6 @@ func _build_menu() -> void:
 		_confirm.popup_centered())
 	col.add_child(reset_btn)
 
-	col.add_child(_pad_hint_strip())
-
 	# ---- правая панель: настройки боя ----
 	_menu_settings_panel = UiKit.panel()
 	_menu_settings_panel.custom_minimum_size = Vector2(MENU_SETTINGS_W, 0)
@@ -2223,6 +2221,10 @@ func _build_controls_tab() -> void:
 			I18n.t("set.pad.none", {}, "Геймпад не найден. Подключите его и откройте настройки заново."),
 			9, Cfg.UI_MUTED))
 	else:
+		# Подсказка по кнопкам геймпада — раньше висела ещё и строкой под
+		# «Играть» на главном экране, убрал оттуда: тут, в настройках
+		# геймпада, ей самое место, а не на первом же экране игры.
+		_settings_body.add_child(_pad_hint_strip())
 		# Ползунок ходит 0..1, а мёртвая зона выше половины хода бессмысленна:
 		# стик перестал бы отзываться вовсе. Поэтому шкала сжата вдвое.
 		_settings_body.add_child(UiKit.slider_row(
