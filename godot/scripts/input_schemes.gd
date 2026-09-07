@@ -161,16 +161,19 @@ class KeyboardAimScheme extends RefCounted:
 
 		var rot_left := Input.is_physical_key_pressed(Sets.key_for("p2_turret_left")) or Input.is_physical_key_pressed(KEY_KP_7)
 		var rot_right := Input.is_physical_key_pressed(Sets.key_for("p2_turret_right")) or Input.is_physical_key_pressed(KEY_KP_9)
+		var firing := Input.is_physical_key_pressed(Sets.key_for("p2_fire"))
 
 		if rot_left and not rot_right:
 			tank.turret_angle -= turret_slew
 		elif rot_right and not rot_left:
 			tank.turret_angle += turret_slew
-		elif moving:
+		elif moving and not firing:
 			# Ручного поворота нет — башня плавно смотрит туда, куда едем.
+			# Но не пока стреляешь: иначе смена направления посреди очереди
+			# уводит ствол за корпусом, и попасть невозможно.
 			tank.turret_angle = Rng.rotate_toward(tank.turret_angle, tank.angle, follow_slew)
 
-		if Input.is_physical_key_pressed(Sets.key_for("p2_fire")):
+		if firing:
 			tank.shoot(world)
 		if Input.is_physical_key_pressed(Sets.key_for("p2_mine")):
 			tank.place_mine(world)
@@ -196,6 +199,11 @@ class GamepadScheme extends RefCounted:
 	## Последняя точка прицеливания в мире. Держится между кадрами.
 	var aim := Vector2.ZERO
 	var _aim_ready := false
+	## Резервный прицел «по движению» (пока правый стик не тронут) хоть раз
+	## да должен посчитаться — иначе на самом первом кадре, если стрелять
+	## раньше, чем тронуть стики, aim так и останется Vector2.ZERO (мировой
+	## центр, а не танк). Дальше, пока стреляешь, он просто не обновляется.
+	var _move_aim_set := false
 	## Мир партии. Ставится игрой каждый кадр (game.gd:_process) и нужен
 	## автоприцелу: список танков, проверка вражды и линия видимости.
 	var world = null
@@ -252,6 +260,14 @@ class GamepadScheme extends RefCounted:
 		cmd["my"] = _axis(JOY_AXIS_LEFT_Y)
 
 		var tank = player.tank
+		# Крючок считается нажатым с середины хода: полное нажатие требовать
+		# незачем, а срабатывание от касания мешает целиться. Считаем его
+		# раньше точки прицела — она не должна пересчитываться из
+		# направления движения, пока идёт стрельба (см. ниже).
+		var rt := Input.get_joy_axis(device, JOY_AXIS_TRIGGER_RIGHT) > 0.5
+		var lt := Input.get_joy_axis(device, JOY_AXIS_TRIGGER_LEFT) > 0.5
+		var firing := rt or Input.is_joy_button_pressed(device, JOY_BUTTON_A)
+
 		var ax := _axis(JOY_AXIS_RIGHT_X)
 		var ay := _axis(JOY_AXIS_RIGHT_Y)
 		if tank != null:
@@ -260,19 +276,20 @@ class GamepadScheme extends RefCounted:
 				var sdir := dir.normalized()
 				aim = _assist_aim(tank, sdir)
 				_aim_ready = true
-			elif not _aim_ready:
-				# Пока игрок не трогал правый стик, целимся туда, куда едем.
+			elif not _aim_ready and (not firing or not _move_aim_set):
+				# Пока игрок не трогал правый стик, целимся туда, куда едем —
+				# но не пересчитываем прицел из движения посреди стрельбы
+				# (кроме самого первого раза, чтобы не целиться в мировой
+				# центр), иначе смена направления уводит точку прицела за
+				# корпусом.
 				var move := Vector2(float(cmd["mx"]), float(cmd["my"]))
 				var ahead := move.normalized() if move.length() > 0.2 else Vector2.RIGHT
 				aim = Vector2(tank.x, tank.y) + ahead * AIM_REACH
+				_move_aim_set = true
 		cmd["ax"] = aim.x
 		cmd["ay"] = aim.y
 
-		# Крючок считается нажатым с середины хода: полное нажатие требовать
-		# незачем, а срабатывание от касания мешает целиться.
-		var rt := Input.get_joy_axis(device, JOY_AXIS_TRIGGER_RIGHT) > 0.5
-		var lt := Input.get_joy_axis(device, JOY_AXIS_TRIGGER_LEFT) > 0.5
-		cmd["fire"] = rt or Input.is_joy_button_pressed(device, JOY_BUTTON_A)
+		cmd["fire"] = firing
 		cmd["mine"] = lt or Input.is_joy_button_pressed(device, JOY_BUTTON_B)
 		cmd["dash"] = Input.is_joy_button_pressed(device, JOY_BUTTON_LEFT_SHOULDER)
 		cmd["ability"] = Input.is_joy_button_pressed(device, JOY_BUTTON_Y)

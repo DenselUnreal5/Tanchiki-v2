@@ -196,6 +196,11 @@ func _apply_nav_mode(pad_ui: bool) -> void:
 	if _nav_theme != null:
 		_nav_theme.set_stylebox("focus", "Button",
 			UiKit.focus_ring() if pad_ui else StyleBoxEmpty.new())
+		# Слайдеры (громкость/деадзона/тряска и т.п.) — не Button, без этой
+		# записи кольцо фокуса на них не рисуется вовсе, падает на
+		# невзрачную рамку движка по умолчанию.
+		_nav_theme.set_stylebox("focus", "HSlider",
+			UiKit.focus_ring() if pad_ui else StyleBoxEmpty.new())
 	for strip in _pad_hints:
 		if is_instance_valid(strip):
 			strip.visible = pad_ui
@@ -214,6 +219,14 @@ func _first_focusable(node: Node) -> Control:
 		var f := _first_focusable(c)
 		if f != null:
 			return f
+	return null
+
+## Кнопка вкладки по её ключу (см. UiKit.plain_tabs: set_meta("tab_key", ...)) —
+## искать по ключу, а не по тексту подписи, который зависит от языка.
+func _find_tab_button(row: Control, key: String) -> Control:
+	for c in row.get_children():
+		if c.has_meta("tab_key") and String(c.get_meta("tab_key")) == key:
+			return c
 	return null
 
 func _push_focus() -> void:
@@ -436,6 +449,7 @@ func _overlay_body(root: Control, title_key: String, title_fallback: String,
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(width, 0)
 	scroll.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	scroll.follow_focus = true
 	center.add_child(scroll)
 
 	var panel := UiKit.panel()
@@ -1074,6 +1088,7 @@ func _build_hub() -> void:
 
 	var hub_scroll := ScrollContainer.new()
 	hub_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	hub_scroll.follow_focus = true
 	box.add_child(hub_scroll)
 
 	_hub_body = UiKit.vbox(8)
@@ -1117,6 +1132,10 @@ func _switch_hub_tab(key: String) -> void:
 	_hub_active_tab = key
 	_rebuild_hub_tabs()
 	_fill_hub_tab(key)
+	# Кнопка вкладки, державшая фокус, была пересобрана (queue_free) —
+	# без этого фокус геймпадом/клавиатурой улетал в никуда (баг: после
+	# смены вкладки не попасть ни в неё, ни дальше в тело).
+	_grab(_find_tab_button(_hub_tabs_row, key))
 
 func _fill_hub_tab(key: String) -> void:
 	for c in _hub_body.get_children():
@@ -1186,6 +1205,7 @@ func _fill_gallery_tab() -> void:
 	var list_scroll := ScrollContainer.new()
 	list_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	list_scroll.follow_focus = true
 	# Та же высота, что и у тела хаба целиком (_hub_body_budget) — иначе
 	# список перков (короче панели описания) оставляет пустой промежуток
 	# перед кнопкой «Закрыть», а высота вкладки не совпадает с Гаражом/
@@ -1659,6 +1679,7 @@ func _build_gameover() -> void:
 
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(600, 0)
+	scroll.follow_focus = true
 	center.add_child(scroll)
 	_gameover.set_meta("scroll", scroll)
 
@@ -1907,6 +1928,7 @@ func _build_settings_shell() -> void:
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
 	box.add_child(scroll)
 
 	_settings_body = UiKit.vbox(8)
@@ -1950,6 +1972,9 @@ func _switch_settings_tab(key: String) -> void:
 	_settings_active_tab = key
 	_rebuild_settings_tabs()
 	_fill_settings_tab(key)
+	# Та же причина, что у _switch_hub_tab: кнопка вкладки была пересобрана,
+	# фокус без этого пропадал — до самих настроек было не добраться.
+	_grab(_find_tab_button(_settings_tabs_row, key))
 
 ## Собирает выбранную вкладку заново при каждом переключении: значения
 ## берутся прямо из Sets, поэтому вкладка всегда показывает текущее

@@ -382,6 +382,10 @@ static func plain_tabs(items: Array, active_key: String, on_change: Callable) ->
 		# клавиатура не могли на них попасть и переключить вкладку.
 		btn.focus_mode = Control.FOCUS_ALL
 		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		# Чтобы после переключения вкладки можно было найти именно эту кнопку
+		# и вернуть на неё фокус (см. ui_root.gd:_find_tab_button) — не по
+		# тексту подписи, тот зависит от языка.
+		btn.set_meta("tab_key", key)
 		var empty := StyleBoxEmpty.new()
 		_style_button(btn, empty, empty, empty, 13, Cfg.UI_ACCENT if on else Cfg.UI_MUTED)
 		btn.add_theme_font_override("font", Fonts.bold if on else Fonts.regular)
