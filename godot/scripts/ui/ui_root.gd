@@ -40,7 +40,7 @@ var menu_scene: MenuScene
 
 ## Ширины панелей меню: слева действия, справа настройки боя.
 const MENU_PANEL_W := 400.0
-const MENU_SETTINGS_W := 430.0
+const MENU_SETTINGS_W := 500.0
 
 var _menu: Control
 var _menu_panel: ThemedPanel
@@ -69,6 +69,8 @@ var _net_error := ""
 var _settings: Control
 var _settings_body: VBoxContainer
 var _settings_sub: RichTextLabel
+var _settings_tabs_row: HBoxContainer
+var _settings_active_tab := "general"
 
 var _pause: Control
 var _perk: Control
@@ -105,6 +107,19 @@ var _confirm: ConfirmationDialog
 
 var _last_gameover := {}
 
+## Навигация геймпадом/клавиатурой: тема с рамкой фокуса, подсказки по
+## кнопкам и стек фокуса для возврата при закрытии оверлеев.
+var _nav_theme: Theme
+var _pad_hints: Array = []
+var _focus_stack: Array = []
+var _menu_focus_cache := {}
+## Кнопки, на которые ставится фокус при открытии экрана.
+var _menu_start_btn: Button
+var _pause_resume_btn: Button
+var _gameover_replay_btn: Button
+## Игрок, которому сейчас показан выбор перка — для отмены по «назад».
+var _perk_player = null
+
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -126,16 +141,26 @@ func _ready() -> void:
 	_net_body = _overlay_body(_net, "net.title", "🌐 Сетевая игра",
 		_net_sub, func(): close_net(), 620)
 
-	_settings = _make_overlay(true)
-	_settings_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_settings_body = _overlay_body(_settings, "settings.title", "⚙ Настройки",
-		_settings_sub, func(): close_settings(), 700)
+	_build_settings_shell()
 
 	_confirm = ConfirmationDialog.new()
 	_confirm.confirmed.connect(func(): reset_progress_requested.emit())
 	add_child(_confirm)
 
 	I18n.language_changed.connect(_on_language_changed)
+
+	for ov in [_settings, _net, _stats, _daily, _hub]:
+		if ov != null:
+			ov.visibility_changed.connect(_on_menu_overlay_visibility.bind(ov))
+
+	# Тема на весь интерфейс несёт ровно одну запись — рамку фокуса кнопки.
+	# Её мы и подменяем при смене режима навигации: кольцо для геймпада,
+	# пусто для мыши. add_theme_stylebox_override у самих кнопок больше нет
+	# (ui_kit.gd:_style_button), поэтому тема доходит до всех.
+	_nav_theme = Theme.new()
+	theme = _nav_theme
+	Sets.ui_input_mode_changed.connect(_apply_nav_mode)
+	_apply_nav_mode(Sets.pad_ui)
 
 # ---------------------------------------------------------------- каркас
 func _make_overlay(dim: bool) -> Control:
@@ -147,6 +172,173 @@ func _make_overlay(dim: bool) -> Control:
 		root.add_child(UiKit.dimmer())
 	add_child(root)
 	return root
+
+# =============================================== навигация геймпадом/клавой
+## Подсказка по кнопкам геймпада внизу экрана. Видна только в режиме
+## навигации (см. _apply_nav_mode). Каждая штука регистрируется в _pad_hints.
+## adjust — показывать ли «‹↔› изменить» (для экранов с ползунками/списками).
+func _pad_hint_strip(adjust: bool = false) -> RichTextLabel:
+	var parts := [
+		"‹A› " + I18n.t("nav.select", {}, "выбрать"),
+		"‹B› " + I18n.t("nav.back", {}, "назад"),
+		"‹✚› " + I18n.t("nav.move", {}, "перемещение"),
+	]
+	if adjust:
+		parts.append("‹↔› " + I18n.t("nav.adjust", {}, "изменить"))
+	var strip := UiKit.rich("[center]" + "   ".join(parts) + "[/center]", 9,
+		Color(Cfg.UI_MUTED, 0.7))
+	strip.visible = Sets.pad_ui
+	_pad_hints.append(strip)
+	return strip
+
+## Смена режима навигации: кольцо фокуса и подсказки по кнопкам видны только
+## когда последний ввод был не мышью.
+func _apply_nav_mode(pad_ui: bool) -> void:
+	if _nav_theme != null:
+		_nav_theme.set_stylebox("focus", "Button",
+			UiKit.focus_ring() if pad_ui else StyleBoxEmpty.new())
+	for strip in _pad_hints:
+		if is_instance_valid(strip):
+			strip.visible = pad_ui
+
+## Отложенный захват фокуса: большинство экранов сначала строят детей, потом
+## ставят visible в том же кадре, а раскладка меню ещё и через call_deferred.
+func _grab(ctrl) -> void:
+	if is_instance_valid(ctrl):
+		ctrl.grab_focus.call_deferred()
+
+## Первый видимый фокусируемый Control в поддереве.
+func _first_focusable(node: Node) -> Control:
+	if node is Control and node.visible and node.focus_mode != Control.FOCUS_NONE:
+		return node
+	for c in node.get_children():
+		var f := _first_focusable(c)
+		if f != null:
+			return f
+	return null
+
+func _push_focus() -> void:
+	_focus_stack.append(get_viewport().gui_get_focus_owner())
+
+func _pop_focus() -> void:
+	if _focus_stack.is_empty():
+		return
+	var prev = _focus_stack.pop_back()
+	if is_instance_valid(prev):
+		_grab(prev)
+
+## Пока открыт оверлей, вызванный из меню, кнопки меню за его подложкой не
+## должны ловить фокус с крестовины (мышь-то ловит подложка, а фокус — нет).
+func _set_menu_focusable(on: bool) -> void:
+	if on:
+		for id in _menu_focus_cache:
+			var c = instance_from_id(id)
+			if is_instance_valid(c):
+				c.focus_mode = _menu_focus_cache[id]
+		_menu_focus_cache.clear()
+	elif _menu_focus_cache.is_empty() and _menu != null:
+		# Уже отключено вложенным оверлеем — не перекэшировать (иначе в кэш
+		# попадёт FOCUS_NONE и восстановить будет нечего).
+		_cache_focus_off(_menu)
+
+## Есть ли сейчас открытый оверлей, вызванный из меню.
+func _any_menu_overlay_open() -> bool:
+	for ov in [_settings, _net, _stats, _daily, _hub]:
+		if ov != null and ov.visible:
+			return true
+	return false
+
+## Открытие/закрытие оверлея из меню: подхват и возврат фокуса, глушение
+## фокуса кнопок меню за подложкой. Централизованно через visibility_changed,
+## чтобы не расставлять по десятку open_/close_ методов.
+func _on_menu_overlay_visibility(ov: Control) -> void:
+	if ov.visible:
+		_push_focus()
+		_set_menu_focusable(false)
+		var cb = ov.get_meta("close_button", null)
+		_grab(cb if cb != null else _first_focusable(ov))
+	else:
+		_pop_focus()
+		if not _any_menu_overlay_open():
+			_set_menu_focusable(true)
+
+func _cache_focus_off(node: Node) -> void:
+	if node is Control and node.focus_mode != Control.FOCUS_NONE:
+		_menu_focus_cache[node.get_instance_id()] = node.focus_mode
+		node.focus_mode = Control.FOCUS_NONE
+	for c in node.get_children():
+		_cache_focus_off(c)
+
+## Линкует ряд кнопок по горизонтали (left/right + next/prev), с переносом.
+func _chain_horizontal(btns: Array, wrap: bool = true) -> void:
+	var n := btns.size()
+	for i in n:
+		var b: Control = btns[i]
+		if not is_instance_valid(b):
+			continue
+		var l: int = (i - 1 + n) % n if wrap else maxi(0, i - 1)
+		var r: int = (i + 1) % n if wrap else mini(n - 1, i + 1)
+		if is_instance_valid(btns[l]):
+			b.focus_neighbor_left = btns[l].get_path()
+			b.focus_previous = btns[l].get_path()
+		if is_instance_valid(btns[r]):
+			b.focus_neighbor_right = btns[r].get_path()
+			b.focus_next = btns[r].get_path()
+
+## Линкует ряды по вертикали (top/bottom). rows — Control'ы; для каждого
+## берётся его meta("focus_row") либо первый фокусируемый потомок.
+func _chain_vertical(rows: Array) -> void:
+	var entries := []
+	for row in rows:
+		if not is_instance_valid(row):
+			continue
+		var e = row.get_meta("focus_row", null) if row.has_meta("focus_row") else null
+		if e == null or not is_instance_valid(e):
+			e = _first_focusable(row)
+		if e != null:
+			entries.append(e)
+	for i in entries.size():
+		var a: Control = entries[i]
+		if i > 0:
+			a.focus_neighbor_top = entries[i - 1].get_path()
+		if i + 1 < entries.size():
+			a.focus_neighbor_bottom = entries[i + 1].get_path()
+
+## «Назад» (Esc / кнопка B): закрывает верхний открытый оверлей. Возвращает
+## true, если что-то закрыл. Вызывается из game.gd:_unhandled_input и
+## заменяет прежние ветки закрытия по Esc, которые жили там.
+func handle_cancel() -> bool:
+	if _perk != null and _perk.visible:
+		perk_chosen.emit(_perk_player, "")
+		return true
+	if _settings != null and _settings.visible:
+		close_settings()
+		return true
+	if _net != null and _net.visible:
+		close_net()
+		return true
+	if _hub != null and _hub.visible:
+		close_hub()
+		return true
+	if _stats != null and _stats.visible:
+		close_stats()
+		return true
+	if _daily != null and _daily.visible:
+		close_daily()
+		return true
+	if _pause != null and _pause.visible:
+		resume_requested.emit()
+		return true
+	# Раскрытая панель настроек боя в меню — сворачиваем.
+	if _menu != null and _menu.visible and _menu_settings_panel != null \
+			and _menu_settings_panel.visible:
+		_menu_settings_panel.visible = false
+		_refresh_mode_button()
+		_layout_menu()
+		_grab(_menu_settings_btn)
+		return true
+	# Голое главное меню и экран итогов — «назад» не делает ничего.
+	return false
 
 ## Стандартная схема оверлея: заголовок, подзаголовок, тело, кнопка «Закрыть».
 ## Собирает строки настроек боя. Вынесено отдельно, потому что при смене
@@ -183,6 +375,9 @@ func _build_menu_settings() -> void:
 		["city", I18n.t("loc.city", {}, "🏙 Город")],
 		["dust", I18n.t("loc.dust", {}, "🏜 Пустошь")],
 		["jungle", I18n.t("loc.jungle", {}, "🌴 Джунгли")],
+		["frost", I18n.t("loc.frost", {}, "❄ Зима")],
+		["exclusion", I18n.t("loc.exclusion", {}, "☢ Зона")],
+		["shore", I18n.t("loc.shore", {}, "🌊 Берег")],
 	]))
 	_menu_settings.add_child(_make_group(I18n.t("menu.weather", {}, "Погода"), "weather", [
 		["auto", I18n.t("wx.auto", {}, "Своя")],
@@ -201,6 +396,32 @@ func _build_menu_settings() -> void:
 	]))
 	_menu_settings.add_child(_make_color_group(I18n.t("menu.color1", {}, "Цвет танка 1"), "color1"))
 	_menu_settings.add_child(_make_color_group(I18n.t("menu.color2", {}, "Цвет танка 2"), "color2"))
+	_wire_menu_settings_nav.call_deferred()
+
+## Связывает переключатели панели настроек боя для навигации крестовиной:
+## внутри группы — по горизонтали с переносом, между группами — по вертикали.
+## Автопоиск соседа промахивается через HFlowContainer, поэтому вручную.
+func _wire_menu_settings_nav() -> void:
+	var groups := []
+	for child in _menu_settings.get_children():
+		if not (child is VBoxContainer):
+			continue
+		var flow: Control = null
+		for gc in child.get_children():
+			if gc is HFlowContainer:
+				flow = gc
+				break
+		if flow == null or flow.get_child_count() == 0:
+			continue
+		var btns := []
+		for b in flow.get_children():
+			btns.append(b)
+		_chain_horizontal(btns, true)
+		child.set_meta("focus_row", btns[0])
+		if is_instance_valid(_menu_settings_btn):
+			btns[0].focus_neighbor_left = _menu_settings_btn.get_path()
+		groups.append(child)
+	_chain_vertical(groups)
 
 
 ## @param title_key ключ перевода заголовка. Именно ключ, а не готовая
@@ -232,6 +453,8 @@ func _overlay_body(root: Control, title_key: String, title_fallback: String,
 	var body := UiKit.vbox(8)
 	box.add_child(body)
 
+	box.add_child(_pad_hint_strip())
+
 	var close := UiKit.secondary(I18n.t("btn.close", {}, "Закрыть"))
 	close.pressed.connect(on_close)
 	var wrap := CenterContainer.new()
@@ -260,12 +483,13 @@ func _hub_body_budget() -> float:
 
 func _resize_overlays() -> void:
 	var screen := get_viewport_rect().size
-	for root in [_stats, _daily, _settings, _net, _gameover]:
+	for root in [_stats, _daily, _net, _gameover]:
 		if root == null or not root.has_meta("scroll"):
 			continue
 		var scroll: ScrollContainer = root.get_meta("scroll")
 		scroll.custom_minimum_size.y = minf(screen.y * 0.86, 900.0)
 	_resize_hub_scroll()
+	_resize_settings_scroll()
 
 ## Высота тела хаба — фиксированный бюджет, ОДИНАКОВЫЙ для всех трёх
 ## вкладок (не зависит от содержимого конкретной вкладки): панель не должна
@@ -377,9 +601,11 @@ func _build_menu() -> void:
 	start.custom_minimum_size = Vector2(0, 50)
 	start.pressed.connect(func(): start_requested.emit())
 	col.add_child(start)
+	_menu_start_btn = start
 
 	_hints = UiKit.rich("", 10, Color(Cfg.UI_MUTED, 0.6))
 	col.add_child(_hints)
+	col.add_child(_pad_hint_strip())
 
 	# Версия на виду. Без неё отчёт игрока не к чему привязать: «не работает»
 	# без номера сборки не отличить от «не работало в прошлой».
@@ -618,6 +844,9 @@ func show_menu() -> void:
 	_resize_overlays()
 	refresh_profile()
 	_refresh_hints()
+	_focus_stack.clear()
+	_set_menu_focusable(true)
+	_grab(_menu_start_btn)
 
 func _refresh_menu_info() -> void:
 	var need := Prof.xp_to_next_level()
@@ -657,6 +886,7 @@ func _build_pause() -> void:
 	var resume := UiKit.primary(I18n.t("pause.resume", {}, "Продолжить"), 15)
 	resume.pressed.connect(func(): resume_requested.emit())
 	box.add_child(resume)
+	_pause_resume_btn = resume
 
 	var gallery := UiKit.secondary(I18n.t("pause.gallery", {}, "Галерея перков"), 13)
 	gallery.custom_minimum_size = Vector2(0, 38)
@@ -673,11 +903,16 @@ func _build_pause() -> void:
 	to_menu.pressed.connect(func(): menu_requested.emit())
 	box.add_child(to_menu)
 
+	box.add_child(_pad_hint_strip())
+
 func show_pause() -> void:
 	_pause.visible = true
+	_push_focus()
+	_grab(_pause_resume_btn)
 
 func hide_pause() -> void:
 	_pause.visible = false
+	_pop_focus()
 
 # ============================================================ ВЫБОР ПЕРКА
 func _build_perk() -> void:
@@ -696,6 +931,7 @@ func _build_perk() -> void:
 
 	_perk_body = UiKit.vbox(12)
 	box.add_child(_perk_body)
+	box.add_child(_pad_hint_strip())
 
 ## Показывает выбор перка для конкретного игрока.
 ## Последняя предложенная тройка перков — для тестов и отладки.
@@ -760,12 +996,16 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty.custom_minimum_size = Vector2(560, 0)
 		_perk_body.add_child(empty)
-	else:
+	var first_card: Control = null
+	if not choices.is_empty():
 		var grid := UiKit.hbox(12)
 		grid.alignment = BoxContainer.ALIGNMENT_CENTER
 		_perk_body.add_child(grid)
 		for id in choices:
-			grid.add_child(_perk_card(player, id))
+			var card := _perk_card(player, id)
+			if first_card == null:
+				first_card = card
+			grid.add_child(card)
 
 	# Экипированные — можно снять.
 	if not player.perk_ids.is_empty():
@@ -794,7 +1034,9 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 	skip_wrap.add_child(skip)
 	_perk_body.add_child(skip_wrap)
 
+	_perk_player = player
 	_perk.visible = true
+	_grab(first_card if first_card != null else skip)
 
 func _perk_card(player, id: String) -> Control:
 	var perk := Perks.get_perk(id)
@@ -805,7 +1047,7 @@ func _perk_card(player, id: String) -> Control:
 	btn.add_theme_stylebox_override("normal", normal)
 	btn.add_theme_stylebox_override("hover", hover)
 	btn.add_theme_stylebox_override("pressed", hover)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# Рамка фокуса — от темы UiRoot (кольцо в режиме навигации, пусто в мыши).
 	btn.pressed.connect(func(): perk_chosen.emit(player, id))
 
 	var box := UiKit.vbox(4)
@@ -813,10 +1055,14 @@ func _perk_card(player, id: String) -> Control:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(box)
 
-	var icon := UiKit.label(String(perk["icon"]), 28)
-	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	icon.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.add_child(icon)
+	var icon_wrap := CenterContainer.new()
+	icon_wrap.custom_minimum_size = Vector2(0, 40)
+	box.add_child(icon_wrap)
+	var icon := PerkIconView.new()
+	icon.custom_minimum_size = Vector2(36, 36)
+	icon.perk_id = id
+	icon.icon_color = Cfg.UI_TEXT
+	icon_wrap.add_child(icon)
 
 	var name_label := UiKit.label(I18n.dn(perk, "name", "perk"), 12, Color.WHITE, true)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1478,9 +1724,11 @@ func _build_gameover() -> void:
 	var replay := UiKit.primary(I18n.t("go.replay", {}, "Ещё раз"), 14)
 	replay.pressed.connect(func(): restart_requested.emit())
 	actions.add_child(replay)
+	_gameover_replay_btn = replay
 	var to_menu := UiKit.secondary(I18n.t("go.menu", {}, "В меню"), 13)
 	to_menu.pressed.connect(func(): menu_requested.emit())
 	actions.add_child(to_menu)
+	box.add_child(_pad_hint_strip())
 
 func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 	_last_gameover = {"result": result, "world": world, "hotseat": hotseat}
@@ -1588,6 +1836,8 @@ func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 		grid.add_child(UiKit.label(str(r["kills"]), 12, color))
 		grid.add_child(UiKit.label(str(r["deaths"]), 12, color))
 
+	_grab(_gameover_replay_btn)
+
 func hide_game_over() -> void:
 	_gameover.visible = false
 
@@ -1596,7 +1846,7 @@ func _on_language_changed() -> void:
 	# Заголовки окон и кнопка «Закрыть» живут вне меню: они собираются один
 	# раз в _ready и пересборкой меню не затрагиваются. Поэтому в английской
 	# игре над сетевым окном оставалась надпись «Сетевая игра».
-	for root in [_stats, _daily, _settings, _net, _gameover]:
+	for root in [_stats, _daily, _net, _gameover]:
 		if root == null or not root.has_meta("title_key"):
 			continue
 		var label := root.get_meta("title_label") as Label
@@ -1607,6 +1857,7 @@ func _on_language_changed() -> void:
 		if btn != null:
 			btn.text = I18n.t("btn.close", {}, "Закрыть")
 	_refresh_hub_language()
+	_refresh_settings_language()
 	_refresh_screens()
 
 ## Общая пересборка после смены языка или темы интерфейса. Главное меню и
@@ -1673,36 +1924,134 @@ func _on_theme_changed() -> void:
 	_refresh_screens()
 
 # ================================================================ НАСТРОЙКИ
-## Собирает экран настроек заново при каждом открытии: значения берутся
-## прямо из Sets, поэтому экран всегда показывает текущее состояние.
+## Настройки — та же вкладочная оболочка, что и у хаба (Галерея перков/
+## Гараж/Достижения, см. _build_hub): ряд вкладок и подзаголовок остаются
+## на месте, меняется только тело вкладки в своём скролле. Раньше это был
+## один длинный список из пяти секций подряд — четыре вкладки читаются
+## заметно легче.
+func _build_settings_shell() -> void:
+	_settings = _make_overlay(true)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_settings.add_child(center)
+
+	var panel := UiKit.panel()
+	panel.custom_minimum_size = Vector2(700, 0)
+	center.add_child(panel)
+
+	var box := UiKit.vbox(10)
+	panel.add_child(box)
+
+	_settings_tabs_row = HBoxContainer.new()
+	box.add_child(_settings_tabs_row)
+
+	_settings_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
+	box.add_child(_settings_sub)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(scroll)
+
+	_settings_body = UiKit.vbox(8)
+	_settings_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_settings_body)
+
+	box.add_child(_pad_hint_strip())
+
+	var close := UiKit.secondary(I18n.t("btn.close", {}, "Закрыть"))
+	close.pressed.connect(func(): close_settings())
+	var wrap := CenterContainer.new()
+	wrap.add_child(close)
+	box.add_child(wrap)
+
+	_settings.set_meta("close_button", close)
+	_settings.set_meta("scroll", scroll)
+
+	_rebuild_settings_tabs()
+
+## Подписи вкладок собираются заново при каждой перестройке — язык мог
+## смениться, отдельно кэшировать их незачем (см. _hub_tab_items).
+func _settings_tab_items() -> Array:
+	return [
+		{"key": "general", "label": I18n.t("settings.tab.general", {}, "Общие")},
+		{"key": "sound", "label": I18n.t("settings.tab.sound", {}, "Звук")},
+		{"key": "graphics", "label": I18n.t("settings.tab.graphics", {}, "Графика")},
+		{"key": "controls", "label": I18n.t("settings.tab.controls", {}, "Управление")},
+	]
+
+func _rebuild_settings_tabs() -> void:
+	var idx := _settings_tabs_row.get_index()
+	var parent := _settings_tabs_row.get_parent()
+	var new_row := UiKit.plain_tabs(_settings_tab_items(), _settings_active_tab,
+		func(key): _switch_settings_tab(key))
+	parent.add_child(new_row)
+	parent.move_child(new_row, idx)
+	_settings_tabs_row.queue_free()
+	_settings_tabs_row = new_row
+
+func _switch_settings_tab(key: String) -> void:
+	_settings_active_tab = key
+	_rebuild_settings_tabs()
+	_fill_settings_tab(key)
+
+## Собирает выбранную вкладку заново при каждом переключении: значения
+## берутся прямо из Sets, поэтому вкладка всегда показывает текущее
+## состояние.
+func _fill_settings_tab(key: String) -> void:
+	for c in _settings_body.get_children():
+		c.queue_free()
+	match key:
+		"general": _build_general_tab()
+		"sound": _build_sound_tab()
+		"graphics": _build_graphics_tab()
+		"controls": _build_controls_tab()
+
+	# Ряды настроек связываем по вертикали: каждая строка выставляет
+	# meta("focus_row") на свой элемент (choice_row/slider_row/switch_row).
+	# Внутри choice_row варианты — по горизонтали с переносом.
+	for row in _settings_body.get_children():
+		if row.has_meta("focus_flow"):
+			var flow: Control = row.get_meta("focus_flow")
+			_chain_horizontal(flow.get_children(), true)
+	_chain_vertical(_settings_body.get_children())
+	_resize_settings_scroll()
+
+## Тот же бюджет высоты, что и у тела хаба (см. _hub_body_budget) — форма
+## оболочки идентична (ряд вкладок + подзаголовок сверху, тело в скролле).
+func _resize_settings_scroll() -> void:
+	if _settings == null or not _settings.has_meta("scroll"):
+		return
+	var scroll: ScrollContainer = _settings.get_meta("scroll")
+	scroll.custom_minimum_size.y = _hub_body_budget()
+
 func open_settings() -> void:
 	_settings_sub.text = "[center]" + I18n.t("settings.sub", {},
 		"Сохраняются в user://settings.cfg и переживают сброс прогресса") + "[/center]"
 
-	for c in _settings_body.get_children():
-		c.queue_free()
-
-	_build_interface_section()
-	_build_video_section()
-	_build_graphics_section()
-	_build_audio_section()
-
-	var reset := UiKit.danger(I18n.t("settings.reset", {}, "Сбросить настройки"), 12)
-	reset.pressed.connect(func():
-		Sets.reset()
-		open_settings())
-	var wrap := CenterContainer.new()
-	wrap.add_child(reset)
-	_settings_body.add_child(wrap)
-
+	var was_visible := _settings.visible
 	_settings.visible = true
+	_switch_settings_tab(_settings_active_tab)
+	# Пересборка на лету (смена темы/режима экрана/языка дёргает
+	# open_settings заново) — фокус улетел, вернём на первую строку.
+	if was_visible:
+		_grab(_first_focusable(_settings_body))
+
+## Перевод настроек на смену языка: кнопка «Закрыть» и подзаголовок живут
+## вне переоткрытия вкладки (создаются один раз в _build_settings_shell),
+## поэтому переводятся отдельно — тот же приём, что и у хаба
+## (_refresh_hub_language).
+func _refresh_settings_language() -> void:
+	if _settings == null:
+		return
+	var btn := _settings.get_meta("close_button") as Button
+	if btn != null:
+		btn.text = I18n.t("btn.close", {}, "Закрыть")
 
 ## Тема интерфейса переключается вживую и сразу сохраняется — как и все
 ## остальные настройки здесь (см. README «каждое изменение применяется
 ## сразу»). Смена формы узлов дерева умений и панелей происходит через
 ## _on_theme_changed(), которая пересобирает открытые экраны.
-func _build_interface_section() -> void:
-	_settings_body.add_child(UiKit.section(I18n.t("set.interface", {}, "Интерфейс"), Cfg.UI_MUTED))
+func _build_general_tab() -> void:
 	var theme_keys := ["noir", "military", "scifi"]
 	var theme_labels := [
 		I18n.t("theme.noir", {}, "Нуар"),
@@ -1718,8 +2067,19 @@ func _build_interface_section() -> void:
 			Cfg.apply_theme(Sets.ui_theme)
 			_on_theme_changed()))
 
-func _build_video_section() -> void:
-	_settings_body.add_child(UiKit.section(I18n.t("set.video", {}, "Видео"), Cfg.UI_MUTED))
+	var reset := UiKit.danger(I18n.t("settings.reset", {}, "Сбросить настройки"), 12)
+	reset.pressed.connect(func():
+		Sets.reset()
+		_switch_settings_tab("general"))
+	var wrap := CenterContainer.new()
+	wrap.add_child(reset)
+	_settings_body.add_child(wrap)
+
+## Экран и графические эффекты вместе — обе прежние секции («Видео» и
+## «Графика») про то, как выглядит игра. Два под-заголовка внутри вкладки
+## сохраняют границу между ними.
+func _build_graphics_tab() -> void:
+	_settings_body.add_child(UiKit.section(I18n.t("set.screen", {}, "Экран"), Cfg.UI_MUTED))
 
 	_settings_body.add_child(UiKit.choice_row(
 		I18n.t("set.mode", {}, "Режим экрана"),
@@ -1732,7 +2092,7 @@ func _build_video_section() -> void:
 			Sets.apply_video()
 			Sets.save()
 			# Список разрешений имеет смысл только в оконном режиме.
-			open_settings.call_deferred()))
+			_switch_settings_tab.call_deferred("graphics")))
 
 	# Разрешение применимо только в окне: в полноэкранных режимах его
 	# задаёт сам монитор.
@@ -1761,11 +2121,48 @@ func _build_video_section() -> void:
 			Sets.apply_video()
 			Sets.save()))
 
-func _build_graphics_section() -> void:
-	# ---- управление -----------------------------------------------------
-	_settings_body.add_child(UiKit.section(
-		I18n.t("set.input", {}, "Управление"), Cfg.UI_MUTED))
+	_settings_body.add_child(UiKit.section(I18n.t("set.fxsection", {}, "Эффекты"), Cfg.UI_MUTED))
 
+	_settings_body.add_child(UiKit.choice_row(
+		I18n.t("set.fx", {}, "Спецэффекты"),
+		[I18n.t("fx.off", {}, "выкл"),
+			I18n.t("fx.medium", {}, "средне"),
+			I18n.t("fx.high", {}, "высоко")],
+		Sets.fx_quality,
+		func(v: int):
+			Sets.fx_quality = v
+			Sets.save()))
+	_settings_body.add_child(UiKit.label(
+		I18n.t("set.fx.hint", {}, "Цветокоррекция, свечение и затенение у стен. Применяется со следующей партии."),
+		9, Cfg.UI_MUTED))
+
+	_settings_body.add_child(UiKit.switch_row(
+		I18n.t("set.weather", {}, "Погода (дождь, туман, гроза)"), Sets.weather_effects,
+		func(v: bool):
+			Sets.weather_effects = v
+			Sets.save()))
+	_settings_body.add_child(UiKit.slider_row(
+		I18n.t("set.weather.power", {}, "Сила погоды"), Sets.weather_intensity,
+		func(v: float):
+			Sets.weather_intensity = v
+			Sets.save()))
+	_settings_body.add_child(UiKit.switch_row(
+		I18n.t("set.daynight", {}, "Цикл дня и ночи"), Sets.day_night,
+		func(v: bool):
+			Sets.day_night = v
+			Sets.save()))
+	_settings_body.add_child(UiKit.switch_row(
+		I18n.t("set.wrecks", {}, "Горящие остовы"), Sets.wrecks,
+		func(v: bool):
+			Sets.wrecks = v
+			Sets.save()))
+	_settings_body.add_child(UiKit.slider_row(
+		I18n.t("set.shake", {}, "Тряска экрана"), Sets.screen_shake,
+		func(v: float):
+			Sets.screen_shake = v
+			Sets.save()))
+
+func _build_controls_tab() -> void:
 	var devices := [
 		[Sets.DEV_AUTO, I18n.t("dev.auto", {}, "Как обычно")],
 		[Sets.DEV_KBM, I18n.t("dev.kbm", {}, "Клавиатура и мышь")],
@@ -1819,51 +2216,16 @@ func _build_graphics_section() -> void:
 			func(v: bool):
 				Sets.pad_vibration = v
 				Sets.save()))
+		_settings_body.add_child(UiKit.switch_row(
+			I18n.t("set.pad.aimassist", {}, "Автоприцел на геймпаде"), Sets.pad_aim_assist,
+			func(v: bool):
+				Sets.pad_aim_assist = v
+				Sets.save()))
+		_settings_body.add_child(UiKit.label(
+			I18n.t("set.pad.aimassist.hint", {}, "Мягкая доводка прицела к ближайшему врагу, пока целишься правым стиком."),
+			9, Cfg.UI_MUTED))
 
-	_settings_body.add_child(UiKit.section(I18n.t("set.graphics", {}, "Графика"), Cfg.UI_MUTED))
-
-	_settings_body.add_child(UiKit.choice_row(
-		I18n.t("set.fx", {}, "Спецэффекты"),
-		[I18n.t("fx.off", {}, "выкл"),
-			I18n.t("fx.medium", {}, "средне"),
-			I18n.t("fx.high", {}, "высоко")],
-		Sets.fx_quality,
-		func(v: int):
-			Sets.fx_quality = v
-			Sets.save()))
-	_settings_body.add_child(UiKit.label(
-		I18n.t("set.fx.hint", {}, "Цветокоррекция, свечение и затенение у стен. Применяется со следующей партии."),
-		9, Cfg.UI_MUTED))
-
-	_settings_body.add_child(UiKit.switch_row(
-		I18n.t("set.weather", {}, "Погода (дождь, туман, гроза)"), Sets.weather_effects,
-		func(v: bool):
-			Sets.weather_effects = v
-			Sets.save()))
-	_settings_body.add_child(UiKit.slider_row(
-		I18n.t("set.weather.power", {}, "Сила погоды"), Sets.weather_intensity,
-		func(v: float):
-			Sets.weather_intensity = v
-			Sets.save()))
-	_settings_body.add_child(UiKit.switch_row(
-		I18n.t("set.daynight", {}, "Цикл дня и ночи"), Sets.day_night,
-		func(v: bool):
-			Sets.day_night = v
-			Sets.save()))
-	_settings_body.add_child(UiKit.switch_row(
-		I18n.t("set.wrecks", {}, "Горящие остовы"), Sets.wrecks,
-		func(v: bool):
-			Sets.wrecks = v
-			Sets.save()))
-	_settings_body.add_child(UiKit.slider_row(
-		I18n.t("set.shake", {}, "Тряска экрана"), Sets.screen_shake,
-		func(v: float):
-			Sets.screen_shake = v
-			Sets.save()))
-
-func _build_audio_section() -> void:
-	_settings_body.add_child(UiKit.section(I18n.t("set.audio", {}, "Звук"), Cfg.UI_MUTED))
-
+func _build_sound_tab() -> void:
 	_settings_body.add_child(UiKit.slider_row(
 		I18n.t("set.master", {}, "Общая громкость"), Sets.master_volume,
 		func(v: float):
