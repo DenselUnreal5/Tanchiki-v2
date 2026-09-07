@@ -435,6 +435,41 @@ static var ICONS := {
 		{"op": "poly", "pts": [Vector2(42,40), Vector2(50,50), Vector2(42,50)]},
 		{"op": "poly", "pts": [Vector2(20,58), Vector2(32,52), Vector2(44,58), Vector2(32,62)]},
 	],
+	"ach_boss_1": [ # рогатый шлем — убийца боссов
+		{"op": "circle", "c": Vector2(32,36), "r": 22, "fill": true},
+		{"op": "poly", "pts": [Vector2(10,30), Vector2(2,6), Vector2(20,20)]},
+		{"op": "poly", "pts": [Vector2(54,30), Vector2(62,6), Vector2(44,20)]},
+		{"op": "rect", "c": Vector2(32,38), "size": Vector2(34,8), "rot": 0, "shade": true},
+	],
+	"ach_boss_10": [ # скрещенные клинки — охотник на боссов
+		{"op": "rect", "c": Vector2(32,32), "size": Vector2(56,8), "rot": 45},
+		{"op": "rect", "c": Vector2(32,32), "size": Vector2(56,8), "rot": -45},
+		{"op": "circle", "c": Vector2(32,32), "r": 6, "fill": true},
+	],
+	"ach_rank_sergeant": [ # шевроны — сержант
+		{"op": "poly", "pts": [Vector2(8,26), Vector2(32,6), Vector2(56,26), Vector2(56,36), Vector2(32,18), Vector2(8,36)]},
+		{"op": "poly", "pts": [Vector2(8,44), Vector2(32,24), Vector2(56,44), Vector2(56,54), Vector2(32,36), Vector2(8,54)]},
+	],
+	"ach_rank_general": [ # звезда с лучами — генерал
+		{"op": "poly", "pts": [Vector2(32,2), Vector2(39,24), Vector2(62,24), Vector2(43,38), Vector2(50,60), Vector2(32,47), Vector2(14,60), Vector2(21,38), Vector2(2,24), Vector2(25,24)]},
+	],
+	"ach_money_5000": [ # мешок монет — коммерсант
+		{"op": "poly", "pts": [Vector2(20,20), Vector2(44,20), Vector2(54,40), Vector2(46,58), Vector2(18,58), Vector2(10,40)]},
+		{"op": "rect", "c": Vector2(32,14), "size": Vector2(10,10), "rot": 0},
+		{"op": "circle", "c": Vector2(32,40), "r": 8, "shade": true},
+	],
+	"ach_money_20000": [ # сундук — магнат
+		{"op": "rect", "c": Vector2(32,44), "size": Vector2(52,28), "rot": 0},
+		{"op": "arc", "c": Vector2(32,30), "r": 26, "a0": 180, "a1": 360, "w": 10},
+		{"op": "rect", "c": Vector2(32,40), "size": Vector2(10,14), "rot": 0, "shade": true},
+	],
+	"ach_defense_wave_10": [ # крепостная башня — стойкий рубеж
+		{"op": "rect", "c": Vector2(32,42), "size": Vector2(36,36), "rot": 0},
+		{"op": "rect", "c": Vector2(10,20), "size": Vector2(10,14), "rot": 0},
+		{"op": "rect", "c": Vector2(54,20), "size": Vector2(10,14), "rot": 0},
+		{"op": "rect", "c": Vector2(32,18), "size": Vector2(10,18), "rot": 0},
+		{"op": "rect", "c": Vector2(32,36), "size": Vector2(20,6), "rot": 0, "shade": true},
+	],
 
 	# ================================================= ГАРАЖ · УЛУЧШЕНИЯ (upg_*)
 	"upg_dmg": [ # ствол с дульной вспышкой — мощный ствол
@@ -594,3 +629,84 @@ static var ICONS := {
 		{"op": "arc", "c": Vector2(20,14), "r": 8, "a0": 30, "a1": 330, "w": 4},
 	],
 }
+
+## Растровые значки перков — сняты «как есть» с референса пользователя
+## (Pictures/GameCenter/icons pack ref/icons.png), без перерисовки, по той же
+## раскладке, что уже использовал набросок выше (см. комментарии "— Rapid
+## Fire" и т.п. у соответствующих ключей ICONS). PerkIconView сперва ищет
+## текстуру здесь; ICONS[id] остаётся только как фон для того, чему пары
+## нет — достижения (ach_*), апгрейды гаража (upg_*), косметика (cos_*) и
+## "forest" (в референсе такого значка не было).
+## Ключи ботов указывают на текстуру одноимённого перка игрока.
+static var TEXTURE_PATHS := {
+	"rapid_fire": "res://art/perks/rapid_fire.png",
+	"double_shot": "res://art/perks/double_shot.png",
+	"fan_shot": "res://art/perks/fan_shot.png",
+	"explosive": "res://art/perks/explosive.png",
+	"piercing": "res://art/perks/piercing.png",
+	"heavy_armor": "res://art/perks/heavy_armor.png",
+	"regen": "res://art/perks/regen.png",
+	"reflect": "res://art/perks/reflect.png",
+	"evasion": "res://art/perks/evasion.png",
+	"shield": "res://art/perks/shield.png",
+	"sprinter": "res://art/perks/sprinter.png",
+	"mines": "res://art/perks/mines.png",
+	"ram": "res://art/perks/ram.png",
+	"thick_armor": "res://art/perks/thick_armor.png",
+	"amphibious": "res://art/perks/amphibious.png",
+	"magnet": "res://art/perks/magnet.png",
+	"sniper": "res://art/perks/sniper.png",
+	"berserk": "res://art/perks/berserk.png",
+	"kamikaze": "res://art/perks/kamikaze.png",
+	"turbo": "res://art/perks/turbo.png",
+	"shadow": "res://art/perks/shadow.png",
+	"vampire": "res://art/perks/vampire.png",
+	"siege": "res://art/perks/siege.png",
+	"nitro": "res://art/perks/nitro.png",
+	"overdrive": "res://art/perks/overdrive.png",
+	"bulwark": "res://art/perks/bulwark.png",
+	"shockwave": "res://art/perks/shockwave.png",
+	"heat_sink": "res://art/perks/heat_sink.png",
+	"thermal": "res://art/perks/thermal.png",
+	"quick_vent": "res://art/perks/quick_vent.png",
+	"heavy_shell": "res://art/perks/heavy_shell.png",
+	"light_shell": "res://art/perks/light_shell.png",
+	"road_king": "res://art/perks/road_king.png",
+	"all_terrain": "res://art/perks/all_terrain.png",
+	"lumberjack": "res://art/perks/lumberjack.png",
+	"concrete_breaker": "res://art/perks/concrete_breaker.png",
+	"can_opener": "res://art/perks/can_opener.png",
+	"scavenger": "res://art/perks/scavenger.png",
+	"keen_ear": "res://art/perks/keen_ear.png",
+	"muffler": "res://art/perks/muffler.png",
+	"coolant": "res://art/perks/coolant.png",
+	"overclock": "res://art/perks/overclock.png",
+	"grip": "res://art/perks/grip.png",
+	"breaker": "res://art/perks/breaker.png",
+	"silencer": "res://art/perks/silencer.png",
+	"smoke": "res://art/perks/smoke.png",
+	"repair": "res://art/perks/repair.png",
+	"quick_reload": "res://art/perks/quick_reload.png",
+	# --- боты: та же текстура, что у одноимённого перка игрока
+	"bot_rapid": "res://art/perks/rapid_fire.png",
+	"bot_speed": "res://art/perks/sprinter.png",
+	"bot_tough": "res://art/perks/heavy_armor.png",
+	"bot_double": "res://art/perks/double_shot.png",
+	"bot_nitro": "res://art/perks/nitro.png",
+	"bot_wave": "res://art/perks/shockwave.png",
+	"bot_accurate": "res://art/perks/sniper.png",
+	"bot_regen": "res://art/perks/regen.png",
+	"bot_heavy": "res://art/perks/heavy_shell.png",
+	"bot_evasion": "res://art/perks/evasion.png",
+}
+
+static var _textures := {}
+
+## Текстура перка, если для него есть растровый значок — иначе null (тогда
+## PerkIconView рисует старый векторный ICONS[id]).
+static func texture_of(id: String) -> Texture2D:
+	if not TEXTURE_PATHS.has(id):
+		return null
+	if not _textures.has(id):
+		_textures[id] = load(TEXTURE_PATHS[id])
+	return _textures[id]

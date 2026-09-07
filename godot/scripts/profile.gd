@@ -37,10 +37,14 @@ const STAT_KEYS := [
 	"bridgeKills",    # убийства, сделанные стоя на мосту
 	"concreteDestroyed",  # снесённые бетонные и железные постройки
 	"abilityUses",    # срабатывания активной способности
+	"bossKills",      # убийства боссов
+	"moneyEarned",    # монет заработано за всё время (не текущий баланс)
+	"globalLevel",    # лучший достигнутый глобальный уровень
+	"defenseWaveReached",  # лучшая волна, до которой продержались в «Обороне»
 ]
 
 ## Статистики-рекорды: обновляются по максимуму, а не суммированием.
-const MAX_STATS := ["rapidKills", "cleanStreak", "damageInGame"]
+const MAX_STATS := ["rapidKills", "cleanStreak", "damageInGame", "globalLevel", "defenseWaveReached"]
 
 ## Названия статистик для экрана «Статистика».
 const STAT_LABELS := {
@@ -62,6 +66,10 @@ const STAT_LABELS := {
 	"bridgeKills": "Убийства на мосту",
 	"concreteDestroyed": "Снесено бетона и железа",
 	"abilityUses": "Способностей применено",
+	"bossKills": "Убито боссов",
+	"moneyEarned": "Заработано монет",
+	"globalLevel": "Наивысший уровень",
+	"defenseWaveReached": "Лучшая волна в «Обороне»",
 }
 
 var global_level := 1
@@ -218,6 +226,7 @@ func add_xp(amount: int) -> void:
 				unlocked[id] = true
 				newly.append(id)
 	if not levels.is_empty():
+		bump_stat("globalLevel", global_level)
 		check_ranks()
 		save_profile()
 		levelup.emit(levels)
@@ -398,6 +407,7 @@ func add_money(amount: int) -> int:
 	if amount <= 0:
 		return money
 	money += amount
+	bump_stat("moneyEarned", amount)
 	save_profile()
 	return money
 
@@ -490,5 +500,9 @@ func _sync_level_unlocks() -> void:
 		if global_level >= int(lvl):
 			for id in Perks.UNLOCK_TABLE[lvl]:
 				unlocked[id] = true
+	# Задним числом зачитываем уровень в статистику — иначе профиль,
+	# успевший дорасти до высокого уровня ещё до появления этого stat-а,
+	# получит достижение о звании только на следующем level-up.
+	bump_stat("globalLevel", global_level)
 	check_challenges()
 	check_ranks()

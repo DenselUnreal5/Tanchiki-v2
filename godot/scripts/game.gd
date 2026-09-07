@@ -512,6 +512,10 @@ func _on_finish(result: Dictionary) -> void:
 	Mus.play_menu()
 	if bool(result["victory"]):
 		Prof.bump_stat("gamesWon", 1)
+	# «Оборона» по дизайну не выигрывается (result["victory"] тут всегда
+	# false) — достижение считает не победу, а лучшую достигнутую волну.
+	if world.mode == "defense":
+		Prof.bump_stat("defenseWaveReached", world.wave)
 	Prof.bump_daily("games", 1)
 	Prof.check_challenges()
 	Prof.save_profile()

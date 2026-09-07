@@ -141,6 +141,9 @@ var EN := {
 	"loc.city": "🏙 City",
 	"loc.dust": "🏜 Wasteland",
 	"loc.jungle": "🌴 Jungle",
+	"loc.frost": "❄ Winter",
+	"loc.exclusion": "☢ Zone",
+	"loc.shore": "🌊 Coast",
 
 	# ---------------------------------------------------- сетевая игра
 	"menu.net": "🌐 Online",
@@ -244,6 +247,13 @@ var EN := {
 	"stat.longKills": "Kills from 50 m",
 	"stat.sniperKills": "Kills from 100 m",
 	"stat.lowHpKills": "Kills at HP ≤ 40%",
+	"stat.bridgeKills": "Bridge kills",
+	"stat.concreteDestroyed": "Concrete and steel destroyed",
+	"stat.abilityUses": "Abilities used",
+	"stat.bossKills": "Bosses defeated",
+	"stat.moneyEarned": "Coins earned",
+	"stat.globalLevel": "Highest level reached",
+	"stat.defenseWaveReached": "Best wave in Defense",
 
 	# ------------------------------------------------------------- достижения
 	"achievements.title": "🏅 Achievements",
@@ -392,6 +402,8 @@ var EN := {
 	"feed.wave.endless": "🌊 Wave {cur}: {n} enemies",
 	"feed.defenseEndless": "🌊 All {n} waves repelled — the defense continues without end!",
 	"feed.boss": "{icon} {name} — BOSS on the battlefield!",
+	"feed.bossEnrage": "{name} goes berserk!",
+	"feed.bossEnrage2": "{name} is on its last legs — watch out!",
 
 	# ------------------------------------------------------------- данные: перки
 	"perk.double_shot.name": "Double Shot",
@@ -562,6 +574,20 @@ var EN := {
 	"ach.ability_250.desc": "Use an ability 250 times",
 	"ach.damage_1000.name": "Artillery",
 	"ach.damage_1000.desc": "1000 damage in a single match",
+	"ach.boss_1.name": "Boss Slayer",
+	"ach.boss_1.desc": "Defeat your first boss",
+	"ach.boss_10.name": "Boss Hunter",
+	"ach.boss_10.desc": "Defeat 10 bosses",
+	"ach.rank_sergeant.name": "Sergeant",
+	"ach.rank_sergeant.desc": "Reach the rank of Sergeant",
+	"ach.rank_general.name": "General",
+	"ach.rank_general.desc": "Reach the rank of General",
+	"ach.money_5000.name": "Entrepreneur",
+	"ach.money_5000.desc": "Earn 5,000 coins over your lifetime",
+	"ach.money_20000.name": "Tycoon",
+	"ach.money_20000.desc": "Earn 20,000 coins over your lifetime",
+	"ach.defense_wave_10.name": "Steadfast Line",
+	"ach.defense_wave_10.desc": "Hold out for 10 waves in Defense",
 
 	# ------------------------------------------------------------- данные: задания
 	"daily.kill_15.name": "Hunt",

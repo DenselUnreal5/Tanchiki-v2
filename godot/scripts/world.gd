@@ -105,6 +105,15 @@ var puppet := false
 var bolts: Array = []
 var scorches: Array = []
 
+## Повал деревьев в грозу. _storm_rng — детерминированная случайность выбора
+## дерева (см. _init); _tree_tiles — кэш координат стоящих деревьев,
+## перестраивается лениво, потому что деревья дербанят и танки, и пули;
+## _trees_felled — счётчик до Cfg.STORM_FELL_MAX.
+var _storm_rng: Rng
+var _tree_tiles: PackedInt32Array = PackedInt32Array()
+var _tree_cache_tick := -100000
+var _trees_felled := 0
+
 func _init(opts: Dictionary) -> void:
 	map = opts["map"]
 	level = opts["level"]
@@ -135,6 +144,10 @@ func _init(opts: Dictionary) -> void:
 	var wx_opts := _weather_opts(opts)
 	wx_opts["allowed"] = loc.get("weather", [])
 	weather = WeatherSystem.new(int(level["seed"]), wx_opts)
+	# Своя случайность для повала деревьев в грозу: она мутирует карту, а
+	# значит должна воспроизводиться один в один от seed карты и не сдвигать
+	# общий поток world.rng. Тот же приём, что и у KOTH-затопления.
+	_storm_rng = Rng.new((int(level["seed"]) ^ 0x57012) & 0xFFFFFFFF)
 	particles = Ent.ParticleSystem.new()
 
 	# У клиента сетевой партии мир — марионетка: карта та же (собрана по тому
@@ -166,7 +179,10 @@ var shot_pings: Array = []
 func notify_shot(shooter) -> void:
 	if shooter == null or shooter.ability_active("silencer"):
 		return
-	var reach: float = Cfg.BOT_HEAR_RANGE * float(shooter.mods.get("noiseMult", 1.0))
+	# Гроза глушит стрельбу: в непогоду бот слышит чужой выстрел ближе,
+	# и отметка на миникарте тоже ставится только вблизи.
+	var wx_noise: float = weather.noise_scale if weather != null else 1.0
+	var reach: float = Cfg.BOT_HEAR_RANGE * float(shooter.mods.get("noiseMult", 1.0)) * wx_noise
 
 	# Та же дальность идёт и в отметку на миникарте: заглушенный выстрел
 	# должен и слышаться ближе, и отмечаться только вблизи.
@@ -249,6 +265,54 @@ func strike_lightning(x: float, y: float) -> void:
 	add_shake(7.0, x, y)
 	Sfx.play("thunder", x, y)
 	weather.flash = maxf(weather.flash, 0.45)
+
+## Ветер грозы валит деревья: раз в Cfg.STORM_FELL_EVERY тиков одно стоящее
+## дерево ложится, но не больше Cfg.STORM_FELL_MAX за партию. Дерево —
+## проезжаемый тайл, поэтому повал открывает линию, а не строит стену;
+## связность карты от этого только растёт.
+##
+## Мутация тайла идёт через map.set_tile, значит попадает в net_log и
+## доезжает до клиента тем же путём, что и KOTH-затопление, — клиент сам
+## этот шаг не считает (step_cosmetic), только повторяет дельты хоста.
+func _update_treefall() -> void:
+	if weather == null or not weather.fells_trees:
+		return
+	if _trees_felled >= Cfg.STORM_FELL_MAX:
+		return
+	if tick % Cfg.STORM_FELL_EVERY != 0:
+		return
+
+	# Кэш деревьев устаревает: их сминают танки и сбивают пули. Раз в
+	# несколько секунд пересобираем, между пересборками пропускаем клетки,
+	# где дерева уже нет.
+	if _tree_tiles.is_empty() or tick - _tree_cache_tick > 600:
+		_rebuild_tree_cache()
+	if _tree_tiles.is_empty():
+		return
+
+	for _try in 8:
+		var idx := int(_storm_rng.nextf() * float(_tree_tiles.size())) % _tree_tiles.size()
+		var cell := _tree_tiles[idx]
+		var r := cell / map.cols
+		var c := cell % map.cols
+		if map.get_tile(r, c) != Cfg.T_TREE:
+			continue
+		map.set_tile(r, c, Cfg.T_EMPTY)
+		_trees_felled += 1
+		var px := c * Cfg.TILE + Cfg.TILE * 0.5
+		var py := r * Cfg.TILE + Cfg.TILE * 0.5
+		particles.burst(px, py, [Cfg.tree, Cfg.tree_dark], 12, 2, 6, 18, 32, _storm_rng)
+		add_shake(2.0, px, py)
+		Sfx.play("crack", px, py)
+		return
+
+func _rebuild_tree_cache() -> void:
+	_tree_tiles = PackedInt32Array()
+	for r in range(1, map.rows - 1):
+		for c in range(1, map.cols - 1):
+			if map.get_tile(r, c) == Cfg.T_TREE:
+				_tree_tiles.append(r * map.cols + c)
+	_tree_cache_tick = tick
 
 # ------------------------------------------------------------------- сеть
 ## Описание танка для клиента: всё, что не меняется каждый тик и потому
@@ -447,20 +511,32 @@ func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Ta
 	# Босс на поле боя только один: пока жив — не спавним второго.
 	if bool(type["boss"]) and boss_alive:
 		type = EnemyTypes.get_type("grunt")
+	var boss_mult := {"hp": 1.0, "dmg": 1.0}
+	if bool(type["boss"]):
+		boss_mult = _boss_stat_mult()
 	var spot := _free_spot(team)
 	var tank := Tank.new({
 		"x": spot.x, "y": spot.y, "team": team,
 		"name": _unique_bot_name(type), "owner": null,
-		"max_hp": round(float(diff["enemy_hp"]) * float(type["hp_mult"]) * ramp),
+		"max_hp": round(float(diff["enemy_hp"]) * float(type["hp_mult"]) * ramp * float(boss_mult["hp"])),
 		"speed": float(diff["enemy_speed"]) * float(type["speed_mult"]),
 		"fire_rate": maxi(4, int(round(float(diff["enemy_fire_rate"]) * float(type["fire_rate_mult"])))),
 		"color_key": String(type["color_key"]) if color_key == "enemy" else color_key,
 		"chassis": String(type.get("chassis", "standard")),
-		"dmg_scale": float(type["dmg_scale"]),
+		"dmg_scale": float(type["dmg_scale"]) * float(boss_mult["dmg"]),
 	})
 	tank.net_id = Net.next_tank_id()
 	tank.enemy_type = type
 	if bool(type["boss"]):
+		tank.is_boss = true
+		tank.boss_stat_mult = float(boss_mult["hp"])
+		# Спаренные стволы и «Шквальный залп» — форсированно, а не через
+		# случайную раздачу (см. _maybe_give_bot_perk), и обязательно через
+		# perk_ids, а не прямой поправкой tank.flags/ability_id: recompute()
+		# вызывается регулярно (ramp, случайный перк за фраг) и стёр бы
+		# любую правку в обход perk_ids.
+		tank.perk_ids = ["bot_boss_twin", "bot_boss_barrage"]
+		tank.recompute()
 		boss_alive = true
 	# В «Обороне» враги метят чуть хуже: их много, и перекрёстный огонь
 	# из всех стволов убивал защитника ещё до подхода к базе. Штраф растёт
@@ -577,6 +653,24 @@ func _spawn_boss() -> Tank:
 	var tank := _spawn_bot("enemy", "enemy", "boss")
 	boss_alive = true
 	return tank
+
+## Множитель характеристик босса от глубины волны «Обороны» и числа игроков
+## в партии. Без него ramp упирается в RAMP_MAX = 1.8 и дальше бесконечная
+## «Оборона» гоняет одного и того же босса что на 10-й волне, что на 60-й,
+## а лобби на четверых видит того же босса, что и один игрок.
+func _boss_stat_mult() -> Dictionary:
+	var extra_players := maxf(0.0, float(players.size() - 1))
+	var wave_depth := 0.0
+	if mode == "defense" and wave > 0:
+		wave_depth = maxf(0.0, float(wave - 1))
+	var hp_mult := (1.0 + extra_players * Cfg.BOSS_HP_PER_EXTRA_PLAYER) \
+		* (1.0 + wave_depth * Cfg.BOSS_HP_PER_WAVE)
+	var dmg_mult := (1.0 + extra_players * Cfg.BOSS_DMG_PER_EXTRA_PLAYER) \
+		* (1.0 + wave_depth * Cfg.BOSS_DMG_PER_WAVE)
+	return {
+		"hp": clampf(hp_mult, 1.0, Cfg.BOSS_HP_MULT_CAP),
+		"dmg": clampf(dmg_mult, 1.0, Cfg.BOSS_DMG_MULT_CAP),
+	}
 
 ## Каждый тик «Оборона»: урон базе и контроль волн.
 func _update_defense() -> void:
@@ -788,6 +882,7 @@ func step() -> void:
 	if mode == "koth":
 		_update_flood()
 	_update_storm()
+	_update_treefall()
 
 	# До хода: _try_ram/count_nearby читают её изнутри Tank.update() ниже.
 	tank_grid.rebuild(tanks)
@@ -885,9 +980,12 @@ func _update_ramp() -> void:
 		if not tank.is_bot:
 			continue
 		# Меняем БАЗОВУЮ характеристику и пересчитываем — иначе бонус затёрся бы
-		# при следующем пересчёте перков. Множитель типа врага сохраняется.
+		# при следующем пересчёте перков. Множитель типа врага сохраняется,
+		# а у босса ещё и boss_stat_mult (волна/число игроков, см.
+		# _boss_stat_mult) — иначе этот пересчёт стирал бы его каждые
+		# RAMP_INTERVAL тиков до значения "как у голого типа".
 		var hp_mult := float(tank.enemy_type.get("hp_mult", 1.0)) if not tank.enemy_type.is_empty() else 1.0
-		tank.base_max_hp = round(float(difficulty["enemy_hp"]) * hp_mult * ramp)
+		tank.base_max_hp = round(float(difficulty["enemy_hp"]) * hp_mult * ramp * tank.boss_stat_mult)
 		tank.recompute()
 	feed.emit(I18n.t("feed.ramp", {}, "Враги стали сильнее!"), Color("#ff8833"))
 
@@ -1002,6 +1100,7 @@ func _credit_player_kill(player, victim, source: String) -> void:
 		var boss_reward := Cfg.REWARD_KILL * 5
 		match_rewards["kills"] += boss_reward
 		reward.emit("boss", boss_reward, player.name)
+		stat.emit("bossKills", 1, "add")
 		global_xp.emit(Cfg.XP_PER_KILL * 3)
 		player.score += Cfg.SCORE_PER_KILL * 3
 		feed.emit(I18n.t("feed.bossKilled", {"name": player.name, "n": boss_reward},
@@ -1051,6 +1150,10 @@ func _maybe_give_bot_perk(bot) -> void:
 		return
 	var available := []
 	for p in Perks.BOT_LIST:
+		# boss_only — не выпадает случайно, только форсированно боссу при
+		# спавне (см. _spawn_bot).
+		if bool(p.get("boss_only", false)):
+			continue
 		if not bot.perk_ids.has(p["id"]):
 			available.append(p)
 	if available.is_empty():

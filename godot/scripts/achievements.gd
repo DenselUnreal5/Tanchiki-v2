@@ -35,6 +35,13 @@ const LIST := [
 	{"id": "ability_50", "name": "Козырь в рукаве", "desc": "50 раз применить способность", "icon": "✦", "stat": "abilityUses", "need": 50, "reward": 40},
 	{"id": "ability_250", "name": "Мастер манёвра", "desc": "250 раз применить способность", "icon": "⚡", "stat": "abilityUses", "need": 250, "reward": 110},
 	{"id": "damage_1000", "name": "Артобстрел", "desc": "1000 урона за одну партию", "icon": "💥", "stat": "damageInGame", "need": 1000, "reward": 60},
+	{"id": "boss_1", "name": "Убийца боссов", "desc": "Убить первого босса", "icon": "👹", "stat": "bossKills", "need": 1, "reward": 60},
+	{"id": "boss_10", "name": "Охотник на боссов", "desc": "Убить 10 боссов", "icon": "⚔️", "stat": "bossKills", "need": 10, "reward": 180},
+	{"id": "rank_sergeant", "name": "Сержант", "desc": "Дослужиться до звания «Сержант»", "icon": "🎖️", "stat": "globalLevel", "need": 20, "reward": 60},
+	{"id": "rank_general", "name": "Генерал", "desc": "Дослужиться до звания «Генерал»", "icon": "⭐", "stat": "globalLevel", "need": 100, "reward": 200},
+	{"id": "money_5000", "name": "Коммерсант", "desc": "Заработать 5000 монет за всё время", "icon": "🪙", "stat": "moneyEarned", "need": 5000, "reward": 40},
+	{"id": "money_20000", "name": "Магнат", "desc": "Заработать 20 000 монет за всё время", "icon": "💰", "stat": "moneyEarned", "need": 20000, "reward": 150},
+	{"id": "defense_wave_10", "name": "Стойкий рубеж", "desc": "Продержаться 10 волн в «Обороне»", "icon": "🏰", "stat": "defenseWaveReached", "need": 10, "reward": 90},
 ]
 
 static func get_achievement(id: String) -> Dictionary:
