@@ -111,9 +111,12 @@ func _ready() -> void:
 
 # ---------------------------------------------------------- действия ввода
 ## Регистрируем действия геймпада кодом, а не в project.godot: ручная правка
-## сериализованных InputEvent хрупка и зависит от версии движка. `ui_accept`,
-## `ui_up/down/left/right` не трогаем — у них уже полный набор по умолчанию
-## (кнопка A, крестовина, левый стик, перенос фокуса).
+## сериализованных InputEvent хрупка и зависит от версии движка. `ui_up/
+## down/left/right` не трогаем — у них уже полный набор по умолчанию
+## (крестовина, левый стик, перенос фокуса). `ui_accept`, вопреки видимости,
+## кнопки геймпада по умолчанию НЕ получает (только Enter/Space с
+## клавиатуры) — навигация фокусом работала, а подтверждение геймпадом
+## нет; добавляем кнопку A явно, тем же приёмом, что и ui_cancel ниже.
 func _ensure_input_actions() -> void:
 	if not InputMap.has_action("pause"):
 		InputMap.add_action("pause")
@@ -127,6 +130,10 @@ func _ensure_input_actions() -> void:
 	# `ui_cancel` уже есть (Esc) — добавляем к нему кнопку B, не пересобирая.
 	if not _action_has_pad("ui_cancel", JOY_BUTTON_B):
 		_bind_pad("ui_cancel", JOY_BUTTON_B)
+	# `ui_accept` уже есть (Enter/Space) — по умолчанию без геймпада вовсе,
+	# добавляем кнопку A, иначе фокус двигается, а подтвердить нечем.
+	if not _action_has_pad("ui_accept", JOY_BUTTON_A):
+		_bind_pad("ui_accept", JOY_BUTTON_A)
 
 func _bind_key(action: StringName, keycode: int) -> void:
 	var e := InputEventKey.new()
