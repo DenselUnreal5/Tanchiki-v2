@@ -95,6 +95,14 @@ func _ready() -> void:
 	_expect("rapid_fire", tank, func(): return float(tank.mods["heatPerShotMult"]), 1.0, 0.7)
 	_expect("quick_reload", tank, func(): return float(tank.mods["heatPerShotMult"]), 1.0, 0.8)
 
+	# «Веер» и «Двойной ствол» обязаны работать вместе, а не выбирать один
+	# из двух: раньше это было if/elif, и при обоих надетых перках стрелял
+	# только веер. Теперь — 3 направления × 2 пули на направление.
+	_check(_bullets_fired(world, tank, ["fan_shot"]) == 3, "«Веер» сам по себе даёт 3 пули")
+	_check(_bullets_fired(world, tank, ["double_shot"]) == 2, "«Двойной ствол» сам по себе даёт 2 пули")
+	_check(_bullets_fired(world, tank, ["fan_shot", "double_shot"]) == 6,
+		"«Веер»+«Двойной ствол» вместе дают 6 пуль, а не побеждает один из них")
+
 	# «Глушитель» обязан отменять оповещение ботов о выстреле.
 	tank.perk_ids = ["silencer"]
 	tank.recompute()
@@ -204,6 +212,17 @@ func _expect(perk_id: String, tank: Tank, probe: Callable, before: float, after:
 	var got_after: float = probe.call()
 	_check(absf(got_before - before) < 0.001 and absf(got_after - after) < 0.001,
 		"%s: %.2f -> %.2f (ждали %.2f -> %.2f)" % [perk_id, got_before, got_after, before, after])
+
+## Надевает набор перков, стреляет один раз и возвращает число новых пуль.
+func _bullets_fired(world, tank: Tank, perk_ids: Array) -> int:
+	tank.perk_ids = perk_ids
+	tank.recompute()
+	tank.fire_cooldown = 0
+	tank.heat = 0.0
+	tank.overheated = false
+	var before: int = world.bullets.size()
+	tank.shoot(world)
+	return world.bullets.size() - before
 
 func _check(ok: bool, what: String) -> void:
 	if ok:

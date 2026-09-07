@@ -16,9 +16,12 @@ extends RefCounted
 const CITY := "city"
 const DUST := "dust"
 const JUNGLE := "jungle"
+const FROST := "frost"
+const EXCLUSION := "exclusion"
+const SHORE := "shore"
 
 ## Порядок в меню.
-const ORDER := [CITY, DUST, JUNGLE]
+const ORDER := [CITY, DUST, JUNGLE, FROST, EXCLUSION, SHORE]
 
 ## Поля локации:
 ##   block_min/max — шаг между улицами: чем больше, тем реже дороги
@@ -109,6 +112,76 @@ static var LIST := {
 		"fog_tint": Color(0.80, 0.88, 0.82),
 		"dune_chance": 0.0, "oases": 0,
 		"ground": Color("#2f3d24"), "ground_alt": Color("#2b3922"),
+	},
+	# Зимний город: та же сетка, что и в городе, но погода почти всегда
+	# снежная. Снег сам по себе уже механика (скользкий грунт, surfaces.gd
+	# + weather.gd), поэтому локация ощущается рулём, а не только палитрой.
+	# Реку сузили: широкая полынья посреди мороза смотрится странно, а
+	# отдельный тайл льда — это новая механика, а не локация.
+	"frost": {
+		"id": "frost", "name": "Зимний город", "icon": "❄", "music": "combat",
+		"block_min": 9, "block_max": 14,
+		"arterials": true, "circles": true, "river": 0.6,
+		"districts": {"downtown": 3, "residential": 4, "industrial": 2, "park": 2},
+		"cover": "", "cover_chance": 0.0, "ruin_chance": 0.0,
+		"ground_tile": Cfg.T_GRASS, "yard_tile": Cfg.T_ROAD,
+		"road_kind": "asphalt",
+		"arterial_w": 3, "street_w": 2, "street_w_wide": 3,
+		"link_chance": 0.55,
+		# Дождя в мороз нет. Первое условие — стартовое (weather.gd:_init),
+		# поэтому партия на этой локации начинается снежной.
+		"weather": ["snow", "fog", "clear", "storm"],
+		"fog_tint": Color(0.90, 0.93, 0.98),
+		"dune_chance": 0.0, "oases": 0,
+		# Холодная свинцовая земля: снежный покров в world_view всё равно
+		# выбеливает её сверху, поэтому базовый цвет неяркий и синеватый.
+		"ground": Color("#44484f"), "ground_alt": Color("#40444b"),
+	},
+	# Промзона-исключение: между городом и пустошью. Магистрали есть, реки
+	# нет, застройка почти вся промышленная и на треть обрушена — открытые
+	# простреливаемые линии, как в пустоши, но по асфальту, а не по песку.
+	"exclusion": {
+		"id": "exclusion", "name": "Промзона", "icon": "☢", "music": "dust",
+		"block_min": 13, "block_max": 20,
+		"arterials": true, "circles": false, "river": 0.0,
+		"districts": {"downtown": 1, "residential": 1, "industrial": 5, "park": 1},
+		"cover": "", "cover_chance": 0.0,
+		# Треть застройки выбита — руина держит бетонный каркас как укрытие,
+		# но открывает линии огня насквозь.
+		"ruin_chance": 0.30,
+		# Дворы промзоны не асфальтируют, а зарастают: иначе промзона —
+		# основной район здесь — заливала бы карту дорогой (замер давал
+		# 5500 тайлов асфальта против 4000 в городе). Заодно это и вид
+		# заброшенной зоны, а не работающего завода.
+		"ground_tile": Cfg.T_GRASS, "yard_tile": Cfg.T_GRASS,
+		"road_kind": "asphalt",
+		"arterial_w": 3, "street_w": 2, "street_w_wide": 2,
+		"link_chance": 0.50,
+		# Ни снега, ни дождя: серо и мутно. Стартует в тумане.
+		"weather": ["fog", "clear", "storm"],
+		"fog_tint": Color(0.82, 0.85, 0.78),
+		"dune_chance": 0.0, "oases": 0,
+		"ground": Color("#4a4d42"), "ground_alt": Color("#464a3f"),
+	},
+	# Побережье: город у большой воды. Русло шире городского, по краям
+	# песчаные намывы, изредка приливная лужа с зыбучим краем. Полноценное
+	# «море у кромки карты» — это топология (Этап 6), здесь пока просто
+	# более мокрый город.
+	"shore": {
+		"id": "shore", "name": "Побережье", "icon": "🌊", "music": "combat",
+		"block_min": 9, "block_max": 14,
+		"arterials": true, "circles": true, "river": 1.4,
+		"districts": {"downtown": 2, "residential": 4, "industrial": 3, "park": 2},
+		"cover": "sand", "cover_chance": 0.20, "ruin_chance": 0.0,
+		"ground_tile": Cfg.T_GRASS, "yard_tile": Cfg.T_ROAD,
+		"road_kind": "asphalt",
+		"arterial_w": 3, "street_w": 2, "street_w_wide": 3,
+		"link_chance": 0.55,
+		# Морская погода: дождь и туман часты, снега не бывает.
+		"weather": ["clear", "rain", "fog", "storm"],
+		"fog_tint": Color(0.84, 0.90, 0.93),
+		"dune_chance": 0.0, "oases": 1,
+		"ground": Color("#3c4030"), "ground_alt": Color("#39402f"),
 	},
 }
 

@@ -510,6 +510,12 @@ func _maybe_use_ability(tank: Tank, world, target_dist: float, has_shot: bool) -
 		"overdrive":
 			if has_shot and target_dist < 420.0:
 				tank.use_ability(world)
+		"boss_barrage":
+			# Замах долгий (BOSS_BARRAGE_WINDUP), поэтому запускаем только
+			# когда уже стреляли по цели этой же дистанции — иначе залп
+			# срабатывает по пустому месту, пока цель ещё не в фокусе.
+			if has_shot and target_dist < 380.0:
+				tank.use_ability(world)
 
 func _try_fire(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> void:
 	if tgt == null or not has_shot:

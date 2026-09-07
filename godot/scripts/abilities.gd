@@ -78,6 +78,15 @@ static var LIST := [
 		"desc": "Чинит треть запаса прочности",
 		"color": Color("#55dd77"), "cooldown": 900, "duration": 0,
 	},
+
+	# --- босс: выдаётся только через Perks.BOT_LIST (boss_only), никогда
+	# не выпадает игроку и не показывается в его подборе перков.
+	{
+		"id": "boss_barrage", "name": "Шквальный залп", "icon": "💢",
+		"desc": "Замах, затем веер снарядов",
+		"color": Color("#ff3355"), "cooldown": Cfg.BOSS_BARRAGE_COOLDOWN,
+		"duration": Cfg.BOSS_BARRAGE_WINDUP,
+	},
 ]
 
 static var _by_id := {}

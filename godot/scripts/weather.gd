@@ -23,26 +23,31 @@ const WEATHER_MIN := 20 * 60
 const WEATHER_MAX := 50 * 60
 
 ## rain/fog/snow — целевая интенсивность (0..1), lightning — шанс вспышки
-## за тик. Ещё два поля — то, ради чего погода вообще влияет на игру:
+## за тик. Ещё три поля — то, ради чего погода вообще влияет на игру:
 ##   vision   — множитель дальности зрения ботов;
-##   traction — множитель сцепления с грунтом (снег скользит).
+##   traction — множитель сцепления с грунтом (снег скользит);
+##   noise    — множитель дальности, с которой бот слышит чужой выстрел
+##              (гроза глушит стрельбу ветром и громом), плюс поле
+##              fells_trees — валит ли ветер деревья (world.gd:_update_treefall).
 const TYPES := {
 	"clear": {"id": "clear", "rain": 0.0, "fog": 0.0, "snow": 0.0,
-		"lightning": 0.0, "vision": 1.0, "traction": 1.0, "weight": 3},
+		"lightning": 0.0, "vision": 1.0, "traction": 1.0, "noise": 1.0, "weight": 3},
 	"rain": {"id": "rain", "rain": 1.0, "fog": 0.15, "snow": 0.0,
-		"lightning": 0.0, "vision": 0.85, "traction": 0.94, "weight": 2},
-	# Густой туман: видно на треть дальности, зато и вас не видят.
+		"lightning": 0.0, "vision": 0.85, "traction": 0.94, "noise": 0.8, "weight": 2},
+	# Густой туман: видно на треть дальности, зато и вас не видят. Звук туман
+	# не глушит — только зрение.
 	"fog": {"id": "fog", "rain": 0.0, "fog": 1.0, "snow": 0.0,
-		"lightning": 0.0, "vision": 0.42, "traction": 1.0, "weight": 2},
+		"lightning": 0.0, "vision": 0.42, "traction": 1.0, "noise": 1.0, "weight": 2},
 	"storm": {"id": "storm", "rain": 1.0, "fog": 0.45, "snow": 0.0,
 		# Вспышка на весь экран теперь редкая: главное в грозе — разряды
 	# в землю, а не мигание. Раньше при 0.02 экран заливало по два раза
 	# в секунду, и смотреть на это было тяжело.
-	"lightning": 0.004, "vision": 0.60, "traction": 0.92, "weight": 1},
+	"lightning": 0.004, "vision": 0.60, "traction": 0.92, "noise": 0.5,
+	"fells_trees": true, "weight": 1},
 	# Снег: заносит обзор и, главное, скользит — по нему танк разгоняется
-	# и тормозит заметно хуже.
+	# и тормозит заметно хуже. Снегопад ещё и приглушает звук.
 	"snow": {"id": "snow", "rain": 0.0, "fog": 0.30, "snow": 1.0,
-		"lightning": 0.0, "vision": 0.75, "traction": 0.80, "weight": 2},
+		"lightning": 0.0, "vision": 0.75, "traction": 0.80, "noise": 0.85, "weight": 2},
 }
 
 ## Скорость плавного перехода к целевой интенсивности за тик.
@@ -183,6 +188,17 @@ var vision_scale: float:
 var traction: float:
 	get:
 		return float(TYPES[condition].get("traction", 1.0))
+
+## Множитель слышимости выстрела. В грозу бот слышит чужую стрельбу вдвое
+## ближе — ветер и гром её глушат. См. world.gd:notify_shot.
+var noise_scale: float:
+	get:
+		return float(TYPES[condition].get("noise", 1.0))
+
+## Валит ли текущая погода деревья (world.gd:_update_treefall).
+var fells_trees: bool:
+	get:
+		return bool(TYPES[condition].get("fells_trees", false))
 
 ## Один тик погоды.
 func update() -> void:

@@ -98,8 +98,101 @@ func _ready() -> void:
 	game.world.strike_lightning(victim.x + Cfg.LIGHTNING_RADIUS * 3.0, victim.y)
 	_check(absf(victim.hp - hp2) < 0.001, "удар в стороне не задевает танк")
 
+	# ---- гроза глушит выстрел ------------------------------------------
+	# Бот слышит чужой выстрел ближе в непогоду: та же дальность идёт и в
+	# отметку на миникарте, поэтому проверяем именно её.
+	print("условие      слышимость выстрела")
+	game.ui.settings["location"] = "auto"
+	_start("clear", "day")
+	var clear_reach := _shot_reach()
+	_start("storm", "day")
+	var storm_reach := _shot_reach()
+	print("  ясно       %6.0f м" % (clear_reach / 8.0))
+	print("  гроза      %6.0f м" % (storm_reach / 8.0))
+	_check(absf(clear_reach - Cfg.BOT_HEAR_RANGE) < 0.001,
+		"в ясную погоду выстрел слышно на полную дальность (%.0f)" % Cfg.BOT_HEAR_RANGE)
+	_check(storm_reach < clear_reach * 0.75, "гроза глушит выстрел: слышно заметно ближе")
+
+	# ---- гроза валит деревья ------------------------------------------
+	# Джунгли: карта, где деревьев вдоволь. Счётчик w._trees_felled считает
+	# именно повал ветром — деревья мнут ещё и танки, по общему числу на
+	# карте одно от другого не отделить.
+	game.ui.settings["location"] = "jungle"
+	_start("storm", "day")
+	var w3 = game.world
+	var trees0 := _count_trees(w3.map)
+	for i in Cfg.STORM_FELL_EVERY * 3:
+		if w3.finished_flag:
+			break
+		w3.step()
+	print("джунгли, гроза: деревьев на карте %d, повалено ветром %d" % [trees0, w3._trees_felled])
+	_check(w3._trees_felled > 0, "за грозу ветер повалил хотя бы одно дерево")
+
+	# И обратное: без грозы счётчик повала не растёт (защита от кода,
+	# который «валит» всегда, а не только в непогоду).
+	_start("clear", "day")
+	var w4 = game.world
+	for i in Cfg.STORM_FELL_EVERY * 3:
+		if w4.finished_flag:
+			break
+		w4.step()
+	_check(w4._trees_felled == 0, "в ясную погоду ветер деревья не валит (счётчик %d)"
+		% w4._trees_felled)
+
+	# ---- потолок и воспроизводимость --------------------------------
+	# Изолированно: только _update_treefall, без хода танков (они тоже мнут
+	# деревья и своей случайностью забили бы проверку).
+	_start("storm", "day")
+	var sum_a := _fell_only(game.world)
+	var capped := game.world._trees_felled
+	_start("storm", "day")
+	var sum_b := _fell_only(game.world)
+	_check(capped == Cfg.STORM_FELL_MAX, "повал упирается в потолок %d за партию (получилось %d)"
+		% [Cfg.STORM_FELL_MAX, capped])
+	_check(sum_a == sum_b, "повал деревьев воспроизводится от seed: %08x == %08x"
+		% [sum_a, sum_b])
+
+	game.ui.settings["location"] = "auto"
 	print("=== ПРОВЕРКА ПОГОДЫ ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
+
+## Дальность, с которой слышен выстрел бота без перков в текущей погоде.
+func _shot_reach() -> float:
+	var shooter: Tank = null
+	for t in game.world.tanks:
+		if t.owner == null and t.perk_ids.is_empty():
+			shooter = t
+			break
+	if shooter == null:
+		_check(false, "бот для проверки слышимости не нашёлся")
+		return 0.0
+	game.world.shot_pings.clear()
+	game.world.notify_shot(shooter)
+	if game.world.shot_pings.is_empty():
+		_check(false, "выстрел не оставил отметки")
+		return 0.0
+	return float(game.world.shot_pings[-1]["reach"])
+
+func _count_trees(map: GameMap) -> int:
+	var n := 0
+	for r in map.rows:
+		for c in map.cols:
+			if map.get_tile(r, c) == Cfg.T_TREE:
+				n += 1
+	return n
+
+## Прогоняет только повал деревьев на свежих счётчиках и возвращает отпечаток
+## карты. Ход танков не трогается — иначе разброс их случайности перекрыл бы
+## то, что проверяется.
+func _fell_only(w) -> int:
+	w._trees_felled = 0
+	w._tree_tiles = PackedInt32Array()
+	w._tree_cache_tick = -100000
+	w._storm_rng = Rng.new((int(w.level["seed"]) ^ 0x57012) & 0xFFFFFFFF)
+	for i in Cfg.STORM_FELL_MAX + 20:
+		w.tick = i * Cfg.STORM_FELL_EVERY
+		w._update_treefall()
+	return w.map.checksum()
 
 func _start(weather: String, daytime: String) -> void:
 	game.ui.settings["mode"] = "ffa"

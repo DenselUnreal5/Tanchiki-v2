@@ -495,6 +495,18 @@ func _draw_ability_state(tank: Tank) -> void:
 			# Разгон: пульсирующее красное кольцо, ствол и так раскалён жаром.
 			draw_arc(Vector2.ZERO, 17.0, 0, TAU, 20,
 				Color(1.0, 0.35, 0.15, pulse), 2.5)
+		"boss_barrage":
+			# Предупреждающий конус вдоль ствола на весь замах — игрок должен
+			# успеть увидеть и уйти с линии огня до срабатывания залпа.
+			var fast_pulse := 0.5 + 0.4 * sin(float(world.tick) * 0.6)
+			draw_arc(Vector2.ZERO, 20.0, 0, TAU, 20, Color(1.0, 0.2, 0.3, fast_pulse), 3.0)
+			draw_set_transform(view_off + Vector2(tank.x, tank.y), tank.turret_angle)
+			var half := Cfg.BOSS_BARRAGE_SPREAD
+			var reach := 160.0
+			var warn := Color(1.0, 0.2, 0.3, 0.22 * fast_pulse)
+			draw_line(Vector2.ZERO, Vector2(cos(half) * reach, sin(half) * reach), warn, 2.0)
+			draw_line(Vector2.ZERO, Vector2(cos(-half) * reach, sin(-half) * reach), warn, 2.0)
+			draw_set_transform(view_off + Vector2(tank.x, tank.y))
 		_:
 			draw_arc(Vector2.ZERO, 17.0, 0, TAU, 20,
 				Color(col.r, col.g, col.b, pulse * 0.8), 2.0)

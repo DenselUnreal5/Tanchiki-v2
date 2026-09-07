@@ -52,7 +52,12 @@ const LIST := {
 	},
 	"boss": {
 		"id": "boss", "name": "Бронемонстр", "icon": "👹",
-		"hp_mult": 5.0, "speed_mult": 0.75, "fire_rate_mult": 1.2, "dmg_scale": 1.6,
+		# dmg_scale ниже, чем можно ждать от 5x HP: с этой версии спаренные
+		# стволы (bot_boss_twin) стреляют по-настоящему двумя пулями за
+		# выстрел вместо одной, так что per-shot урон и так примерно
+		# удвоился — задирать dmg_scale поверх этого значило бы удвоить
+		# DPS ещё раз.
+		"hp_mult": 5.0, "speed_mult": 0.75, "fire_rate_mult": 1.2, "dmg_scale": 1.15,
 		"accuracy_bonus": 0.1, "react_mult": 1.0,
 		"fire_range": 420.0, "keep_min": 100.0, "keep_max": 300.0,
 		"chassis": "boss", "role": "attacker", "color_key": "boss",

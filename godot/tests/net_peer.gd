@@ -51,6 +51,12 @@ func _run_host() -> void:
 	game.ui.settings["game_type"] = "single"
 	game.ui.settings["difficulty"] = "medium"
 	game.ui.settings["level"] = 1
+	# Гроза над джунглями: ветер валит деревья (world.gd:_update_treefall),
+	# и это мутация карты помимо разрушенных построек. Клиент сам её не
+	# считает — только повторяет дельты хоста, — поэтому финальная сверка
+	# отпечатков заодно проверяет, что повал доехал один в один.
+	game.ui.settings["weather"] = "storm"
+	game.ui.settings["location"] = "jungle"
 
 	# Лобби прошло — дальше «Играть» запускает синхронный отсчёт, а не
 	# партию напрямую. Отсчёт идёт по реальным секундам (SceneTreeTimer), а

@@ -61,6 +61,18 @@ func _ready() -> void:
 func _draw() -> void:
 	if size.x <= 0.0 or size.y <= 0.0:
 		return
+	# Растровый значок — референс пользователя как есть — в приоритете; старый
+	# векторный ICONS[id] остаётся фоном для того, чему растровой пары нет
+	# (достижения, апгрейды, косметика, "forest").
+	var tex: Texture2D = PerkIcons.texture_of(perk_id)
+	if tex != null:
+		draw_texture_rect(tex, Rect2(Vector2.ZERO, size), false, icon_color)
+		if rough:
+			draw_set_transform(Vector2.ZERO, 0.0, size / 64.0)
+			for spot in _grain_spots():
+				draw_circle(spot["c"], spot["r"], Color(0, 0, 0, 0.15))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
 	var ops: Array = PerkIcons.ICONS.get(perk_id, PerkIcons.ICONS["_default"])
 	# Значки нарисованы на сетке 64×64 — растягиваем под фактический размер узла.
 	draw_set_transform(Vector2.ZERO, 0.0, size / 64.0)

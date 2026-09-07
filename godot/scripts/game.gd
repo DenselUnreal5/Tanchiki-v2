@@ -606,23 +606,17 @@ func _on_perk_chosen(player, perk_id: String) -> void:
 
 # ------------------------------------------------------------------ ввод
 func _unhandled_input(event: InputEvent) -> void:
-	var key_event := event as InputEventKey
-	if key_event == null or not key_event.pressed or key_event.echo:
-		return
-	var key: int = key_event.keycode
-
-	if key == KEY_ESCAPE:
-		if ui.is_gallery_open or ui.is_garage_open or ui.is_stats_open \
-				or ui.is_achievements_open or ui.is_daily_open:
-			ui.close_gallery()
-			ui.close_garage()
-			ui.close_stats()
-			ui.close_achievements()
-			ui.close_daily()
+	# Действия, а не голые клавиши: те же кнопки работают и с геймпада
+	# (B — назад, Start — пауза, Back — табло). Действия ввода заводит
+	# settings.gd:_ensure_input_actions.
+	if event.is_action_pressed("ui_cancel"):
+		# Esc/B закрывают верхний открытый оверлей. Если закрывать нечего —
+		# проваливаемся ниже, чтобы Esc всё ещё ставил паузу.
+		if ui.handle_cancel():
 			get_viewport().set_input_as_handled()
 			return
 
-	if key == KEY_P or key == KEY_ESCAPE:
+	if event.is_action_pressed("pause"):
 		if state == S_PLAYING:
 			pause()
 		elif state == S_PAUSED:
@@ -630,7 +624,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	if key == KEY_TAB and (state == S_PLAYING or state == S_PAUSED):
+	if event.is_action_pressed("scoreboard") and (state == S_PLAYING or state == S_PAUSED):
 		hud.toggle_scoreboard(world)
 		get_viewport().set_input_as_handled()
 
@@ -645,9 +639,14 @@ func _process(delta: float) -> void:
 	# в мировые координаты через личную область просмотра игрока.
 	var mouse := get_viewport().get_mouse_position()
 	for p in players:
-		# Мышью целится только схема первого игрока.
-		if p.scheme.has_method("read_command"):
+		# Схемы читают эти поля перед каждым кадром. Проверяем наличие поля,
+		# а не тип схемы: у мышиной есть mouse, у геймпадной — world (для
+		# автоприцела), и присваивать несуществующее поле — ошибка времени
+		# выполнения.
+		if "mouse" in p.scheme:
 			p.scheme.mouse = mouse
+		if "world" in p.scheme:
+			p.scheme.world = world
 
 	if state == S_PLAYING and Net.role == "client":
 		_client_frame(delta)

@@ -111,6 +111,21 @@ var dash_cooldown := 0
 ## Сколько тиков подряд рывок не даёт продвижения (упёрлись в стену).
 var dash_stall := 0
 
+## Состояние босса — на обычном танке всё это no-op (is_boss=false).
+## boss_phase растёт по порогу HP и не откатывается назад (см. _update_boss_phase).
+var is_boss := false
+var boss_phase := 1
+var enrage_speed_mult := 1.0
+var enrage_fire_rate_mult := 1.0
+var enrage_shield_ticks := 0
+## Множитель HP/урона от волны/числа игроков — задаётся при спавне
+## (world.gd:_boss_stat_mult) и переживает пересчёт по рампе (см. _update_ramp).
+var boss_stat_mult := 1.0
+## Замах перед телеграфируемой атакой босса: 0 — атаки нет, иначе тики
+## до срабатывания. kind — какую атаку разрешить в _resolve_telegraphed_attack.
+var telegraph_ticks := 0
+var telegraph_kind := ""
+
 var in_water := false
 var water_timer := 0
 ## Тики в зыбучем песке — свой счётчик, потому что интервал у него свой.
@@ -285,8 +300,8 @@ func recompute() -> void:
 	if not upgrade_mods.is_empty():
 		mods = _apply_upgrade_mods(mods)
 	max_hp = maxf(1.0, round(base_max_hp * float(mods["maxHPMult"])))
-	speed = base_speed * float(mods["speedMult"])
-	fire_rate = maxi(4, int(round(float(base_fire_rate) * float(mods["fireRateMult"]))))
+	speed = base_speed * float(mods["speedMult"]) * enrage_speed_mult
+	fire_rate = maxi(4, int(round(float(base_fire_rate) * float(mods["fireRateMult"]) * enrage_fire_rate_mult)))
 	# Сохраняем долю здоровья: рост максимума лечит пропорционально,
 	# снижение не убивает мгновенно.
 	hp = clampf(round(max_hp * hp_ratio), 1.0, max_hp)
@@ -348,11 +363,18 @@ func update(world) -> void:
 		weapon_timer -= 1
 		if weapon_timer <= 0:
 			weapon = ""
+	if telegraph_ticks > 0:
+		telegraph_ticks -= 1
+		if telegraph_ticks <= 0:
+			_resolve_telegraphed_attack(world)
+	if enrage_shield_ticks > 0:
+		enrage_shield_ticks -= 1
 
 	wants_move = false
 	_update_surface(world)
 	_update_regen()
 	_update_shield(world)
+	_update_boss_phase(world)
 
 	# Управление: человек через владельца, бот через свой «мозг».
 	if owner != null:
@@ -456,6 +478,37 @@ func _update_shield(world) -> void:
 		shield_hp = Cfg.SHIELD_HP
 		shield_cooldown = Cfg.SHIELD_COOLDOWN
 		world.particles.burst(x, y, [Cfg.shield, Color("#88ddff")], 10, 2, 4, 12, 20, world.rng)
+
+## Фазы ярости босса: разовый переход при падении HP ниже порога (в отличие
+## от «берсерка» в world.gd:deal_damage, который проверяется на каждый удар,
+## тут нужен именно защёлкивающийся латч — вспышка и смена темпа должны
+## случиться один раз и остаться в силе, а не мигать туда-сюда у порога).
+func _update_boss_phase(world) -> void:
+	if not is_boss or max_hp <= 0.0:
+		return
+	var ratio := hp / max_hp
+	if boss_phase < 2 and ratio <= Cfg.BOSS_PHASE2_HP:
+		boss_phase = 2
+		enrage_speed_mult = Cfg.BOSS_PHASE2_SPEED_MULT
+		enrage_fire_rate_mult = Cfg.BOSS_PHASE2_FIRE_RATE_MULT
+		recompute()
+		world.feed.emit(I18n.t("feed.bossEnrage", {"name": name},
+			"%s впадает в ярость!" % name), Color("#ff3355"))
+		world.particles.burst(x, y, [Color("#ff3355"), Color("#ffaa33")], 24, 3, 6, 20, 34, world.rng)
+		world.add_shake(6.0, x, y)
+		Sfx.play("thunder", x, y)
+	elif boss_phase < 3 and ratio <= Cfg.BOSS_PHASE3_HP:
+		boss_phase = 3
+		enrage_speed_mult = Cfg.BOSS_PHASE3_SPEED_MULT
+		enrage_fire_rate_mult = Cfg.BOSS_PHASE3_FIRE_RATE_MULT
+		enrage_shield_ticks = Cfg.BOSS_PHASE3_SHIELD_TICKS
+		ability_cd = 0  # на последнем издыхании способность готова бить сразу
+		recompute()
+		world.feed.emit(I18n.t("feed.bossEnrage2", {"name": name},
+			"%s на последнем издыхании — берегитесь!" % name), Color("#ff3355"))
+		world.particles.burst(x, y, [Cfg.shield, Color("#ff3355")], 30, 3, 7, 22, 38, world.rng)
+		world.add_shake(9.0, x, y)
+		Sfx.play("thunder", x, y)
 
 ## Раздельное разрешение по осям — позволяет скользить вдоль стен.
 func _move(world) -> void:
@@ -598,18 +651,27 @@ func shoot(world) -> bool:
 		world.notify_shot(self)
 		return true
 
+	# «Веер» и «Двойной ствол» — независимые оси, а не альтернативы: веер
+	# задаёт число направлений, двойной ствол — число параллельных пуль на
+	# каждое направление. Вместе это веер, где в каждом луче летит по две
+	# пули, а не «побеждает» только один из перков.
+	var directions := [0.0]
 	if flags.has("fanShot"):
-		for i in range(-1, 2):
-			world.bullets.append(Ent.Bullet.new(muzzle_x, muzzle_y,
-				turret_angle + i * 0.15, self, 0.45 * scale_v))
-	elif flags.has("doubleShot"):
+		directions = [-0.15, 0.0, 0.15]
+	# С «Веером» урон на пулю снижен и без «Двойного ствола» (0.45× — так
+	# было всегда), иначе комбо удваивало бы урон веера поверх и так
+	# утроенного числа пуль.
+	var per_bullet_scale := 0.45 * scale_v if flags.has("fanShot") else scale_v
+	if flags.has("doubleShot"):
 		var perp := turret_angle + PI / 2.0
 		var ox := cos(perp) * 6.0
 		var oy := sin(perp) * 6.0
-		world.bullets.append(Ent.Bullet.new(muzzle_x + ox, muzzle_y + oy, turret_angle, self, scale_v))
-		world.bullets.append(Ent.Bullet.new(muzzle_x - ox, muzzle_y - oy, turret_angle, self, scale_v))
+		for off in directions:
+			world.bullets.append(Ent.Bullet.new(muzzle_x + ox, muzzle_y + oy, turret_angle + off, self, per_bullet_scale))
+			world.bullets.append(Ent.Bullet.new(muzzle_x - ox, muzzle_y - oy, turret_angle + off, self, per_bullet_scale))
 	else:
-		world.bullets.append(Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, scale_v))
+		for off in directions:
+			world.bullets.append(Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle + off, self, per_bullet_scale))
 
 	world.particles.burst(muzzle_x, muzzle_y, [Color("#ffee55"), Color("#ffffaa")], 5, 2, 4, 8, 8, world.rng)
 	Sfx.play("shoot", muzzle_x, muzzle_y)
@@ -633,6 +695,25 @@ func shoot_lobbed(world) -> bool:
 	world.particles.burst(muzzle_x, muzzle_y, [Color("#ff9933"), Color("#ffcc66")], 6, 2, 4, 10, 12, world.rng)
 	Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
 	return true
+
+## Срабатывание отложенной атаки после замаха. Стреляет по текущему
+## turret_angle — башня продолжает довороты к цели весь замах, поэтому
+## залп бьёт туда, где цель окажется к концу телеграфа, а не где была.
+func _resolve_telegraphed_attack(world) -> void:
+	var kind := telegraph_kind
+	telegraph_kind = ""
+	if not alive or kind != "barrage":
+		return
+	var muzzle_x := x + cos(turret_angle) * muzzle_len
+	var muzzle_y := y + sin(turret_angle) * muzzle_len
+	var n := Cfg.BOSS_BARRAGE_BULLETS
+	for i in n:
+		var off := (float(i) - float(n - 1) * 0.5) * Cfg.BOSS_BARRAGE_SPREAD * 2.0 / float(n - 1)
+		world.bullets.append(Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle + off,
+			self, Cfg.BOSS_BARRAGE_DMG_SCALE * dmg_scale))
+	world.particles.burst(muzzle_x, muzzle_y, [Color("#ff3355"), Color("#ffaa33")], 14, 3, 6, 14, 24, world.rng)
+	world.add_shake(5.0, muzzle_x, muzzle_y)
+	Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
 
 ## Ставит мину. Лимит мин отсчитывается для каждого танка отдельно.
 func place_mine(world) -> bool:
@@ -726,8 +807,17 @@ func use_ability(world) -> bool:
 			var ab_color: Color = ab.get("color", Color.WHITE)
 			world.particles.burst(x, y, [ab_color, Color.WHITE],
 				14, 2, 5, 12, 22, world.rng)
+		"boss_barrage":
+			# Кулдаун уже поставлен выше вместе со всеми способностями — здесь
+			# только замах. Урон наносится позже, в _resolve_telegraphed_attack,
+			# когда телеграф досчитает до нуля: игрок должен успеть среагировать.
+			telegraph_kind = "barrage"
+			telegraph_ticks = int(ab["duration"])
+			world.particles.burst(x, y, [Color("#ff3355"), Color.WHITE],
+				10, 2, 4, 10, 16, world.rng)
 
-	Sfx.play("explosion" if ability_id == "shockwave" else "pickup", x, y)
+	Sfx.play("thunder" if ability_id == "boss_barrage" \
+		else ("explosion" if ability_id == "shockwave" else "pickup"), x, y)
 	if owner != null:
 		world.stat.emit("abilityUses", 1, "add")
 	return true
@@ -784,6 +874,8 @@ func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 	var dmg := amount * float(mods["damageTakenMult"])
 	if ability_active("bulwark"):
 		dmg *= Cfg.BULWARK_DAMAGE_MULT
+	if enrage_shield_ticks > 0:
+		dmg *= Cfg.BOSS_PHASE3_SHIELD_MULT
 
 	if shield_hp > 0.0:
 		var absorbed := minf(shield_hp, dmg)
@@ -815,6 +907,8 @@ func on_death(world, killer) -> void:
 	shadow_timer = 0
 	ability_timer = 0
 	dash_range = 0.0
+	telegraph_ticks = 0
+	enrage_shield_ticks = 0
 
 	world.particles.burst(x, y, Cfg.explosion, 30, 3, 8, 20, 40, world.rng)
 	Sfx.play("explosion", x, y)

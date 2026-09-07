@@ -291,6 +291,12 @@ const LIGHTNING_CHANCE := 0.55
 ## Сколько следов от ударов хранится: дальше старые вытесняются.
 const MAX_SCORCH := 40
 
+## Повал деревьев в грозу (world.gd:_update_treefall). Раз в столько тиков
+## ветер валит одно стоящее дерево, но не больше STORM_FELL_MAX за партию —
+## иначе долгая гроза выкашивала бы всю карту под ноль.
+const STORM_FELL_EVERY := 150
+const STORM_FELL_MAX := 60
+
 # ------------------------------------------------------- активные способности
 ## «Бастион»: множитель входящего урона на время действия.
 const BULWARK_DAMAGE_MULT := 0.4
@@ -301,6 +307,36 @@ const SHOCKWAVE_TILE_DAMAGE := 150.0
 const SHOCKWAVE_PUSH := 5.5
 ## «Форсаж»: множитель времени перезарядки, пока способность активна.
 const OVERDRIVE_RELOAD_MULT := 0.5
+
+# ------------------------------------------------------------------- босс
+## Фазы ярости: порог доли HP, ниже которого включается следующая фаза,
+## и во сколько раз растут скорость/темп стрельбы на ней. Фаза 3 вдобавок
+## даёт временный щит (доля урона, что проходит) — на грани смерти босс
+## должен ощущаться как последний рывок, а не просто «ещё немного HP».
+const BOSS_PHASE2_HP := 0.5
+const BOSS_PHASE3_HP := 0.2
+const BOSS_PHASE2_SPEED_MULT := 1.25
+const BOSS_PHASE2_FIRE_RATE_MULT := 0.85
+const BOSS_PHASE3_SPEED_MULT := 1.45
+const BOSS_PHASE3_FIRE_RATE_MULT := 0.7
+const BOSS_PHASE3_SHIELD_TICKS := 180
+const BOSS_PHASE3_SHIELD_MULT := 0.35
+## «Шквальный залп»: замах (тики до срабатывания), откат, число пуль веера,
+## полураствор веера (рад) и доля урона на каждую пулю относительно dmg_scale.
+const BOSS_BARRAGE_WINDUP := 50
+const BOSS_BARRAGE_COOLDOWN := 540
+const BOSS_BARRAGE_BULLETS := 5
+const BOSS_BARRAGE_SPREAD := 0.5
+const BOSS_BARRAGE_DMG_SCALE := 0.7
+## Масштаб характеристик босса от числа игроков сверх одного и от глубины
+## волны «Обороны» (n-1) — без этого бесконечная «Оборона» гоняла бы на
+## 40-й волне того же босса, что и на 7-й, см. world.gd:_boss_stat_mult.
+const BOSS_HP_PER_EXTRA_PLAYER := 0.35
+const BOSS_DMG_PER_EXTRA_PLAYER := 0.10
+const BOSS_HP_PER_WAVE := 0.15
+const BOSS_DMG_PER_WAVE := 0.05
+const BOSS_HP_MULT_CAP := 4.0
+const BOSS_DMG_MULT_CAP := 2.0
 
 const EXPLOSIVE_R := 32.0
 const EXPLOSIVE_SPLASH := 0.5

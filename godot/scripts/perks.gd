@@ -217,6 +217,13 @@ const BOT_LIST := [
 	{"id": "bot_regen", "icon": "❤", "name": "Регенерация", "desc": "60 HP в минуту", "mods": {"regenPerMinute": 60.0}},
 	{"id": "bot_heavy", "icon": "💥", "name": "Тяжёлые пули", "desc": "Урон +25%", "mods": {"dmgMult": 1.25}},
 	{"id": "bot_evasion", "icon": "💨", "name": "Уклонение", "desc": "15% шанс уклонения", "mods": {"evasionChance": 0.15}},
+	# --- boss_only: не участвуют в случайной раздаче после убийства
+	# (см. фильтр в world.gd:_maybe_give_bot_perk) — их получает только сам
+	# босс, форсированно, при спавне (world.gd:_spawn_bot).
+	{"id": "bot_boss_twin", "icon": "🔫", "name": "Спаренная установка",
+		"desc": "Оба ствола стреляют разом", "flags": ["doubleShot"], "boss_only": true},
+	{"id": "bot_boss_barrage", "icon": "💢", "name": "Шквальный залп",
+		"desc": "Замах, затем веер снарядов", "active": "boss_barrage", "boss_only": true},
 ]
 
 static var _by_id := {}
