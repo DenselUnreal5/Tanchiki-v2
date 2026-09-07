@@ -22,6 +22,18 @@ static func flat(bg: Color, radius: float = 8.0, border: float = 0.0,
 	s.content_margin_bottom = 6
 	return s
 
+## Кольцо фокуса для навигации геймпадом. Прозрачная заливка, акцентная
+## рамка чуть снаружи кнопки. Ставится темой на UiRoot только в режиме
+## навигации (ui_root.gd:_apply_nav_mode), в мышином режиме — StyleBoxEmpty.
+static func focus_ring() -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color.TRANSPARENT
+	s.set_border_width_all(2)
+	s.border_color = Cfg.UI_ACCENT
+	s.set_corner_radius_all(int(_chrome_radius()))
+	s.set_expand_margin_all(2.0)
+	return s
+
 static func card_style(border_color: Color = Cfg.UI_BORDER) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = Cfg.UI_CARD
@@ -87,7 +99,9 @@ static func _style_button(b: Button, normal: StyleBox, hover: StyleBox,
 	b.add_theme_stylebox_override("normal", normal)
 	b.add_theme_stylebox_override("hover", hover)
 	b.add_theme_stylebox_override("pressed", pressed)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# Рамку фокуса НЕ переопределяем здесь: ею управляет тема на UiRoot —
+	# видимое кольцо в режиме навигации геймпадом, пусто в мышином режиме
+	# (ui_root.gd:_apply_nav_mode).
 	b.add_theme_stylebox_override("disabled", normal)
 	b.add_theme_font_override("font", Fonts.regular)
 	b.add_theme_font_size_override("font_size", font_size)
@@ -262,6 +276,7 @@ static func slider_row(label_text: String, value: float, on_change: Callable,
 	slider.value_changed.connect(func(v: float):
 		value_label.text = "%d%s" % [round(v * 100.0), suffix]
 		on_change.call(v))
+	row.set_meta("focus_row", slider)
 	return row
 
 ## Строка-выключатель: подпись и кнопка «Вкл/Выкл».
@@ -281,6 +296,7 @@ static func switch_row(label_text: String, value: bool, on_change: Callable) -> 
 		btn.text = I18n.t("opt.on", {}, "Включено") if pressed else I18n.t("opt.off", {}, "Выключено")
 		on_change.call(pressed))
 	row.add_child(btn)
+	row.set_meta("focus_row", btn)
 	return row
 
 ## Строка-переключатель из нескольких вариантов.
@@ -307,6 +323,38 @@ static func choice_row(label_text: String, options: Array, index: int,
 		var value := i
 		btn.pressed.connect(func(): on_change.call(value))
 		flow.add_child(btn)
+	if flow.get_child_count() > 0:
+		row.set_meta("focus_row", flow.get_child(mini(index, flow.get_child_count() - 1)))
+	row.set_meta("focus_flow", flow)
+	return row
+
+## Строка переназначения клавиши: подпись и кнопка-приёмник (см.
+## keybind_button.gd). Клик по кнопке переводит её в режим ожидания
+## следующей физической клавиши; Esc отменяет без изменений. on_change
+## получает новый физический keycode — конфликты с другими действиями
+## решает вызывающий код (см. ui_root.gd:_assign_key), не сам виджет.
+static func keybind_row(label_text: String, keycode: int, on_change: Callable) -> Control:
+	var row := hbox(12)
+	row.custom_minimum_size = Vector2(0, 30)
+
+	var name_label := label(label_text, 12, Cfg.UI_TEXT)
+	name_label.custom_minimum_size = Vector2(178, 0)
+	row.add_child(name_label)
+
+	var btn := KeybindButton.new()
+	btn.custom_minimum_size = Vector2(110, 26)
+	var r := _chrome_radius()
+	var bw := _chrome_border_w()
+	var normal := flat(Color(0.086, 0.102, 0.086, 0.7), r, bw, Color(1, 1, 1, 0.16))
+	var hover := flat(Color(0.11, 0.14, 0.11, 0.8), r, bw, Color(Cfg.UI_ACCENT, 0.6))
+	var listening_style := flat(Color(Cfg.UI_ACCENT_DIM, 0.85), r, bw, Cfg.UI_ACCENT)
+	_style_button(btn, normal, hover, normal, 12, Color("#a8b09a"))
+	btn.normal_style = normal
+	btn.listening_style = listening_style
+	btn.keycode = keycode
+	btn.key_captured.connect(func(k: int): on_change.call(k))
+	row.add_child(btn)
+	row.set_meta("focus_row", btn)
 	return row
 
 ## Полупрозрачная затемняющая подложка оверлея (.overlay.dim).

@@ -10,6 +10,23 @@
 class_name Ctl
 extends RefCounted
 
+## Клавиши по умолчанию для переназначаемых действий (см. Sets.key_for/
+## Sets.set_key, вкладка «Управление» в настройках). Один физический
+## keycode на действие — там, где в схемах ниже раньше было несколько
+## клавиш-дублей одного действия, дефолт здесь — только одна из них
+## (обычно самая «настоящая», не-numpad), остальные варианты убраны.
+## Мышь (ЛКМ/ПКМ у игрока 1) и Num-дубли движения/башни игрока 2 —
+## отдельная, непереназначаемая механика, сюда не входят.
+const DEFAULT_KEYS := {
+	"p1_up": KEY_W, "p1_down": KEY_S, "p1_left": KEY_A, "p1_right": KEY_D,
+	"p1_fire": KEY_SPACE, "p1_mine": KEY_E, "p1_dash": KEY_SHIFT,
+	"p1_airstrike": KEY_F, "p1_ability": KEY_Q,
+	"p2_up": KEY_UP, "p2_down": KEY_DOWN, "p2_left": KEY_LEFT, "p2_right": KEY_RIGHT,
+	"p2_turret_left": KEY_COMMA, "p2_turret_right": KEY_PERIOD,
+	"p2_fire": KEY_SLASH, "p2_mine": KEY_DELETE,
+	"p2_dash": KEY_KP_ADD, "p2_ability": KEY_KP_SUBTRACT,
+}
+
 ## Общая структура команды управления танком.
 static func empty_command() -> Dictionary:
 	return {"mx": 0.0, "my": 0.0, "ax": 0.0, "ay": 0.0,
@@ -60,13 +77,13 @@ class MouseAimScheme extends RefCounted:
 		var cmd := Ctl.empty_command()
 		var mx := 0.0
 		var my := 0.0
-		if Input.is_physical_key_pressed(KEY_W) or (allow_arrows and Input.is_physical_key_pressed(KEY_UP)):
+		if Input.is_physical_key_pressed(Sets.key_for("p1_up")) or (allow_arrows and Input.is_physical_key_pressed(KEY_UP)):
 			my -= 1.0
-		if Input.is_physical_key_pressed(KEY_S) or (allow_arrows and Input.is_physical_key_pressed(KEY_DOWN)):
+		if Input.is_physical_key_pressed(Sets.key_for("p1_down")) or (allow_arrows and Input.is_physical_key_pressed(KEY_DOWN)):
 			my += 1.0
-		if Input.is_physical_key_pressed(KEY_A) or (allow_arrows and Input.is_physical_key_pressed(KEY_LEFT)):
+		if Input.is_physical_key_pressed(Sets.key_for("p1_left")) or (allow_arrows and Input.is_physical_key_pressed(KEY_LEFT)):
 			mx -= 1.0
-		if Input.is_physical_key_pressed(KEY_D) or (allow_arrows and Input.is_physical_key_pressed(KEY_RIGHT)):
+		if Input.is_physical_key_pressed(Sets.key_for("p1_right")) or (allow_arrows and Input.is_physical_key_pressed(KEY_RIGHT)):
 			mx += 1.0
 
 		var w: Vector2 = player.screen_to_world(mouse.x, mouse.y)
@@ -74,11 +91,11 @@ class MouseAimScheme extends RefCounted:
 		cmd["my"] = my
 		cmd["ax"] = w.x
 		cmd["ay"] = w.y
-		cmd["fire"] = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_physical_key_pressed(KEY_SPACE)
-		cmd["mine"] = Input.is_physical_key_pressed(KEY_E) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
-		cmd["dash"] = Input.is_key_pressed(KEY_SHIFT) and not Input.is_physical_key_pressed(KEY_KP_0)
-		cmd["airstrike"] = Input.is_physical_key_pressed(KEY_F)
-		cmd["ability"] = Input.is_physical_key_pressed(KEY_Q)
+		cmd["fire"] = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_physical_key_pressed(Sets.key_for("p1_fire"))
+		cmd["mine"] = Input.is_physical_key_pressed(Sets.key_for("p1_mine")) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+		cmd["dash"] = Input.is_physical_key_pressed(Sets.key_for("p1_dash"))
+		cmd["airstrike"] = Input.is_physical_key_pressed(Sets.key_for("p1_airstrike"))
+		cmd["ability"] = Input.is_physical_key_pressed(Sets.key_for("p1_ability"))
 		return cmd
 
 	func apply(tank: Tank, player, world) -> void:
@@ -131,19 +148,19 @@ class KeyboardAimScheme extends RefCounted:
 	func apply(tank: Tank, player, world) -> void:
 		var dx := 0.0
 		var dy := 0.0
-		if Input.is_physical_key_pressed(KEY_UP) or Input.is_physical_key_pressed(KEY_KP_8):
+		if Input.is_physical_key_pressed(Sets.key_for("p2_up")) or Input.is_physical_key_pressed(KEY_KP_8):
 			dy -= 1.0
-		if Input.is_physical_key_pressed(KEY_DOWN) or Input.is_physical_key_pressed(KEY_KP_2):
+		if Input.is_physical_key_pressed(Sets.key_for("p2_down")) or Input.is_physical_key_pressed(KEY_KP_2):
 			dy += 1.0
-		if Input.is_physical_key_pressed(KEY_LEFT) or Input.is_physical_key_pressed(KEY_KP_4):
+		if Input.is_physical_key_pressed(Sets.key_for("p2_left")) or Input.is_physical_key_pressed(KEY_KP_4):
 			dx -= 1.0
-		if Input.is_physical_key_pressed(KEY_RIGHT) or Input.is_physical_key_pressed(KEY_KP_6):
+		if Input.is_physical_key_pressed(Sets.key_for("p2_right")) or Input.is_physical_key_pressed(KEY_KP_6):
 			dx += 1.0
 		var moving := dx != 0.0 or dy != 0.0
 		tank.thrust(dx, dy)
 
-		var rot_left := Input.is_physical_key_pressed(KEY_COMMA) or Input.is_physical_key_pressed(KEY_KP_7)
-		var rot_right := Input.is_physical_key_pressed(KEY_PERIOD) or Input.is_physical_key_pressed(KEY_KP_9)
+		var rot_left := Input.is_physical_key_pressed(Sets.key_for("p2_turret_left")) or Input.is_physical_key_pressed(KEY_KP_7)
+		var rot_right := Input.is_physical_key_pressed(Sets.key_for("p2_turret_right")) or Input.is_physical_key_pressed(KEY_KP_9)
 
 		if rot_left and not rot_right:
 			tank.turret_angle -= turret_slew
@@ -153,14 +170,13 @@ class KeyboardAimScheme extends RefCounted:
 			# Ручного поворота нет — башня плавно смотрит туда, куда едем.
 			tank.turret_angle = Rng.rotate_toward(tank.turret_angle, tank.angle, follow_slew)
 
-		if Input.is_physical_key_pressed(KEY_KP_0) or Input.is_physical_key_pressed(KEY_KP_5) \
-				or Input.is_physical_key_pressed(KEY_SLASH) or Input.is_physical_key_pressed(KEY_KP_ENTER):
+		if Input.is_physical_key_pressed(Sets.key_for("p2_fire")):
 			tank.shoot(world)
-		if Input.is_physical_key_pressed(KEY_KP_PERIOD) or Input.is_physical_key_pressed(KEY_DELETE):
+		if Input.is_physical_key_pressed(Sets.key_for("p2_mine")):
 			tank.place_mine(world)
-		if Input.is_physical_key_pressed(KEY_KP_ADD):
+		if Input.is_physical_key_pressed(Sets.key_for("p2_dash")):
 			tank.dash()
-		if Input.is_physical_key_pressed(KEY_KP_SUBTRACT):
+		if Input.is_physical_key_pressed(Sets.key_for("p2_ability")):
 			tank.use_ability(world)
 
 # ---------------------------------------------------------------------------
@@ -180,17 +196,35 @@ class GamepadScheme extends RefCounted:
 	## Последняя точка прицеливания в мире. Держится между кадрами.
 	var aim := Vector2.ZERO
 	var _aim_ready := false
+	## Мир партии. Ставится игрой каждый кадр (game.gd:_process) и нужен
+	## автоприцелу: список танков, проверка вражды и линия видимости.
+	var world = null
 
 	## На каком расстоянии перед танком ставится точка прицела. На попадание
 	## это не влияет — башня всё равно смотрит по направлению, — но слишком
 	## близкая точка делает наводку дёрганой.
 	const AIM_REACH := 260.0
 
+	# ---- автоприцел ---------------------------------------------------------
+	## Мягкое притяжение к ближайшей цели, и только пока игрок целится правым
+	## стиком (цель должна попасть в конус вокруг направления стика). Стик
+	## отпущен — притяжения нет вовсе. Полный захват не делаем: игрок сохраняет
+	## контроль и может увести прицел на другого врага.
+	##
+	## ASSIST_RANGE  — радиус поиска цели, px.
+	## ASSIST_CONE   — половина угла конуса от направления стика, градусы:
+	##                 цель вне конуса игнорируется, чтобы прицел не прыгал
+	##                 к тому, на кого игрок не смотрит.
+	## ASSIST_PULL   — доля пути от угла стика к точному углу на цель.
+	const ASSIST_RANGE := 320.0
+	const ASSIST_CONE := 35.0
+	const ASSIST_PULL := 0.6
+
 	func _init(device_: int = 0) -> void:
 		device = device_
 
 	func hints() -> Array:
-		return [
+		var h := [
 			"[левый стик] движение",
 			"[правый стик] прицел",
 			"[RT] / [A] выстрел",
@@ -199,6 +233,9 @@ class GamepadScheme extends RefCounted:
 			"[Y] способность перка",
 			"[RB] авиаудар (Оборона)",
 		]
+		if Sets.pad_aim_assist:
+			h.append("автоприцел: доводка к ближайшему врагу")
+		return h
 
 	## Ось с мёртвой зоной. Ниже порога — ровный ноль, выше — растяжка
 	## остатка на весь ход, чтобы у самого порога не было ступеньки.
@@ -220,7 +257,8 @@ class GamepadScheme extends RefCounted:
 		if tank != null:
 			var dir := Vector2(ax, ay)
 			if dir.length() > 0.2:
-				aim = Vector2(tank.x, tank.y) + dir.normalized() * AIM_REACH
+				var sdir := dir.normalized()
+				aim = _assist_aim(tank, sdir)
 				_aim_ready = true
 			elif not _aim_ready:
 				# Пока игрок не трогал правый стик, целимся туда, куда едем.
@@ -241,5 +279,46 @@ class GamepadScheme extends RefCounted:
 		cmd["airstrike"] = Input.is_joy_button_pressed(device, JOY_BUTTON_RIGHT_SHOULDER)
 		return cmd
 
-	func apply(tank: Tank, player, world) -> void:
-		Ctl.apply_command(tank, world, read_command(player))
+	## Точка прицела при заданном направлении стика. Без автоприцела (или без
+	## подходящей цели) — просто впереди танка по стику; с автоприцелом —
+	## подкрученная на ASSIST_PULL к точному углу на ближайшего врага.
+	func _assist_aim(tank, sdir: Vector2) -> Vector2:
+		var base := Vector2(tank.x, tank.y) + sdir * AIM_REACH
+		if not Sets.pad_aim_assist or world == null:
+			return base
+		var tgt = _nearest_target(tank, sdir)
+		if tgt == null:
+			return base
+		var cur := sdir.angle()
+		var want := Vector2(tgt.x - tank.x, tgt.y - tank.y).angle()
+		var blended := cur + wrapf(want - cur, -PI, PI) * ASSIST_PULL
+		return Vector2(tank.x, tank.y) + Vector2.from_angle(blended) * AIM_REACH
+
+	## Ближайший видимый враг в радиусе и в конусе вокруг направления стика,
+	## или null. «Ближайший» — по прямой дистанции среди прошедших отбор.
+	func _nearest_target(tank, stick_dir: Vector2):
+		if world == null or not ("tanks" in world):
+			return null
+		var cone_cos := cos(deg_to_rad(ASSIST_CONE))
+		var best = null
+		var best_d := ASSIST_RANGE
+		for t in world.tanks:
+			if t == tank or not t.alive:
+				continue
+			if not world.are_hostile(tank, t):
+				continue
+			var off := Vector2(t.x - tank.x, t.y - tank.y)
+			var d := off.length()
+			if d > best_d or d < 1.0:
+				continue
+			if off.normalized().dot(stick_dir) < cone_cos:
+				continue
+			if not world.map.has_line_of_sight(tank.x, tank.y, t.x, t.y):
+				continue
+			best_d = d
+			best = t
+		return best
+
+	func apply(tank: Tank, player, world_) -> void:
+		world = world_
+		Ctl.apply_command(tank, world_, read_command(player))

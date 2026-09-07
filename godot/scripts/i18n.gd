@@ -132,13 +132,6 @@ var EN := {
 	"nav.back": "back",
 	"nav.move": "move",
 	"nav.adjust": "adjust",
-	"hint.pad.stickL": "left stick",
-	"hint.pad.stickR": "right stick",
-	"hint.pad.move": "move",
-	"hint.pad.aim": "aim",
-	"hint.pad.fire": "fire",
-	"hint.pad.mine": "mine",
-	"hint.pad.dash": "ram dash",
 	"hint.pad.ability": "perk ability",
 
 	# --------------------------------------------------------- локации
@@ -296,16 +289,22 @@ var EN := {
 	"go.replay": "Play Again",
 	"go.menu": "To Menu",
 
-	# ------------------------------------------------------------- подсказки
-	"hint.p1.move": "move",
-	"hint.p1.aim": "mouse",
-	"hint.p1.aim2": "aim",
-	"hint.p1.fire": "fire",
-	"hint.p1.mine": "mine",
-	"hint.p1.dash": "dash",
-	"hint.p2.turret": "turret",
-	"hint.pause": "pause",
-	"hint.scoreboard": "scoreboard",
+	# --------------------------------------------------------- свои клавиши
+	"set.keys.p1": "Keys — Player 1",
+	"set.keys.p2": "Keys — Player 2",
+	"set.keys.reset": "Reset keys",
+	"set.key.conflict": "Key \"{key}\" is already used by: {action}",
+	"key.up": "Forward",
+	"key.down": "Backward",
+	"key.left": "Left",
+	"key.right": "Right",
+	"key.fire": "Fire",
+	"key.mine": "Mine",
+	"key.dash": "Ram dash",
+	"key.ability": "Perk ability",
+	"key.airstrike": "Airstrike",
+	"key.turretLeft": "Turret left",
+	"key.turretRight": "Turret right",
 
 	# --------------------------------------------------- подсказки меню
 	"tip.theme": "Change the UI theme in Settings → Interface: noir, military dossier or sci-fi",

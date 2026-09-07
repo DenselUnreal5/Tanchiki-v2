@@ -50,11 +50,9 @@ var _menu_info: RichTextLabel
 var _menu_settings: Control
 var _menu_settings_panel: ThemedPanel
 var _menu_settings_btn: Button
-var _hints: RichTextLabel
 var _lang_btn: Button
 
-## Крутящаяся подсказка об интерфейсе внизу меню (см. MenuTips) — отдельно
-## от _hints (те про раскладку клавиш/геймпада, не про сам интерфейс).
+## Крутящаяся подсказка об интерфейсе внизу меню (см. MenuTips).
 var _menu_tip: RichTextLabel
 var _menu_tip_timer: Timer
 var _menu_tip_order: Array = []
@@ -71,6 +69,7 @@ var _settings_body: VBoxContainer
 var _settings_sub: RichTextLabel
 var _settings_tabs_row: HBoxContainer
 var _settings_active_tab := "general"
+var _settings_key_status: Label
 
 var _pause: Control
 var _perk: Control
@@ -603,8 +602,6 @@ func _build_menu() -> void:
 	col.add_child(start)
 	_menu_start_btn = start
 
-	_hints = UiKit.rich("", 10, Color(Cfg.UI_MUTED, 0.6))
-	col.add_child(_hints)
 	col.add_child(_pad_hint_strip())
 
 	# Версия на виду. Без неё отчёт игрока не к чему привязать: «не работает»
@@ -706,7 +703,6 @@ func _build_menu() -> void:
 	_menu_tip_timer.start()
 
 	_refresh_lang_btn()
-	_refresh_hints()
 	_refresh_mode_button()
 	_layout_menu.call_deferred()
 
@@ -762,10 +758,7 @@ func _make_group(label_text: String, key: String, options: Array) -> VBoxContain
 		var btn := UiKit.toggle(String(opt[1]))
 		btn.button_group = group
 		btn.button_pressed = settings[key] == value
-		btn.pressed.connect(func():
-			settings[key] = value
-			if key == "game_type":
-				_refresh_hints())
+		btn.pressed.connect(func(): settings[key] = value)
 		flow.add_child(btn)
 	return box
 
@@ -801,49 +794,12 @@ func _refresh_lang_btn() -> void:
 	_lang_btn.text = I18n.t("menu.lang.ru", {}, "🌐 English") if I18n.lang == "ru" \
 		else I18n.t("menu.lang.en", {}, "🌐 Русский")
 
-## Подсказки по управлению зависят от выбранного типа игры.
-func _refresh_hints() -> void:
-	var move := I18n.t("hint.p1.move", {}, "движение")
-	var fire := I18n.t("hint.p1.fire", {}, "выстрел")
-	var mine := I18n.t("hint.p1.mine", {}, "мина")
-	var rows := []
-	# Подсказка обязана соответствовать выбранному устройству: игроку
-	# с геймпадом бесполезно читать про WASD.
-	rows.append(_hint_row(I18n.t("player1", {}, "Игрок 1"), Sets.p1_device, 0,
-		move, fire, mine))
-	if settings["game_type"] == "hotseat":
-		rows.append(_hint_row(I18n.t("player2", {}, "Игрок 2"), Sets.p2_device, 1,
-			move, fire, mine))
-	rows.append("[P]/[Esc] %s · [Tab] %s" % [
-		I18n.t("hint.pause", {}, "пауза"), I18n.t("hint.scoreboard", {}, "табло")])
-	_hints.text = "[center]" + "\n".join(rows) + "[/center]"
-
-## Строка подсказки под выбранное устройство игрока.
-func _hint_row(who: String, device: String, index: int,
-		move: String, fire: String, mine: String) -> String:
-	if device.begins_with("pad"):
-		return "[b]%s:[/b] [%s] %s · [%s] %s · [RT] %s · [LT] %s · [LB] %s" % [
-			who,
-			I18n.t("hint.pad.stickL", {}, "левый стик"), I18n.t("hint.pad.move", {}, "движение"),
-			I18n.t("hint.pad.stickR", {}, "правый стик"), I18n.t("hint.pad.aim", {}, "прицел"),
-			I18n.t("hint.pad.fire", {}, "выстрел"), I18n.t("hint.pad.mine", {}, "мина"),
-			I18n.t("hint.pad.dash", {}, "рывок")]
-	var keys_only := device == Sets.DEV_KEYS or (device == Sets.DEV_AUTO and index == 1)
-	if keys_only:
-		return "[b]%s:[/b] [↑][←][↓][→] %s · [<][>] %s · [Num 0] %s · [Num .] %s" % [
-			who, move, I18n.t("hint.p2.turret", {}, "башня"), fire, mine]
-	return "[b]%s:[/b] [W][A][S][D] %s · [%s] %s · [ЛКМ] %s · [E] %s · [Shift] %s" % [
-		who, move,
-		I18n.t("hint.p1.aim", {}, "мышь"), I18n.t("hint.p1.aim2", {}, "прицел"),
-		fire, mine, I18n.t("hint.p1.dash", {}, "рывок")]
-
 func show_menu() -> void:
 	hide_all_overlays()
 	_menu.visible = true
 	_layout_menu()
 	_resize_overlays()
 	refresh_profile()
-	_refresh_hints()
 	_focus_stack.clear()
 	_set_menu_focusable(true)
 	_grab(_menu_start_btn)
@@ -2162,6 +2118,45 @@ func _build_graphics_tab() -> void:
 			Sets.screen_shake = v
 			Sets.save()))
 
+## Действия вкладки «Управление» в порядке отображения — см. Ctl.DEFAULT_KEYS.
+const _P1_KEY_ACTIONS := ["p1_up", "p1_down", "p1_left", "p1_right",
+	"p1_fire", "p1_mine", "p1_dash", "p1_airstrike", "p1_ability"]
+const _P2_KEY_ACTIONS := ["p2_up", "p2_down", "p2_left", "p2_right",
+	"p2_turret_left", "p2_turret_right", "p2_fire", "p2_mine", "p2_dash", "p2_ability"]
+
+## Подпись действия — общий словарь понятий: «вперёд»/«огонь»/... читаются
+## одной строкой у обоих игроков, различаются только сами клавиши.
+func _key_action_label(action_id: String) -> String:
+	match action_id:
+		"p1_up", "p2_up": return I18n.t("key.up", {}, "Вперёд")
+		"p1_down", "p2_down": return I18n.t("key.down", {}, "Назад")
+		"p1_left", "p2_left": return I18n.t("key.left", {}, "Влево")
+		"p1_right", "p2_right": return I18n.t("key.right", {}, "Вправо")
+		"p1_fire", "p2_fire": return I18n.t("key.fire", {}, "Огонь")
+		"p1_mine", "p2_mine": return I18n.t("key.mine", {}, "Мина")
+		"p1_dash", "p2_dash": return I18n.t("key.dash", {}, "Рывок-таран")
+		"p1_ability", "p2_ability": return I18n.t("key.ability", {}, "Способность перка")
+		"p1_airstrike": return I18n.t("key.airstrike", {}, "Авиаудар")
+		"p2_turret_left": return I18n.t("key.turretLeft", {}, "Башня влево")
+		"p2_turret_right": return I18n.t("key.turretRight", {}, "Башня вправо")
+	return action_id
+
+## Общий обработчик всех keybind_row на вкладке «Управление»: клавиша,
+## уже занятая другим действием (любого игрока), не применяется — только
+## показывает предупреждение, старая привязка не трогается.
+func _assign_key(action_id: String, keycode: int) -> void:
+	for other_id in Ctl.DEFAULT_KEYS.keys():
+		if other_id == action_id:
+			continue
+		if Sets.key_for(other_id) == keycode:
+			if is_instance_valid(_settings_key_status):
+				_settings_key_status.text = I18n.t("set.key.conflict",
+					{"key": OS.get_keycode_string(keycode), "action": _key_action_label(other_id)},
+					"Клавиша «%s» уже занята: %s" % [OS.get_keycode_string(keycode), _key_action_label(other_id)])
+			return
+	Sets.set_key(action_id, keycode)
+	_switch_settings_tab("controls")
+
 func _build_controls_tab() -> void:
 	var devices := [
 		[Sets.DEV_AUTO, I18n.t("dev.auto", {}, "Как обычно")],
@@ -2192,8 +2187,29 @@ func _build_controls_tab() -> void:
 					Sets.p1_device = id
 				else:
 					Sets.p2_device = id
-				Sets.save()
-				_refresh_hints()))
+				Sets.save()))
+
+	_settings_body.add_child(UiKit.section(I18n.t("set.keys.p1", {}, "Клавиши — Игрок 1"), Cfg.UI_MUTED))
+	for action in _P1_KEY_ACTIONS:
+		_settings_body.add_child(UiKit.keybind_row(_key_action_label(action), Sets.key_for(action),
+			func(k: int): _assign_key(action, k)))
+
+	_settings_body.add_child(UiKit.section(I18n.t("set.keys.p2", {}, "Клавиши — Игрок 2"), Cfg.UI_MUTED))
+	for action in _P2_KEY_ACTIONS:
+		_settings_body.add_child(UiKit.keybind_row(_key_action_label(action), Sets.key_for(action),
+			func(k: int): _assign_key(action, k)))
+
+	_settings_key_status = UiKit.label("", 10, Cfg.UI_WARN)
+	_settings_body.add_child(_settings_key_status)
+
+	var reset_keys := UiKit.danger(I18n.t("set.keys.reset", {}, "Сбросить клавиши"), 12)
+	reset_keys.pressed.connect(func():
+		Sets.custom_keys.clear()
+		Sets.save()
+		_switch_settings_tab("controls"))
+	var reset_keys_wrap := CenterContainer.new()
+	reset_keys_wrap.add_child(reset_keys)
+	_settings_body.add_child(reset_keys_wrap)
 
 	if Sets.pads().is_empty():
 		_settings_body.add_child(UiKit.label(
