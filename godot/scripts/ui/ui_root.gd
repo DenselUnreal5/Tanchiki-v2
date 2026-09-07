@@ -602,8 +602,6 @@ func _build_menu() -> void:
 	col.add_child(start)
 	_menu_start_btn = start
 
-	col.add_child(_pad_hint_strip())
-
 	# Версия на виду. Без неё отчёт игрока не к чему привязать: «не работает»
 	# без номера сборки не отличить от «не работало в прошлой».
 	var ver := UiKit.label("v" + game_version(), 9, Color(Cfg.UI_MUTED, 0.55))
@@ -661,6 +659,8 @@ func _build_menu() -> void:
 			"Сбросить весь прогресс профиля? Открытые перки будут потеряны.")
 		_confirm.popup_centered())
 	col.add_child(reset_btn)
+
+	col.add_child(_pad_hint_strip())
 
 	# ---- правая панель: настройки боя ----
 	_menu_settings_panel = UiKit.panel()
@@ -1111,6 +1111,9 @@ func _rebuild_hub_tabs() -> void:
 	parent.move_child(new_row, idx)
 	_hub_tabs_row.queue_free()
 	_hub_tabs_row = new_row
+	# Кнопки вкладок теперь фокусируемы (см. UiKit.plain_tabs) — свяжем их
+	# по горизонтали, иначе геймпад/клавиатура не смогут переключить вкладку.
+	_chain_horizontal(_hub_tabs_row.get_children(), true)
 
 func _switch_hub_tab(key: String) -> void:
 	_hub_active_tab = key
@@ -1964,12 +1967,16 @@ func _fill_settings_tab(key: String) -> void:
 
 	# Ряды настроек связываем по вертикали: каждая строка выставляет
 	# meta("focus_row") на свой элемент (choice_row/slider_row/switch_row).
-	# Внутри choice_row варианты — по горизонтали с переносом.
+	# Внутри choice_row варианты — по горизонтали с переносом. Ряд вкладок
+	# сверху — первое звено цепочки: с него «вниз» ведёт в тело вкладки,
+	# а свои кнопки внутри ряда линкуются по горизонтали, иначе геймпад/
+	# клавиатура не могут переключить вкладку вовсе (FOCUS_NONE раньше).
+	_chain_horizontal(_settings_tabs_row.get_children(), true)
 	for row in _settings_body.get_children():
 		if row.has_meta("focus_flow"):
 			var flow: Control = row.get_meta("focus_flow")
 			_chain_horizontal(flow.get_children(), true)
-	_chain_vertical(_settings_body.get_children())
+	_chain_vertical([_settings_tabs_row] + _settings_body.get_children())
 	_resize_settings_scroll()
 
 ## Тот же бюджет высоты, что и у тела хаба (см. _hub_body_budget) — форма

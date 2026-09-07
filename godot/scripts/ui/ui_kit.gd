@@ -378,7 +378,9 @@ static func plain_tabs(items: Array, active_key: String, on_change: Callable) ->
 		var btn := Button.new()
 		btn.text = String(item["label"]).to_upper()
 		btn.flat = true
-		btn.focus_mode = Control.FOCUS_NONE
+		# Раньше FOCUS_NONE — вкладки были недостижимы фокусом вовсе, геймпад/
+		# клавиатура не могли на них попасть и переключить вкладку.
+		btn.focus_mode = Control.FOCUS_ALL
 		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		var empty := StyleBoxEmpty.new()
 		_style_button(btn, empty, empty, empty, 13, Cfg.UI_ACCENT if on else Cfg.UI_MUTED)
