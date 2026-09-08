@@ -27,8 +27,15 @@ var _icon: PerkIconView
 func _ready() -> void:
 	custom_minimum_size = Vector2(44, 44)
 	size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	focus_mode = Control.FOCUS_NONE
+	# Раньше FOCUS_NONE — узел был недостижим фокусом вовсе, геймпад и
+	# клавиатура не могли добраться ни до одного перка в Галерее.
+	focus_mode = Control.FOCUS_ALL
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	# Узел рисует себя сам в _draw() (см. ниже) — автоматическая рамка
+	# фокуса из темы для таких полностью кастомных Control'ов не
+	# подхватывается движком, перерисовываем вручную по смене фокуса.
+	focus_entered.connect(queue_redraw)
+	focus_exited.connect(queue_redraw)
 	_icon = PerkIconView.new()
 	_icon.custom_minimum_size = Vector2(22, 22)
 	_icon.size = Vector2(22, 22)
@@ -61,6 +68,15 @@ func _draw() -> void:
 		_: _draw_octagon()
 	if locked and need_level > 0:
 		_draw_badge()
+	if has_focus():
+		_draw_focus_ring()
+
+## Рамка фокуса геймпада/клавиатуры — своя отрисовка, а не тема: узел
+## полностью рисует себя сам, автоматическое кольцо Control поверх
+## кастомного _draw() не появляется (см. _apply_nav_mode в ui_root.gd,
+## тем же приёмом чинили слайдеры).
+func _draw_focus_ring() -> void:
+	draw_rect(Rect2(-3, -3, size.x + 6, size.y + 6), Cfg.UI_ACCENT, false, 2.0)
 
 # ---------------------------------------------------------------- формы
 func _border_color() -> Color:

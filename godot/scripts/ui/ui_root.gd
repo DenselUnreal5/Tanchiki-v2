@@ -1218,6 +1218,12 @@ func _fill_gallery_tab() -> void:
 	list_scroll.add_child(left_col)
 
 	var first_id := ""
+	# Соседи по фокусу связываются явно (см. ниже) — хаб раньше целиком
+	# полагался на автоматический геометрический подбор Godot'ом, а узлы
+	# перков и вовсе были недостижимы фокусом (skill_node.gd: FOCUS_NONE).
+	# _prev_band_last — нижний узел предыдущей категории, чтобы «вниз» из
+	# последней строки можно было уйти в следующую категорию, а не упереться.
+	var _prev_band_last: SkillNode = null
 	for cat in Perks.CATEGORIES:
 		var perks := []
 		for p in Perks.all():
@@ -1246,11 +1252,13 @@ func _fill_gallery_tab() -> void:
 
 		var num_cols := ceili(float(perks.size()) / float(_GALLERY_MAX_PER_COL))
 		var rows := ceili(float(perks.size()) / float(num_cols))
+		var columns: Array = []
 		for c in num_cols:
 			var sub := UiKit.vbox(8)
 			sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			sub.alignment = BoxContainer.ALIGNMENT_CENTER
 			subcols.add_child(sub)
+			var column: Array = []
 			for r in rows:
 				var idx := c * rows + r
 				if idx >= perks.size():
@@ -1258,14 +1266,44 @@ func _fill_gallery_tab() -> void:
 				if r > 0:
 					sub.add_child(_gallery_spine())
 				var node_wrap := CenterContainer.new()
-				node_wrap.add_child(_gallery_node(perks[idx]))
+				var node := _gallery_node(perks[idx])
+				node_wrap.add_child(node)
 				sub.add_child(node_wrap)
+				column.append(node)
+			columns.append(column)
+
+		# Вертикально — внутри каждого столбца (_chain_vertical принимает сам
+		# SkillNode как «строку»: _first_focusable возвращает узел напрямую,
+		# раз он и есть фокусируемый контрол).
+		for column in columns:
+			_chain_vertical(column)
+		# Горизонтально — между соседними столбцами на совпадающих строках.
+		for c in columns.size() - 1:
+			var a: Array = columns[c]
+			var b: Array = columns[c + 1]
+			for r in mini(a.size(), b.size()):
+				a[r].focus_neighbor_right = b[r].get_path()
+				b[r].focus_neighbor_left = a[r].get_path()
+		# Между категориями — одна связь вниз из прошлой в первый узел этой.
+		if _prev_band_last != null and not columns.is_empty() and not columns[0].is_empty():
+			var band_first: SkillNode = columns[0][0]
+			_prev_band_last.focus_neighbor_bottom = band_first.get_path()
+			band_first.focus_neighbor_top = _prev_band_last.get_path()
+		if not columns.is_empty() and not columns.back().is_empty():
+			_prev_band_last = columns.back().back()
 
 	if _gallery_selected_id == "" or Perks.get_perk(_gallery_selected_id).is_empty():
 		_gallery_selected_id = first_id
 
 	_gallery_detail_panel = _gallery_detail(Perks.get_perk(_gallery_selected_id))
 	row.add_child(_gallery_detail_panel)
+
+	# Вкладки хаба → первый перк: от вкладок «вниз» сразу попадаешь в список,
+	# тем же приёмом, каким это уже сделано для Настроек.
+	if _gallery_nodes.has(first_id):
+		var top_tab := _find_tab_button(_hub_tabs_row, "gallery")
+		if top_tab != null:
+			top_tab.focus_neighbor_bottom = _gallery_nodes[first_id].get_path()
 
 ## Прямая вертикальная связь между двумя узлами одной колонки.
 func _gallery_spine() -> Control:
