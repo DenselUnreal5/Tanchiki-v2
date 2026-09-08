@@ -712,6 +712,37 @@ func _build_menu() -> void:
 		_confirm.popup_centered())
 	col.add_child(reset_btn)
 
+	# Автопоиск соседа Godot промахивается через GridContainer — тот же баг,
+	# что и у HFlowContainer в _wire_menu_settings_nav (обрывается после
+	# одного шага: стрелками кажется, что зажатие клавиши «не держится»).
+	# Прошиваем сетку явно: по строкам горизонтально, по столбцам вертикально.
+	var footer_btns := footer.get_children()
+	var footer_rows: Array = []
+	var fi := 0
+	while fi < footer_btns.size():
+		var row: Array = footer_btns.slice(fi, mini(fi + footer.columns, footer_btns.size()))
+		if row.size() > 1:
+			_chain_horizontal(row, false)
+		footer_rows.append(row)
+		fi += footer.columns
+	for col_i in footer.columns:
+		var column: Array = []
+		for row in footer_rows:
+			if col_i < row.size():
+				column.append(row[col_i])
+		_chain_vertical(column)
+	# Вход в сетку сверху и выход снизу — тоже детерминированные, а не
+	# автоподбор через геометрию.
+	if footer_rows.size() > 0:
+		var first_row: Array = footer_rows[0]
+		var last_row: Array = footer_rows[footer_rows.size() - 1]
+		if is_instance_valid(_menu_start_btn):
+			first_row[0].focus_neighbor_top = _menu_start_btn.get_path()
+			_menu_start_btn.focus_neighbor_bottom = first_row[0].get_path()
+		for b in last_row:
+			b.focus_neighbor_bottom = reset_btn.get_path()
+		reset_btn.focus_neighbor_top = last_row[0].get_path()
+
 	# ---- правая панель: настройки боя ----
 	_menu_settings_panel = UiKit.panel()
 	_menu_settings_panel.custom_minimum_size = Vector2(MENU_SETTINGS_W, 0)
