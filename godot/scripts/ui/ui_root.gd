@@ -1220,7 +1220,14 @@ func _switch_hub_tab(key: String, focus_id: String = "") -> void:
 		_grab(_find_tab_button(_hub_tabs_row, key))
 
 func _fill_hub_tab(key: String) -> void:
+	# remove_child() ДО queue_free(): само удаление из дерева отложено
+	# только у free(), а _hub_body.get_children() без remove_child() ещё
+	# секунду держит вперемешку и старых, и новых детей — из-за этого
+	# поиск по meta (_find_by_meta/_first_focusable) мог найти старую,
+	# уже обречённую кнопку с тем же card_id вместо только что созданной,
+	# и фокус пропадал через кадр, когда её реально удаляли.
 	for c in _hub_body.get_children():
+		_hub_body.remove_child(c)
 		c.queue_free()
 	match key:
 		"gallery": _fill_gallery_tab()
@@ -1569,7 +1576,15 @@ func _upgrade_card(up: Dictionary) -> Control:
 	info.add_child(segs)
 
 	if maxed:
-		row.add_child(UiKit.label(I18n.t("upg.max", {}, "МАКС"), 10, Cfg.UI_ACCENT, true))
+		# Тот же card_id, что и у кнопки «Улучшить» ниже — иначе после
+		# покупки ПОСЛЕДНЕГО уровня _find_by_meta (_switch_hub_tab) не
+		# находит ничего с этим id, фокус срывается на первую карточку
+		# всего экрана вместо того, чтобы остаться на месте.
+		var max_wrap := FocusRingPanel.new()
+		max_wrap.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+		max_wrap.set_meta("card_id", "upg_" + String(up["id"]))
+		max_wrap.add_child(UiKit.label(I18n.t("upg.max", {}, "МАКС"), 10, Cfg.UI_ACCENT, true))
+		row.add_child(max_wrap)
 	else:
 		var buy := UiKit.small(I18n.t("upg.buy", {"price": cost}, "Улучшить · %d 🪙" % cost))
 		buy.disabled = not can_buy
@@ -1704,11 +1719,15 @@ func _fill_achievements_tab() -> void:
 	grid.add_theme_constant_override("v_separation", 8)
 	_hub_body.add_child(grid)
 
+	# Карточки — FocusRingPanel, а не голый PanelContainer: иначе они вообще
+	# недостижимы фокусом геймпада/клавиатуры (см. комментарий у прошивки
+	# соседей ниже).
+	var cards: Array = []
 	for a in Achievements.LIST:
 		var done := Prof.achievements.has(a["id"])
 		var cur := int(Prof.stats.get(a["stat"], 0))
 		var need := int(a["need"])
-		var card := PanelContainer.new()
+		var card := FocusRingPanel.new()
 		card.custom_minimum_size = Vector2(168, 0)
 		card.add_theme_stylebox_override("panel",
 			UiKit.card_style(Cfg.UI_ACCENT_DIM if done else Cfg.UI_BORDER))
@@ -1741,6 +1760,17 @@ func _fill_achievements_tab() -> void:
 			box.add_child(prog)
 			box.add_child(UiKit.progress_bar(float(cur) / float(need), 148, 3, Cfg.UI_WARN))
 		grid.add_child(card)
+		cards.append(card)
+
+	# Автопоиск соседа промахивается через HFlowContainer с переменным
+	# переносом строк (тот же баг, что и у панели настроек боя, см.
+	# _wire_menu_settings_nav) — прошиваем одним кольцом по кругу, чтобы
+	# каждая карточка была достижима стиком/клавиатурой без обрывов.
+	_chain_horizontal(cards, true)
+	if not cards.is_empty():
+		var top_tab := _find_tab_button(_hub_tabs_row, "achievements")
+		if top_tab != null:
+			top_tab.focus_neighbor_bottom = cards[0].get_path()
 
 # ============================================================ ЕЖЕДНЕВНЫЕ
 func open_daily() -> void:
@@ -1758,7 +1788,11 @@ func open_daily() -> void:
 	_daily_sub.text = "[center]" + I18n.t("daily.sub", {"done": done, "total": quests.size()},
 		"Награды сбрасываются в полночь · выполнено [b]%d[/b] из %d" % [done, quests.size()]) + "[/center]"
 
+	# remove_child() ДО queue_free() — см. тот же приём и его причину в
+	# _fill_hub_tab(): без него _first_focusable() мог поймать старую,
+	# уже обречённую карточку вместо новой, и фокус пропадал через кадр.
 	for c in _daily_body.get_children():
+		_daily_body.remove_child(c)
 		c.queue_free()
 
 	for q in quests:
@@ -2329,7 +2363,7 @@ func _assign_key(action_id: String, keycode: int) -> void:
 
 func _build_controls_tab() -> void:
 	var devices := [
-		[Sets.DEV_AUTO, I18n.t("dev.auto", {}, "Как обычно")],
+		[Sets.DEV_AUTO, I18n.t("dev.auto", {}, "Авто")],
 		[Sets.DEV_KBM, I18n.t("dev.kbm", {}, "Клавиатура и мышь")],
 		[Sets.DEV_KEYS, I18n.t("dev.keys", {}, "Только клавиатура")],
 	]
