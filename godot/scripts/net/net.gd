@@ -33,6 +33,21 @@ const SNAP_EVERY := 3
 ## компромисс между задержкой и устойчивостью к джиттеру.
 const INTERP_DELAY := 0.12
 
+## Сбор в лобби идёт поверх Steam-лобби. Основной путь — приглашение друга
+## (приватное лобби, ни SteamID, ни код наружу не идут). Для тех, кого нет
+## в друзьях, есть публичное лобби с четырёхзначным кодом; SteamID хоста и
+## там не публикуется — он берётся из getLobbyOwner уже после входа в лобби.
+## В лобби ровно двое — хост и один гость.
+const GAME_TAG := "tanchiki-v2"
+const MAX_LOBBY := 2
+## Значения enum Steam.* из GodotSteam 4.22. Держим числами, чтобы файл
+## грузился и в сборке без расширения — там сетевой путь через Steam недоступен.
+const _LOBBY_TYPE_PUBLIC := 2
+const _LOBBY_CMP_EQUAL := 0
+const _LOBBY_DIST_WORLDWIDE := 3
+const _STEAM_RESULT_OK := 1
+const _STEAM_ENTER_OK := 1  # CHAT_ROOM_ENTER_RESPONSE_SUCCESS
+
 signal lobby_changed
 signal match_starting(settings: Dictionary)
 signal net_error(text: String)
@@ -40,6 +55,9 @@ signal disconnected
 ## -1 — отсчёта нет; иначе секунд до старта партии. Считает хост, клиенты
 ## только показывают присланное число.
 signal countdown_changed(seconds_left: int)
+## Игра позвала нас в сетевое лобби (принятое приглашение Steam или запуск
+## по ссылке «Join Game»). UI должен открыть экран сети сам.
+signal lobby_entered
 
 ## "" — офлайн, "host" — хозяин партии, "client" — присоединившийся.
 var role := ""
@@ -73,6 +91,15 @@ var countdown_left := -1
 ## host_begin_countdown сверяется с ним и молча выходит, если отсчёт
 ## успел смениться другим или отмениться, пока он спал между секундами.
 var _countdown_token := 0
+
+## Код текущего лобби: хост генерирует, гость вводит. Пусто офлайн и при
+## прямом подключении по адресу.
+var lobby_code := ""
+## Хэндл Steam-лобби (0 — нет). Есть только у пути «по коду».
+var _steam_lobby_id := 0
+## "host" | "join", пока не пришёл асинхронный колбэк Steam — для строки
+## «Создаём…/Ищем…» в UI. Пусто — операции нет.
+var lobby_pending := ""
 
 # ------------------------------------------------------------- диагностика
 ## Счётчики за партию. Без них про «потери и лаги» нечего сказать: сеть
@@ -122,6 +149,12 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_connect_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	# Приглашения ловим всегда: игрок мог их получить, ещё не открыв экран сети.
+	_steam_connect_invite_signals()
+	# «Join Game» из друзей при закрытой игре: Steam кладёт «+connect_lobby <id>».
+	_boot_join_lobby = _parse_connect_lobby()
+	if _boot_join_lobby != 0:
+		call_deferred("_do_boot_join")
 
 func bind_game(g: Node) -> void:
 	_game = g
@@ -250,6 +283,15 @@ func leave(notify: bool = true) -> void:
 	_last_snap_seq = -1
 	_snap_seq = 0
 	last_snap_msec = 0
+	if _steam_lobby_id != 0:
+		var s := _steam()
+		if s != null:
+			s.leaveLobby(_steam_lobby_id)
+		_steam_lobby_id = 0
+	lobby_code = ""
+	lobby_pending = ""
+	_join_target_lobby = 0
+	pending_invite = {}
 	lobby_changed.emit()
 	if was_playing and notify:
 		disconnected.emit()
@@ -283,6 +325,11 @@ func _on_peer_disconnected(id: int) -> void:
 	_cmd_last.erase(id)
 	if _game != null and _game.has_method("net_peer_left"):
 		_game.net_peer_left(id)
+	# Освободилось место — снова пускаем в лобби по коду.
+	if _steam_lobby_id != 0:
+		var s := _steam()
+		if s != null:
+			s.setLobbyJoinable(_steam_lobby_id, true)
 	_rpc_lobby.rpc(lobby)
 	lobby_changed.emit()
 
@@ -302,17 +349,293 @@ func _on_server_disconnected() -> void:
 func _rpc_hello(info: Dictionary) -> void:
 	if role != "host":
 		return
+	var id := multiplayer.get_remote_sender_id()
+	# Больше двух в лобби не пускаем: партия рассчитана на хоста и гостя.
+	if not lobby.has(id) and lobby.size() >= MAX_LOBBY:
+		multiplayer.multiplayer_peer.disconnect_peer(id)
+		return
 	# Новый игрок в разгар отсчёта — не тот состав, что отсчитывался.
 	if countdown_left >= 0:
 		host_cancel_countdown()
-	var id := multiplayer.get_remote_sender_id()
 	lobby[id] = info
 	_rpc_lobby.rpc(lobby)
 	lobby_changed.emit()
+	# Лобби заполнено — закрываем от поиска по коду.
+	if lobby.size() >= MAX_LOBBY and _steam_lobby_id != 0:
+		var s := _steam()
+		if s != null:
+			s.setLobbyJoinable(_steam_lobby_id, false)
 
 @rpc("authority", "reliable")
 func _rpc_lobby(list: Dictionary) -> void:
 	lobby = list
+	lobby_changed.emit()
+
+# -------------------------------------------------- лобби Steam: инвайты и код
+## id Steam-лобби, в которое мы сейчас входим (ждём lobby_joined).
+var _join_target_lobby := 0
+## Входящее приглашение: {id, name}. Живёт на экране сети, пока не принято
+## и не протухло (следующим приглашением, входом или выходом).
+var pending_invite := {}
+## id лобби из «+connect_lobby» при холодном запуске по «Join Game».
+var _boot_join_lobby := 0
+
+## Доступ к синглтону Steam — как в steam_stats.gd. null, если расширения нет.
+func _steam() -> Object:
+	if not Engine.has_singleton("Steam"):
+		return null
+	return Engine.get_singleton("Steam")
+
+static func _steam_ready() -> bool:
+	return NetTransport.SteamTransport.new().available()
+
+## Колбэки матчмейкинга. Идемпотентно: экран сети пересобирается часто,
+## а подписка нужна одна на процесс.
+func _steam_connect_signals() -> void:
+	var s := _steam()
+	if s == null:
+		return
+	for pair in [["lobby_created", _on_steam_lobby_created],
+			["lobby_match_list", _on_steam_lobby_match_list],
+			["lobby_joined", _on_steam_lobby_joined]]:
+		if not s.is_connected(pair[0], pair[1]):
+			s.connect(pair[0], pair[1])
+
+## Приглашение может прийти, когда игрок ещё не открывал экран сети, —
+## поэтому эти колбэки подключаются на старте (см. _ready).
+func _steam_connect_invite_signals() -> void:
+	var s := _steam()
+	if s == null:
+		return
+	if not s.is_connected("join_requested", _on_steam_join_requested):
+		s.connect("join_requested", _on_steam_join_requested)
+	if not s.is_connected("lobby_invite", _on_steam_lobby_invite):
+		s.connect("lobby_invite", _on_steam_lobby_invite)
+
+## Четыре цифры, 1000–9999. Глобальной проверки уникальности нет: 9000
+## вариантов, фильтр запроса по точному коду и партия на двоих делают
+## совпадение пренебрежимым, а при нём берётся первое лобби из списка.
+func _gen_code() -> String:
+	return str(randi() % 9000 + 1000)
+
+static func is_code(code: String) -> bool:
+	if code.length() != 4:
+		return false
+	for c in code:
+		if c < "0" or c > "9":
+			return false
+	return true
+
+# --------------------------------------------------------------- создание лобби
+## Единственный способ создать Steam-лобби: всегда публичное лобби с
+## четырёхзначным кодом. Раньше «пригласить через оверлей Steam» и «дать код»
+## были двумя разными типами лобби (приватное без кода / публичное с кодом) —
+## объединены в одну, чтобы кнопка «Пригласить друга» в лобби (invite_overlay)
+## всегда была рабочей (_steam_lobby_id теперь ставится в любом случае), а код
+## всегда был под рукой как запасной способ, если оверлей приглашений Steam не
+## открылся (выключен у игрока в настройках — игра этого никак не обнаружит).
+func host_lobby() -> void:
+	if lobby_pending != "":
+		return
+	if not _steam_ready() or _steam() == null:
+		net_error.emit(I18n.t("net.err.noSteamInvite", {}, "Для игры через Steam нужен Steam"))
+		return
+	if not (transport is NetTransport.SteamTransport):
+		set_transport(NetTransport.SteamTransport.new())
+	_steam_connect_signals()
+	lobby_pending = "host"
+	lobby_changed.emit()
+	_steam().createLobby(_LOBBY_TYPE_PUBLIC, MAX_LOBBY)
+
+func _on_steam_lobby_created(result: int, lobby_id: int) -> void:
+	if lobby_pending != "host":
+		return
+	lobby_pending = ""
+	var s := _steam()
+	if result != _STEAM_RESULT_OK or s == null:
+		net_error.emit(I18n.t("net.err.steamHost", {}, "Steam не дал открыть игру"))
+		lobby_changed.emit()
+		return
+	# host_game() вызывает leave(), поэтому сперва поднимаем хоста, затем
+	# пишем данные лобби — иначе leave() их же и сотрёт. SteamID хоста в
+	# метаданные НЕ кладём: гость возьмёт его из getLobbyOwner после входа.
+	if not host_game():
+		s.leaveLobby(lobby_id)
+		return
+	_steam_lobby_id = lobby_id
+	s.setLobbyData(lobby_id, "game", GAME_TAG)
+	lobby_code = _gen_code()
+	s.setLobbyData(lobby_id, "code", lobby_code)
+	lobby_changed.emit()
+
+## Оверлей Steam со списком друзей для приглашения в своё лобби.
+func invite_overlay() -> void:
+	if role != "host" or _steam_lobby_id == 0:
+		return
+	var s := _steam()
+	if s != null:
+		s.activateGameOverlayInviteDialog(_steam_lobby_id)
+
+# ---------------------------------------------------------------- вход в лобби
+## Ищет публичное лобби с этим кодом и входит в него.
+func join_by_code(code: String) -> void:
+	if lobby_pending != "":
+		return
+	code = code.strip_edges()
+	if not is_code(code):
+		net_error.emit(I18n.t("net.code.badcode", {}, "Код — это четыре цифры"))
+		return
+	if not _steam_ready() or _steam() == null:
+		net_error.emit(I18n.t("net.err.noSteamCode", {}, "Для игры по коду нужен Steam"))
+		return
+	if not (transport is NetTransport.SteamTransport):
+		set_transport(NetTransport.SteamTransport.new())
+	_steam_connect_signals()
+	lobby_code = code
+	lobby_pending = "join"
+	lobby_changed.emit()
+	var s := _steam()
+	s.addRequestLobbyListStringFilter("game", GAME_TAG, _LOBBY_CMP_EQUAL)
+	s.addRequestLobbyListStringFilter("code", code, _LOBBY_CMP_EQUAL)
+	s.addRequestLobbyListDistanceFilter(_LOBBY_DIST_WORLDWIDE)
+	s.requestLobbyList()
+
+func _on_steam_lobby_match_list(lobbies: Array) -> void:
+	# Список приходит только на наш requestLobbyList из join_by_code.
+	if lobby_pending != "join" or _join_target_lobby != 0:
+		return
+	if lobbies.is_empty():
+		var wanted := lobby_code
+		lobby_pending = ""
+		lobby_code = ""
+		net_error.emit(I18n.t("net.code.notfound", {"code": wanted},
+			"Лобби с кодом %s не найдено" % wanted))
+		lobby_changed.emit()
+		return
+	_enter_steam_lobby(int(lobbies[0]))
+
+## Общий вход в известное Steam-лобби: приглашение, запуск по ссылке, код.
+## SteamID хоста берём из getLobbyOwner ПОСЛЕ входа — наружу он не попадает.
+func join_lobby_id(lobby_id: int) -> void:
+	if lobby_id <= 0 or lobby_pending == "host":
+		return
+	if not _steam_ready() or _steam() == null:
+		net_error.emit(I18n.t("net.err.noSteamInvite", {}, "Для приглашений нужен Steam"))
+		return
+	if not (transport is NetTransport.SteamTransport):
+		set_transport(NetTransport.SteamTransport.new())
+	_steam_connect_signals()
+	lobby_pending = "join"
+	lobby_changed.emit()
+	_enter_steam_lobby(lobby_id)
+
+func _enter_steam_lobby(lobby_id: int) -> void:
+	_join_target_lobby = lobby_id
+	_steam().joinLobby(lobby_id)
+
+func _on_steam_lobby_joined(lobby_id: int, _perm: int, _locked: bool, response: int) -> void:
+	if _join_target_lobby != lobby_id:
+		return
+	_join_target_lobby = 0
+	var s := _steam()
+	if s == null or response != _STEAM_ENTER_OK:
+		lobby_pending = ""
+		lobby_code = ""
+		net_error.emit(I18n.t("net.err.joinLobby", {}, "Не удалось войти в лобби"))
+		lobby_changed.emit()
+		return
+	var owner := int(s.getLobbyOwner(lobby_id))
+	var code_here := String(s.getLobbyData(lobby_id, "code"))
+	# join_game() вызывает leave() — _steam_lobby_id и код ставим после него.
+	if not join_game(str(owner)):
+		lobby_pending = ""
+		lobby_code = ""
+		lobby_changed.emit()
+		return
+	_steam_lobby_id = lobby_id
+	lobby_code = code_here
+	lobby_pending = ""
+	pending_invite = {}
+	lobby_changed.emit()
+
+# ------------------------------------------------------------ входящие инвайты
+func _on_steam_join_requested(lobby_id: int, _friend_id: int) -> void:
+	pending_invite = {}
+	lobby_entered.emit()
+	join_lobby_id(lobby_id)
+
+func _on_steam_lobby_invite(inviter: int, lobby_id: int, _game_id: int) -> void:
+	var s := _steam()
+	var nm := ""
+	if s != null:
+		nm = String(s.getFriendPersonaName(inviter))
+	pending_invite = {"id": lobby_id, "name": nm}
+	lobby_changed.emit()
+
+func accept_pending_invite() -> void:
+	if pending_invite.is_empty():
+		return
+	var lid := int(pending_invite.get("id", 0))
+	pending_invite = {}
+	lobby_entered.emit()
+	join_lobby_id(lid)
+
+## «+connect_lobby <id>» — так Steam запускает игру по «Join Game», когда она
+## была закрыта. Смотрим обычные аргументы и строку запуска от Steam.
+func _parse_connect_lobby() -> int:
+	var scan := func(parts) -> int:
+		for i in range(parts.size() - 1):
+			var a := String(parts[i])
+			if a == "+connect_lobby" or a == "connect_lobby":
+				return int(parts[i + 1])
+		return 0
+	var id: int = scan.call(OS.get_cmdline_args())
+	if id == 0:
+		id = scan.call(OS.get_cmdline_user_args())
+	if id == 0:
+		var s := _steam()
+		if s != null:
+			id = scan.call(String(s.getLaunchCommandLine()).split(" ", false))
+	return id
+
+func _do_boot_join() -> void:
+	await get_tree().process_frame
+	if _boot_join_lobby != 0:
+		lobby_entered.emit()
+		join_lobby_id(_boot_join_lobby)
+		_boot_join_lobby = 0
+
+## Хост есть, есть хотя бы один гость и все гости нажали «Готов».
+func all_guests_ready() -> bool:
+	if role != "host":
+		return false
+	var guests := 0
+	for pid in lobby.keys():
+		if int(pid) == 1:
+			continue
+		guests += 1
+		if not bool((lobby[pid] as Dictionary).get("ready", false)):
+			return false
+	return guests > 0
+
+## Клиент отмечает готовность; хост пересобирает лобби и, если шёл отсчёт для
+## прежнего состояния, отменяет его.
+func set_ready(v: bool) -> void:
+	if role != "client":
+		return
+	_rpc_ready.rpc_id(1, v)
+
+@rpc("any_peer", "reliable")
+func _rpc_ready(v: bool) -> void:
+	if role != "host":
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if not lobby.has(id):
+		return
+	(lobby[id] as Dictionary)["ready"] = v
+	if countdown_left >= 0:
+		host_cancel_countdown()
+	_rpc_lobby.rpc(lobby)
 	lobby_changed.emit()
 
 # --------------------------------------------------------------- обратный отсчёт

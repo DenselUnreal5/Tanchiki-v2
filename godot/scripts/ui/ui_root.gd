@@ -62,6 +62,7 @@ var _net: Control
 var _net_body: VBoxContainer
 var _net_sub: RichTextLabel
 var _net_address := "127.0.0.1"
+var _net_code := ""
 var _net_error := ""
 
 var _settings: Control
@@ -217,6 +218,17 @@ func _first_focusable(node: Node) -> Control:
 		return node
 	for c in node.get_children():
 		var f := _first_focusable(c)
+		if f != null:
+			return f
+	return null
+
+## Ищет потомка с заданной meta-парой — восстановить фокус на ту же
+## карточку после пересборки тела вкладки (см. _switch_hub_tab).
+func _find_by_meta(node: Node, meta_key: String, value: String) -> Control:
+	if node is Control and node.has_meta(meta_key) and String(node.get_meta(meta_key)) == value:
+		return node
+	for c in node.get_children():
+		var f := _find_by_meta(c, meta_key, value)
 		if f != null:
 			return f
 	return null
@@ -933,6 +945,10 @@ var last_perk_choices: Array = []
 
 ## Выбранный транспорт сетевой игры: steam | direct.
 var _net_kind := "steam"
+## Свёрнут ли блок «Другие способы подключения» (прямой адрес/SteamID/LAN) на
+## экране до подключения — по умолчанию свёрнут, обычному игроку туда лезть
+## незачем: единственная кнопка «Создать игру» уже покрывает основной путь.
+var _net_advanced_open := false
 
 ## Ставит выбранный транспорт в Net. Ошибку показываем в самом окне, а не
 ## всплывающим сообщением: игрок сейчас смотрит именно сюда.
@@ -1154,14 +1170,23 @@ func _rebuild_hub_tabs() -> void:
 	# по горизонтали, иначе геймпад/клавиатура не смогут переключить вкладку.
 	_chain_horizontal(_hub_tabs_row.get_children(), true)
 
-func _switch_hub_tab(key: String) -> void:
+## focus_id — id карточки (см. _find_by_meta/"card_id"), на которую нужно
+## вернуть фокус после пересборки, вместо вкладки: используется, когда
+## вызов пришёл не от клика по вкладке, а от обновления её же содержимого
+## (например покупка улучшения в гараже — фокус должен остаться на той же
+## карточке, а не улететь на саму вкладку).
+func _switch_hub_tab(key: String, focus_id: String = "") -> void:
 	_hub_active_tab = key
 	_rebuild_hub_tabs()
 	_fill_hub_tab(key)
-	# Кнопка вкладки, державшая фокус, была пересобрана (queue_free) —
-	# без этого фокус геймпадом/клавиатурой улетал в никуда (баг: после
-	# смены вкладки не попасть ни в неё, ни дальше в тело).
-	_grab(_find_tab_button(_hub_tabs_row, key))
+	if focus_id != "":
+		var target := _find_by_meta(_hub_body, "card_id", focus_id)
+		_grab(target if target != null else _first_focusable(_hub_body))
+	else:
+		# Кнопка вкладки, державшая фокус, была пересобрана (queue_free) —
+		# без этого фокус геймпадом/клавиатурой улетал в никуда (баг: после
+		# смены вкладки не попасть ни в неё, ни дальше в тело).
+		_grab(_find_tab_button(_hub_tabs_row, key))
 
 func _fill_hub_tab(key: String) -> void:
 	for c in _hub_body.get_children():
@@ -1172,9 +1197,9 @@ func _fill_hub_tab(key: String) -> void:
 		"achievements": _fill_achievements_tab()
 	_resize_hub_scroll()
 
-func _open_hub_tab(key: String) -> void:
+func _open_hub_tab(key: String, focus_id: String = "") -> void:
 	_hub.visible = true
-	_switch_hub_tab(key)
+	_switch_hub_tab(key, focus_id)
 
 func close_hub() -> void:
 	_hub.visible = false
@@ -1435,8 +1460,8 @@ func _gallery_detail(perk: Dictionary) -> Control:
 	return panel
 
 # ================================================================== ГАРАЖ
-func open_garage() -> void:
-	_open_hub_tab("garage")
+func open_garage(focus_id: String = "") -> void:
+	_open_hub_tab("garage", focus_id)
 
 func close_garage() -> void:
 	if _hub_active_tab == "garage":
@@ -1517,10 +1542,15 @@ func _upgrade_card(up: Dictionary) -> Control:
 	else:
 		var buy := UiKit.small(I18n.t("upg.buy", {"price": cost}, "Улучшить · %d 🪙" % cost))
 		buy.disabled = not can_buy
+		# card_id — чтобы после покупки (тело вкладки пересобирается целиком)
+		# фокус вернулся на эту же карточку, а не улетел на вкладку «Гараж»
+		# (см. _switch_hub_tab/_find_by_meta).
+		var card_id := "upg_" + String(up["id"])
+		buy.set_meta("card_id", card_id)
 		buy.pressed.connect(func():
 			if Prof.buy_upgrade(String(up["id"]))["ok"]:
 				garage_changed.emit()
-				open_garage())
+				open_garage(card_id))
 		row.add_child(buy)
 	return card
 
@@ -1553,22 +1583,29 @@ func _cosmetic_card(c: Dictionary, type: String) -> Control:
 		state = I18n.t("cos.price", {"price": c["price"]}, "Цена: %d 🪙" % int(c["price"]))
 	info.add_child(UiKit.label(state, 9, Cfg.UI_MUTED))
 
+	# card_id — общий для кнопок «Купить»/«Надеть» одного предмета, чтобы
+	# после покупки (кнопка меняется на «Надеть») фокус нашёл её преемницу
+	# с тем же id, а не улетел на вкладку «Гараж» (см. _switch_hub_tab/
+	# _find_by_meta).
+	var card_id := "cos_%s_%s" % [type, String(c["id"])]
 	if owned:
 		var equip := UiKit.small(I18n.t("cos.equipped", {}, "Надето") if equipped
 			else I18n.t("cos.equip", {}, "Надеть"))
 		equip.disabled = equipped
+		equip.set_meta("card_id", card_id)
 		equip.pressed.connect(func():
 			if Prof.equip_cosmetic(type, String(c["id"]))["ok"]:
 				garage_changed.emit()
-				open_garage())
+				open_garage(card_id))
 		row.add_child(equip)
 	else:
 		var buy := UiKit.small(I18n.t("cos.buy", {"price": c["price"]}, "Купить · %d 🪙" % int(c["price"])))
 		buy.disabled = not can_buy
+		buy.set_meta("card_id", card_id)
 		buy.pressed.connect(func():
 			if Prof.buy_cosmetic(type, String(c["id"]))["ok"]:
 				garage_changed.emit()
-				open_garage())
+				open_garage(card_id))
 		row.add_child(buy)
 	return card
 
@@ -1676,6 +1713,12 @@ func _fill_achievements_tab() -> void:
 
 # ============================================================ ЕЖЕДНЕВНЫЕ
 func open_daily() -> void:
+	# Пересборка на лету (кнопка «Забрать» тоже вызывает open_daily() —
+	# см. ниже) сносит и пересоздаёт весь список карточек, включая ту,
+	# что держала фокус — без восстановления геймпад/клавиатура упирались
+	# в невалидного владельца фокуса и не могли сдвинуться к следующей
+	# награде (тот же приём, что и в open_settings()).
+	var was_visible := _daily.visible
 	var quests := Daily.selection()
 	var done := 0
 	for q in quests:
@@ -1727,6 +1770,8 @@ func open_daily() -> void:
 		_daily_body.add_child(card)
 
 	_daily.visible = true
+	if was_visible:
+		_grab(_first_focusable(_daily_body))
 
 func close_daily() -> void:
 	_daily.visible = false
@@ -2422,9 +2467,100 @@ func _refresh_net() -> void:
 		_build_net_lobby()
 
 func _build_net_offline() -> void:
-	# Выбор транспорта. Steam ведёт соединение через релей Valve, поэтому
-	# проброс портов не нужен; прямой адрес остаётся для локальной сети.
 	var steam_ok := NetTransport.SteamTransport.new().available()
+
+	# Имя игрока — общее для обоих путей подключения.
+	var name_row := UiKit.hbox(8)
+	name_row.add_child(UiKit.label(I18n.t("net.name", {}, "Имя"), 12, Cfg.UI_TEXT))
+	var name_edit := LineEdit.new()
+	name_edit.text = Net.my_name
+	name_edit.custom_minimum_size = Vector2(220, 30)
+	name_edit.text_changed.connect(func(t: String): Net.my_name = t)
+	name_row.add_child(name_edit)
+	_net_body.add_child(name_row)
+
+	# Входящее приглашение — показываем первым, оно самое срочное.
+	if not Net.pending_invite.is_empty():
+		var who := String(Net.pending_invite.get("name", ""))
+		_net_body.add_child(UiKit.label(
+			I18n.t("net.invite.incoming", {"name": who}, "%s зовёт в игру" % who),
+			12, Cfg.UI_ACCENT))
+		var accept_btn := UiKit.primary(I18n.t("net.invite.accept", {}, "Принять"), 13)
+		accept_btn.disabled = Net.lobby_pending != ""
+		accept_btn.pressed.connect(func():
+			_net_error = ""
+			Net.accept_pending_invite()
+			_refresh_net())
+		_net_body.add_child(accept_btn)
+
+	if Net.lobby_pending != "":
+		_net_body.add_child(UiKit.label(
+			I18n.t("net.code.creating", {}, "Создаём лобби…") if Net.lobby_pending == "host"
+				else I18n.t("net.code.searching", {}, "Подключаемся…"), 11, Cfg.UI_MUTED))
+
+	# --- Основной путь: одна кнопка «Создать игру» (Steam, лобби+код разом) ---
+	# Раньше здесь было два разных способа хостинга (пригласить через оверлей
+	# Steam / создать по коду) — объединены в Net.host_lobby(): лобби теперь
+	# всегда публичное и с кодом, поэтому «Пригласить друга» в лобби всегда
+	# рабочая, а код — всегда под рукой как запасной путь.
+	var create_btn := UiKit.primary(I18n.t("net.invite.create", {}, "Создать игру"), 13)
+	create_btn.disabled = not steam_ok or Net.lobby_pending != ""
+	create_btn.pressed.connect(func():
+		_net_error = ""
+		Net.host_lobby()
+		_refresh_net())
+	_net_body.add_child(create_btn)
+	_net_body.add_child(UiKit.label(
+		I18n.t("net.invite.createHint", {},
+			"Друга позовёте кнопкой в лобби или через «Join Game» в списке друзей Steam."),
+		9, Cfg.UI_MUTED))
+	if not steam_ok:
+		_net_body.add_child(UiKit.label(
+			I18n.t("net.err.noSteamInvite", {}, "Для игры через Steam нужен Steam — ниже прямое подключение."),
+			9, Cfg.UI_MUTED))
+
+	# --- Присоединиться по коду от друга ---
+	var code_row := UiKit.hbox(8)
+	code_row.add_child(UiKit.label(I18n.t("net.code.enter", {}, "Код"), 12, Cfg.UI_TEXT))
+	var code_edit := LineEdit.new()
+	code_edit.max_length = 4
+	code_edit.text = _net_code
+	code_edit.placeholder_text = "0000"
+	code_edit.custom_minimum_size = Vector2(120, 30)
+	code_edit.text_changed.connect(func(t: String):
+		var digits := ""
+		for c in t:
+			if c >= "0" and c <= "9":
+				digits += c
+		_net_code = digits
+		if digits != t:
+			code_edit.text = digits
+			code_edit.caret_column = digits.length())
+	code_row.add_child(code_edit)
+	var join_code_btn := UiKit.secondary(I18n.t("net.code.join", {}, "Войти"), 13)
+	join_code_btn.disabled = not steam_ok or Net.lobby_pending != ""
+	join_code_btn.pressed.connect(func():
+		_net_error = ""
+		Net.join_by_code(_net_code)
+		_refresh_net())
+	code_row.add_child(join_code_btn)
+	_net_body.add_child(code_row)
+
+	# --- Другие способы: прямой адрес или SteamID (локальная сеть / без Steam) ---
+	# Свёрнуто по умолчанию — обычному игроку сюда лезть незачем, единственная
+	# кнопка выше уже покрывает основной путь. Раскрывашка — обычная кнопка:
+	# отдельного виджета «аккордеон» в UiKit нет и городить его ради одного
+	# места не стоит.
+	var adv_toggle := UiKit.secondary(
+		("▾ " if _net_advanced_open else "▸ ") + I18n.t("net.advanced", {}, "Другие способы подключения"), 12)
+	adv_toggle.pressed.connect(func():
+		_net_advanced_open = not _net_advanced_open
+		_refresh_net())
+	_net_body.add_child(adv_toggle)
+
+	if not _net_advanced_open:
+		return
+
 	if not steam_ok and _net_kind == "steam":
 		_net_kind = "direct"
 	var kinds := [
@@ -2439,28 +2575,11 @@ func _build_net_offline() -> void:
 		I18n.t("net.kind", {}, "Соединение"), labels, idx,
 		func(v: int):
 			_net_kind = String(kinds[v][0])
-			# Адрес от другого транспорта здесь бессмыслен: IP не SteamID
-			# и наоборот. Чистим, чтобы игрок не подключался к мусору.
 			_apply_net_kind()
 			_refresh_net()))
-	if not steam_ok:
-		_net_body.add_child(UiKit.label(
-			I18n.t("net.steam.off", {}, "Steam недоступен в этой сборке — работает только прямой адрес."),
-			9, Cfg.UI_MUTED))
 	_apply_net_kind()
 
-	_net_body.add_child(UiKit.section(I18n.t("net.new", {}, "Своя игра"), Cfg.UI_MUTED))
-
-	var name_row := UiKit.hbox(8)
-	name_row.add_child(UiKit.label(I18n.t("net.name", {}, "Имя"), 12, Cfg.UI_TEXT))
-	var name_edit := LineEdit.new()
-	name_edit.text = Net.my_name
-	name_edit.custom_minimum_size = Vector2(220, 30)
-	name_edit.text_changed.connect(func(t: String): Net.my_name = t)
-	name_row.add_child(name_edit)
-	_net_body.add_child(name_row)
-
-	var host_btn := UiKit.primary(I18n.t("net.host", {}, "Создать игру"), 13)
+	var host_btn := UiKit.secondary(I18n.t("net.host", {}, "Создать напрямую"), 13)
 	host_btn.pressed.connect(func():
 		_net_error = ""
 		Net.host_game()
@@ -2468,9 +2587,6 @@ func _build_net_offline() -> void:
 	_net_body.add_child(host_btn)
 	if _net_kind == "steam":
 		var sid := NetTransport.SteamTransport.my_steam_id()
-		_net_body.add_child(UiKit.label(
-			I18n.t("net.steam.hint", {}, "Соединение идёт через серверы Valve — проброс портов не нужен."),
-			9, Cfg.UI_MUTED))
 		if sid > 0:
 			var id_row := UiKit.hbox(8)
 			id_row.add_child(UiKit.label(I18n.t("net.steam.mine", {}, "Ваш SteamID"),
@@ -2481,15 +2597,11 @@ func _build_net_offline() -> void:
 			id_edit.custom_minimum_size = Vector2(220, 30)
 			id_row.add_child(id_edit)
 			_net_body.add_child(id_row)
-			_net_body.add_child(UiKit.label(
-				I18n.t("net.steam.share", {}, "Передайте его тем, кто подключается."),
-				9, Cfg.UI_MUTED))
 	else:
 		_net_body.add_child(UiKit.label(
 			I18n.t("net.host.hint", {}, "Порт 8124. В локальной сети остальным нужен ваш адрес, через интернет — проброс порта."),
 			9, Cfg.UI_MUTED))
 
-	_net_body.add_child(UiKit.section(I18n.t("net.join.title", {}, "Подключиться"), Cfg.UI_MUTED))
 	var addr_row := UiKit.hbox(8)
 	addr_row.add_child(UiKit.label(
 		I18n.t("net.steam.id", {}, "SteamID хоста") if _net_kind == "steam"
@@ -2514,6 +2626,40 @@ func _build_net_lobby() -> void:
 		role_text = I18n.t("net.role.client", {}, "Вы подключены")
 	_net_body.add_child(UiKit.section(role_text, Cfg.UI_ACCENT))
 
+	# Как позвать второго. «Пригласить друга» реально работает только у
+	# Steam-лобби (Net.host_lobby() всегда его ставит) — хост, зашедший через
+	# «Создать напрямую» (прямой адрес/SteamID, без матчмейкинга Steam),
+	# никакого Steam-лобби не получает, кнопка приглашения там ничего не
+	# сделала бы. Ему вместо неё показываем то же самое напоминание об
+	# адресе/SteamID, что было на экране до подключения.
+	if Net.role == "host" and Net.lobby.size() < Net.MAX_LOBBY:
+		if Net._steam_lobby_id != 0:
+			var inv_btn := UiKit.primary(I18n.t("net.invite.friend", {}, "Пригласить друга"), 13)
+			inv_btn.pressed.connect(func(): Net.invite_overlay())
+			_net_body.add_child(inv_btn)
+			_net_body.add_child(UiKit.label(
+				I18n.t("net.code.label", {}, "или назовите код второму игроку"), 11, Cfg.UI_MUTED))
+			var code_big := UiKit.label(Net.lobby_code, 40, Cfg.UI_ACCENT, true)
+			code_big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			code_big.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_net_body.add_child(code_big)
+		elif _net_kind == "steam":
+			var sid := NetTransport.SteamTransport.my_steam_id()
+			if sid > 0:
+				_net_body.add_child(UiKit.label(
+					I18n.t("net.steam.mine", {}, "Ваш SteamID"), 11, Cfg.UI_MUTED))
+				var sid_row := UiKit.hbox(8)
+				var sid_edit := LineEdit.new()
+				sid_edit.text = str(sid)
+				sid_edit.editable = false
+				sid_edit.custom_minimum_size = Vector2(220, 30)
+				sid_row.add_child(sid_edit)
+				_net_body.add_child(sid_row)
+		else:
+			_net_body.add_child(UiKit.label(
+				I18n.t("net.host.hint", {}, "Порт 8124. В локальной сети остальным нужен ваш адрес, через интернет — проброс порта."),
+				9, Cfg.UI_MUTED))
+
 	if Net.lobby.is_empty():
 		_net_body.add_child(UiKit.label(I18n.t("net.waiting", {}, "Соединение…"), 12, Cfg.UI_MUTED))
 	for peer_id in Net.lobby.keys():
@@ -2527,6 +2673,11 @@ func _build_net_lobby() -> void:
 		chip.color = pal["body"]
 		chip.custom_minimum_size = Vector2(18, 14)
 		row.add_child(chip)
+		# Готовность показываем только для гостей: у хоста своя кнопка старта.
+		if int(peer_id) != 1:
+			row.add_child(UiKit.label(
+				"✓" if bool(info.get("ready", false)) else "…", 12,
+				Cfg.UI_ACCENT if bool(info.get("ready", false)) else Cfg.UI_MUTED))
 		_net_body.add_child(row)
 
 	# Идёт отсчёт — вместо кнопок старта список игроков дополняет большая
@@ -2546,13 +2697,27 @@ func _build_net_lobby() -> void:
 			cancel_btn.pressed.connect(func(): Net.host_cancel_countdown())
 			_net_body.add_child(cancel_btn)
 	elif Net.role == "host":
+		var enough := Net.lobby.size() >= Net.MAX_LOBBY
+		var ready := Net.all_guests_ready()
 		var start_btn := UiKit.primary(I18n.t("net.start", {}, "Начать партию"), 13)
+		start_btn.disabled = not enough or not ready
 		start_btn.pressed.connect(func(): Net.host_begin_countdown())
 		_net_body.add_child(start_btn)
-		_net_body.add_child(UiKit.label(
-			I18n.t("net.start.hint", {}, "Режим, сложность и уровень берутся из вашего меню и объявляются всем."),
-			9, Cfg.UI_MUTED))
+		if not enough:
+			_net_body.add_child(UiKit.label(
+				I18n.t("net.wait.player", {}, "Ждём второго игрока…"), 9, Cfg.UI_MUTED))
+		elif not ready:
+			_net_body.add_child(UiKit.label(
+				I18n.t("net.wait.ready", {}, "Ждём готовности игрока…"), 9, Cfg.UI_MUTED))
+		else:
+			_net_body.add_child(UiKit.label(
+				I18n.t("net.start.hint", {}, "Режим, сложность и уровень берутся из вашего меню и объявляются всем."),
+				9, Cfg.UI_MUTED))
 	else:
+		var me: Dictionary = Net.lobby.get(multiplayer.get_unique_id(), {})
+		_net_body.add_child(UiKit.switch_row(
+			I18n.t("net.ready", {}, "Готов"), bool(me.get("ready", false)),
+			func(v: bool): Net.set_ready(v)))
 		_net_body.add_child(UiKit.label(
 			I18n.t("net.wait.host", {}, "Ждём, когда хост начнёт партию."), 11, Cfg.UI_MUTED))
 
