@@ -285,6 +285,12 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	remote_players = []
 	players = [PlayerState.new(0, I18n.t("player1", {}, "Игрок 1"),
 		String(s["color1"]), _scheme_for(Sets.p1_device, 0, hotseat))]
+	# Живое переключение геймпад/клавиатура прямо в бою — только одиночная
+	# игра с устройством «Как обычно»: в «горячем стуле» устройства жёстко
+	# закреплены за игроками по номеру (см. _scheme_for), смешивать нельзя,
+	# иначе оба танка начнут слушать один и тот же джойстик.
+	if not hotseat and Sets.p1_device == Sets.DEV_AUTO:
+		players[0].enable_auto_device_switch(players[0].scheme, Ctl.GamepadScheme.new(0))
 	if hotseat and not Net.is_online:
 		players.append(PlayerState.new(1, I18n.t("player2", {}, "Игрок 2"),
 			String(s["color2"]), _scheme_for(Sets.p2_device, 1, hotseat)))

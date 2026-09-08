@@ -11,7 +11,13 @@ extends RefCounted
 var index: int
 var name: String
 var color_key: String
-var scheme                      # Ctl.MouseAimScheme | Ctl.KeyboardAimScheme
+var scheme                      # Ctl.MouseAimScheme | Ctl.KeyboardAimScheme | Ctl.GamepadScheme
+## Второй набор схем для живого переключения геймпад/клавиатура прямо в
+## бою (см. Sets.last_input_pad) — только когда включено (game.gd,
+## одиночная игра с устройством «Как обычно»). null — переключения нет,
+## scheme используется как есть.
+var _auto_kbm_scheme = null
+var _auto_pad_scheme = null
 ## Сетевой номер соединения: 0 — локальная игра, 1 — хост, дальше клиенты.
 var peer_id := 0
 
@@ -120,8 +126,19 @@ func add_xp(amount: int) -> int:
 	return gained
 
 # ------------------------------------------------------------------ ввод
+## Включает живое переключение геймпад/клавиатура прямо в бою: kbm_scheme
+## и pad_scheme создаются один раз и живут весь матч (не пересоздаются на
+## переключении — GamepadScheme не теряет замок R3/последнее направление
+## прицела, пока рукой не тронул стик заново).
+func enable_auto_device_switch(kbm_scheme, pad_scheme) -> void:
+	_auto_kbm_scheme = kbm_scheme
+	_auto_pad_scheme = pad_scheme
+	scheme = pad_scheme if Sets.last_input_pad else kbm_scheme
+
 ## Вызывается танком каждый тик.
 func control(t: Tank, world) -> void:
+	if _auto_pad_scheme != null:
+		scheme = _auto_pad_scheme if Sets.last_input_pad else _auto_kbm_scheme
 	scheme.apply(t, self, world)
 
 ## Радиус подбора аптечек с учётом перка «Магнит».

@@ -165,17 +165,31 @@ signal ui_input_mode_changed(pad_ui: bool)
 const _NAV_KEYS := [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_TAB,
 	KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]
 
+## Устройством, которым только что реально играли (не только ходили по
+## меню) — живой индикатор для авто-переключения схемы управления в бою
+## (см. game.gd/player_state.gd). Отдельно от pad_ui: там клавиатура
+## считается только по навигационным клавишам, тут — по любой, включая
+## WASD и остальные игровые клавиши.
+var last_input_pad := false
+signal last_input_device_changed(pad: bool)
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton and event.pressed:
 		_set_pad_ui(true)
+		_set_last_input_pad(true)
 	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.5:
 		_set_pad_ui(true)
-	elif event is InputEventKey and event.pressed and event.keycode in _NAV_KEYS:
-		_set_pad_ui(true)
+		_set_last_input_pad(true)
+	elif event is InputEventKey and event.pressed:
+		_set_last_input_pad(false)
+		if event.keycode in _NAV_KEYS:
+			_set_pad_ui(true)
 	elif event is InputEventMouseButton and event.pressed:
 		_set_pad_ui(false)
+		_set_last_input_pad(false)
 	elif event is InputEventMouseMotion and event.relative != Vector2.ZERO:
 		_set_pad_ui(false)
+		_set_last_input_pad(false)
 
 func _set_pad_ui(v: bool) -> void:
 	if v == pad_ui:
@@ -190,6 +204,12 @@ func _set_pad_ui(v: bool) -> void:
 			if f != null:
 				f.release_focus()
 	ui_input_mode_changed.emit(v)
+
+func _set_last_input_pad(v: bool) -> void:
+	if v == last_input_pad:
+		return
+	last_input_pad = v
+	last_input_device_changed.emit(v)
 
 # ---------------------------------------------------------------- хранилище
 func load_settings() -> void:
