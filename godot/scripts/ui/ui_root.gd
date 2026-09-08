@@ -352,6 +352,32 @@ func handle_cancel() -> bool:
 	# Голое главное меню и экран итогов — «назад» не делает ничего.
 	return false
 
+## L1/R1 геймпада переключают активную вкладку в открытых Настройках или
+## Хабе (Галерея/Гараж/Достижения) — действия заводит settings.gd:
+## _ensure_input_actions. В бою те же кнопки заняты рывком/авиаударом
+## (сырой опрос в GamepadScheme, не через action) — конфликта нет, вкладки
+## открываются только на паузе/в меню, где танк не тикает.
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event.is_action_pressed("tab_next") or event.is_action_pressed("tab_prev")):
+		return
+	var dir := 1 if event.is_action_pressed("tab_next") else -1
+	if _settings != null and _settings.visible:
+		_switch_settings_tab(_neighbor_tab_key(_settings_tab_items(), _settings_active_tab, dir))
+		get_viewport().set_input_as_handled()
+	elif _hub != null and _hub.visible:
+		_switch_hub_tab(_neighbor_tab_key(_hub_tab_items(), _hub_active_tab, dir))
+		get_viewport().set_input_as_handled()
+
+## Соседний ключ вкладки по кругу: direction = 1 — следующая, -1 — предыдущая.
+func _neighbor_tab_key(items: Array, current: String, direction: int) -> String:
+	var idx := 0
+	for i in items.size():
+		if String(items[i]["key"]) == current:
+			idx = i
+			break
+	idx = (idx + direction + items.size()) % items.size()
+	return String(items[idx]["key"])
+
 ## Стандартная схема оверлея: заголовок, подзаголовок, тело, кнопка «Закрыть».
 ## Собирает строки настроек боя. Вынесено отдельно, потому что при смене
 ## языка их надо построить заново: подписи и варианты переводятся один раз

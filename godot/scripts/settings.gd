@@ -134,6 +134,14 @@ func _ensure_input_actions() -> void:
 	# добавляем кнопку A, иначе фокус двигается, а подтвердить нечем.
 	if not _action_has_pad("ui_accept", JOY_BUTTON_A):
 		_bind_pad("ui_accept", JOY_BUTTON_A)
+	# L1/R1 — переключение вкладок (Настройки/Хаб), только геймпад, без
+	# клавиатурного дубля: сама кнопка вкладки уже кликается Enter/A.
+	if not InputMap.has_action("tab_prev"):
+		InputMap.add_action("tab_prev")
+		_bind_pad("tab_prev", JOY_BUTTON_LEFT_SHOULDER)
+	if not InputMap.has_action("tab_next"):
+		InputMap.add_action("tab_next")
+		_bind_pad("tab_next", JOY_BUTTON_RIGHT_SHOULDER)
 
 func _bind_key(action: StringName, keycode: int) -> void:
 	var e := InputEventKey.new()
@@ -171,14 +179,22 @@ const _NAV_KEYS := [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_TAB,
 ## считается только по навигационным клавишам, тут — по любой, включая
 ## WASD и остальные игровые клавиши.
 var last_input_pad := false
+## Номер геймпада, приславшего последнее событие last_input_pad — реальный
+## Input.device из самого события, а НЕ предположение. Нужен, чтобы
+## авто-переключение в бою (game.gd/player_state.gd) слушало тот же
+## физический контроллер, которым игрок только что пользовался, а не
+## захардкоженное устройство 0.
+var last_pad_device := 0
 signal last_input_device_changed(pad: bool)
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton and event.pressed:
 		_set_pad_ui(true)
+		last_pad_device = event.device
 		_set_last_input_pad(true)
 	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.5:
 		_set_pad_ui(true)
+		last_pad_device = event.device
 		_set_last_input_pad(true)
 	elif event is InputEventKey and event.pressed:
 		_set_last_input_pad(false)

@@ -139,6 +139,10 @@ func enable_auto_device_switch(kbm_scheme, pad_scheme) -> void:
 func control(t: Tank, world) -> void:
 	if _auto_pad_scheme != null:
 		scheme = _auto_pad_scheme if Sets.last_input_pad else _auto_kbm_scheme
+		if scheme == _auto_pad_scheme:
+			# Не хардкодим устройство 0 — слушаем тот геймпад, с которого
+			# реально пришёл последний ввод (см. Sets.last_pad_device).
+			_auto_pad_scheme.device = Sets.last_pad_device
 	scheme.apply(t, self, world)
 
 ## Радиус подбора аптечек с учётом перка «Магнит».
