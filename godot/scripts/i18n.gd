@@ -118,7 +118,7 @@ var EN := {
 	# ------------------------------------------------------- управление
 	"set.dev1": "Player 1",
 	"set.dev2": "Player 2",
-	"dev.auto": "Default",
+	"dev.auto": "Auto",
 	"dev.kbm": "Keyboard and mouse",
 	"dev.keys": "Keyboard only",
 	"dev.pad": "Gamepad",

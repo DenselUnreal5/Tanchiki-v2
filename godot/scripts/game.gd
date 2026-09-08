@@ -700,6 +700,11 @@ func _bind_net() -> void:
 	Net.disconnected.connect(func():
 		if state != S_MENU:
 			to_menu())
+	# Приняли приглашение Steam или запустились по «Join Game» — показываем
+	# экран сети, чтобы игрок видел лобби, а не пустое меню.
+	Net.lobby_entered.connect(func():
+		if state == S_MENU:
+			ui.open_net())
 
 ## Кадр клиента: своя симуляция не считается вовсе. Идут только частицы,
 ## погода и обломки, а положение всего живого приходит от хоста.

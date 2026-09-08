@@ -1080,6 +1080,11 @@ func _kill_tank(victim, killer, source: String) -> void:
 	if victim.owner != null:
 		victim.owner.deaths += 1
 		victim.owner.clean_streak = 0
+		# Геймпадный жёсткий лок переживает смерть/возрождение (схема — одна
+		# на весь матч) — без сброса новая жизнь наследует прицел от старой.
+		# У схемы мышью такого метода нет, отсюда has_method.
+		if victim.owner.scheme.has_method("release_lock"):
+			victim.owner.scheme.release_lock()
 		player_died.emit(victim.owner)
 
 	kill.emit(victim, null if suicide else killer, source, suicide)

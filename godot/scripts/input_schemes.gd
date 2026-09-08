@@ -297,9 +297,9 @@ class GamepadScheme extends RefCounted:
 				locked_target = tgt
 		if locked_target != null:
 			if not is_instance_valid(locked_target) or not locked_target.alive:
-				locked_target = null
+				release_lock()
 			elif tank != null and Vector2(locked_target.x - tank.x, locked_target.y - tank.y).length() > LOCK_BREAK_RANGE:
-				locked_target = null
+				release_lock()
 
 		var ax := _axis(JOY_AXIS_RIGHT_X)
 		var ay := _axis(JOY_AXIS_RIGHT_Y)
@@ -398,6 +398,15 @@ class GamepadScheme extends RefCounted:
 			best_d = d
 			best = t
 		return best
+
+	## Снимает жёсткий лок и просит следующий тик пересчитать прицел заново
+	## (см. read_command() — без этого прицел остаётся замороженным на месте
+	## погибшей цели). Вызывается и когда лок распадается сам (цель умерла /
+	## вышла за LOCK_BREAK_RANGE), и при смерти собственного танка — новая
+	## жизнь не должна наследовать прицел от прошлой (см. World._kill_tank()).
+	func release_lock() -> void:
+		locked_target = null
+		_aim_ready = false
 
 	func apply(tank: Tank, player, world_) -> void:
 		world = world_
