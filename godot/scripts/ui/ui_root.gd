@@ -389,6 +389,46 @@ func _neighbor_tab_key(items: Array, current: String, direction: int) -> String:
 	idx = (idx + direction + items.size()) % items.size()
 	return String(items[idx]["key"])
 
+## Свой повтор ui_down/ui_up, пока направление удерживается: встроенный
+## повтор Godot у аналогового стика (в отличие от эха клавиатуры на
+## удержание клавиши) не настолько надёжен — зажатый стик мог не
+## докручивать длинные списки (Настройки/Гараж/Достижения/Галерея) дальше
+## первого шага. Только вертикаль: горизонталь занята слайдерами/
+## choice_row («‹↔› изменить») и вводом текста, трогать её не нужно.
+## Работает поверх обычной навигации, не вместо неё — первый переход
+## фокуса как и раньше делает сам Godot по первому нажатию, задержка
+## перед стартом повтора не даёт задвоить этот самый первый шаг.
+const _NAV_REPEAT_DELAY := 0.35
+const _NAV_REPEAT_INTERVAL := 0.1
+var _nav_repeat_dir := ""
+var _nav_repeat_t := 0.0
+
+func _process(delta: float) -> void:
+	var dir := ""
+	if Input.is_action_pressed("ui_down"):
+		dir = "ui_down"
+	elif Input.is_action_pressed("ui_up"):
+		dir = "ui_up"
+	if dir != _nav_repeat_dir:
+		_nav_repeat_dir = dir
+		_nav_repeat_t = _NAV_REPEAT_DELAY
+	elif dir != "":
+		_nav_repeat_t -= delta
+		if _nav_repeat_t <= 0.0:
+			_nav_repeat_t = _NAV_REPEAT_INTERVAL
+			_advance_focus(dir)
+
+func _advance_focus(dir: String) -> void:
+	var owner := get_viewport().gui_get_focus_owner()
+	if owner == null:
+		return
+	var np: NodePath = owner.focus_neighbor_bottom if dir == "ui_down" else owner.focus_neighbor_top
+	if np.is_empty():
+		return
+	var nxt := owner.get_node_or_null(np)
+	if nxt != null:
+		nxt.grab_focus()
+
 ## Стандартная схема оверлея: заголовок, подзаголовок, тело, кнопка «Закрыть».
 ## Собирает строки настроек боя. Вынесено отдельно, потому что при смене
 ## языка их надо построить заново: подписи и варианты переводятся один раз
