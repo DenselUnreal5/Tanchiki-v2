@@ -422,6 +422,28 @@ func update(world) -> void:
 	body_angle = Rng.rotate_toward(body_angle, angle,
 		absf(angle - body_angle) * BODY_TURN_RATE + 0.02)
 
+## Клиентское предсказание движения СВОЕГО танка: подмножество update(),
+## касающееся только позиции/скорости/углов. Вызывается только клиентом,
+## только для локального танка игрока, вместо обычного update() (который
+## на клиенте для своего танка вообще не идёт — control() до него не
+## доходит, world.step_cosmetic() не вызывает update()). Бой (стрельба,
+## мина, рывок, авиаудар, способность) не предсказывается — это остаётся
+## исключительно host-authoritative через снапшот.
+func predict_move(world, cmd: Dictionary) -> void:
+	if not alive:
+		return
+	if turbo_timer > 0:
+		turbo_timer -= 1
+	wants_move = false
+	_update_surface(world)
+	thrust(float(cmd.get("mx", 0.0)), float(cmd.get("my", 0.0)))
+	aim_at(float(cmd.get("ax", 0.0)), float(cmd.get("ay", 0.0)))
+	_move(world, false)
+	vx *= Cfg.FRICTION
+	vy *= Cfg.FRICTION
+	body_angle = Rng.rotate_toward(body_angle, angle,
+		absf(angle - body_angle) * BODY_TURN_RATE + 0.02)
+
 ## Читает покрытие под центром танка и оставляет след из-под гусениц.
 func _update_surface(world) -> void:
 	surface = Surfaces.of_tile(world.map.tile_at_pixel(x, y), world.road_kind)
@@ -511,7 +533,11 @@ func _update_boss_phase(world) -> void:
 		Sfx.play("thunder", x, y)
 
 ## Раздельное разрешение по осям — позволяет скользить вдоль стен.
-func _move(world) -> void:
+## crush_trees=false — для клиентского предсказания: деревья не блокируют
+## движение (is_solid_tile проверяет только стены/кирпич), поэтому вырубку
+## безопасно оставить хосту, чтобы не начислять статистику дважды и не
+## расходиться с ним по карте при неточном предсказании.
+func _move(world, crush_trees: bool = true) -> void:
 	var map: GameMap = world.map
 	var nx := x + vx
 	var ny := y + vy
@@ -530,7 +556,8 @@ func _move(world) -> void:
 	if hit:
 		blocked_ticks += 1
 
-	_crush_trees(world)
+	if crush_trees:
+		_crush_trees(world)
 
 	x = clampf(x, col_w * 0.5 + 2.0, map.width - col_w * 0.5 - 2.0)
 	y = clampf(y, col_h * 0.5 + 2.0, map.height - col_h * 0.5 - 2.0)

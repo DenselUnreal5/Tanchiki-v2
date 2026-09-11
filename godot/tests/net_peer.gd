@@ -82,6 +82,12 @@ func _run_host() -> void:
 			remote_tank_ok = true
 	_check(remote_tank_ok, "танк клиента есть в мире хоста")
 
+	# Авторитетный спавн игроков обязан реально слать host_tank_spawned, а
+	# не молчать из-за того, что _match_active ещё не выставлен (см.
+	# Net.begin_match()) — иначе состав долетал бы только оптом, в roster.
+	_check(Net.stat_tank_spawn_out >= 2,
+		"host_tank_spawned реально ушёл при спавне игроков (%d раз)" % Net.stat_tank_spawn_out)
+
 	# Отпечаток снимается дважды: до боя он проверяет, что карта собралась
 	# одинаково по seed, после боя — что разрушения доехали до клиента.
 	print("  карта хоста до боя: %s" % _map_hash(game.world.map))
@@ -132,6 +138,25 @@ func _run_client() -> void:
 	_check(game.world.puppet, "мир клиента — марионетка (сам ничего не считает)")
 	print("  карта клиента до боя: %s" % _map_hash(game.world.map))
 
+	# Предсказание проверяем, пока хост ещё активно шлёт снапшоты — он
+	# замирает (game.pause()) ближе к концу теста, и сверка ниже не
+	# дождалась бы свежих данных, если бы проверка стояла позже.
+	#
+	# Ждём не просто появления game.players[0].tank, а первой РЕАЛЬНОЙ
+	# сверки (game._last_reconciled_tick > -1): свежесозданный танк на
+	# клиенте стартует с x=0,y=0 (net_spawn_puppet не несёт координат —
+	# они приходят только со снапшотом), и пока не прошла хотя бы одна
+	# _reconcile_local_tank(), координаты не настоящие. Настенные часы —
+	# та же причина, что и во всех остальных ожиданиях сети в этом файле.
+	var predict_guard_started := Time.get_ticks_msec()
+	while (game.players.is_empty() or game.players[0].tank == null
+			or game._last_reconciled_tick < 0) and Time.get_ticks_msec() - predict_guard_started < 8000:
+		await _frames(1)
+	if not game.players.is_empty() and game.players[0].tank != null and game._last_reconciled_tick >= 0:
+		await _check_prediction(game.players[0].tank)
+	else:
+		_check(false, "дождались первой сверки своего танка перед проверкой предсказания")
+
 	await _frames(420)
 	# Ждём финальную сверку от замершего хоста. Сравнивать раньше нельзя:
 	# хост ушёл бы вперёд на те разрушения, которые к нам ещё не доехали,
@@ -163,6 +188,59 @@ func _run_client() -> void:
 			mine = t
 	_check(mine != null, "свой танк найден и привязан к камере")
 	_check(game.players[0].tank == mine, "HUD и камера смотрят на свой танк")
+
+# ------------------------------------------------------------ предсказание
+## Подменяет схему ввода на фиксированную команду и проверяет, что позиция
+## своего танка сдвигается СРАЗУ в том же кадре — раньше, чем мог бы дойти
+## следующий снапшот хоста (иначе это была бы просто интерполяция, а не
+## Tank.predict_move()). Второй шаг — что после сверки с хостом (см.
+## game.gd::_reconcile_local_tank) позиция остаётся близкой к авторитетной,
+## а не расходится буфером повторов.
+func _check_prediction(mine: Tank) -> void:
+	var scripted := ScriptedScheme.new()
+	game.players[0].scheme = scripted
+	var before := Vector2(mine.x, mine.y)
+	var tick_before: int = game._last_reconciled_tick
+	scripted.cmd = {"mx": 1.0, "my": 0.0, "ax": mine.x + 100.0, "ay": mine.y,
+		"fire": false, "mine": false, "dash": false, "airstrike": false, "ability": false}
+	# Кадр рендера — не то же самое, что тик симуляции: headless без vsync
+	# может прогнать несколько process_frame раньше, чем накопитель
+	# _client_frame() дотянет до Cfg.TICK_SEC. Ждём, пока world.tick
+	# реально продвинется хотя бы на один тик.
+	var tick_before_move: int = game.world.tick
+	var tick_guard := 0
+	while int(game.world.tick) <= tick_before_move and tick_guard < 60:
+		tick_guard += 1
+		await _frames(1)
+	var delta := Vector2(mine.x, mine.y) - before
+	_check(delta.length() > 0.01,
+		"предсказание сдвигает свой танк в тот же тик, не дожидаясь снапшота (Δ=%.3f)" % delta.length())
+
+	# Ждём, пока придёт снапшот НОВЕЕ того, что был на момент включения
+	# движения, и _reconcile_local_tank() (game.gd) его обработает —
+	# только тогда сверка честная: сравниваем предсказанную позицию с
+	# хостовой на тик, который уже включает наше движение. Настенные
+	# часы, не число кадров — та же ловушка, что и в net_dedicated.gd.
+	var wait_started := Time.get_ticks_msec()
+	while game._last_reconciled_tick <= tick_before and Time.get_ticks_msec() - wait_started < 8000:
+		await _frames(1)
+	var last_reconciled: int = game._last_reconciled_tick
+	var reconciled := last_reconciled > tick_before
+	_check(reconciled, "пришла новая сверка после включения движения")
+	if reconciled:
+		var auth := Net.latest_snapshot_tank(mine.net_id)
+		var err := Vector2(mine.x - float(auth["x"]), mine.y - float(auth["y"])).length()
+		_check(err < 40.0,
+			"локальная позиция близка к авторитетной после сверки (Δ=%.1f)" % err)
+	scripted.cmd = Ctl.empty_command()
+
+## Тестовая заглушка ввода: MouseAimScheme/GamepadScheme читают настоящие
+## устройства ОС, недоступные в headless — здесь просто фиксированная
+## команда на каждый тик.
+class ScriptedScheme extends RefCounted:
+	var cmd: Dictionary = {}
+	func read_command(_player) -> Dictionary:
+		return cmd
 
 # ------------------------------------------------------------------ утилиты
 ## Отпечаток карты: по нему сверяется, что генератор дал одно и то же.

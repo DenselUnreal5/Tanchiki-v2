@@ -24,6 +24,11 @@ var accumulator := 0.0
 var remote_players: Array = []
 var _snap_tick := 0
 var _sum_tick := 0
+## Буфер команд своего танка для клиентского предсказания: {"tick","cmd"},
+## tick — в пространстве world.tick. Сверяется и подрезается в
+## _reconcile_local_tank() при приходе каждого нового снапшота.
+var _predict_buf: Array = []
+var _last_reconciled_tick := -1
 ## Сколько раз карта клиента разошлась с хостовой за партию. Ноль — норма;
 ## всё остальное видно в тестах и в отладке.
 var net_desyncs := 0
@@ -90,6 +95,14 @@ func _ready() -> void:
 	_bind_profile_events()
 	_bind_net()
 
+	# --server / --connect=host:port — запуск сразу в сетевой режим, минуя
+	# меню (для сервера) или с автоподключением (для клиента). Обычный запуск
+	# без этих флагов не меняется ни на шаг.
+	var cli := Cli.parse()
+	if bool(cli["server"]):
+		_boot_dedicated_server(cli)
+		return
+
 	get_viewport().size_changed.connect(_on_resize)
 	_on_resize()
 
@@ -106,6 +119,55 @@ func _ready() -> void:
 	ui.show_menu()
 	# Тема меню включится сама, как только соберётся в фоне.
 	Mus.play_menu()
+	# --connect=host:port — сразу подключиться, не ходя руками в «Другие
+	# способы». Экран сети открываем поверх меню тем же приёмом, каким уже
+	# встречаем входящие приглашения Steam (см. _bind_net → lobby_entered).
+	# Открыть экран нужно ДО join_game(): именно open_net() подписывается на
+	# Net.net_error, а join_game() может отказать синхронно (битый адрес) —
+	# в обратном порядке эта ошибка улетела бы в пустоту, никем не услышанная.
+	if String(cli["connect_host"]) != "":
+		ui.open_net()
+		Net.join_game(String(cli["connect_host"]), int(cli["connect_port"]))
+
+## Выделенный сервер: без окна и без своего игрока. Поднимает ENet-хост,
+## настраивает партию по флагам командной строки и запускает её сам, как
+## только наберётся нужное число гостей — «Начать партию» здесь некому
+## нажать (см. Net.dedicated / Net._rpc_hello).
+func _boot_dedicated_server(cli: Dictionary) -> void:
+	var port := int(cli["port"])
+	var target := int(cli["players"])
+	if String(cli["mode"]) != "":
+		ui.settings["mode"] = String(cli["mode"])
+	if String(cli["difficulty"]) != "":
+		ui.settings["difficulty"] = String(cli["difficulty"])
+	if int(cli["level"]) != Cli.UNSET_LEVEL:
+		ui.settings["level"] = int(cli["level"])
+	if String(cli["weather"]) != "":
+		ui.settings["weather"] = String(cli["weather"])
+	if String(cli["daytime"]) != "":
+		ui.settings["daytime"] = String(cli["daytime"])
+	if String(cli["location"]) != "":
+		ui.settings["location"] = String(cli["location"])
+
+	# Имя сервера — чтобы у подключившихся в списке лобби была не безликая
+	# «Игрок», а понятная строка на месте пустого слота хоста.
+	Net.my_name = I18n.t("net.dedicated.name", {}, "Выделенный сервер")
+
+	if not Net.host_dedicated(port, target):
+		push_error("[server] не удалось открыть порт %d" % port)
+		get_tree().quit(1)
+		return
+
+	# Партию запускает сам отсчёт Net, а не клик по «Начать партию» —
+	# смотреть на экран некому. Тот же приём, что ui_root.gd применяет для
+	# интерактивного хоста в _on_countdown_changed, только напрямую, без
+	# зависимости от того, открыт ли где-то экран сети.
+	Net.countdown_changed.connect(func(seconds_left: int):
+		if seconds_left == 0 and Net.role == "host":
+			start_match())
+
+	print("[server] слушаю порт %d, жду %d игроков (режим %s, сложность %s, уровень %s)"
+		% [port, target, ui.settings["mode"], ui.settings["difficulty"], ui.settings["level"]])
 
 ## Свёрнутое окно не должно означать проигранную партию.
 func _notification(what: int) -> void:
@@ -264,6 +326,10 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	if world != null:
 		world.dispose()
 		world = null
+	# world.tick новой партии считается заново от нуля — старый буфер
+	# предсказания был бы про уже не существующие тики.
+	_predict_buf = []
+	_last_reconciled_tick = -1
 
 	var s := ui.settings
 	var hotseat: bool = String(s["game_type"]) == "hotseat"
@@ -283,20 +349,40 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	# соперники живут в remote_players и в мир попадают наравне, но своего
 	# окна на этом компьютере не имеют.
 	remote_players = []
-	players = [PlayerState.new(0, I18n.t("player1", {}, "Игрок 1"),
-		String(s["color1"]), _scheme_for(Sets.p1_device, 0, hotseat))]
-	# Живое переключение геймпад/клавиатура прямо в бою — только одиночная
-	# игра с устройством «Как обычно»: в «горячем стуле» устройства жёстко
-	# закреплены за игроками по номеру (см. _scheme_for), смешивать нельзя,
-	# иначе оба танка начнут слушать один и тот же джойстик.
-	if not hotseat and Sets.p1_device == Sets.DEV_AUTO:
-		players[0].enable_auto_device_switch(players[0].scheme, Ctl.GamepadScheme.new(0))
-	if hotseat and not Net.is_online:
-		players.append(PlayerState.new(1, I18n.t("player2", {}, "Игрок 2"),
-			String(s["color2"]), _scheme_for(Sets.p2_device, 1, hotseat)))
-	if Net.is_online:
-		players[0].peer_id = multiplayer.get_unique_id()
-		players[0].name = String(Net.my_name)
+	# Выделенный сервер — не игрок: у него нет ни экрана, ни своего танка,
+	# players так и остаётся пустым, а всех людей несут remote_players ниже.
+	var is_dedicated_host := Net.role == "host" and Net.dedicated
+	players = []
+	if not is_dedicated_host:
+		# «Горячий стул» с обоими устройствами «Как обычно» — определяем
+		# схемы по факту подключённых геймпадов, а не жёстко мышь+стрелки:
+		# один джойстик достаётся первому игроку (второй как и раньше с
+		# клавиатуры — поделить один джойстик на двоих физически нельзя,
+		# оба слушали бы один и тот же device); два и больше — по одному
+		# каждому. Явный ручной выбор хотя бы у одного из игроков в
+		# Настройках отключает автоопределение целиком — уважаем его.
+		var p1_dev := Sets.p1_device
+		var p2_dev := Sets.p2_device
+		if hotseat and p1_dev == Sets.DEV_AUTO and p2_dev == Sets.DEV_AUTO:
+			var pads := Sets.pads()
+			if pads.size() >= 1:
+				p1_dev = "pad%d" % int(pads[0]["id"])
+			if pads.size() >= 2:
+				p2_dev = "pad%d" % int(pads[1]["id"])
+		players = [PlayerState.new(0, I18n.t("player1", {}, "Игрок 1"),
+			String(s["color1"]), _scheme_for(p1_dev, 0, hotseat))]
+		# Живое переключение геймпад/клавиатура прямо в бою — только одиночная
+		# игра с устройством «Как обычно»: в «горячем стуле» устройства
+		# закреплены за игроками на старте матча (выше), смешивать на лету
+		# нельзя, иначе оба танка начнут слушать один и тот же джойстик.
+		if not hotseat and Sets.p1_device == Sets.DEV_AUTO:
+			players[0].enable_auto_device_switch(players[0].scheme, Ctl.GamepadScheme.new(0))
+		if hotseat and not Net.is_online:
+			players.append(PlayerState.new(1, I18n.t("player2", {}, "Игрок 2"),
+				String(s["color2"]), _scheme_for(p2_dev, 1, hotseat)))
+		if Net.is_online:
+			players[0].peer_id = multiplayer.get_unique_id()
+			players[0].name = String(Net.my_name)
 	if Net.role == "host":
 		# Каждому подключённому — свой игрок с сетевой схемой управления:
 		# его ввод приходит пакетами, а не с этой клавиатуры.
@@ -332,6 +418,11 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	var level := LevelGen.generate(int(s["level"]), String(s["mode"]), seed_override,
 		match_location)
 	Net.reset_tank_ids()
+	# Партия официально активна для Net ещё до World.new(): спавн игроков и
+	# начальных ботов идёт внутри конструктора мира, и их авторитетный
+	# host_tank_spawned() иначе молча не сработал бы (см. Net.begin_match()).
+	if Net.role == "host":
+		Net.begin_match()
 	world = World.new({
 		"map": level["map"], "level": level, "mode": String(s["mode"]),
 		"difficulty": String(s["difficulty"]),
@@ -718,9 +809,16 @@ func _client_frame(delta: float) -> void:
 		steps += 1
 		var p = players[0]
 		if p.scheme.has_method("read_command"):
-			Net.send_command(p.scheme.read_command(p))
+			var cmd: Dictionary = p.scheme.read_command(p)
+			Net.send_command(cmd)
+			if p.tank != null:
+				p.tank.predict_move(world, cmd)
+				_predict_buf.append({"tick": world.tick, "cmd": cmd})
+				if _predict_buf.size() > 480:
+					_predict_buf = _predict_buf.slice(_predict_buf.size() - 480)
 	if accumulator > Cfg.TICK_SEC * Cfg.MAX_STEPS_PER_FRAME:
 		accumulator = 0.0
+	_reconcile_local_tank()
 	_apply_net_state()
 	_check_net_alive()
 	for p in players:
@@ -789,12 +887,51 @@ func _net_extra() -> Dictionary:
 		out["base"] = [world.base["hp"], world.base["max_hp"]]
 	return out
 
+## Сверка клиентского предсказания своего танка с последним авторитетным
+## снапшотом хоста: снап позиции на присланный тик, затем повтор команд,
+## накопленных после этого тика, поверх скорректированной позиции. См.
+## Tank.predict_move(). Работает в пространстве world.tick (не current_tick
+## — см. Net.latest_snapshot_tank).
+func _reconcile_local_tank() -> void:
+	if players.is_empty():
+		return
+	var p = players[0]
+	if p.tank == null or p.tank.net_id == 0:
+		return
+	var auth := Net.latest_snapshot_tank(p.tank.net_id)
+	if auth.is_empty():
+		return
+	var t: int = int(auth["tick"])
+	if t <= _last_reconciled_tick:
+		return
+	_last_reconciled_tick = t
+
+	var tank: Tank = p.tank
+	tank.x = float(auth["x"])
+	tank.y = float(auth["y"])
+	tank.body_angle = float(auth["body"])
+	tank.angle = tank.body_angle
+	tank.turret_angle = float(auth["turret"])
+	tank.vx = 0.0
+	tank.vy = 0.0
+
+	var replay: Array = []
+	for entry in _predict_buf:
+		if int(entry["tick"]) > t:
+			replay.append(entry)
+	if replay.size() > Cfg.RECONCILE_MAX_REPLAY:
+		replay = replay.slice(replay.size() - Cfg.RECONCILE_MAX_REPLAY)
+	for entry in replay:
+		tank.predict_move(world, entry["cmd"])
+	_predict_buf = replay
+
 ## Раскладывает присланное состояние по объектам мира. Танки уже созданы
 ## заранее по составу, поэтому здесь только координаты и здоровье.
 func _apply_net_state() -> void:
 	var st := Net.render_state()
 	if st.is_empty() or world == null:
 		return
+	var local_tank = players[0].tank if not players.is_empty() else null
 	var seen := {}
 	var live := []
 	for t in world.tanks:
@@ -802,11 +939,12 @@ func _apply_net_state() -> void:
 		if info == null:
 			continue
 		seen[t.net_id] = true
-		t.x = float(info["x"])
-		t.y = float(info["y"])
-		t.body_angle = float(info["body"])
-		t.angle = t.body_angle
-		t.turret_angle = float(info["turret"])
+		if t != local_tank:
+			t.x = float(info["x"])
+			t.y = float(info["y"])
+			t.body_angle = float(info["body"])
+			t.angle = t.body_angle
+			t.turret_angle = float(info["turret"])
 		t.hp = float(info["hp"])
 		t.shield_hp = float(info["shield"])
 		var flags := int(info["flags"])

@@ -199,6 +199,7 @@ var EN := {
 	"net.advanced": "Other ways to connect",
 	"net.ready": "Ready",
 	"net.wait.player": "Waiting for the second player…",
+	"net.dedicated.name": "Dedicated server",
 	"net.wait.ready": "Waiting for the player to get ready…",
 	"hud.net.host": "net: host, players nearby %d",
 	"hud.net.client": "net: %d ms, loss %d%%",

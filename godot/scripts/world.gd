@@ -434,7 +434,6 @@ func _free_spot(team: String, w: float = Cfg.TANK_W, h: float = Cfg.TANK_H) -> V
 	return Vector2(Cfg.TILE * 4, Cfg.TILE * 4)
 
 func _spawn_combatants() -> void:
-	var diff := difficulty
 	var is_ctf := mode == "ctf"
 	var is_defense := mode == "defense"
 
@@ -450,24 +449,7 @@ func _spawn_combatants() -> void:
 			team = "player"
 		else:
 			team = "human_%d" % i
-		var spot := _free_spot(team)
-		var hp: float = float(diff["player_hp"])
-		if is_defense:
-			# В «Обороне» игрок один против орды — запас прочности выше.
-			hp = round(hp * Cfg.DEFENSE_PLAYER_HP_MULT)
-		var tank := Tank.new({
-			"x": spot.x, "y": spot.y, "team": team, "name": player.name,
-			"owner": player, "max_hp": hp,
-			"speed": Cfg.PLAYER_SPEED, "fire_rate": Cfg.PLAYER_FIRE_RATE,
-			"dmg_scale": Cfg.PLAYER_DMG_MULT,
-			"color_key": player.color_key,
-			"upgrade_mods": player.upgrade_mods,
-			"cosmetics": player.cosmetics,
-		})
-		tank.net_id = Net.next_tank_id()
-		tank.owner_peer = int(player.peer_id)
-		player.tank = tank
-		tanks.append(tank)
+		_spawn_player_tank(player, team)
 
 	# ---- боты -----------------------------------------------------------
 	if is_ctf:
@@ -486,8 +468,33 @@ func _spawn_combatants() -> void:
 		# «Оборона»: враги приходят волнами, первая ставится в _setup_defense.
 		pass
 	else:
-		for i in int(diff["enemies"]):
+		for i in int(difficulty["enemies"]):
 			_spawn_bot("bot_%d" % i, "enemy")
+
+## Один игрок: точка спавна, танк, авторитетное объявление сети — тот же
+## приём, каким уже размножаются боты в _spawn_bot() (см. её финал).
+func _spawn_player_tank(player, team: String) -> Tank:
+	var spot := _free_spot(team)
+	var hp: float = float(difficulty["player_hp"])
+	if mode == "defense":
+		# В «Обороне» игрок один против орды — запас прочности выше.
+		hp = round(hp * Cfg.DEFENSE_PLAYER_HP_MULT)
+	var tank := Tank.new({
+		"x": spot.x, "y": spot.y, "team": team, "name": player.name,
+		"owner": player, "max_hp": hp,
+		"speed": Cfg.PLAYER_SPEED, "fire_rate": Cfg.PLAYER_FIRE_RATE,
+		"dmg_scale": Cfg.PLAYER_DMG_MULT,
+		"color_key": player.color_key,
+		"upgrade_mods": player.upgrade_mods,
+		"cosmetics": player.cosmetics,
+	})
+	tank.net_id = Net.next_tank_id()
+	tank.owner_peer = int(player.peer_id)
+	player.tank = tank
+	tanks.append(tank)
+	if Net.role == "host":
+		Net.host_tank_spawned(tank_info(tank))
+	return tank
 
 func _spawn_bot_team(team: String, count: int, color_key: String) -> void:
 	# Раньше союзники были принудительно только рядовыми, а противники брались

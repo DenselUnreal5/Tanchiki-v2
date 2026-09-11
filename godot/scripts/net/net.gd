@@ -30,8 +30,9 @@ const MAX_PLAYERS := 4
 const SNAP_EVERY := 3
 ## Клиент рисует прошлое: показывать надо между двумя пришедшими снапшотами,
 ## иначе на каждой потере пакета танки замирают. Две длины интервала —
-## компромисс между задержкой и устойчивостью к джиттеру.
-const INTERP_DELAY := 0.12
+## компромисс между задержкой и устойчивостью к джиттеру. В тиках
+## current_tick (60 Гц), не в секундах: 0.12 с × 60 ≈ 7.
+const INTERP_DELAY_TICKS := 7
 
 ## Сбор в лобби идёт поверх Steam-лобби. Основной путь — приглашение друга
 ## (приватное лобби, ни SteamID, ни код наружу не идут). Для тех, кого нет
@@ -59,10 +60,27 @@ signal countdown_changed(seconds_left: int)
 ## по ссылке «Join Game»). UI должен открыть экран сети сам.
 signal lobby_entered
 
+## Глобальный сетевой тик: строго растёт в _physics_process, 60 раз в
+## секунду (движок тикает физику с такой частотой — см. project.godot,
+## [physics] common/physics_ticks_per_second). Живёт всё время работы
+## процесса, не завязан на матч и НЕ сбрасывается в leave() — это часы
+## сетевого слоя (TTL команд, буфер интерполяции, иск. лаг), а не партии.
+var current_tick: int = 0
+
+func _physics_process(_delta: float) -> void:
+	current_tick += 1
+
 ## "" — офлайн, "host" — хозяин партии, "client" — присоединившийся.
 var role := ""
 ## peer_id -> {name, color_key, cosmetics, ready}
 var lobby := {}
+## Выделенный сервер: этот хост — без своего танка, только считает партию.
+## Ставится в host_dedicated(); game.gd проверяет перед созданием
+## локального игрока в start_match().
+var dedicated := false
+## Сколько ГОСТЕЙ (не считая самого сервера) нужно для автостарта партии на
+## выделенном сервере — без «Готов», по одному числу подключений.
+var dedicated_target_players := 2
 ## Имя по умолчанию. Переводится при запуске: в английской игре в поле имени
 ## не должно стоять русское слово. Дальше это значение принадлежит игроку —
 ## смена языка его уже не трогает, иначе стёрла бы введённое им имя.
@@ -78,10 +96,11 @@ var _commands := {}
 ## Буфер снапшотов у клиента: [{t, data}].
 var _snaps: Array = []
 ## Кэш словаря «id танка -> запись» для младшего снапшота интерполяции —
-## ключ по его "t". render_state() вызывается на частоте кадра (до 144 Гц),
-## а сама пара снапшотов меняется на частоте их прихода (20 Гц): без кэша
-## словарь пересобирался в разы чаще, чем менялась пара, которую он описывает.
-var _interp_cache_t := -1.0
+## ключ по его "t" (тик current_tick). render_state() вызывается на частоте
+## кадра (до 144 Гц), а сама пара снапшотов меняется на частоте их прихода
+## (20 Гц): без кэша словарь пересобирался в разы чаще, чем менялась пара,
+## которую он описывает.
+var _interp_cache_t := -1
 var _interp_cache_prev := {}
 var _roster := {}
 var _match_active := false
@@ -110,8 +129,9 @@ var stat_snap_lost := 0    # не дошло, посчитано по разры
 var stat_snap_late := 0    # пришло с опозданием и отброшено
 var stat_cmd_in := 0       # принято пакетов ввода (хост)
 var stat_cmd_late := 0     # ввод, пришедший не по порядку
+var stat_tank_spawn_out := 0  # ушедших host_tank_spawned (хост)
 var rtt_msec := 0.0        # время оборота до хоста
-var last_snap_msec := 0    # когда пришёл последний снапшот
+var last_snap_tick := 0    # current_tick, когда пришёл последний снапшот
 
 ## Номер исходящей команды и последний принятый номер по каждому игроку.
 var _cmd_seq := 0
@@ -167,7 +187,7 @@ func _process(_delta: float) -> void:
 	NetTransport.SteamTransport.pump()
 
 	if not _delayed.is_empty():
-		var now := Time.get_ticks_msec()
+		var now := current_tick
 		var keep := []
 		for item in _delayed:
 			if int(item["due"]) <= now:
@@ -191,7 +211,10 @@ func _send(callable: Callable) -> void:
 	if debug_loss > 0.0 and _dbg_rng.randf() < debug_loss:
 		return
 	if debug_lag_msec > 0.0:
-		_delayed.append({"due": Time.get_ticks_msec() + int(debug_lag_msec),
+		# debug_lag_msec — миллисекунды снаружи (так его выставляют тесты и
+		# отладка), но очередь считает в тиках current_tick — переводим один
+		# раз на входе.
+		_delayed.append({"due": current_tick + int(round(debug_lag_msec * Cfg.TICK_HZ / 1000.0)),
 			"call": callable})
 		return
 	callable.call()
@@ -199,8 +222,10 @@ func _send(callable: Callable) -> void:
 ## Сводка состояния сети для HUD и тестов.
 func stats() -> Dictionary:
 	var stale := 0
-	if last_snap_msec > 0:
-		stale = Time.get_ticks_msec() - last_snap_msec
+	if last_snap_tick > 0:
+		# Наружу — по-прежнему миллисекунды: HUD и game.gd::_check_net_alive()
+		# сравнивают с NET_WARN_MSEC/NET_DEAD_MSEC, их менять незачем.
+		stale = int((current_tick - last_snap_tick) * 1000.0 / Cfg.TICK_HZ)
 	return {
 		"role": role, "rtt": rtt_msec, "stale_msec": stale,
 		"snap_in": stat_snap_in, "snap_out": stat_snap_out,
@@ -239,6 +264,21 @@ func host_game(port: int = PORT) -> bool:
 	lobby_changed.emit()
 	return true
 
+## Выделенный сервер: та же ENet-хостовая партия, но без своего игрока —
+## этот процесс только считает мир и раздаёт снапшоты. Транспорт нарочно
+## ENet, а не то, что было выбрано раньше в UI: сервер не зависит от Steam.
+##
+## host_game() сам вызывает leave() первой строкой, а leave() (ниже) сбрасывает
+## dedicated/dedicated_target_players — поэтому их выставляют ПОСЛЕ успешного
+## host_game(), а не до.
+func host_dedicated(port: int, target_players: int) -> bool:
+	transport = NetTransport.EnetTransport.new(port)
+	if not host_game(port):
+		return false
+	dedicated = true
+	dedicated_target_players = clampi(target_players, 1, MAX_PLAYERS - 1)
+	return true
+
 ## @param address адрес для ENet либо идентификатор лобби для Steam —
 ##        для этого слоя это непрозрачная строка.
 func join_game(address: String, port: int = PORT) -> bool:
@@ -269,11 +309,13 @@ func leave(notify: bool = true) -> void:
 		_peer = null
 	multiplayer.multiplayer_peer = null
 	role = ""
+	dedicated = false
+	dedicated_target_players = 2
 	lobby.clear()
 	_commands.clear()
 	_cmd_last.clear()
 	_snaps.clear()
-	_interp_cache_t = -1.0
+	_interp_cache_t = -1
 	_interp_cache_prev = {}
 	_delayed.clear()
 	_roster.clear()
@@ -282,7 +324,9 @@ func leave(notify: bool = true) -> void:
 	_countdown_token += 1
 	_last_snap_seq = -1
 	_snap_seq = 0
-	last_snap_msec = 0
+	last_snap_tick = 0
+	# current_tick НЕ сбрасываем: это часы сетевого слоя на весь процесс,
+	# а не состояние одного подключения.
 	if _steam_lobby_id != 0:
 		var s := _steam()
 		if s != null:
@@ -350,8 +394,12 @@ func _rpc_hello(info: Dictionary) -> void:
 	if role != "host":
 		return
 	var id := multiplayer.get_remote_sender_id()
-	# Больше двух в лобби не пускаем: партия рассчитана на хоста и гостя.
-	if not lobby.has(id) and lobby.size() >= MAX_LOBBY:
+	# Предел лобби: обычно ровно хост+гость (MAX_LOBBY), но у выделенного
+	# сервера своего слота для игрока нет — считаем по dedicated_target_players
+	# гостей плюс сам сервер (+1, потому что lobby.size() включает его запись
+	# под ключом 1).
+	var cap := (dedicated_target_players + 1) if dedicated else MAX_LOBBY
+	if not lobby.has(id) and lobby.size() >= cap:
 		multiplayer.multiplayer_peer.disconnect_peer(id)
 		return
 	# Новый игрок в разгар отсчёта — не тот состав, что отсчитывался.
@@ -365,6 +413,15 @@ func _rpc_hello(info: Dictionary) -> void:
 		var s := _steam()
 		if s != null:
 			s.setLobbyJoinable(_steam_lobby_id, false)
+	# Выделенный сервер сам решает, когда стартовать — набралось нужное число
+	# гостей, и «Готов» тут спрашивать не у кого.
+	if dedicated and countdown_left < 0 and not _match_active:
+		var guests := 0
+		for pid in lobby.keys():
+			if int(pid) != 1:
+				guests += 1
+		if guests >= dedicated_target_players:
+			host_begin_countdown()
 
 @rpc("authority", "reliable")
 func _rpc_lobby(list: Dictionary) -> void:
@@ -680,6 +737,15 @@ func _rpc_countdown(seconds_left: int) -> void:
 	countdown_changed.emit(seconds_left)
 
 # ------------------------------------------------------------------ партия
+## Матч официально идёт с точки зрения хоста ещё ДО host_start_match():
+## World._init() спавнит игроков и часть ботов раньше, чем до него доходит
+## очередь выставить _match_active внутри host_start_match(), и их
+## host_tank_spawned() иначе молча не сработал бы (см. ниже — она не шлёт,
+## пока флаг ложный). Вызывать до World.new() на хосте.
+func begin_match() -> void:
+	if role == "host":
+		_match_active = true
+
 ## Хост объявляет старт: клиенты соберут ту же карту по seed и тем же
 ## настройкам, поэтому передавать нечего, кроме двадцати байт.
 func host_start_match(settings: Dictionary, seed_value: int, roster: Array) -> void:
@@ -701,7 +767,7 @@ func _rpc_match_start(settings: Dictionary, seed_value: int, roster: Array) -> v
 			"Хост прислал непонятный старт партии"))
 		return
 	_snaps.clear()
-	_interp_cache_t = -1.0
+	_interp_cache_t = -1
 	_interp_cache_prev = {}
 	_last_snap_seq = -1
 	_roster.clear()
@@ -715,11 +781,13 @@ func _rpc_match_start(settings: Dictionary, seed_value: int, roster: Array) -> v
 	s["net_roster"] = roster
 	match_starting.emit(s)
 
-## Новый танк посреди партии — волны «Обороны» и подкрепления.
+## Новый танк — авторитетный спавн игрока при старте партии (см.
+## begin_match()) и подкрепления посреди неё (волны «Обороны», босс).
 func host_tank_spawned(info: Dictionary) -> void:
 	if role != "host" or not _match_active:
 		return
 	_roster[int(info["id"])] = info
+	stat_tank_spawn_out += 1
 	_rpc_tank_spawn.rpc(info)
 
 @rpc("authority", "reliable")
@@ -779,21 +847,21 @@ func _rpc_command(data: PackedByteArray) -> void:
 			return
 	_cmd_last[id] = seq
 
-	cmd["at"] = Time.get_ticks_msec()
+	cmd["at"] = current_tick
 	_commands[id] = cmd
 
-## Сколько миллисекунд ввод считается годным после последнего пакета.
-## Дальше танк отпускает управление вместо того, чтобы вечно ехать по
-## последней команде: при обрыве это выглядело как танк-призрак, уходящий
-## в стену до конца партии.
-const COMMAND_TTL_MSEC := 500
+## Сколько тиков ввод считается годным после последнего пакета (500 мс при
+## 60 Гц). Дальше танк отпускает управление вместо того, чтобы вечно ехать
+## по последней команде: при обрыве это выглядело как танк-призрак,
+## уходящий в стену до конца партии.
+const COMMAND_TTL_TICKS := 30
 
 ## Последний ввод игрока — его читает сетевая схема управления.
 func command_of(peer_id: int) -> Dictionary:
 	var cmd: Dictionary = _commands.get(peer_id, {})
 	if cmd.is_empty():
 		return cmd
-	if Time.get_ticks_msec() - int(cmd.get("at", 0)) > COMMAND_TTL_MSEC:
+	if current_tick - int(cmd.get("at", 0)) > COMMAND_TTL_TICKS:
 		return {}
 	return cmd
 
@@ -823,8 +891,8 @@ func _rpc_snapshot(data: PackedByteArray) -> void:
 	_last_snap_seq = seq
 
 	stat_snap_in += 1
-	last_snap_msec = Time.get_ticks_msec()
-	_snaps.append({"t": Time.get_ticks_msec() / 1000.0, "data": snap})
+	last_snap_tick = current_tick
+	_snaps.append({"t": current_tick, "data": snap})
 	while _snaps.size() > 8:
 		_snaps.pop_front()
 
@@ -836,24 +904,26 @@ func _rpc_snapshot(data: PackedByteArray) -> void:
 func render_state() -> Dictionary:
 	if _snaps.is_empty():
 		return {}
-	var now := Time.get_ticks_msec() / 1000.0
-	var target := now - INTERP_DELAY
+	var now := current_tick
+	var target := now - INTERP_DELAY_TICKS
 
 	var older: Dictionary = _snaps[0]
 	var newer: Dictionary = _snaps[-1]
 	for i in range(_snaps.size() - 1):
-		if float(_snaps[i]["t"]) <= target and float(_snaps[i + 1]["t"]) >= target:
+		if int(_snaps[i]["t"]) <= target and int(_snaps[i + 1]["t"]) >= target:
 			older = _snaps[i]
 			newer = _snaps[i + 1]
 			break
 
-	var span: float = maxf(0.001, float(newer["t"]) - float(older["t"]))
-	var k: float = clampf((target - float(older["t"])) / span, 0.0, 1.0)
+	# Меньше тика разницы не бывает — порог 1.0 вместо старого 0.001
+	# (тогда target/"t" были секундами-float, теперь целые тики).
+	var span: float = maxf(1.0, float(int(newer["t"]) - int(older["t"])))
+	var k: float = clampf(float(target - int(older["t"])) / span, 0.0, 1.0)
 
 	# Пара снапшотов меняется на частоте их прихода (20 Гц), а этот метод —
 	# на частоте кадра (до 144 Гц): пересобирать словарь на каждый вызов,
 	# когда пара обычно та же самая, что и в прошлый раз, — чистые потери.
-	var older_t: float = float(older["t"])
+	var older_t: int = int(older["t"])
 	if older_t != _interp_cache_t:
 		_interp_cache_t = older_t
 		_interp_cache_prev = {}
@@ -875,8 +945,9 @@ func render_state() -> Dictionary:
 			"flags": int(t["flags"]),
 		}
 
-	var ahead: float = maxf(0.0, now - float(newer["t"]))
-	var ticks_ahead: float = ahead / Cfg.TICK_SEC
+	# now и "t" уже в тиках — раньше здесь секунды делили на длину тика,
+	# теперь оба шага (время→доля секунды→тики) схлопнулись в одно вычитание.
+	var ticks_ahead: float = maxf(0.0, float(now - int(newer["t"])))
 	var bullets := []
 	for b in newer["data"]["bullets"]:
 		bullets.append({
@@ -887,6 +958,24 @@ func render_state() -> Dictionary:
 		})
 
 	return {"tanks": tanks, "bullets": bullets, "extra": newer["data"]["extra"]}
+
+## Необработанный (без интерполяции) снимок одного танка из последнего
+## пришедшего снапшота — для сверки предсказанного движения СВОЕГО танка.
+## В отличие от render_state(), тик здесь в пространстве World.tick (как
+## его прислал хост), а не current_tick — то, что нужно клиенту для сверки
+## со своим world.tick. Пустой словарь — нет снапшотов или танк не найден.
+func latest_snapshot_tank(net_id: int) -> Dictionary:
+	if _snaps.is_empty():
+		return {}
+	var snap: Dictionary = _snaps[-1]["data"]
+	for t in snap["tanks"]:
+		if int(t["id"]) == net_id:
+			return {
+				"tick": int(snap["tick"]),
+				"x": float(t["x"]), "y": float(t["y"]),
+				"body": float(t["body"]), "turret": float(t["turret"]),
+			}
+	return {}
 
 # ------------------------------------------------------------ карта и лента
 ## Изменения тайлов уходят надёжно: пропущенное разрушение оставило бы
