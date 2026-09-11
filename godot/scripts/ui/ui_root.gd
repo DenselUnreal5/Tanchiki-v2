@@ -50,7 +50,6 @@ var _menu_info: RichTextLabel
 var _menu_settings: Control
 var _menu_settings_panel: ThemedPanel
 var _menu_settings_btn: Button
-var _lang_btn: Button
 
 ## Крутящаяся подсказка об интерфейсе внизу меню (см. MenuTips).
 var _menu_tip: RichTextLabel
@@ -692,12 +691,6 @@ func _build_menu() -> void:
 	settings_btn.pressed.connect(func(): open_settings())
 	footer.add_child(settings_btn)
 
-	_lang_btn = UiKit.secondary("", 13)
-	_lang_btn.custom_minimum_size = Vector2(0, 38)
-	_lang_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_lang_btn.pressed.connect(func(): I18n.toggle_lang())
-	footer.add_child(_lang_btn)
-
 	var quit_btn := UiKit.secondary(I18n.t("menu.quit", {}, "Выход"), 13)
 	quit_btn.custom_minimum_size = Vector2(0, 38)
 	quit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -783,7 +776,6 @@ func _build_menu() -> void:
 	_menu.add_child(_menu_tip_timer)
 	_menu_tip_timer.start()
 
-	_refresh_lang_btn()
 	_refresh_mode_button()
 	_layout_menu.call_deferred()
 
@@ -869,11 +861,6 @@ func _make_color_group(label_text: String, key: String) -> VBoxContainer:
 func _refresh_mode_button() -> void:
 	var caret := "▴" if _menu_settings_panel.visible else "▾"
 	_menu_settings_btn.text = "%s  %s" % [I18n.t("menu.selectMode", {}, "⚙️ Выбрать режим"), caret]
-
-## Подпись кнопки языка показывает целевой язык.
-func _refresh_lang_btn() -> void:
-	_lang_btn.text = I18n.t("menu.lang.ru", {}, "🌐 English") if I18n.lang == "ru" \
-		else I18n.t("menu.lang.en", {}, "🌐 Русский")
 
 func show_menu() -> void:
 	hide_all_overlays()
@@ -2226,6 +2213,19 @@ func _build_general_tab() -> void:
 			Sets.save()
 			Cfg.apply_theme(Sets.ui_theme)
 			_on_theme_changed()))
+
+	# Кнопка-тумблер, а не выбор: подпись сама показывает целевой язык,
+	# на который переключит клик. Тело вкладки и так пересобирается целиком
+	# при каждой смене языка (_on_language_changed -> _refresh_screens ->
+	# open_settings), отдельно обновлять подпись не нужно.
+	var lang_row := UiKit.hbox(8)
+	lang_row.add_child(UiKit.label(I18n.t("set.lang", {}, "Язык интерфейса"), 12, Cfg.UI_TEXT))
+	var lang_btn := UiKit.secondary(
+		I18n.t("menu.lang.ru", {}, "🌐 English") if I18n.lang == "ru"
+			else I18n.t("menu.lang.en", {}, "🌐 Русский"), 13)
+	lang_btn.pressed.connect(func(): I18n.toggle_lang())
+	lang_row.add_child(lang_btn)
+	_settings_body.add_child(lang_row)
 
 	var reset := UiKit.danger(I18n.t("settings.reset", {}, "Сбросить настройки"), 12)
 	reset.pressed.connect(func():

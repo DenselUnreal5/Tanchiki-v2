@@ -57,6 +57,7 @@ var EN := {
 	"opt.on": "On",
 	"opt.off": "Off",
 	"set.theme": "UI theme",
+	"set.lang": "Interface language",
 	"theme.noir": "Noir",
 	"theme.military": "Military dossier",
 	"theme.scifi": "Sci-Fi",
