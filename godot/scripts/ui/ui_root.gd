@@ -48,6 +48,7 @@ var _menu_title_box: VBoxContainer
 var _menu_title: Label
 var _menu_info: RichTextLabel
 var _menu_settings: Control
+var _menu_settings_scroll: ScrollContainer
 var _menu_settings_panel: ThemedPanel
 var _menu_settings_btn: Button
 
@@ -593,11 +594,19 @@ func _resize_hub_scroll() -> void:
 	var scroll: ScrollContainer = _hub.get_meta("scroll")
 	scroll.custom_minimum_size.y = _hub_body_budget()
 
+## Потолок высоты списка групп в панели «Выбрать режим» — вписывается в
+## экран (тот же приём, что и у _hub_body_budget() в Хабе), а не тянет
+## панель ниже нижнего края без какого-либо способа туда добраться.
+func _menu_settings_budget(top: float, screen_h: float) -> float:
+	return maxf(screen_h - top - 32.0, 200.0)
+
 ## Раскладка главного меню.
 ##
 ## Заголовок сверху по центру, слева панель действий, справа от неё —
-## раскрывающиеся настройки боя. Прокрутки нет: обе панели по высоте
-## считаются от содержимого и целиком помещаются в окно.
+## раскрывающиеся настройки боя. Левая панель по высоте считается от
+## содержимого и целиком помещается в окно; список групп в правой панели
+## может быть выше экрана — сверх потолка высоты его прокручивает
+## _menu_settings_scroll (см. _menu_settings_budget).
 func _layout_menu() -> void:
 	if _menu_panel == null:
 		return
@@ -614,6 +623,8 @@ func _layout_menu() -> void:
 	_menu_panel.size = Vector2(MENU_PANEL_W, left_h)
 	_menu_panel.position = Vector2(26, _panel_y(screen, left_h, top))
 
+	var set_natural: float = _menu_settings.get_combined_minimum_size().y
+	_menu_settings_scroll.custom_minimum_size.y = minf(set_natural, _menu_settings_budget(top, screen.y))
 	var set_h: float = _menu_settings_panel.get_combined_minimum_size().y
 	_menu_settings_panel.size = Vector2(MENU_SETTINGS_W, set_h)
 	var set_x := 26.0 + MENU_PANEL_W + 18.0
@@ -783,8 +794,18 @@ func _build_menu() -> void:
 	_menu_settings_panel.minimum_size_changed.connect(_layout_menu)
 	_menu.add_child(_menu_settings_panel)
 
+	# Список групп (тип игры/режим/сложность/уровень/локация/погода/время
+	# суток/цвет 1/цвет 2) выше некоторых экранов — без скролла нижние
+	# группы (особенно «Цвет танка 2») уходили ниже края экрана без
+	# какого-либо способа туда добраться.
+	_menu_settings_scroll = ScrollContainer.new()
+	_menu_settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_menu_settings_scroll.follow_focus = true
+	_menu_settings_panel.add_child(_menu_settings_scroll)
+
 	_menu_settings = UiKit.vbox(11)
-	_menu_settings_panel.add_child(_menu_settings)
+	_menu_settings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_menu_settings_scroll.add_child(_menu_settings)
 
 	_build_menu_settings()
 

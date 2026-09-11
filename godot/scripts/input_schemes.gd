@@ -134,6 +134,11 @@ class NetScheme extends RefCounted:
 class KeyboardAimScheme extends RefCounted:
 	var turret_slew := 0.07   # рад/тик при ручном повороте
 	var follow_slew := 0.05   # рад/тик при доворотe за корпусом
+	# ВРЕМЕННАЯ диагностика бага «у игрока 2 в горячем стуле нет
+	# управления» — статическое чтение кода не находит причину, нужен
+	# реальный лог с работающего запуска. Убрать после диагностики.
+	var _debug_printed_keys := false
+	var _debug_last_state := ""
 
 	func hints() -> Array:
 		return [
@@ -146,6 +151,13 @@ class KeyboardAimScheme extends RefCounted:
 		]
 
 	func apply(tank: Tank, player, world) -> void:
+		if not _debug_printed_keys:
+			_debug_printed_keys = true
+			print("[P2-DEBUG] коды клавиш: up=%d down=%d left=%d right=%d turret_left=%d turret_right=%d fire=%d mine=%d dash=%d ability=%d" % [
+				Sets.key_for("p2_up"), Sets.key_for("p2_down"), Sets.key_for("p2_left"), Sets.key_for("p2_right"),
+				Sets.key_for("p2_turret_left"), Sets.key_for("p2_turret_right"), Sets.key_for("p2_fire"),
+				Sets.key_for("p2_mine"), Sets.key_for("p2_dash"), Sets.key_for("p2_ability")])
+
 		var dx := 0.0
 		var dy := 0.0
 		if Input.is_physical_key_pressed(Sets.key_for("p2_up")) or Input.is_physical_key_pressed(KEY_KP_8):
@@ -162,6 +174,18 @@ class KeyboardAimScheme extends RefCounted:
 		var rot_left := Input.is_physical_key_pressed(Sets.key_for("p2_turret_left")) or Input.is_physical_key_pressed(KEY_KP_7)
 		var rot_right := Input.is_physical_key_pressed(Sets.key_for("p2_turret_right")) or Input.is_physical_key_pressed(KEY_KP_9)
 		var firing := Input.is_physical_key_pressed(Sets.key_for("p2_fire"))
+
+		if dx != 0.0 or dy != 0.0 or rot_left or rot_right or firing:
+			# vx/vy — уже ПОСЛЕ tank.thrust(dx, dy) выше: если dx/dy ненулевые,
+			# а скорость не меняется — дело не в чтении клавиш, а в физике/
+			# владельце танка дальше по цепочке.
+			var state := "dx=%.1f dy=%.1f rot_l=%s rot_r=%s fire=%s | vx=%.1f vy=%.1f" % [
+				dx, dy, rot_left, rot_right, firing, tank.vx, tank.vy]
+			if state != _debug_last_state:
+				_debug_last_state = state
+				print("[P2-DEBUG] ", state)
+		elif _debug_last_state != "":
+			_debug_last_state = ""
 
 		if rot_left and not rot_right:
 			tank.turret_angle -= turret_slew
