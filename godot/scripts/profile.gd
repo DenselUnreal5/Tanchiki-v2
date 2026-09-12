@@ -83,6 +83,12 @@ var ranks_claimed := {}     # Set<String> — какие звания уже в�
 var daily := {"date": "", "progress": {}, "claimed": []}
 var cosmetic_owned := {}    # Set<"тип:id">
 var cosmetics := {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
+## Цвет танка игрока 1/2 — общий на профиль, «Горячий стул» делит его на
+## обоих так же, как и улучшения. Разблокировка по Cfg.PLAYER_SKINS[].level
+## считается на лету от global_level — отдельного списка открытых цветов,
+## в отличие от перков, вести не нужно (уровень и так персистентен).
+var equipped_color1 := "p1"
+var equipped_color2 := "p2"
 
 func _ready() -> void:
 	_empty_stats()
@@ -167,6 +173,12 @@ func _apply(data: Dictionary) -> void:
 			var id := String(cos.get(type, "none"))
 			if is_cosmetic_owned(type, id):
 				cosmetics[type] = id
+	var c1 := String(data.get("equippedColor1", equipped_color1))
+	if is_color_unlocked(c1):
+		equipped_color1 = c1
+	var c2 := String(data.get("equippedColor2", equipped_color2))
+	if is_color_unlocked(c2):
+		equipped_color2 = c2
 	_refresh_daily_if_stale()
 
 func save_profile() -> void:
@@ -183,6 +195,8 @@ func save_profile() -> void:
 		"daily": daily,
 		"cosmeticOwned": cosmetic_owned.keys(),
 		"cosmetics": cosmetics,
+		"equippedColor1": equipped_color1,
+		"equippedColor2": equipped_color2,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f != null:
@@ -201,6 +215,8 @@ func reset() -> void:
 	daily = {"date": Daily.today_key(), "progress": {}, "claimed": []}
 	cosmetic_owned.clear()
 	cosmetics = {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
+	equipped_color1 = "p1"
+	equipped_color2 = "p2"
 	_sync_level_unlocks()
 	save_profile()
 
@@ -401,6 +417,26 @@ func equip_cosmetic(type: String, id: String) -> Dictionary:
 ## Экипированный набор для применения к танкам игроков.
 func equipped_cosmetics() -> Dictionary:
 	return cosmetics.duplicate()
+
+# ------------------------------------------------------------- цвет танка
+## Открыт ли цвет на текущем global_level (Cfg.PLAYER_SKINS[].level).
+func is_color_unlocked(key: String) -> bool:
+	for skin in Cfg.PLAYER_SKINS:
+		if String(skin["key"]) == key:
+			return global_level >= int(skin.get("level", 1))
+	return false
+
+## slot: 0 — игрок 1, 1 — игрок 2. «Горячий стул» делит один и тот же
+## профиль на обоих — какой цвет открыт, не зависит от слота.
+func set_equipped_color(slot: int, key: String) -> bool:
+	if not is_color_unlocked(key):
+		return false
+	if slot == 0:
+		equipped_color1 = key
+	else:
+		equipped_color2 = key
+	save_profile()
+	return true
 
 # -------------------------------------------------------------- валюта и улучшения
 func add_money(amount: int) -> int:

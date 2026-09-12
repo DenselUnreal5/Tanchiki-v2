@@ -343,7 +343,7 @@ func leave(notify: bool = true) -> void:
 func _self_info() -> Dictionary:
 	return {
 		"name": my_name,
-		"color_key": String(Prof.cosmetics.get("color", "p1")),
+		"color_key": Prof.equipped_color1,
 		"cosmetics": Prof.equipped_cosmetics(),
 		"ready": false,
 	}

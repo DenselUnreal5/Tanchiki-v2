@@ -166,7 +166,7 @@ func _update_tank() -> void:
 	# Цвет и косметика — реальные, экипированные в Гараже. Гараж открывается
 	# поверх этого же меню, поэтому читаем их каждый тик, а не только при
 	# пересборке по ресайзу: перекраска видна сразу, без перезапуска экрана.
-	_display_tank.color_key = String(_settings.get("color1", "p1"))
+	_display_tank.color_key = Prof.equipped_color1
 	_display_tank.cosmetics = Prof.equipped_cosmetics()
 	_display_tank.turret_angle = _turret_angle
 	_tank_view.muzzle = _muzzle

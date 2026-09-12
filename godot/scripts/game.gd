@@ -370,7 +370,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 			if pads.size() >= 2:
 				p2_dev = "pad%d" % int(pads[1]["id"])
 		players = [PlayerState.new(0, I18n.t("player1", {}, "Игрок 1"),
-			String(s["color1"]), _scheme_for(p1_dev, 0, hotseat))]
+			Prof.equipped_color1, _scheme_for(p1_dev, 0, hotseat))]
 		# Живое переключение геймпад/клавиатура прямо в бою — только одиночная
 		# игра с устройством «Как обычно»: в «горячем стуле» устройства
 		# закреплены за игроками на старте матча (выше), смешивать на лету
@@ -379,7 +379,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 			players[0].enable_auto_device_switch(players[0].scheme, Ctl.GamepadScheme.new(0))
 		if hotseat and not Net.is_online:
 			players.append(PlayerState.new(1, I18n.t("player2", {}, "Игрок 2"),
-				String(s["color2"]), _scheme_for(p2_dev, 1, hotseat)))
+				Prof.equipped_color2, _scheme_for(p2_dev, 1, hotseat)))
 		if Net.is_online:
 			players[0].peer_id = multiplayer.get_unique_id()
 			players[0].name = String(Net.my_name)

@@ -31,7 +31,7 @@ static func game_version() -> String:
 
 var settings := {
 	"game_type": "single", "mode": "ffa", "difficulty": "medium",
-	"level": 1, "color1": "p1", "color2": "p2",
+	"level": 1,
 	# "auto" — погода, время суток и локация выбираются сами.
 	"weather": "auto", "daytime": "auto", "location": "auto",
 }
@@ -484,8 +484,6 @@ func _build_menu_settings() -> void:
 		["night", I18n.t("tod.night", {}, "🌙 Ночь")],
 		["midnight", I18n.t("tod.midnight", {}, "🌑 Полночь")],
 	]))
-	_menu_settings.add_child(_make_color_group(I18n.t("menu.color1", {}, "Цвет танка 1"), "color1"))
-	_menu_settings.add_child(_make_color_group(I18n.t("menu.color2", {}, "Цвет танка 2"), "color2"))
 	_wire_menu_settings_nav.call_deferred()
 
 ## Связывает переключатели панели настроек боя для навигации крестовиной:
@@ -892,29 +890,6 @@ func _make_group(label_text: String, key: String, options: Array) -> VBoxContain
 		var btn := UiKit.toggle(String(opt[1]))
 		btn.button_group = group
 		btn.button_pressed = settings[key] == value
-		btn.pressed.connect(func(): settings[key] = value)
-		flow.add_child(btn)
-	return box
-
-func _make_color_group(label_text: String, key: String) -> VBoxContainer:
-	var box := UiKit.vbox(6)
-	box.add_child(UiKit.label(label_text.to_upper(), 10, Color(Cfg.UI_MUTED, 0.55)))
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 6)
-	flow.add_theme_constant_override("v_separation", 6)
-	box.add_child(flow)
-	var group := ButtonGroup.new()
-	for skin in Cfg.PLAYER_SKINS:
-		var btn := UiKit.toggle(String(skin["key"]).to_upper())
-		btn.tooltip_text = I18n.t("skin." + String(skin["key"]), {}, String(skin["name"]))
-		btn.button_group = group
-		btn.button_pressed = settings[key] == skin["key"]
-		var col := Color(String(skin["color"]))
-		btn.add_theme_stylebox_override("normal", UiKit.flat(col.darkened(0.35), 999, 1, Color(1, 1, 1, 0.12)))
-		btn.add_theme_stylebox_override("hover", UiKit.flat(col.darkened(0.15), 999, 1, Cfg.UI_ACCENT))
-		btn.add_theme_stylebox_override("pressed", UiKit.flat(col, 999, 2, Color.WHITE))
-		btn.add_theme_stylebox_override("hover_pressed", UiKit.flat(col, 999, 2, Color.WHITE))
-		var value: String = skin["key"]
 		btn.pressed.connect(func(): settings[key] = value)
 		flow.add_child(btn)
 	return box
@@ -1575,6 +1550,11 @@ func _fill_garage_tab() -> void:
 			grid.add_child(_upgrade_card(up))
 		_hub_body.add_child(grid)
 
+	# ---- цвет танка ----
+	_hub_body.add_child(UiKit.section(I18n.t("garage.colors", {}, "Цвет танка"), Cfg.UI_MUTED))
+	_hub_body.add_child(_garage_color_row(I18n.t("menu.color1", {}, "Цвет танка 1"), 0, Prof.equipped_color1))
+	_hub_body.add_child(_garage_color_row(I18n.t("menu.color2", {}, "Цвет танка 2"), 1, Prof.equipped_color2))
+
 	# ---- косметика ----
 	_hub_body.add_child(UiKit.section(I18n.t("garage.cosmetics", {}, "Косметика"), Cfg.UI_MUTED))
 	var type_names := {"camo": "Камуфляж", "hull": "Рисунок", "track": "Гусеницы", "turret": "Башня"}
@@ -1702,6 +1682,52 @@ func _cosmetic_card(c: Dictionary, type: String) -> Control:
 				open_garage(card_id))
 		row.add_child(buy)
 	return card
+
+## Строка кружков-переключателей цвета для одного игрока (slot: 0 — игрок
+## 1, 1 — игрок 2) — тот же визуальный язык, что раньше был в панели
+## главного меню (см. историю: _make_color_group), перенесённый сюда, плюс
+## блокировка по уровню профиля (Prof.is_color_unlocked) вместо свободного
+## выбора.
+func _garage_color_row(label_text: String, slot: int, equipped_key: String) -> Control:
+	var box := UiKit.vbox(6)
+	box.add_child(UiKit.label(label_text.to_upper(), 10, Color(Cfg.UI_MUTED, 0.55)))
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 6)
+	flow.add_theme_constant_override("v_separation", 6)
+	box.add_child(flow)
+	var group := ButtonGroup.new()
+	for skin in Cfg.PLAYER_SKINS:
+		var key: String = skin["key"]
+		var unlocked := Prof.is_color_unlocked(key)
+		var lvl := int(skin.get("level", 1))
+		var btn := UiKit.toggle(String(key).to_upper() if unlocked else str(lvl))
+		btn.tooltip_text = I18n.t("skin." + key, {}, String(skin["name"])) if unlocked \
+			else I18n.t("gallery.unlockAt", {"lvl": lvl}, "Откроется на уровне профиля %d" % lvl)
+		btn.button_group = group
+		btn.button_pressed = equipped_key == key
+		btn.disabled = not unlocked
+		var col := Color(String(skin["color"]))
+		if unlocked:
+			btn.add_theme_stylebox_override("normal", UiKit.flat(col.darkened(0.35), 999, 1, Color(1, 1, 1, 0.12)))
+			btn.add_theme_stylebox_override("hover", UiKit.flat(col.darkened(0.15), 999, 1, Cfg.UI_ACCENT))
+			btn.add_theme_stylebox_override("pressed", UiKit.flat(col, 999, 2, Color.WHITE))
+			btn.add_theme_stylebox_override("hover_pressed", UiKit.flat(col, 999, 2, Color.WHITE))
+		else:
+			var muted := col.darkened(0.6)
+			muted.a = 0.5
+			btn.add_theme_stylebox_override("normal", UiKit.flat(muted, 999, 1, Color(1, 1, 1, 0.08)))
+			btn.add_theme_stylebox_override("disabled", UiKit.flat(muted, 999, 1, Color(1, 1, 1, 0.08)))
+		# card_id — чтобы после клика (тело вкладки пересобирается целиком)
+		# фокус вернулся на эту же кнопку, тот же приём, что и у карточек
+		# апгрейдов/косметики выше (см. _switch_hub_tab/_find_by_meta).
+		var card_id := "color%d_%s" % [slot, key]
+		btn.set_meta("card_id", card_id)
+		btn.pressed.connect(func():
+			if Prof.set_equipped_color(slot, key):
+				garage_changed.emit()
+				open_garage(card_id))
+		flow.add_child(btn)
+	return box
 
 # ================================================================ СТАТИСТИКА
 func open_stats() -> void:

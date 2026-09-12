@@ -232,6 +232,7 @@ var EN := {
 	# ------------------------------------------------------------- гараж
 	"garage.title": "🔧 Garage",
 	"garage.sub": "Coins: {money} 🪙 · Tank upgrades apply to both players in a match",
+	"garage.colors": "Tank color",
 	"garage.cosmetics": "Cosmetics",
 	"cos.hull": "Decal",
 	"cos.track": "Tracks",
