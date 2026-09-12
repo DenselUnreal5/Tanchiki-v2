@@ -746,14 +746,6 @@ func _build_menu() -> void:
 	quit_btn.pressed.connect(func(): quit_requested.emit())
 	footer.add_child(quit_btn)
 
-	var reset_btn := UiKit.danger(I18n.t("menu.reset", {}, "Сбросить прогресс"), 12)
-	reset_btn.custom_minimum_size = Vector2(0, 32)
-	reset_btn.pressed.connect(func():
-		_confirm.dialog_text = I18n.t("confirm.reset", {},
-			"Сбросить весь прогресс профиля? Открытые перки будут потеряны.")
-		_confirm.popup_centered())
-	col.add_child(reset_btn)
-
 	# Автопоиск соседа Godot промахивается через GridContainer — тот же баг,
 	# что и у HFlowContainer в _wire_menu_settings_nav (обрывается после
 	# одного шага: стрелками кажется, что зажатие клавиши «не держится»).
@@ -777,13 +769,9 @@ func _build_menu() -> void:
 	# автоподбор через геометрию.
 	if footer_rows.size() > 0:
 		var first_row: Array = footer_rows[0]
-		var last_row: Array = footer_rows[footer_rows.size() - 1]
 		if is_instance_valid(_menu_start_btn):
 			first_row[0].focus_neighbor_top = _menu_start_btn.get_path()
 			_menu_start_btn.focus_neighbor_bottom = first_row[0].get_path()
-		for b in last_row:
-			b.focus_neighbor_bottom = reset_btn.get_path()
-		reset_btn.focus_neighbor_top = last_row[0].get_path()
 
 	# ---- правая панель: настройки боя ----
 	_menu_settings_panel = UiKit.panel()
@@ -2327,6 +2315,18 @@ func _build_general_tab() -> void:
 	var wrap := CenterContainer.new()
 	wrap.add_child(reset)
 	_settings_body.add_child(wrap)
+
+	# Ниже настроек — сброс самого профиля (достижения/перки/деньги/
+	# уровень), более серьёзное действие, чем сброс технических настроек
+	# выше. Раньше жила отдельной кнопкой прямо на главном экране.
+	var reset_progress := UiKit.danger(I18n.t("menu.reset", {}, "Сбросить прогресс"), 12)
+	reset_progress.pressed.connect(func():
+		_confirm.dialog_text = I18n.t("confirm.reset", {},
+			"Сбросить весь прогресс профиля? Открытые перки будут потеряны.")
+		_confirm.popup_centered())
+	var progress_wrap := CenterContainer.new()
+	progress_wrap.add_child(reset_progress)
+	_settings_body.add_child(progress_wrap)
 
 ## Экран и графические эффекты вместе — обе прежние секции («Видео» и
 ## «Графика») про то, как выглядит игра. Два под-заголовка внутри вкладки
