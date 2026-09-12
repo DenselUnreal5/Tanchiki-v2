@@ -48,7 +48,6 @@ var EN := {
 	"menu.reset": "Reset Progress",
 	"menu.quit": "Quit",
 	"menu.settings": "⚙ Settings",
-	"settings.sub": "Stored in user://settings.cfg and survive a progress reset",
 	"settings.reset": "Reset to defaults",
 	"settings.tab.general": "General",
 	"settings.tab.sound": "Sound",
@@ -335,7 +334,7 @@ var EN := {
 	"tip.gamepad": "Gamepad is supported — the control scheme switches automatically",
 	"tip.hotseat": "Play two players on one screen with Hot Seat mode when starting a game",
 	"tip.net": "There's online multiplayer — the \"Online\" button on the main menu",
-	"tip.lang": "The interface language switches with the button in the corner of the menu",
+	"tip.lang": "The interface language switches in Settings → General",
 	"tip.mines": "Lay mines and detonate them once an enemy gets close",
 
 	# ------------------------------------------------------------- HUD
