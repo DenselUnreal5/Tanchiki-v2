@@ -809,16 +809,22 @@ func _build_menu() -> void:
 
 	# ---- подсказка об интерфейсе внизу экрана ----
 	# offset_right оставляет угол свободным от танка-декорации в menu_scene.
+	# Сдвинута на ~1см (38px при нынешнем масштабе интерфейса) правее
+	# исходного места — левая и правая границы смещены на одну и ту же
+	# величину, иначе центрированный текст съехал бы вбок лишь наполовину.
 	var tip_wrap := Control.new()
 	tip_wrap.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	tip_wrap.offset_left = 26.0
-	tip_wrap.offset_right = -220.0
+	tip_wrap.offset_left = 64.0
+	tip_wrap.offset_right = -182.0
 	tip_wrap.offset_top = -30.0
 	tip_wrap.offset_bottom = -10.0
 	tip_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_menu.add_child(tip_wrap)
 
-	_menu_tip = UiKit.rich("", 10, Color(Cfg.UI_MUTED, 0.6))
+	# Ярче и крупнее прежнего приглушённого текста (Cfg.UI_MUTED, альфа
+	# 0.6, 10px) — тот же основной текстовый цвет интерфейса, что и у
+	# обычных подписей, вместо едва заметного.
+	_menu_tip = UiKit.rich("", 12, Color(Cfg.UI_TEXT, 0.85))
 	_menu_tip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_menu_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tip_wrap.add_child(_menu_tip)
