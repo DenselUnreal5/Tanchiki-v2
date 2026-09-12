@@ -48,7 +48,6 @@ var EN := {
 	"menu.reset": "Reset Progress",
 	"menu.quit": "Quit",
 	"menu.settings": "⚙ Settings",
-	"settings.sub": "Stored in user://settings.cfg and survive a progress reset",
 	"settings.reset": "Reset to defaults",
 	"settings.tab.general": "General",
 	"settings.tab.sound": "Sound",

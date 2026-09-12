@@ -67,7 +67,6 @@ var _net_error := ""
 
 var _settings: Control
 var _settings_body: VBoxContainer
-var _settings_sub: RichTextLabel
 var _settings_tabs_row: HBoxContainer
 var _settings_active_tab := "general"
 var _settings_key_status: Label
@@ -2177,9 +2176,6 @@ func _build_settings_shell() -> void:
 	_settings_tabs_row = HBoxContainer.new()
 	box.add_child(_settings_tabs_row)
 
-	_settings_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	box.add_child(_settings_sub)
-
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.follow_focus = true
@@ -2265,9 +2261,6 @@ func _resize_settings_scroll() -> void:
 	scroll.custom_minimum_size.y = _hub_body_budget()
 
 func open_settings() -> void:
-	_settings_sub.text = "[center]" + I18n.t("settings.sub", {},
-		"Сохраняются в user://settings.cfg и переживают сброс прогресса") + "[/center]"
-
 	var was_visible := _settings.visible
 	_settings.visible = true
 	_switch_settings_tab(_settings_active_tab)
@@ -2276,10 +2269,9 @@ func open_settings() -> void:
 	if was_visible:
 		_grab(_first_focusable(_settings_body))
 
-## Перевод настроек на смену языка: кнопка «Закрыть» и подзаголовок живут
-## вне переоткрытия вкладки (создаются один раз в _build_settings_shell),
-## поэтому переводятся отдельно — тот же приём, что и у хаба
-## (_refresh_hub_language).
+## Перевод настроек на смену языка: кнопка «Закрыть» живёт вне переоткрытия
+## вкладки (создаётся один раз в _build_settings_shell), поэтому
+## переводится отдельно — тот же приём, что и у хаба (_refresh_hub_language).
 func _refresh_settings_language() -> void:
 	if _settings == null:
 		return
