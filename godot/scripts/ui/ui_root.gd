@@ -2292,7 +2292,13 @@ func _build_general_tab() -> void:
 	# при каждой смене языка (_on_language_changed -> _refresh_screens ->
 	# open_settings), отдельно обновлять подпись не нужно.
 	var lang_row := UiKit.hbox(8)
-	lang_row.add_child(UiKit.label(I18n.t("set.lang", {}, "Язык интерфейса"), 12, Cfg.UI_TEXT))
+	var lang_label := UiKit.label(I18n.t("set.lang", {}, "Язык интерфейса"), 12, Cfg.UI_TEXT)
+	# Та же фиксированная ширина подписи, что у choice_row/switch_row/
+	# keybind_row (ui_kit.gd) — без неё кнопка вставала сразу за текстом
+	# и не совпадала по горизонтали с вариантами темы интерфейса строкой
+	# выше, вкладка выглядела неровно.
+	lang_label.custom_minimum_size = Vector2(178, 0)
+	lang_row.add_child(lang_label)
 	var lang_btn := UiKit.secondary(
 		I18n.t("menu.lang.ru", {}, "🌐 English") if I18n.lang == "ru"
 			else I18n.t("menu.lang.en", {}, "🌐 Русский"), 13)
