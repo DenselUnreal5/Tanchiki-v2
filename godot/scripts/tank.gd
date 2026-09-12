@@ -596,6 +596,8 @@ func _check_water(world) -> void:
 			world.deal_damage(self, Cfg.QUICKSAND_DMG, null, "water")
 			world.particles.burst(x, y, [Cfg.quicksand, Cfg.quicksand_wet],
 				4, 1, 3, 8, 14, world.rng)
+			if owner != null:
+				Ctl.vibrate(owner, 0.5, 0.8, 0.25)
 		return
 	quicksand_timer = 0
 
@@ -608,6 +610,7 @@ func _check_water(world) -> void:
 		in_water = true
 		if owner != null:
 			world.on_water_entered(self)
+			Ctl.vibrate(owner, 0.3, 0.4, 0.15)
 	vx *= Cfg.WATER_DRAG
 	vy *= Cfg.WATER_DRAG
 
@@ -621,6 +624,7 @@ func _check_water(world) -> void:
 			world.particles.burst(x, y, [Cfg.water_light, Color("#88aaff")], 5, 2, 4, 12, 18, world.rng)
 			if owner != null:
 				Sfx.play("water", x, y)
+				Ctl.vibrate(owner, 0.4, 0.7, 0.2)
 	if world.tick % 8 == 0:
 		world.particles.burst(x, y, [Cfg.water_light], 1, 2, 2, 10, 10, world.rng)
 
@@ -662,7 +666,10 @@ func shoot(world) -> bool:
 	var wp := Weapons.get_weapon(weapon) if weapon != "" else {}
 	if not wp.is_empty():
 		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * float(wp["cooldown_mult"]))))
-		_after_shot()
+		# _after_shot() здесь не нужен — уже вызван выше безусловно (строка
+		# 659). Повторный вызов удваивал нагрев ствола и shots_fired на
+		# каждый выстрел из подобранного оружия: «Пулемёт» перегревался
+		# втрое быстрее расчётного и ощущался как дебаф, а не баф.
 		var bullets := int(wp["bullets"])
 		for i in bullets:
 			var offset := 0.0

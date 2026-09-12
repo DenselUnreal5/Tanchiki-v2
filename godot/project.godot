@@ -31,6 +31,14 @@ Net="*res://scripts/net/net.gd"
 Sets="*res://scripts/settings.gd"
 Fonts="*res://scripts/fonts.gd"
 
+[debug]
+
+; Чтобы print() из net.gd попадал в файл независимо от того, как запущена
+; игра (двойной клик по .exe, без консоли) — временно, для диагностики
+; проблемы с поиском Steam-лобби по коду. Путь на Windows:
+; %APPDATA%\Godot\app_userdata\<имя проекта>\logs\godot.log
+file_logging/enable_file_logging=true
+
 [display]
 
 window/size/viewport_width=1280

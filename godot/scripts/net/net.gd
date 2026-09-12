@@ -520,9 +520,12 @@ func _on_steam_lobby_created(result: int, lobby_id: int) -> void:
 		s.leaveLobby(lobby_id)
 		return
 	_steam_lobby_id = lobby_id
-	s.setLobbyData(lobby_id, "game", GAME_TAG)
+	var ok_game: bool = s.setLobbyData(lobby_id, "game", GAME_TAG)
 	lobby_code = _gen_code()
-	s.setLobbyData(lobby_id, "code", lobby_code)
+	var ok_code: bool = s.setLobbyData(lobby_id, "code", lobby_code)
+	print("[net] лобби %d создано, код %s, setLobbyData(game)=%s setLobbyData(code)=%s, readback game=«%s» code=«%s»"
+		% [lobby_id, lobby_code, ok_game, ok_code,
+			s.getLobbyData(lobby_id, "game"), s.getLobbyData(lobby_id, "code")])
 	lobby_changed.emit()
 
 ## Оверлей Steam со списком друзей для приглашения в своё лобби.
@@ -555,12 +558,14 @@ func join_by_code(code: String) -> void:
 	s.addRequestLobbyListStringFilter("game", GAME_TAG, _LOBBY_CMP_EQUAL)
 	s.addRequestLobbyListStringFilter("code", code, _LOBBY_CMP_EQUAL)
 	s.addRequestLobbyListDistanceFilter(_LOBBY_DIST_WORLDWIDE)
+	print("[net] поиск лобби: game=«%s» code=«%s» dist=worldwide" % [GAME_TAG, code])
 	s.requestLobbyList()
 
 func _on_steam_lobby_match_list(lobbies: Array) -> void:
 	# Список приходит только на наш requestLobbyList из join_by_code.
 	if lobby_pending != "join" or _join_target_lobby != 0:
 		return
+	print("[net] лобби найдено по коду «%s»: %d шт. %s" % [lobby_code, lobbies.size(), lobbies])
 	if lobbies.is_empty():
 		var wanted := lobby_code
 		lobby_pending = ""

@@ -50,6 +50,15 @@ static func apply_command(tank: Tank, world, cmd: Dictionary) -> void:
 	if bool(cmd.get("ability", false)):
 		tank.use_ability(world)
 
+## Отдача геймпада — общая точка входа, чтобы не разбрасывать проверку
+## тумблера настроек и типа схемы по местам, где случается «взрыв». У мыши/
+## клавиатуры вибрировать нечему (поля device нет) — просто не срабатывает.
+static func vibrate(player, weak_magnitude: float, strong_magnitude: float, duration: float) -> void:
+	if player == null or not Sets.pad_vibration:
+		return
+	if "device" in player.scheme:
+		Input.start_joy_vibration(int(player.scheme.device), weak_magnitude, strong_magnitude, duration)
+
 # ---------------------------------------------------------------------------
 # Управление мышью: WASD + прицел мышью. Основная схема первого игрока.
 # ---------------------------------------------------------------------------

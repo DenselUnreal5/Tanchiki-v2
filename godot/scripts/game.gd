@@ -546,7 +546,8 @@ func _bind_world_events(w: World) -> void:
 	w.player_died.connect(func(player):
 		Prof.bump_stat("timesDied", 1)
 		hud.add_feed(I18n.t("feed.youDied", {"name": player.name},
-			"%s: танк уничтожен" % player.name), Cfg.UI_DANGER))
+			"%s: танк уничтожен" % player.name), Cfg.UI_DANGER)
+		Ctl.vibrate(player, 0.5, 1.0, 0.4))
 
 	w.player_damage.connect(func(_player, amount: float):
 		match_damage += amount
