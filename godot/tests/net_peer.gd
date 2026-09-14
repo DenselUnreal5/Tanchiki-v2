@@ -38,10 +38,12 @@ func _ready() -> void:
 func _run_host() -> void:
 	Net.my_name = "Хост"
 	_check(Net.host_game(), "порт открыт")
-	# Ждём клиента.
-	var guard := 0
-	while Net.lobby.size() < 2 and guard < 900:
-		guard += 1
+	# Ждём клиента. Настенные часы, не число кадров: headless крутит
+	# process_frame то быстрее, то медленнее 60 Гц под нагрузкой, а
+	# ENet-рукопожатие всё равно займёт своё реальное время (см. тот же
+	# приём в net_dedicated.gd).
+	var wait_started := Time.get_ticks_msec()
+	while Net.lobby.size() < 2 and Time.get_ticks_msec() - wait_started < 15000:
 		await _frames(1)
 	_check(Net.lobby.size() >= 2, "клиент подключился (в лобби %d)" % Net.lobby.size())
 	if Net.lobby.size() < 2:
@@ -118,9 +120,9 @@ func _run_client() -> void:
 
 	# Лобби видно и хосту, и клиенту — а не только хосту, который сам себя
 	# в него сразу заносит. Это и есть проверка «оба видят друг друга».
-	var lobby_guard := 0
-	while Net.lobby.size() < 2 and lobby_guard < 900:
-		lobby_guard += 1
+	# Настенные часы, не число кадров — см. комментарий в _run_host().
+	var lobby_wait_started := Time.get_ticks_msec()
+	while Net.lobby.size() < 2 and Time.get_ticks_msec() - lobby_wait_started < 15000:
 		await _frames(1)
 	_check(Net.lobby.size() >= 2, "клиент видит обоих в лобби (у себя %d)" % Net.lobby.size())
 

@@ -45,9 +45,11 @@ func _ready() -> void:
 func _run_host() -> void:
 	Net.my_name = "Хост"
 	_check(Net.host_game(), "порт открыт")
-	var guard := 0
-	while Net.lobby.size() < 2 and guard < 900:
-		guard += 1
+	# Настенные часы, не число кадров: headless крутит process_frame то
+	# быстрее, то медленнее 60 Гц под нагрузкой, а ENet-рукопожатие всё
+	# равно займёт своё реальное время (см. тот же приём в net_peer.gd).
+	var wait_started := Time.get_ticks_msec()
+	while Net.lobby.size() < 2 and Time.get_ticks_msec() - wait_started < 15000:
 		await _frames(1)
 	if not _check(Net.lobby.size() >= 2, "клиент подключился"):
 		return
@@ -72,9 +74,8 @@ func _run_host() -> void:
 
 	# ---- обрыв: клиент уходит, хост обязан прибраться ---------------------
 	print("  ждём обрыва связи с клиентом…")
-	var wait := 0
-	while Net.lobby.size() > 1 and wait < 900:
-		wait += 1
+	var leave_wait_started := Time.get_ticks_msec()
+	while Net.lobby.size() > 1 and Time.get_ticks_msec() - leave_wait_started < 15000:
 		await _frames(1)
 	_check(Net.lobby.size() == 1, "хост заметил уход клиента")
 	await _frames(60)
@@ -92,9 +93,8 @@ func _run_host() -> void:
 func _run_client() -> void:
 	Net.my_name = "Клиент"
 	_check(Net.join_game("127.0.0.1"), "подключение начато")
-	var guard := 0
-	while game.world == null and guard < 1200:
-		guard += 1
+	var wait_started := Time.get_ticks_msec()
+	while game.world == null and Time.get_ticks_msec() - wait_started < 15000:
 		await _frames(1)
 	if not _check(game.world != null, "партия объявлена"):
 		return

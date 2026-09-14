@@ -1,5 +1,5 @@
 # ============================================================================
-# net_code.gd — лобби: код, готовность гостей, разбор ссылки «Join Game».
+# net_code.gd — лобби: готовность гостей, разбор ссылки «Join Game».
 #
 # Путь через Steam (createLobby/requestLobbyList/приглашения) headless не
 # проверить — нужен запущенный клиент Steam. Здесь только та логика, что от
@@ -13,39 +13,11 @@ extends Node
 var failures := 0
 
 func _ready() -> void:
-	_check_is_code()
-	_check_gen_code()
 	_check_guests_ready()
 	_check_connect_lobby()
 
-	print("=== ПРОВЕРКА КОДА ЛОББИ ЗАВЕРШЕНА, проблем: %d ===" % failures)
+	print("=== ПРОВЕРКА ЛОББИ ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
-
-## Формат кода: ровно четыре десятичные цифры.
-func _check_is_code() -> void:
-	for good in ["1000", "9999", "1234", "0000"]:
-		_check(Net.is_code(good), "«%s» — годный код" % good)
-	for bad in ["", "12", "12345", "12a4", "abcd", " 123", "1 23"]:
-		_check(not Net.is_code(bad), "«%s» — негодный код" % bad)
-
-## Генератор всегда даёт четыре цифры в диапазоне 1000–9999.
-func _check_gen_code() -> void:
-	var ok := true
-	var lo := 9999
-	var hi := 1000
-	for i in range(2000):
-		var code: String = Net._gen_code()
-		if not Net.is_code(code):
-			ok = false
-			break
-		var n := int(code)
-		if n < 1000 or n > 9999:
-			ok = false
-			break
-		lo = mini(lo, n)
-		hi = maxi(hi, n)
-	_check(ok, "_gen_code() всегда four-значный 1000–9999")
-	_check(hi - lo > 1000, "_gen_code() покрывает диапазон (разброс %d)" % (hi - lo))
 
 ## all_guests_ready(): нужен хост, хотя бы один гость и готовность всех гостей.
 func _check_guests_ready() -> void:

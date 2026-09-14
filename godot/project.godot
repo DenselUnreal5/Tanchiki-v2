@@ -16,7 +16,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="Тянчики — Battle Tanks"
 config/description="Top-down танковый шутер: FFA, Захват флага, Царь горы, Оборона."
-config/version="0.9.0"
+config/version="0.9.2"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
@@ -34,8 +34,8 @@ Fonts="*res://scripts/fonts.gd"
 [debug]
 
 ; Чтобы print() из net.gd попадал в файл независимо от того, как запущена
-; игра (двойной клик по .exe, без консоли) — временно, для диагностики
-; проблемы с поиском Steam-лобби по коду. Путь на Windows:
+; игра (двойной клик по .exe, без консоли) — для диагностики сетевых
+; проблем. Путь на Windows:
 ; %APPDATA%\Godot\app_userdata\<имя проекта>\logs\godot.log
 file_logging/enable_file_logging=true
 

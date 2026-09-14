@@ -57,8 +57,15 @@ func _run_server() -> void:
 	# пятисекундный отсчёт (SceneTreeTimer), а headless крутит кадры то
 	# быстрее, то медленнее 60 Гц — фиксированный бюджет кадров под нагрузкой
 	# кончается раньше, чем набегают реальные пять секунд (см. net_peer.gd).
+	# Оба процесса ждут появления мира по СВОЕМУ независимому таймеру: под
+	# нагрузкой (см. HERO_Main в остальных комментариях сессии) само ENet-
+	# рукопожатие может занять заметно больше секунды, а если бюджет одной
+	# стороны истечёт раньше, чем у другой, она уйдёт (Net.leave() в конце
+	# _ready()) и оборвёт соединение прямо перед тем, как оно должно было
+	# состояться. 25 секунд вместо 12 — не защита от реальной поломки
+	# (для неё хватило бы и 12), а просто больше запаса под эту гонку.
 	var wait_started := Time.get_ticks_msec()
-	while game.world == null and Time.get_ticks_msec() - wait_started < 12000:
+	while game.world == null and Time.get_ticks_msec() - wait_started < 25000:
 		await _frames(1)
 	_check(game.world != null, "партия стартовала сама, по числу игроков")
 	if game.world == null:
@@ -75,13 +82,13 @@ func _run_server() -> void:
 
 # ------------------------------------------------------------------ клиент
 func _run_client() -> void:
-	# --connect= обязан сам открыть экран сети — без похода в «Другие способы».
+	# --connect= обязан сам открыть экран сети — без ручного ввода адреса.
 	_check(game.ui.is_net_open, "экран сети открылся сам")
 
-	# То же самое: ждём по настенным часам, а не по числу кадров (см.
-	# комментарий в _run_server()).
+	# То же самое: ждём по настенным часам, а не по числу кадров, и с тем
+	# же запасом (см. комментарий в _run_server()).
 	var wait_started := Time.get_ticks_msec()
-	while game.world == null and Time.get_ticks_msec() - wait_started < 12000:
+	while game.world == null and Time.get_ticks_msec() - wait_started < 25000:
 		await _frames(1)
 	_check(game.world != null, "сервер объявил партию, мир собран")
 	if game.world == null:

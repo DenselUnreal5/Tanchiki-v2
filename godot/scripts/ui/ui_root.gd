@@ -61,9 +61,15 @@ var _menu_tip_idx := 0
 var _net: Control
 var _net_body: VBoxContainer
 var _net_sub: RichTextLabel
-var _net_address := "127.0.0.1"
-var _net_code := ""
 var _net_error := ""
+## "" — верхний выбор Создать/Присоединиться, "create" — ввод названия
+## комнаты, "join" — поиск + список лобби.
+var _net_mode := ""
+## Название комнаты, вводимое на экране создания.
+var _net_room_name := ""
+## Строка поиска на экране «Присоединиться» — фильтрует
+## Net.lobby_browser_results на клиенте (см. _build_net_join()).
+var _net_search := ""
 
 var _settings: Control
 var _settings_body: VBoxContainer
@@ -989,28 +995,6 @@ func _build_perk() -> void:
 ## Показывает выбор перка для конкретного игрока.
 ## Последняя предложенная тройка перков — для тестов и отладки.
 var last_perk_choices: Array = []
-
-## Выбранный транспорт сетевой игры: steam | direct.
-var _net_kind := "steam"
-## Свёрнут ли блок «Другие способы подключения» (прямой адрес/SteamID/LAN) на
-## экране до подключения — по умолчанию свёрнут, обычному игроку туда лезть
-## незачем: единственная кнопка «Создать игру» уже покрывает основной путь.
-var _net_advanced_open := false
-
-## Ставит выбранный транспорт в Net. Ошибку показываем в самом окне, а не
-## всплывающим сообщением: игрок сейчас смотрит именно сюда.
-func _apply_net_kind() -> void:
-	var t: NetTransport = NetTransport.SteamTransport.new() if _net_kind == "steam" 		else NetTransport.EnetTransport.new(Net.PORT)
-	if not t.available():
-		_net_kind = "direct"
-		t = NetTransport.EnetTransport.new(Net.PORT)
-	Net.transport = t
-	# Адрес от другого транспорта здесь бессмыслен: IP не SteamID и наоборот.
-	# Проверка стоит здесь, а не только в обработчике переключателя, потому
-	# что умолчание 127.0.0.1 висело бы в поле и при первом открытии окна.
-	var looks_like_ip := _net_address.find(".") >= 0
-	if _net_address != "" and looks_like_ip == (_net_kind == "steam"):
-		_net_address = ""
 
 func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 	# В режимах с запретами («Амфибия» в «Царе горы») такие перки не предлагаем:
@@ -2581,11 +2565,13 @@ func open_net() -> void:
 		Net.lobby_changed.connect(_refresh_net)
 		Net.net_error.connect(_on_net_error)
 		Net.countdown_changed.connect(_on_countdown_changed)
+		Net.lobby_list_updated.connect(_refresh_net)
 	_net.visible = true
 	_refresh_net()
 
 func close_net() -> void:
 	_net.visible = false
+	_net_mode = ""
 
 var is_net_open: bool:
 	get: return _net != null and _net.visible
@@ -2651,130 +2637,135 @@ func _build_net_offline() -> void:
 
 	if Net.lobby_pending != "":
 		_net_body.add_child(UiKit.label(
-			I18n.t("net.code.creating", {}, "Создаём лобби…") if Net.lobby_pending == "host"
-				else I18n.t("net.code.searching", {}, "Подключаемся…"), 11, Cfg.UI_MUTED))
+			I18n.t("net.room.creating", {}, "Создаём…") if Net.lobby_pending == "host"
+				else I18n.t("net.room.searching", {}, "Подключаемся…"), 11, Cfg.UI_MUTED))
 
-	# --- Основной путь: одна кнопка «Создать игру» (Steam, лобби+код разом) ---
-	# Раньше здесь было два разных способа хостинга (пригласить через оверлей
-	# Steam / создать по коду) — объединены в Net.host_lobby(): лобби теперь
-	# всегда публичное и с кодом, поэтому «Пригласить друга» в лобби всегда
-	# рабочая, а код — всегда под рукой как запасной путь.
-	var create_btn := UiKit.primary(I18n.t("net.invite.create", {}, "Создать игру"), 13)
-	create_btn.disabled = not steam_ok or Net.lobby_pending != ""
-	create_btn.pressed.connect(func():
-		_net_error = ""
-		Net.host_lobby()
-		_refresh_net())
-	_net_body.add_child(create_btn)
-	_net_body.add_child(UiKit.label(
-		I18n.t("net.invite.createHint", {},
-			"Друга позовёте кнопкой в лобби или через «Join Game» в списке друзей Steam."),
-		9, Cfg.UI_MUTED))
 	if not steam_ok:
 		_net_body.add_child(UiKit.label(
-			I18n.t("net.err.noSteamInvite", {}, "Для игры через Steam нужен Steam — ниже прямое подключение."),
-			9, Cfg.UI_MUTED))
-
-	# --- Присоединиться по коду от друга ---
-	var code_row := UiKit.hbox(8)
-	code_row.add_child(UiKit.label(I18n.t("net.code.enter", {}, "Код"), 12, Cfg.UI_TEXT))
-	var code_edit := LineEdit.new()
-	code_edit.max_length = 4
-	code_edit.text = _net_code
-	code_edit.placeholder_text = "0000"
-	code_edit.custom_minimum_size = Vector2(120, 30)
-	code_edit.text_changed.connect(func(t: String):
-		var digits := ""
-		for c in t:
-			if c >= "0" and c <= "9":
-				digits += c
-		_net_code = digits
-		if digits != t:
-			code_edit.text = digits
-			code_edit.caret_column = digits.length())
-	code_row.add_child(code_edit)
-	var join_code_btn := UiKit.secondary(I18n.t("net.code.join", {}, "Войти"), 13)
-	join_code_btn.disabled = not steam_ok or Net.lobby_pending != ""
-	join_code_btn.pressed.connect(func():
-		_net_error = ""
-		Net.join_by_code(_net_code)
-		_refresh_net())
-	code_row.add_child(join_code_btn)
-	_net_body.add_child(code_row)
-
-	# --- Другие способы: прямой адрес или SteamID (локальная сеть / без Steam) ---
-	# Свёрнуто по умолчанию — обычному игроку сюда лезть незачем, единственная
-	# кнопка выше уже покрывает основной путь. Раскрывашка — обычная кнопка:
-	# отдельного виджета «аккордеон» в UiKit нет и городить его ради одного
-	# места не стоит.
-	var adv_toggle := UiKit.secondary(
-		("▾ " if _net_advanced_open else "▸ ") + I18n.t("net.advanced", {}, "Другие способы подключения"), 12)
-	adv_toggle.pressed.connect(func():
-		_net_advanced_open = not _net_advanced_open
-		_refresh_net())
-	_net_body.add_child(adv_toggle)
-
-	if not _net_advanced_open:
+			I18n.t("net.err.noSteam", {}, "Нужен клиент Steam — сетевая игра недоступна"),
+			11, Cfg.UI_DANGER))
 		return
 
-	if not steam_ok and _net_kind == "steam":
-		_net_kind = "direct"
-	var kinds := [
-		["steam", I18n.t("net.kind.steam", {}, "Через Steam")],
-		["direct", I18n.t("net.kind.direct", {}, "Прямой адрес")],
-	]
-	var labels := []
-	for k in kinds:
-		labels.append(String(k[1]))
-	var idx := 0 if _net_kind == "steam" else 1
-	_net_body.add_child(UiKit.choice_row(
-		I18n.t("net.kind", {}, "Соединение"), labels, idx,
-		func(v: int):
-			_net_kind = String(kinds[v][0])
-			_apply_net_kind()
-			_refresh_net()))
-	_apply_net_kind()
+	match _net_mode:
+		"create":
+			_build_net_create()
+		"join":
+			_build_net_join()
+		_:
+			_build_net_choice()
 
-	var host_btn := UiKit.secondary(I18n.t("net.host", {}, "Создать напрямую"), 13)
-	host_btn.pressed.connect(func():
+## Верхний уровень: ровно два выбора, как просил пользователь.
+func _build_net_choice() -> void:
+	var create_btn := UiKit.primary(I18n.t("net.create", {}, "Создать"), 15)
+	create_btn.pressed.connect(func():
 		_net_error = ""
-		Net.host_game()
+		_net_room_name = ""
+		_net_mode = "create"
 		_refresh_net())
-	_net_body.add_child(host_btn)
-	if _net_kind == "steam":
-		var sid := NetTransport.SteamTransport.my_steam_id()
-		if sid > 0:
-			var id_row := UiKit.hbox(8)
-			id_row.add_child(UiKit.label(I18n.t("net.steam.mine", {}, "Ваш SteamID"),
-				12, Cfg.UI_TEXT))
-			var id_edit := LineEdit.new()
-			id_edit.text = str(sid)
-			id_edit.editable = false
-			id_edit.custom_minimum_size = Vector2(220, 30)
-			id_row.add_child(id_edit)
-			_net_body.add_child(id_row)
-	else:
-		_net_body.add_child(UiKit.label(
-			I18n.t("net.host.hint", {}, "Порт 8124. В локальной сети остальным нужен ваш адрес, через интернет — проброс порта."),
-			9, Cfg.UI_MUTED))
+	_net_body.add_child(create_btn)
 
-	var addr_row := UiKit.hbox(8)
-	addr_row.add_child(UiKit.label(
-		I18n.t("net.steam.id", {}, "SteamID хоста") if _net_kind == "steam"
-			else I18n.t("net.address", {}, "Адрес"), 12, Cfg.UI_TEXT))
-	var addr_edit := LineEdit.new()
-	addr_edit.text = _net_address
-	addr_edit.custom_minimum_size = Vector2(220, 30)
-	addr_edit.text_changed.connect(func(t: String): _net_address = t)
-	addr_row.add_child(addr_edit)
-	_net_body.add_child(addr_row)
-
-	var join_btn := UiKit.secondary(I18n.t("net.join", {}, "Подключиться"), 13)
+	var join_btn := UiKit.primary(I18n.t("net.join", {}, "Присоединиться"), 15)
 	join_btn.pressed.connect(func():
 		_net_error = ""
-		Net.join_game(_net_address)
+		_net_search = ""
+		_net_mode = "join"
+		Net.refresh_lobby_list()
 		_refresh_net())
 	_net_body.add_child(join_btn)
+
+## Экран «Создать»: название комнаты + подтверждение.
+func _build_net_create() -> void:
+	var back_btn := UiKit.small(I18n.t("net.back", {}, "Назад"))
+	back_btn.pressed.connect(func():
+		_net_mode = ""
+		_refresh_net())
+	_net_body.add_child(back_btn)
+
+	var name_row := UiKit.hbox(8)
+	name_row.add_child(UiKit.label(I18n.t("net.room.name", {}, "Название комнаты"), 12, Cfg.UI_TEXT))
+	var room_edit := LineEdit.new()
+	room_edit.text = _net_room_name
+	room_edit.placeholder_text = I18n.t("net.room.placeholder", {}, "Например: Игра Дениса")
+	room_edit.custom_minimum_size = Vector2(260, 30)
+	room_edit.text_changed.connect(func(t: String): _net_room_name = t)
+	name_row.add_child(room_edit)
+	_net_body.add_child(name_row)
+
+	var host_btn := UiKit.primary(I18n.t("net.create.confirm", {}, "Создать лобби"), 14)
+	host_btn.disabled = Net.lobby_pending != ""
+	host_btn.pressed.connect(func():
+		_net_error = ""
+		Net.host_lobby(_net_room_name)
+		_refresh_net())
+	_net_body.add_child(host_btn)
+
+## Экран «Присоединиться»: поиск по имени игрока/комнаты + список лобби.
+## Steam-фильтры (addRequestLobbyListStringFilter) — только точное
+## совпадение, так что подстрочный поиск делаем здесь, на клиенте, над
+## уже полученным полным списком (Net.lobby_browser_results). Список лежит
+## в собственном контейнере, а не в _net_body напрямую: пересборка на
+## каждую нажатую клавишу не должна уничтожать саму строку поиска —
+## иначе LineEdit терял бы фокус после первого же символа.
+func _build_net_join() -> void:
+	var back_btn := UiKit.small(I18n.t("net.back", {}, "Назад"))
+	back_btn.pressed.connect(func():
+		_net_mode = ""
+		_refresh_net())
+	_net_body.add_child(back_btn)
+
+	var search_row := UiKit.hbox(8)
+	search_row.add_child(UiKit.label(I18n.t("net.search", {}, "Поиск"), 12, Cfg.UI_TEXT))
+	var search_edit := LineEdit.new()
+	search_edit.text = _net_search
+	search_edit.placeholder_text = I18n.t("net.search.placeholder", {}, "Имя игрока или комнаты")
+	search_edit.custom_minimum_size = Vector2(260, 30)
+	search_row.add_child(search_edit)
+	_net_body.add_child(search_row)
+
+	_net_body.add_child(UiKit.section(I18n.t("net.browser.title", {}, "Доступные лобби"), Cfg.UI_ACCENT))
+	var refresh_btn := UiKit.small(I18n.t("net.browser.refresh", {}, "Обновить"))
+	refresh_btn.pressed.connect(func():
+		Net.refresh_lobby_list()
+		_refresh_net())
+	_net_body.add_child(refresh_btn)
+
+	var list_box := UiKit.vbox(6)
+	_net_body.add_child(list_box)
+
+	var render_list := func():
+		for c in list_box.get_children():
+			c.queue_free()
+		var q := _net_search.strip_edges().to_lower()
+		var shown := 0
+		for entry in Net.lobby_browser_results:
+			var host_name := String(entry.get("host_name", ""))
+			var room := String(entry.get("room_name", ""))
+			if q != "" and host_name.to_lower().find(q) < 0 and room.to_lower().find(q) < 0:
+				continue
+			shown += 1
+			var row := UiKit.hbox(8)
+			var members := int(entry.get("members", 0))
+			var max_members := int(entry.get("max_members", 0))
+			row.add_child(UiKit.label(
+				"%s · %s · %s" % [room, host_name,
+					I18n.t("net.browser.players", {"n": members, "max": max_members}, "%d/%d" % [members, max_members])],
+				11, Cfg.UI_TEXT))
+			var lobby_id := int(entry.get("id", 0))
+			var join_row_btn := UiKit.small(I18n.t("net.browser.join", {}, "Войти"))
+			join_row_btn.disabled = Net.lobby_pending != ""
+			join_row_btn.pressed.connect(func():
+				_net_error = ""
+				Net.join_lobby_id(lobby_id)
+				_refresh_net())
+			row.add_child(join_row_btn)
+			list_box.add_child(row)
+		if shown == 0:
+			list_box.add_child(UiKit.label(I18n.t("net.browser.empty", {}, "Лобби не найдены"), 11, Cfg.UI_MUTED))
+
+	search_edit.text_changed.connect(func(t: String):
+		_net_search = t
+		render_list.call())
+	render_list.call()
 
 func _build_net_lobby() -> void:
 	var role_text := I18n.t("net.role.host", {}, "Вы хост")
@@ -2782,24 +2773,18 @@ func _build_net_lobby() -> void:
 		role_text = I18n.t("net.role.client", {}, "Вы подключены")
 	_net_body.add_child(UiKit.section(role_text, Cfg.UI_ACCENT))
 
-	# Как позвать второго. «Пригласить друга» реально работает только у
-	# Steam-лобби (Net.host_lobby() всегда его ставит) — хост, зашедший через
-	# «Создать напрямую» (прямой адрес/SteamID, без матчмейкинга Steam),
-	# никакого Steam-лобби не получает, кнопка приглашения там ничего не
-	# сделала бы. Ему вместо неё показываем то же самое напоминание об
-	# адресе/SteamID, что было на экране до подключения.
+	# Как позвать второго. WaitingRoomPanel: хостинг через Steam всегда
+	# поднимает публичное лобби (Net.host_lobby()) — название комнаты видно
+	# в списке и в поиске, «Пригласить друга» — дополнительный способ в
+	# обход поиска, плюс SteamID для ручной передачи.
 	if Net.role == "host" and Net.lobby.size() < Net.MAX_LOBBY:
 		if Net._steam_lobby_id != 0:
+			_net_body.add_child(UiKit.label(
+				"%s: %s" % [I18n.t("net.room.label", {}, "Комната"), Net.room_name],
+				12, Cfg.UI_TEXT))
 			var inv_btn := UiKit.primary(I18n.t("net.invite.friend", {}, "Пригласить друга"), 13)
 			inv_btn.pressed.connect(func(): Net.invite_overlay())
 			_net_body.add_child(inv_btn)
-			_net_body.add_child(UiKit.label(
-				I18n.t("net.code.label", {}, "или назовите код второму игроку"), 11, Cfg.UI_MUTED))
-			var code_big := UiKit.label(Net.lobby_code, 40, Cfg.UI_ACCENT, true)
-			code_big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			code_big.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			_net_body.add_child(code_big)
-		elif _net_kind == "steam":
 			var sid := NetTransport.SteamTransport.my_steam_id()
 			if sid > 0:
 				_net_body.add_child(UiKit.label(
@@ -2880,6 +2865,7 @@ func _build_net_lobby() -> void:
 	var leave_btn := UiKit.danger(I18n.t("net.leave", {}, "Отключиться"), 12)
 	leave_btn.pressed.connect(func():
 		Net.leave()
+		_net_mode = ""
 		_net_error = ""
 		_refresh_net())
 	_net_body.add_child(leave_btn)
