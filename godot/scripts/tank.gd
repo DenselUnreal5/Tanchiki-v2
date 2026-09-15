@@ -140,6 +140,24 @@ var weapon := ""
 ## Оставшиеся тики действия оружия.
 var weapon_timer := 0
 
+## Экипированная в гараже пушка: id из cannons.gd. "standard" — обычный ствол.
+var cannon_id := "standard"
+
+## Заморозка «Ледяной пушкой»: пока тикает, управление отключено (update()).
+var freeze_ticks := 0
+## Стак «Кислотной пушки»: урон идёт периодическими тиками из update(),
+## а не единоразовым попаданием — см. apply_acid()/_hit_tanks().
+var acid_stacks := 0
+var acid_ticks_left := 0
+var acid_tick_timer := 0
+var acid_dmg_scale := 1.0
+var acid_attacker = null    # Tank — кому засчитывается урон тика
+
+## «Небесный удар»: кулдаун заряда (тикает только в грозу) и готовность —
+## следующий shoot() потратит её на заряженную пулю (см. shoot()).
+var sky_strike_cooldown := 0
+var sky_strike_ready := false
+
 var flag = null       # Ent.Flag
 var brain = null      # BotBrain
 
@@ -193,6 +211,7 @@ func _init(opts: Dictionary) -> void:
 	upgrade_mods = opts.get("upgrade_mods", {})
 	cosmetics = opts.get("cosmetics", {})
 	dmg_scale = float(opts.get("dmg_scale", 1.0))
+	cannon_id = String(opts.get("cannon_id", "standard"))
 
 	angle = -PI / 2.0 if owner != null else PI / 2.0
 	body_angle = angle
@@ -254,7 +273,14 @@ func _after_shot() -> void:
 	#
 	# Поэтому плата убрана вместе с самим нагревом: четыре секунды ствол
 	# держит любой темп, а цена — откат и то, что активный перк всего один.
-	var gain: float = Cfg.HEAT_PER_SHOT * float(mods["heatPerShotMult"])
+	var heat_mult := 1.0
+	if weapon != "":
+		heat_mult = float(Weapons.get_weapon(weapon).get("heat_mult", 1.0))
+	elif cannon_id != "" and cannon_id != "standard":
+		# get_cannon() возвращает {} для неизвестного id (см. cannons.gd) —
+		# .get(...) с дефолтом безопасно откатывается на обычный нагрев.
+		heat_mult = float(Cannons.get_cannon(cannon_id).get("heat_mult", 1.0))
+	var gain: float = Cfg.HEAT_PER_SHOT * float(mods["heatPerShotMult"]) * heat_mult
 	if ability_active("overclock"):
 		gain = 0.0
 	heat = minf(1.0, heat + gain)
@@ -369,6 +395,27 @@ func update(world) -> void:
 			_resolve_telegraphed_attack(world)
 	if enrage_shield_ticks > 0:
 		enrage_shield_ticks -= 1
+	if freeze_ticks > 0:
+		freeze_ticks -= 1
+	# Яд тикает даже под заморозкой — она глушит только управление, не эффекты.
+	if acid_ticks_left > 0:
+		acid_ticks_left -= 1
+		if acid_ticks_left <= 0:
+			acid_stacks = 0
+		else:
+			acid_tick_timer -= 1
+			if acid_tick_timer <= 0:
+				acid_tick_timer = Cfg.ACID_TICK_INTERVAL
+				var tick_dmg: float = Cfg.ACID_DMG_PER_STACK_TICK * float(acid_stacks) * acid_dmg_scale
+				world.deal_damage(self, tick_dmg, acid_attacker, "acid")
+
+	# «Небесный удар»: заряд копится только в грозу, как и «Повелитель
+	# молний» — вне грозы просто ждёт на месте, не тратя впустую 12 секунд.
+	if flags.has("skyStrike") and world.weather != null and world.weather.condition == "storm":
+		if sky_strike_cooldown > 0:
+			sky_strike_cooldown -= 1
+		elif not sky_strike_ready:
+			sky_strike_ready = true
 
 	wants_move = false
 	_update_surface(world)
@@ -376,11 +423,14 @@ func update(world) -> void:
 	_update_shield(world)
 	_update_boss_phase(world)
 
-	# Управление: человек через владельца, бот через свой «мозг».
-	if owner != null:
-		owner.control(self, world)
-	elif brain != null:
-		brain.update(self, world)
+	# Управление: человек через владельца, бот через свой «мозг». Заморозка
+	# «Ледяной пушки» глушит оба пути одним условием — бот стреляет/движется
+	# только из brain.update(), напрямую минуя apply_command().
+	if freeze_ticks <= 0:
+		if owner != null:
+			owner.control(self, world)
+		elif brain != null:
+			brain.update(self, world)
 
 	# Рывок-таран: пока не проехали DASH_DISTANCE, скорость ×DASH_SPEED_MULT.
 	if dash_range > 0.0:
@@ -643,10 +693,13 @@ func _try_ram(world) -> void:
 		if dx * dx + dy * dy > r2:
 			continue
 		var damage := floorf(spd * Cfg.RAM_DMG_PER_SPEED * float(mods["ramMult"]))
-		if damage <= 0.0:
-			continue
-		# Начисление фрага и статистику тарана делает World по source == 'ram'.
-		world.deal_damage(other, damage, self, "ram")
+		# Замороженный «Ледяной пушкой» враг гибнет от любого тарана
+		# гарантированно — в обход брони/щита/уклонения (execute_frozen_kill).
+		if other.freeze_ticks > 0:
+			world.execute_frozen_kill(other, self)
+		elif damage > 0.0:
+			# Начисление фрага и статистику тарана делает World по source == 'ram'.
+			world.deal_damage(other, damage, self, "ram")
 		var push_angle: float = atan2(dy, dx)
 		other.vx += cos(push_angle) * Cfg.RAM_PUSH
 		other.vy += sin(push_angle) * Cfg.RAM_PUSH
@@ -685,6 +738,40 @@ func shoot(world) -> bool:
 		world.notify_shot(self)
 		return true
 
+	# Пушка из гаража переопределяет выстрел так же, как временное оружие
+	# выше — «Веер»/«Двойной ствол» её не касаются (см. Cannons.LIST).
+	# get_cannon() возвращает {} для неизвестного id — например, если по
+	# сети пришёл чужой/неправильный cannon_id от клиента (net.gd не
+	# валидирует поле лобби). В этом случае просто стреляем обычно, а не
+	# падаем на прямом доступе к отсутствующим ключам.
+	var cn := Cannons.get_cannon(cannon_id) if cannon_id != "" and cannon_id != "standard" else {}
+	if not cn.is_empty():
+		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * float(cn["cooldown_mult"]))))
+		var b := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, float(cn["dmg_scale"]) * scale_v)
+		b.cannon_kind = String(cn["mode"])
+		# Лёд/кислота бьют только танки: пробитие/взрыв/сохранение кирпича
+		# для них не определены, поэтому явно отключены, даже если у
+		# стрелка есть «Пробивной»/«Взрывной»/«Толстая броня».
+		b.pierce = 0
+		b.explosive = false
+		b.keep_bricks = false
+		world.bullets.append(b)
+		world.particles.burst(muzzle_x, muzzle_y, [cn.get("color", Color.WHITE), Color.WHITE], 6, 2, 4, 10, 12, world.rng)
+		Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
+		world.notify_shot(self)
+		return true
+
+	# «Небесный удар»: заряд тратится только на обычный выстрел — как и
+	# «Веер»/«Двойной ствол» выше, эффект не переживает переопределение
+	# оружием/пушкой из гаража (обе ветки уже вернулись выше), иначе заряд
+	# просто сгорал бы впустую на выстрел, которому он не достанется.
+	# Метится только первая пуля залпа — «Веер»+«Двойной ствол» не должны
+	# бить молнией шесть раз за один заряд.
+	var sky_strike_shot: bool = flags.has("skyStrike") and sky_strike_ready
+	if sky_strike_shot:
+		sky_strike_ready = false
+		sky_strike_cooldown = Cfg.SKY_STRIKE_COOLDOWN
+
 	# «Веер» и «Двойной ствол» — независимые оси, а не альтернативы: веер
 	# задаёт число направлений, двойной ствол — число параллельных пуль на
 	# каждое направление. Вместе это веер, где в каждом луче летит по две
@@ -701,11 +788,20 @@ func shoot(world) -> bool:
 		var ox := cos(perp) * 6.0
 		var oy := sin(perp) * 6.0
 		for off in directions:
-			world.bullets.append(Ent.Bullet.new(muzzle_x + ox, muzzle_y + oy, turret_angle + off, self, per_bullet_scale))
-			world.bullets.append(Ent.Bullet.new(muzzle_x - ox, muzzle_y - oy, turret_angle + off, self, per_bullet_scale))
+			var b1 := Ent.Bullet.new(muzzle_x + ox, muzzle_y + oy, turret_angle + off, self, per_bullet_scale)
+			var b2 := Ent.Bullet.new(muzzle_x - ox, muzzle_y - oy, turret_angle + off, self, per_bullet_scale)
+			if sky_strike_shot:
+				b1.sky_strike = true
+				sky_strike_shot = false
+			world.bullets.append(b1)
+			world.bullets.append(b2)
 	else:
 		for off in directions:
-			world.bullets.append(Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle + off, self, per_bullet_scale))
+			var b := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle + off, self, per_bullet_scale)
+			if sky_strike_shot:
+				b.sky_strike = true
+				sky_strike_shot = false
+			world.bullets.append(b)
 
 	world.particles.burst(muzzle_x, muzzle_y, [Color("#ffee55"), Color("#ffffaa")], 5, 2, 4, 8, 8, world.rng)
 	Sfx.play("shoot", muzzle_x, muzzle_y)
@@ -930,6 +1026,47 @@ func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 		result["killed"] = true
 	return result
 
+## Заморозка «Ледяной пушкой» — в обход deal_damage()/take_damage(): 0-урона
+## пуля туда бы не дошла (там гейт amount<=0). Уважает спавн-защиту и
+## уклонение, как обычное попадание, чтобы «Уклонение» не было бессильно
+## именно против этой пушки.
+func apply_freeze(world, attacker, ticks: int) -> bool:
+	if not alive or spawn_protect > 0:
+		return false
+	# Активный щит («Энергощит») закрывает от любого попадания, включая это —
+	# take_damage() поглощает урон щитом первым делом, здесь эквивалент.
+	if shield_hp > 0.0:
+		world.particles.burst(x, y, [Cfg.shield], 5, 2, 4, 12, 12, world.rng)
+		return false
+	if float(mods["evasionChance"]) > 0.0 and world.rng.nextf() < float(mods["evasionChance"]):
+		world.particles.burst(x, y, [Color("#00ffff"), Color("#aaffff")], 5, 2, 3, 10, 14, world.rng)
+		return false
+	freeze_ticks = ticks
+	vx = 0.0
+	vy = 0.0
+	world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE], 10, 2, 4, 12, 20, world.rng)
+	return true
+
+## Стак «Кислотной пушки»: сам урон приходит периодическими тиками из
+## update() через deal_damage() — так вампиризм/отражение/берсерк и
+## статистика урона считают каждый тик как обычное попадание.
+func apply_acid(world, attacker, dmg_scale_value: float) -> bool:
+	if not alive or spawn_protect > 0:
+		return false
+	if shield_hp > 0.0:
+		world.particles.burst(x, y, [Cfg.shield], 5, 2, 4, 12, 12, world.rng)
+		return false
+	if float(mods["evasionChance"]) > 0.0 and world.rng.nextf() < float(mods["evasionChance"]):
+		world.particles.burst(x, y, [Color("#00ffff"), Color("#aaffff")], 5, 2, 3, 10, 14, world.rng)
+		return false
+	acid_stacks = mini(Cfg.ACID_STACK_MAX, acid_stacks + 1)
+	acid_ticks_left = Cfg.ACID_DURATION_TICKS
+	if acid_tick_timer <= 0:
+		acid_tick_timer = Cfg.ACID_TICK_INTERVAL
+	acid_dmg_scale = dmg_scale_value
+	acid_attacker = attacker
+	return true
+
 ## Вызывается World после смерти.
 func on_death(world, killer) -> void:
 	alive = false
@@ -943,6 +1080,15 @@ func on_death(world, killer) -> void:
 	dash_range = 0.0
 	telegraph_ticks = 0
 	enrage_shield_ticks = 0
+	freeze_ticks = 0
+	acid_stacks = 0
+	acid_ticks_left = 0
+	acid_tick_timer = 0
+	acid_attacker = null
+	# sky_strike_cooldown/_ready НЕ сбрасываются: это собственный ресурс
+	# игрока вроде ability_timer (см. respawn() ниже) — если бы смерть
+	# обнуляла кулдаун, специально умереть ради мгновенного нового заряда
+	# стало бы выгодной тактикой.
 
 	world.particles.burst(x, y, Cfg.explosion, 30, 3, 8, 20, 40, world.rng)
 	Sfx.play("explosion", x, y)
@@ -991,6 +1137,11 @@ func respawn(nx: float, ny: float) -> void:
 	dash_stall = 0
 	weapon = ""
 	weapon_timer = 0
+	freeze_ticks = 0
+	acid_stacks = 0
+	acid_ticks_left = 0
+	acid_tick_timer = 0
+	acid_attacker = null
 	last_attacker = null
 	flag = null
 	if brain != null:
@@ -1002,11 +1153,23 @@ func separate_from(other) -> void:
 	var dy: float = y - other.y
 	var d := sqrt(dx * dx + dy * dy)
 	var min_dist := Cfg.TANK_BODY_R * 0.9
-	if d >= min_dist or d == 0.0:
+	if d >= min_dist:
 		return
+	var nx: float
+	var ny: float
+	if d == 0.0:
+		# Точное совпадение координат (например, два бота на одном
+		# free_spot) — направление через dx/dy не определить (0/0), раньше
+		# это тихо пропускало расталкивание насовсем. Берём стабильный угол
+		# по id: не ноль и разный у любой пары танков, пока один из них не
+		# сдвинется сам и dx/dy не станут ненулевыми.
+		var a: float = float(id) * 2.399963229728653
+		nx = cos(a)
+		ny = sin(a)
+	else:
+		nx = dx / d
+		ny = dy / d
 	var push := ((min_dist - d) / min_dist) * 0.35
-	var nx := dx / d
-	var ny := dy / d
 	vx += nx * push
 	vy += ny * push
 	other.vx -= nx * push

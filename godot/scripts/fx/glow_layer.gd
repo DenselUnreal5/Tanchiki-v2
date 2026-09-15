@@ -60,7 +60,9 @@ func _draw() -> void:
 	for b in world.bullets:
 		if not b.alive:
 			continue
-		var color: Color = Cfg.bullet if b.from_player else Cfg.bullet_enemy
+		var cannon_color := Cannons.color_for_mode(b.cannon_kind)
+		var color: Color = cannon_color if cannon_color.a > 0.0 \
+			else (Cfg.bullet if b.from_player else Cfg.bullet_enemy)
 		_glow(Vector2(b.x, b.y), 26.0 if b.lobbed else 18.0, color, 0.45)
 
 	# --- ракеты авиаудара

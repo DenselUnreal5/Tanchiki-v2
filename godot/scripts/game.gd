@@ -395,12 +395,14 @@ func start_match(net_opts: Dictionary = {}) -> void:
 				Ctl.NetScheme.new(int(peer_id)))
 			rp.peer_id = int(peer_id)
 			rp.cosmetics = info.get("cosmetics", {})
+			rp.equipped_cannon = String(info.get("cannon_id", "standard"))
 			remote_players.append(rp)
 
 	for p in players:
 		p.reset_for_match()
 		p.upgrade_mods = Prof.upgrade_mods()
 		p.cosmetics = Prof.equipped_cosmetics()
+		p.equipped_cannon = Prof.equipped_cannon
 	for p in remote_players:
 		p.reset_for_match()
 
@@ -977,7 +979,11 @@ func _apply_net_extra(extra: Dictionary) -> void:
 	world.flags.clear()
 	for f in extra.get("flags", []):
 		var fl = Ent.Flag.new(float(f[0]), float(f[1]), "player" if int(f[2]) == 0 else "enemy")
-		fl.at_home = bool(f[3])
+		# at_home/carried — вычисляемые свойства без сеттера (только get:),
+		# присваивать им напрямую нельзя. Сеть везёт только один бит
+		# "дома/не дома" (game.gd:878), носителя не передаёт — поэтому у
+		# клиента любой "не дома" флаг рисуется как "брошенный".
+		fl.state = "home" if bool(f[3]) else "dropped"
 		world.flags.append(fl)
 	world.pickups.clear()
 	for p in extra.get("pickups", []):
@@ -1007,6 +1013,7 @@ func net_spawn_puppet(info: Dictionary) -> void:
 		"net_id": int(info["id"]), "owner_peer": int(info["owner_peer"]),
 	})
 	tank.cosmetics = info.get("cosmetics", {})
+	tank.cannon_id = String(info.get("cannon_id", "standard"))
 	# Свой танк цепляется к местному игроку: иначе не будет ни камеры,
 	# ни HUD, ни прицеливания.
 	if int(info["owner_peer"]) == multiplayer.get_unique_id() and not players.is_empty():

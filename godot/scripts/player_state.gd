@@ -27,6 +27,8 @@ var tank: Tank = null
 var upgrade_mods := {}
 ## Экипированная косметика: {hull, track, turret}.
 var cosmetics := {}
+## Экипированная в гараже пушка: id из cannons.gd.
+var equipped_cannon := "standard"
 
 ## Экипированные перки. Танк держит ссылку на этот же массив.
 var perk_ids: Array = []

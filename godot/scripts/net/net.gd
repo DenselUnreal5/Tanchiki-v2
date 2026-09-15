@@ -79,7 +79,7 @@ func _physics_process(_delta: float) -> void:
 
 ## "" — офлайн, "host" — хозяин партии, "client" — присоединившийся.
 var role := ""
-## peer_id -> {name, color_key, cosmetics, ready}
+## peer_id -> {name, color_key, cosmetics, cannon_id, ready}
 var lobby := {}
 ## Выделенный сервер: этот хост — без своего танка, только считает партию.
 ## Ставится в host_dedicated(); game.gd проверяет перед созданием
@@ -277,6 +277,7 @@ func host_game(port: int = PORT) -> bool:
 	role = "host"
 	lobby = {1: _self_info()}
 	lobby_changed.emit()
+	print("[net] host_game: слушаю порт ", port)
 	return true
 
 ## Выделенный сервер: та же ENet-хостовая партия, но без своего игрока —
@@ -310,6 +311,7 @@ func join_game(address: String, port: int = PORT) -> bool:
 	role = "client"
 	lobby = {}
 	lobby_changed.emit()
+	print("[net] join_game: подключаюсь к ", address, ":", port)
 	return true
 
 ## @param notify сообщить игре, что партия оборвалась. Ложь только там,
@@ -360,6 +362,7 @@ func _self_info() -> Dictionary:
 		"name": my_name,
 		"color_key": Prof.equipped_color1,
 		"cosmetics": Prof.equipped_cosmetics(),
+		"cannon_id": Prof.equipped_cannon,
 		"ready": false,
 	}
 
@@ -367,6 +370,7 @@ func _self_info() -> Dictionary:
 func _on_peer_connected(id: int) -> void:
 	if role != "host":
 		return
+	print("[net] peer_connected: ", id)
 	# Новичку отдаём весь лобби-список, себя объявляем ему отдельно.
 	_rpc_lobby.rpc_id(id, lobby)
 
@@ -393,13 +397,16 @@ func _on_peer_disconnected(id: int) -> void:
 	lobby_changed.emit()
 
 func _on_connected() -> void:
+	print("[net] connected_to_server")
 	_rpc_hello.rpc_id(1, _self_info())
 
 func _on_connect_failed() -> void:
+	print("[net] connection_failed")
 	net_error.emit(I18n.t("net.err.failed", {}, "Сервер не отвечает"))
 	leave()
 
 func _on_server_disconnected() -> void:
+	print("[net] server_disconnected")
 	net_error.emit(I18n.t("net.err.lost", {}, "Соединение с хостом потеряно"))
 	disconnected.emit()
 	leave(false)
@@ -510,9 +517,11 @@ func host_lobby(name: String) -> void:
 		_pending_room_name = I18n.t("net.room.default", {"name": my_name}, "Игра %s" % my_name)
 	lobby_pending = "host"
 	lobby_changed.emit()
+	print("[net] host_lobby: создаю лобби, название='", _pending_room_name, "'")
 	_steam().createLobby(_LOBBY_TYPE_PUBLIC, MAX_LOBBY)
 
 func _on_steam_lobby_created(result: int, lobby_id: int) -> void:
+	print("[net] lobby_created: result=", result, " lobby_id=", lobby_id)
 	if lobby_pending != "host":
 		return
 	lobby_pending = ""
@@ -557,6 +566,7 @@ func join_lobby_id(lobby_id: int) -> void:
 	_steam_connect_signals()
 	lobby_pending = "join"
 	lobby_changed.emit()
+	print("[net] join_lobby_id: пробую войти в ", lobby_id)
 	_enter_steam_lobby(lobby_id)
 
 func _enter_steam_lobby(lobby_id: int) -> void:
@@ -579,25 +589,34 @@ func refresh_lobby_list() -> void:
 	var s := _steam()
 	s.addRequestLobbyListStringFilter("game", GAME_TAG, _LOBBY_CMP_EQUAL)
 	s.addRequestLobbyListDistanceFilter(_LOBBY_DIST_WORLDWIDE)
+	print("[net] refresh_lobby_list: запрашиваю список (tag=", GAME_TAG, ")")
 	s.requestLobbyList()
 
 func _on_steam_lobby_match_list(lobbies: Array) -> void:
+	print("[net] lobby_match_list: найдено ", lobbies.size(), " лобби")
 	var s := _steam()
 	var out := []
 	if s != null:
 		for lid in lobbies:
 			var id := int(lid)
+			var host_name := String(s.getLobbyData(id, "host_name"))
+			var room_name_here := String(s.getLobbyData(id, "room_name"))
+			var members := int(s.getNumLobbyMembers(id))
+			var max_members := int(s.getLobbyMemberLimit(id))
+			print("[net]   лобби ", id, ": host='", host_name, "' room='", room_name_here,
+				"' ", members, "/", max_members)
 			out.append({
 				"id": id,
-				"host_name": String(s.getLobbyData(id, "host_name")),
-				"room_name": String(s.getLobbyData(id, "room_name")),
-				"members": int(s.getNumLobbyMembers(id)),
-				"max_members": int(s.getLobbyMemberLimit(id)),
+				"host_name": host_name,
+				"room_name": room_name_here,
+				"members": members,
+				"max_members": max_members,
 			})
 	lobby_browser_results = out
 	lobby_list_updated.emit()
 
 func _on_steam_lobby_joined(lobby_id: int, _perm: int, _locked: bool, response: int) -> void:
+	print("[net] lobby_joined: lobby_id=", lobby_id, " response=", response)
 	if _join_target_lobby != lobby_id:
 		return
 	_join_target_lobby = 0

@@ -119,6 +119,11 @@ class Bullet extends RefCounted:
 	var from_player := false
 	## Миномётный снаряд: летит по дуге и не задевает стены.
 	var lobbed := false
+	## Пуля из cannons.gd: "" | "freeze" | "acid" — см. _hit_tanks().
+	var cannon_kind := ""
+	## «Небесный удар»: этот выстрел заряжен, при попадании по танку
+	## вдобавок к обычному урону бьёт молния в точке попадания.
+	var sky_strike := false
 
 	func _init(x_: float, y_: float, angle: float, owner_, dmg_scale_: float = 1.0) -> void:
 		x = x_
@@ -259,12 +264,28 @@ class Bullet extends RefCounted:
 			if dx * dx + dy * dy > hit_r2:
 				continue
 
+			if cannon_kind == "freeze":
+				tank.apply_freeze(world, owner, Cfg.ICE_FREEZE_TICKS)
+				alive = false
+				world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE], 8, 2, 4, 10, 20, world.rng)
+				return true
+			if cannon_kind == "acid":
+				tank.apply_acid(world, owner, dmg_scale)
+				alive = false
+				world.particles.burst(x, y, [Color("#9dff5c"), Color("#4a7a2a")], 8, 2, 4, 10, 20, world.rng)
+				return true
+
 			var amount: float = (Cfg.BULLET_DMG_MIN + world.rng.nextf() \
 				* (Cfg.BULLET_DMG_MAX - Cfg.BULLET_DMG_MIN)) * dmg_scale
 			world.deal_damage(tank, amount, owner, "bullet")
 
 			if explosive:
 				_explode(world, tank, amount)
+
+			# «Небесный удар»: вдобавок к обычному урону — молния в точке
+			# попадания. Не замена урону пули, а надбавка поверх него.
+			if sky_strike:
+				world.strike_lightning(x, y, owner)
 
 			alive = false
 			world.particles.burst(x, y, [Color("#ff8833"), Color("#ffee55")], 8, 2, 4, 10, 20, world.rng)

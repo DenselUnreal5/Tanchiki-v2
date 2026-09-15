@@ -239,8 +239,10 @@ func _update_storm() -> void:
 
 	strike_lightning(x, y)
 
-## Разряд в точку: урон, след, звук и вспышка.
-func strike_lightning(x: float, y: float) -> void:
+## Разряд в точку: урон, след, звук и вспышка. attacker — чей это удар (null
+## у случайного разряда в грозу — тот бьёт безлично, ни в чей актив не идёт);
+## носителю «Цепной молнии» позволяет цеплять соседей (см. ниже).
+func strike_lightning(x: float, y: float, attacker = null) -> void:
 	# Номер разряда нужен только для формы ломаной, поэтому берётся из
 	# счётчика тиков и целой части случайного числа — своего метода
 	# у Rng для целых нет.
@@ -251,6 +253,7 @@ func strike_lightning(x: float, y: float) -> void:
 		scorches.pop_front()
 
 	var r2: float = Cfg.LIGHTNING_RADIUS * Cfg.LIGHTNING_RADIUS
+	var hit := {}
 	for t in tanks:
 		if not t.alive:
 			continue
@@ -258,13 +261,89 @@ func strike_lightning(x: float, y: float) -> void:
 		var dy: float = t.y - y
 		if dx * dx + dy * dy > r2:
 			continue
-		deal_damage(t, Cfg.LIGHTNING_DAMAGE, null, "lightning")
+		deal_damage(t, Cfg.LIGHTNING_DAMAGE, attacker, "lightning")
+		hit[t.id] = true
 
 	particles.burst(x, y, [Cfg.bolt_core, Cfg.bolt_glow, Color.WHITE],
 		22, 3, 7, 20, 44, rng)
 	add_shake(7.0, x, y)
 	Sfx.play("thunder", x, y)
 	weather.flash = maxf(weather.flash, 0.45)
+
+	# «Цепная молния»: только у носителя перка, и только от его собственных
+	# ударов — случайный безличный разряд (attacker == null) не цепляет,
+	# иначе одна гроза могла бы включить эффект чужого перка.
+	if attacker != null and attacker.alive and attacker.flags.has("chainLightning"):
+		_chain_lightning(x, y, attacker, hit)
+
+## Добор целей для «Цепной молнии»: ближайшие враги вне уже задетого пятна,
+## каждому — половина урона разряда. Радиус шире основного LIGHTNING_RADIUS
+## умышленно — иначе почти всегда совпадал бы с ним и цеплять было бы некого.
+func _chain_lightning(x: float, y: float, attacker, already_hit: Dictionary) -> void:
+	var candidates := []
+	var r2: float = Cfg.CHAIN_LIGHTNING_RADIUS * Cfg.CHAIN_LIGHTNING_RADIUS
+	for t in tanks:
+		if not t.alive or already_hit.has(t.id) or not are_hostile(attacker, t):
+			continue
+		var dx: float = t.x - x
+		var dy: float = t.y - y
+		var d2 := dx * dx + dy * dy
+		if d2 > r2:
+			continue
+		candidates.append([d2, t])
+	candidates.sort_custom(func(a, b): return a[0] < b[0])
+
+	var chain_dmg: float = Cfg.LIGHTNING_DAMAGE * Cfg.CHAIN_LIGHTNING_DMG_MULT
+	for i in mini(Cfg.CHAIN_LIGHTNING_MAX_TARGETS, candidates.size()):
+		var t = candidates[i][1]
+		deal_damage(t, chain_dmg, attacker, "lightning")
+		scorches.append(Vector2(t.x, t.y))
+		while scorches.size() > Cfg.MAX_SCORCH:
+			scorches.pop_front()
+		particles.burst(t.x, t.y, [Cfg.bolt_core, Cfg.bolt_glow], 10, 2, 5, 14, 26, rng)
+
+## «Повелитель молний»: во время грозы, в том же ритме, что и обычный
+## разряд, каждый носитель перка независимо бросает свой шанс ударить
+## молнией в ближайшего врага. Отдельно от _update_storm() — это
+## дополнительное событие поверх обычного случайного разряда, не замена.
+func _update_lightning_lord() -> void:
+	if weather == null or weather.condition != "storm":
+		return
+	if tick % Cfg.LIGHTNING_EVERY != 0:
+		return
+	for holder in tanks:
+		if not holder.alive or not holder.flags.has("lightningLord"):
+			continue
+		# Полный грозовой билд (все три перка сразу) поднимает шанс — иначе
+		# «Цепная молния»/«Небесный удар» без самого «Повелителя молний»
+		# почти нечем было бы запускать: он единственный, кто бьёт сам,
+		# без выстрела/попадания.
+		var chance := Cfg.LIGHTNING_LORD_CHANCE
+		if holder.flags.has("skyStrike") and holder.flags.has("chainLightning"):
+			chance = Cfg.LIGHTNING_LORD_SYNERGY_CHANCE
+		if rng.nextf() > chance:
+			continue
+		var target = _nearest_hostile(holder)
+		if target != null:
+			strike_lightning(target.x, target.y, holder)
+
+## Ближайший живой враг без ограничений по дальности/видимости — для
+## магических эффектов вроде «Повелителя молний», в отличие от
+## BotBrain.find_best_threat(), которому для прицельной стрельбы нужны
+## дальность обзора и прямая видимость.
+func _nearest_hostile(tank):
+	var best = null
+	var best_d2 := INF
+	for other in tanks:
+		if other == tank or not other.alive or not are_hostile(tank, other):
+			continue
+		var dx: float = other.x - tank.x
+		var dy: float = other.y - tank.y
+		var d2 := dx * dx + dy * dy
+		if d2 < best_d2:
+			best_d2 = d2
+			best = other
+	return best
 
 ## Ветер грозы валит деревья: раз в Cfg.STORM_FELL_EVERY тиков одно стоящее
 ## дерево ложится, но не больше Cfg.STORM_FELL_MAX за партию. Дерево —
@@ -323,6 +402,7 @@ static func tank_info(t: Tank) -> Dictionary:
 		"color_key": t.color_key, "chassis": t.chassis_id,
 		"max_hp": t.max_hp, "speed": t.speed, "fire_rate": t.fire_rate,
 		"owner_peer": t.owner_peer, "cosmetics": t.cosmetics,
+		"cannon_id": t.cannon_id,
 	}
 
 func roster() -> Array:
@@ -487,6 +567,7 @@ func _spawn_player_tank(player, team: String) -> Tank:
 		"color_key": player.color_key,
 		"upgrade_mods": player.upgrade_mods,
 		"cosmetics": player.cosmetics,
+		"cannon_id": player.equipped_cannon,
 	})
 	tank.net_id = Net.next_tank_id()
 	tank.owner_peer = int(player.peer_id)
@@ -889,6 +970,7 @@ func step() -> void:
 	if mode == "koth":
 		_update_flood()
 	_update_storm()
+	_update_lightning_lord()
 	_update_treefall()
 
 	# До хода: _try_ram/count_nearby читают её изнутри Tank.update() ниже.
@@ -1007,14 +1089,29 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		var ratio: float = attacker.hp / attacker.max_hp if attacker.max_hp > 0.0 else 0.0
 		if ratio <= 0.4:
 			amount *= 1.6
-	# «Глушение»: попадание по тому, кто вас ещё не нашёл, бьёт сильнее.
-	# Это и есть плата за тишину — иначе перк только отваживал цели.
-	if attacker != null and source == "bullet" 			and float(attacker.mods["ambushDmgMult"]) > 1.0 			and target.brain != null and target.brain.target != attacker:
+	# «Глушение»/«Хищник»: попадание по тому, кто вас (именно вас) не бил и
+	# не видел последние Cfg.AMBUSH_UNAWARE_TICKS тиков, — внезапная атака.
+	# Раньше это проверялось через target.brain.target (текущая цель бота) —
+	# у игроков brain нет, и бонус против них не мог сработать вовсе.
+	# last_attacker/last_attacker_tick уже ведутся на каждом танке для
+	# начисления фрага и одинаково доступны у игроков и ботов — не новое
+	# состояние, а переиспользование существующего.
+	var is_ambush: bool = attacker != null and source == "bullet" \
+		and (target.last_attacker != attacker \
+			or tick - target.last_attacker_tick > Cfg.AMBUSH_UNAWARE_TICKS)
+	# «Глушение» — это и есть плата за тишину, иначе перк только отваживал цели.
+	if is_ambush and float(attacker.mods["ambushDmgMult"]) > 1.0:
 		amount *= float(attacker.mods["ambushDmgMult"])
 
 	var res: Dictionary = target.take_damage(self, amount, attacker, source)
 	if bool(res["evaded"]) or float(res["applied"]) <= 0.0:
 		return 0.0
+
+	# «Хищник»: рывок скорости за попадание из засады — сработавшая, а не
+	# просто попытанная (уклонение выше уже отсеяно). Не требует «Глушения»,
+	# но усиливается им — попал незамеченным, добавил урона, оторвался.
+	if is_ambush and float(attacker.mods["ambushDashTicks"]) > 0.0:
+		attacker.turbo_timer = maxi(attacker.turbo_timer, int(attacker.mods["ambushDashTicks"]))
 
 	target.last_attacker = attacker
 	target.last_attacker_tick = tick
@@ -1053,6 +1150,38 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 	if bool(res["killed"]):
 		_kill_tank(target, attacker, source)
 	return float(res["applied"])
+
+## Гарантированное убийство: таран по цели, замороженной «Ледяной пушкой».
+## В обход take_damage() — щит/броня/уклонение/damageTakenMult не спасают,
+## это осознанное решение (см. план «пушки»). Вампиризм/отражение не
+## начисляются: гарантированный килл — уже сам по себе награда, дублировать
+## её лечением незачем. source остаётся "ram" (не отдельная строка) —
+## _kill_tank() начисляет ramKills-статистику и перк «Таран» именно по
+## source == "ram", а это буквально таран.
+func execute_frozen_kill(victim, attacker) -> void:
+	if victim == null or not victim.alive:
+		return
+	var amount: float = victim.hp
+	victim.hp = 0.0
+	victim.freeze_ticks = 0
+	victim.last_attacker = attacker
+	victim.last_attacker_tick = tick
+	# Урон в статистику засчитывается, как и у deal_damage() — иначе гарантированный
+	# килл тараном не давал бы очков урона: замер "Царя горы" по таймауту
+	# сравнивает damage_dealt, а на табло в конце матча — "Урон нанесён".
+	# Вампиризм/отражение сознательно не начисляются (см. коммент выше).
+	if attacker != null:
+		attacker.damage_dealt += amount
+		if attacker.owner != null:
+			attacker.owner.damage_dealt += amount
+			player_damage.emit(attacker.owner, amount)
+	damage_number.emit(victim.x, victim.y - 20, "-%d" % int(round(amount)),
+		Color("#ff4444") if victim.owner != null else Color("#ffee55"))
+	if victim.owner != null:
+		victim.owner.damage_flash = 12
+		victim.owner.shake = maxf(victim.owner.shake, 8.0)
+		Sfx.play("hit")
+	_kill_tank(victim, attacker, "ram")
 
 func _kill_tank(victim, killer, source: String) -> void:
 	victim.on_death(self, killer)

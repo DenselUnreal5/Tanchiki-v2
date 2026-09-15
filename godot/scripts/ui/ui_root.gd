@@ -1527,6 +1527,15 @@ func _fill_garage_tab() -> void:
 			grid.add_child(_upgrade_card(up))
 		_hub_body.add_child(grid)
 
+	# ---- пушки ----
+	_hub_body.add_child(UiKit.section(I18n.t("garage.cannons", {}, "Пушки"), Cfg.UI_MUTED))
+	var cannon_grid := HFlowContainer.new()
+	cannon_grid.add_theme_constant_override("h_separation", 10)
+	cannon_grid.add_theme_constant_override("v_separation", 10)
+	for c in Cannons.LIST:
+		cannon_grid.add_child(_cannon_card(c))
+	_hub_body.add_child(cannon_grid)
+
 	# ---- цвет танка ----
 	_hub_body.add_child(UiKit.section(I18n.t("garage.colors", {}, "Цвет танка"), Cfg.UI_MUTED))
 	_hub_body.add_child(_garage_color_row(I18n.t("menu.color1", {}, "Цвет танка 1"), 0, Prof.equipped_color1))
@@ -1563,6 +1572,7 @@ func _upgrade_card(up: Dictionary) -> Control:
 	icon.perk_id = "upg_" + String(up["id"])
 	icon.icon_color = Cfg.UI_TEXT
 	icon.custom_minimum_size = Vector2(26, 26)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(icon)
 
 	var info := UiKit.vbox(3)
@@ -1621,6 +1631,7 @@ func _cosmetic_card(c: Dictionary, type: String) -> Control:
 	icon.perk_id = "cos_%s_%s" % [type, String(c["id"])]
 	icon.icon_color = c.get("color", c.get("a", Cfg.UI_TEXT))
 	icon.custom_minimum_size = Vector2(26, 26)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(icon)
 
 	var info := UiKit.vbox(3)
@@ -1655,6 +1666,62 @@ func _cosmetic_card(c: Dictionary, type: String) -> Control:
 		buy.set_meta("card_id", card_id)
 		buy.pressed.connect(func():
 			if Prof.buy_cosmetic(type, String(c["id"]))["ok"]:
+				garage_changed.emit()
+				open_garage(card_id))
+		row.add_child(buy)
+	return card
+
+## Карточка пушки в гараже — почти дословная копия _cosmetic_card(), но
+## владение/выбор идут через Prof.*_cannon(), а иконка — просто эмодзи
+## из cannons.gd (как уже рисует своё wp["icon"] HUD подобранного оружия),
+## без отдельной записи в perk_icons.gd.
+func _cannon_card(c: Dictionary) -> Control:
+	var id := String(c["id"])
+	var owned := Prof.is_cannon_owned(id)
+	var equipped := Prof.equipped_cannon == id
+	var can_buy := not owned and Prof.money >= int(c["price"])
+
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(258, 0)
+	var border := Cfg.UI_ACCENT_DIM if equipped else (Color(Cfg.UI_GOLD, 0.45) if can_buy else Cfg.UI_BORDER)
+	card.add_theme_stylebox_override("panel", UiKit.card_style(border))
+
+	var row := UiKit.hbox(10)
+	card.add_child(row)
+	var icon := UiKit.label(String(c["icon"]), 22, c.get("color", Cfg.UI_TEXT))
+	icon.custom_minimum_size = Vector2(26, 26)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(icon)
+
+	var info := UiKit.vbox(3)
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(info)
+	info.add_child(UiKit.label(I18n.dn(c, "name", "cannon"), 11, Color.WHITE, true))
+	info.add_child(UiKit.label(I18n.dn(c, "desc", "cannon"), 9, Cfg.UI_MUTED))
+	var state := ""
+	if owned:
+		state = I18n.t("cos.equipped", {}, "Надето") if equipped else I18n.t("cos.owned", {}, "Куплено")
+	else:
+		state = I18n.t("cos.price", {"price": c["price"]}, "Цена: %d 🪙" % int(c["price"]))
+	info.add_child(UiKit.label(state, 9, Cfg.UI_MUTED))
+
+	var card_id := "cannon_" + id
+	if owned:
+		var equip := UiKit.small(I18n.t("cos.equipped", {}, "Надето") if equipped
+			else I18n.t("cos.equip", {}, "Надеть"))
+		equip.disabled = equipped
+		equip.set_meta("card_id", card_id)
+		equip.pressed.connect(func():
+			if Prof.equip_cannon(id)["ok"]:
+				garage_changed.emit()
+				open_garage(card_id))
+		row.add_child(equip)
+	else:
+		var buy := UiKit.small(I18n.t("cos.buy", {"price": c["price"]}, "Купить · %d 🪙" % int(c["price"])))
+		buy.disabled = not can_buy
+		buy.set_meta("card_id", card_id)
+		buy.pressed.connect(func():
+			if Prof.buy_cannon(id)["ok"]:
 				garage_changed.emit()
 				open_garage(card_id))
 		row.add_child(buy)
@@ -2640,6 +2707,10 @@ func _build_net_offline() -> void:
 			I18n.t("net.room.creating", {}, "Создаём…") if Net.lobby_pending == "host"
 				else I18n.t("net.room.searching", {}, "Подключаемся…"), 11, Cfg.UI_MUTED))
 
+	# Прямого IP больше нет: он в принципе не рассчитан работать «из коробки»
+	# у обычного игрока за NAT/файрволом — ровно то, из-за чего он и не
+	# подключался. Steam P2P (релей Valve) для того и нужен, чтобы решать
+	# эту же задачу самостоятельно. Без Steam сетевая игра сейчас недоступна.
 	if not steam_ok:
 		_net_body.add_child(UiKit.label(
 			I18n.t("net.err.noSteam", {}, "Нужен клиент Steam — сетевая игра недоступна"),
@@ -2768,8 +2839,17 @@ func _build_net_join() -> void:
 	render_list.call()
 
 func _build_net_lobby() -> void:
+	# role == "client" ставится, как только ENet локально создал сокет — это
+	# ещё не значит, что рукопожатие с хостом реально прошло (оно асинхронное,
+	# может занять несколько секунд или сорваться таймаутом). Пока свой танк
+	# не появился в общем лобби (Net.lobby пуст), честно показываем «идёт
+	# подключение», а не «подключились» — иначе разрыв связи выглядит как
+	# бесконечное молчаливое зависание.
+	var connecting := Net.role == "client" and Net.lobby.is_empty()
 	var role_text := I18n.t("net.role.host", {}, "Вы хост")
-	if Net.role != "host":
+	if connecting:
+		role_text = I18n.t("net.role.connecting", {}, "Подключаемся к хосту…")
+	elif Net.role != "host":
 		role_text = I18n.t("net.role.client", {}, "Вы подключены")
 	_net_body.add_child(UiKit.section(role_text, Cfg.UI_ACCENT))
 
@@ -2803,6 +2883,10 @@ func _build_net_lobby() -> void:
 
 	if Net.lobby.is_empty():
 		_net_body.add_child(UiKit.label(I18n.t("net.waiting", {}, "Соединение…"), 12, Cfg.UI_MUTED))
+		if connecting:
+			_net_body.add_child(UiKit.label(
+				I18n.t("net.waiting.hint", {}, "Может занять несколько секунд. Если долго не проходит — сеть между компьютерами не пропускает игру, попробуйте «Отключиться» и другой способ."),
+				9, Cfg.UI_MUTED))
 	for peer_id in Net.lobby.keys():
 		var info: Dictionary = Net.lobby[peer_id]
 		var row := UiKit.hbox(8)

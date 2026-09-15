@@ -1286,7 +1286,9 @@ func _draw_bullets() -> void:
 			draw_circle(pos, 4, Color("#ff9933"))
 			draw_circle(pos, 1.8, Color("#ffe8a0"))
 			continue
-		var color: Color = Cfg.bullet if b.from_player else Cfg.bullet_enemy
+		var cannon_color := Cannons.color_for_mode(b.cannon_kind)
+		var color: Color = cannon_color if cannon_color.a > 0.0 \
+			else (Cfg.bullet if b.from_player else Cfg.bullet_enemy)
 		# Короткий след — читается направление полёта.
 		var trail := color
 		trail.a = 0.35
@@ -1502,6 +1504,14 @@ func _draw_tank(tank: Tank) -> void:
 	var has_turret_color := turret_id != "" and turret_id != "none"
 	var barrel_base := Cosmetics.color_of("turret", turret_id, Color("#4d545c"))
 	var barrel_dark := Cosmetics.color_of("turret", turret_id, Color("#2b3036"))
+	# Пушка из гаража ("ice"/"acid") красит короткую полоску у среза ствола —
+	# тот же приём, что и раскалённый ствол ниже, но не завязана на heat.
+	# Гвард — как в Tank.shoot() (tank.gd:734): "standard" не красится.
+	var cannon_accent := Color(0, 0, 0, 0)
+	if tank.cannon_id != "" and tank.cannon_id != "standard":
+		var cn := Cannons.get_cannon(tank.cannon_id)
+		if cn.has("color"):
+			cannon_accent = cn["color"]
 	var tr := float(shape["turret_r"])
 	var bl := float(shape["barrel_len"])
 	var bw := float(shape["barrel_w"])
@@ -1530,6 +1540,10 @@ func _draw_tank(tank: Tank) -> void:
 		_:
 			_rect(b0, -bw * 0.5, bl, bw, barrel_base)
 			_rect(b1 - 4.0, -bw * 0.5 - 1.0, 5.0, bw + 2.0, barrel_dark)
+	# Полоска чуть позади раскалённого пятна (b1-9..b1) — не пересекается
+	# с ним, значит порядок отрисовки друг на друга не влияет.
+	if cannon_accent.a > 0.0:
+		_rect(b1 - 14.0, -bw * 0.5 - 0.5, 5.0, bw + 1.0, cannon_accent)
 	# Раскалённый ствол: по нему видно, сколько ещё можно стрелять, не
 	# отводя глаз на полоску в углу экрана.
 	if tank.heat > 0.25:

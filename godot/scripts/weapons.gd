@@ -13,21 +13,21 @@ static var LIST := {
 		"duration": 60 * 8,      # 8 секунд
 		"cooldown_mult": 0.45,   # стреляет вдвое чаще
 		"dmg_scale": 0.55,       # но каждая пуля слабее
-		"spread": 0.06, "bullets": 1, "explosive": false,
+		"spread": 0.06, "bullets": 1, "explosive": false, "heat_mult": 1.0,
 	},
 	"rockets": {
 		"id": "rockets", "name": "Ракеты", "icon": "🚀", "color": Color("#ff5566"),
 		"duration": 60 * 8,
 		"cooldown_mult": 2.2,
 		"dmg_scale": 1.9,
-		"spread": 0.02, "bullets": 1, "explosive": true,
+		"spread": 0.02, "bullets": 1, "explosive": true, "heat_mult": 1.0,
 	},
 	"shotgun": {
 		"id": "shotgun", "name": "Дробовик", "icon": "💥", "color": Color("#ffcc44"),
 		"duration": 60 * 6,
 		"cooldown_mult": 2.0,
 		"dmg_scale": 0.4,
-		"spread": 0.22, "bullets": 6, "explosive": false,
+		"spread": 0.22, "bullets": 6, "explosive": false, "heat_mult": 1.0,
 	},
 }
 

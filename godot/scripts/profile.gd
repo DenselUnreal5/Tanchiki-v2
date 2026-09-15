@@ -83,6 +83,8 @@ var ranks_claimed := {}     # Set<String> — какие звания уже в�
 var daily := {"date": "", "progress": {}, "claimed": []}
 var cosmetic_owned := {}    # Set<"тип:id">
 var cosmetics := {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
+var cannon_owned := {}      # Set<id пушки>
+var equipped_cannon := "standard"
 ## Цвет танка игрока 1/2 — общий на профиль, «Горячий стул» делит его на
 ## обоих так же, как и улучшения. Разблокировка по Cfg.PLAYER_SKINS[].level
 ## считается на лету от global_level — отдельного списка открытых цветов,
@@ -179,6 +181,15 @@ func _apply(data: Dictionary) -> void:
 	var c2 := String(data.get("equippedColor2", equipped_color2))
 	if is_color_unlocked(c2):
 		equipped_color2 = c2
+	var known_cannons := {}
+	for c in Cannons.LIST:
+		known_cannons[c["id"]] = true
+	for id in data.get("cannonOwned", []):
+		if known_cannons.has(id):
+			cannon_owned[id] = true
+	var eq_cannon := String(data.get("equippedCannon", "standard"))
+	if is_cannon_owned(eq_cannon):
+		equipped_cannon = eq_cannon
 	_refresh_daily_if_stale()
 
 func save_profile() -> void:
@@ -197,6 +208,8 @@ func save_profile() -> void:
 		"cosmetics": cosmetics,
 		"equippedColor1": equipped_color1,
 		"equippedColor2": equipped_color2,
+		"cannonOwned": cannon_owned.keys(),
+		"equippedCannon": equipped_cannon,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f != null:
@@ -217,6 +230,8 @@ func reset() -> void:
 	cosmetics = {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
 	equipped_color1 = "p1"
 	equipped_color2 = "p2"
+	cannon_owned.clear()
+	equipped_cannon = "standard"
 	_sync_level_unlocks()
 	save_profile()
 
@@ -417,6 +432,33 @@ func equip_cosmetic(type: String, id: String) -> Dictionary:
 ## Экипированный набор для применения к танкам игроков.
 func equipped_cosmetics() -> Dictionary:
 	return cosmetics.duplicate()
+
+# ------------------------------------------------------------------- пушки
+## Доступна ли пушка (куплена или "standard" — она всегда бесплатна).
+func is_cannon_owned(id: String) -> bool:
+	if Cannons.get_cannon(id).is_empty():
+		return false
+	return id == "standard" or cannon_owned.has(id)
+
+func buy_cannon(id: String) -> Dictionary:
+	var c := Cannons.get_cannon(id)
+	if c.is_empty() or id == "standard":
+		return {"ok": false, "reason": "unknown"}
+	if cannon_owned.has(id):
+		return {"ok": false, "reason": "owned"}
+	if money < int(c["price"]):
+		return {"ok": false, "reason": "money"}
+	money -= int(c["price"])
+	cannon_owned[id] = true
+	save_profile()
+	return {"ok": true, "price": int(c["price"])}
+
+func equip_cannon(id: String) -> Dictionary:
+	if not is_cannon_owned(id):
+		return {"ok": false, "reason": "not_owned"}
+	equipped_cannon = id
+	save_profile()
+	return {"ok": true}
 
 # ------------------------------------------------------------- цвет танка
 ## Открыт ли цвет на текущем global_level (Cfg.PLAYER_SKINS[].level).
