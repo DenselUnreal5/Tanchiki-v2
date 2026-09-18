@@ -1823,7 +1823,7 @@ func _build_net_lobby() -> void:
 	# не появился в общем лобби (Net.lobby пуст), честно показываем «идёт
 	# подключение», а не «подключились» — иначе разрыв связи выглядит как
 	# бесконечное молчаливое зависание.
-	var connecting := Net.role == "client" and not Net.lobby.has(multiplayer.get_unique_id())
+	var connecting := Net.role == "client" and not Net.lobby.has(Net.my_peer_id())
 	var role_text := I18n.t("net.role.host", {}, "Вы хост")
 	if connecting:
 		role_text = I18n.t("net.role.connecting", {}, "Подключаемся к хосту…")
@@ -1917,7 +1917,7 @@ func _build_net_lobby() -> void:
 				I18n.t("net.start.hint", {}, "Режим, сложность и уровень берутся из вашего меню и объявляются всем."),
 				9, Cfg.UI_MUTED))
 	else:
-		var me: Dictionary = Net.lobby.get(multiplayer.get_unique_id(), {})
+		var me: Dictionary = Net.lobby.get(Net.my_peer_id(), {})
 		_net_body.add_child(UiKit.switch_row(
 			I18n.t("net.ready", {}, "Готов"), bool(me.get("ready", false)),
 			func(v: bool): Net.set_ready(v)))

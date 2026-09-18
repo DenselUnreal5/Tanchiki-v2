@@ -366,6 +366,15 @@ func leave(notify: bool = true) -> void:
 	if was_playing and notify:
 		disconnected.emit()
 
+## Свой peer id или 0, если соединение не установлено. Прямой вызов
+## multiplayer.get_unique_id() при неактивном ENet пишет ошибку в консоль, а
+## экран лобби перерисовывается и после обрыва, и пока идёт подключение.
+func my_peer_id() -> int:
+	var mp := multiplayer.multiplayer_peer
+	if mp == null or mp.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		return 0
+	return multiplayer.get_unique_id()
+
 func _self_info() -> Dictionary:
 	return {
 		"name": my_name,
@@ -736,7 +745,7 @@ func all_guests_ready() -> bool:
 ## Клиент отмечает готовность; хост пересобирает лобби и, если шёл отсчёт для
 ## прежнего состояния, отменяет его.
 func set_ready(v: bool) -> void:
-	if role != "client" or not lobby.has(multiplayer.get_unique_id()):
+	if role != "client" or not lobby.has(my_peer_id()):
 		return
 	_rpc_ready.rpc_id(1, v)
 
