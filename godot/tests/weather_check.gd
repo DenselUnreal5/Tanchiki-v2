@@ -144,7 +144,7 @@ func _ready() -> void:
 	# деревья и своей случайностью забили бы проверку).
 	_start("storm", "day")
 	var sum_a := _fell_only(game.world)
-	var capped := game.world._trees_felled
+	var capped: int = game.world._trees_felled
 	_start("storm", "day")
 	var sum_b := _fell_only(game.world)
 	_check(capped == Cfg.STORM_FELL_MAX, "повал упирается в потолок %d за партию (получилось %d)"

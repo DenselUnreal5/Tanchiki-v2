@@ -762,6 +762,8 @@ func _process(delta: float) -> void:
 
 	if state == S_PLAYING and Net.role == "client":
 		_client_frame(delta)
+	elif (state == S_PERK or state == S_PAUSED) and Net.role == "host":
+		_host_keepalive()
 	elif state == S_PLAYING:
 		accumulator += minf(0.25, delta)
 		var steps := 0
@@ -882,6 +884,22 @@ func _host_frame() -> void:
 		return
 	_snap_tick = world.tick
 	Net.host_broadcast(world.tick, world.tanks, world.bullets, _net_extra())
+
+## Пока хост выбирает перк или стоит на паузе, мир не шагает, а значит,
+## _host_frame() не шлёт снапшоты (они привязаны к world.tick). Клиент
+## воспринял бы тишину как обрыв и через NET_DEAD_MSEC вышел бы в меню
+## («Хост не отвечает») — а перк выбирают на старте каждой партии. Поэтому
+## замерший мир пересылаем по часам: 10 раз в секунду, без роста тика.
+func _host_keepalive() -> void:
+	if world == null or Net.lobby.size() <= 1:
+		return
+	var now := Time.get_ticks_msec()
+	if now - _keepalive_msec < 100:
+		return
+	_keepalive_msec = now
+	Net.host_broadcast(world.tick, world.tanks, world.bullets, _net_extra())
+
+var _keepalive_msec := 0
 
 ## Мелочь режима, без которой HUD клиента врёт: счёт, флаги, аптечки, база.
 func _net_extra() -> Dictionary:
