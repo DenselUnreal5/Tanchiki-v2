@@ -1,0 +1,38 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/cards/upgrade_card.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/ui/perk_icon_view.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/ui/focus_ring_panel.gd" id="3"]
+
+[node name="UpgradeCard" type="PanelContainer"]
+script = ExtResource("1")
+
+[node name="Row" type="HBoxContainer" parent="."]
+unique_name_in_owner = true
+
+[node name="Icon" type="Control" parent="Row"]
+unique_name_in_owner = true
+script = ExtResource("2")
+
+[node name="Info" type="VBoxContainer" parent="Row"]
+unique_name_in_owner = true
+
+[node name="NameLabel" type="Label" parent="Row/Info"]
+unique_name_in_owner = true
+
+[node name="DescLabel" type="Label" parent="Row/Info"]
+unique_name_in_owner = true
+
+[node name="Segs" type="HBoxContainer" parent="Row/Info"]
+unique_name_in_owner = true
+
+[node name="MaxWrap" type="PanelContainer" parent="Row"]
+unique_name_in_owner = true
+script = ExtResource("3")
+
+[node name="MaxLabel" type="Label" parent="Row/MaxWrap"]
+unique_name_in_owner = true
+
+[node name="BuyBtn" type="Button" parent="Row"]
+unique_name_in_owner = true
+text = ""

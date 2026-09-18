@@ -43,6 +43,16 @@ var EN := {
 	"menu.achievements": "🏅 Achievements",
 	"menu.daily": "📅 Quests",
 	"menu.stats": "Statistics",
+	# Плитки главного меню — иконка и подпись отдельными полями (см.
+	# main_menu.gd:_build_nav_grid), без запечённого в текст эмодзи, в
+	# отличие от menu.garage/achievements/daily/net/settings выше (те заняты
+	# паузой и вкладками хаба).
+	"menu.tile.garage": "Garage",
+	"menu.tile.achievements": "Achievements",
+	"menu.tile.daily": "Quests",
+	"menu.tile.net": "Online",
+	"menu.tile.settings": "Settings",
+	"menu.lvl": "Lvl.",
 	"menu.sound.on": "🔊 Sound",
 	"menu.sound.off": "🔇 Sound",
 	"menu.reset": "Reset Progress",

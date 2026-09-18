@@ -1,0 +1,78 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/ui/menu_scene.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/ui/themed_panel.gd" id="3"]
+
+[node name="MainMenu" type="Control"]
+script = ExtResource("1")
+
+[node name="MenuSceneBg" type="Control" parent="."]
+unique_name_in_owner = true
+script = ExtResource("2")
+
+[node name="LeftPanel" type="MarginContainer" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3")
+
+[node name="Col" type="VBoxContainer" parent="LeftPanel"]
+unique_name_in_owner = true
+
+[node name="TitleBox" type="VBoxContainer" parent="LeftPanel/Col"]
+unique_name_in_owner = true
+
+[node name="HudStrip" type="PanelContainer" parent="LeftPanel/Col"]
+unique_name_in_owner = true
+
+[node name="HudRow" type="HBoxContainer" parent="LeftPanel/Col/HudStrip"]
+unique_name_in_owner = true
+
+[node name="ChipRank" type="Label" parent="LeftPanel/Col/HudStrip/HudRow"]
+unique_name_in_owner = true
+
+[node name="ChipLevel" type="Label" parent="LeftPanel/Col/HudStrip/HudRow"]
+unique_name_in_owner = true
+
+[node name="ChipCoins" type="Label" parent="LeftPanel/Col/HudStrip/HudRow"]
+unique_name_in_owner = true
+
+[node name="ChipPerks" type="Label" parent="LeftPanel/Col/HudStrip/HudRow"]
+unique_name_in_owner = true
+
+[node name="ModeSummaryBtn" type="Button" parent="LeftPanel/Col"]
+unique_name_in_owner = true
+text = ""
+
+[node name="StartBtn" type="Button" parent="LeftPanel/Col"]
+unique_name_in_owner = true
+text = ""
+
+[node name="VersionPill" type="PanelContainer" parent="LeftPanel/Col"]
+unique_name_in_owner = true
+
+[node name="VersionLabel" type="Label" parent="LeftPanel/Col/VersionPill"]
+unique_name_in_owner = true
+
+[node name="NavGrid" type="GridContainer" parent="LeftPanel/Col"]
+unique_name_in_owner = true
+
+[node name="TipTicker" type="PanelContainer" parent="LeftPanel/Col"]
+unique_name_in_owner = true
+
+[node name="TipLabel" type="RichTextLabel" parent="LeftPanel/Col/TipTicker"]
+unique_name_in_owner = true
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+
+[node name="SettingsPanel" type="MarginContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+script = ExtResource("3")
+
+[node name="SettingsScroll" type="ScrollContainer" parent="SettingsPanel"]
+unique_name_in_owner = true
+horizontal_scroll_mode = 0
+
+[node name="SettingsBody" type="VBoxContainer" parent="SettingsPanel/SettingsScroll"]
+unique_name_in_owner = true

@@ -15,7 +15,13 @@
 # плоскими панелями меню и остальным интерфейсом.
 #
 # Композиция смещена вправо: слева экран занимают панели меню.
+#
+# @tool: даёт живой предпросмотр main_menu.tscn прямо в редакторе Godot —
+# сетка/развёртка/подсветка рисуются и там (Cfg — статика, безопасно), а вот
+# сам танк (Tank/PlayerState/MenuTankView — игровые классы, не рассчитанные
+# на редактор) в редакторе не строится, см. Engine.is_editor_hint() ниже.
 # ============================================================================
+@tool
 class_name MenuScene
 extends Control
 
@@ -70,6 +76,12 @@ func _ready() -> void:
 	_shot_timer = int(randf_range(200.0, 340.0))
 	_turret_hold = int(randf_range(90.0, 220.0))
 
+	# В редакторе — только сетка/развёртка/подсветка (см. _draw()): танк
+	# строят игровые классы (Tank/PlayerState/MenuTankView), не рассчитанные
+	# на работу вне настоящей партии.
+	if Engine.is_editor_hint():
+		return
+
 	# Заглушка вместо живого игрока: MenuTankView._draw_tank() требует
 	# ненулевой player (проверка союзности), но раз у самого player нет
 	# своего tank, до world она не доходит — world можно не заводить вовсе.
@@ -93,7 +105,8 @@ func _process(_delta: float) -> void:
 		_last_size = size
 		_rebuild()
 	time += 1
-	_update_tank()
+	if not Engine.is_editor_hint():
+		_update_tank()
 	queue_redraw()
 
 func _build_glow_texture() -> void:

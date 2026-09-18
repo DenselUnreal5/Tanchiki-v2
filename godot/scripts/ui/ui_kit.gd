@@ -3,7 +3,13 @@
 #
 # Повторяет style.css веб-версии: тёмная схема, зелёный акцент, скруглённые
 # «пилюли»-кнопки, панели с полупрозрачным фоном и золотые акценты.
+#
+# @tool: только static func, своих static var с литералами-конструкторами
+# нет — судя по main_menu.tscn работало и без этого, но ставим для
+# единообразия с Cfg/PerkIcons/Upgrades/... (см. config.gd), раз та же
+# болячка бьёт непредсказуемо по разным классам с похожей структурой.
 # ============================================================================
+@tool
 class_name UiKit
 extends RefCounted
 
@@ -118,20 +124,26 @@ static func _style_button(b: Button, normal: StyleBox, hover: StyleBox,
 ## Нуар — мягкая пилюля (рваная бумага, мягкие формы), военное досье —
 ## почти прямой срез с толстой рамкой (штампованный металл), sci-fi —
 ## небольшое скругление, тоньше и светлее.
+## Sets — автозагрузка, её скрипт не @tool: в редакторе Godot (main_menu.tscn
+## теперь рисует себя и там) подставляет вместо неё заглушку-placeholder без
+## настоящих полей — тема по умолчанию тогда military, как у Cfg.apply_theme.
+static func _ui_theme() -> String:
+	return "military" if Engine.is_editor_hint() else Sets.ui_theme
+
 static func _chrome_radius() -> float:
-	match Sets.ui_theme:
+	match _ui_theme():
 		"military": return 3.0
 		"scifi": return 8.0
 		_: return 999.0
 
 static func _chrome_border_w() -> float:
-	return 2.0 if Sets.ui_theme == "military" else 1.0
+	return 2.0 if _ui_theme() == "military" else 1.0
 
 ## Главная зелёная кнопка (btn-primary / #btn-start).
 static func primary(text: String, font_size: int = 16) -> Button:
 	var b := Button.new()
 	b.text = text
-	var r := 4.0 if Sets.ui_theme == "military" else 12.0
+	var r := 4.0 if _ui_theme() == "military" else 12.0
 	var normal := flat(Color("#2f7329"), r, 1, Cfg.UI_ACCENT)
 	var hover := flat(Color("#3d8f36"), r, 1, Cfg.UI_ACCENT)
 	var pressed := flat(Color("#245c1f"), r, 1, Cfg.UI_ACCENT)
@@ -412,6 +424,54 @@ static func unlock_button(text: String, state: String) -> Button:
 	_style_button(b, style, style, style, 12, color)
 	b.add_theme_font_override("font", Fonts.bold)
 	return b
+
+## Первый видимый фокусируемый Control в поддереве — используется chain_vertical
+## как запасной вариант, когда у строки нет meta("focus_row").
+static func first_focusable(node: Node) -> Control:
+	if node is Control and node.visible and node.focus_mode != Control.FOCUS_NONE:
+		return node
+	for c in node.get_children():
+		var f := first_focusable(c)
+		if f != null:
+			return f
+	return null
+
+## Линкует ряд кнопок по горизонтали (left/right + next/prev), с переносом.
+## Автопоиск соседа Godot промахивается через GridContainer/HFlowContainer —
+## этим и пользуются все вызывающие места.
+static func chain_horizontal(btns: Array, wrap: bool = true) -> void:
+	var n := btns.size()
+	for i in n:
+		var b: Control = btns[i]
+		if not is_instance_valid(b):
+			continue
+		var l: int = (i - 1 + n) % n if wrap else maxi(0, i - 1)
+		var r: int = (i + 1) % n if wrap else mini(n - 1, i + 1)
+		if is_instance_valid(btns[l]):
+			b.focus_neighbor_left = btns[l].get_path()
+			b.focus_previous = btns[l].get_path()
+		if is_instance_valid(btns[r]):
+			b.focus_neighbor_right = btns[r].get_path()
+			b.focus_next = btns[r].get_path()
+
+## Линкует ряды по вертикали (top/bottom). rows — Control'ы; для каждого
+## берётся его meta("focus_row") либо первый фокусируемый потомок.
+static func chain_vertical(rows: Array) -> void:
+	var entries := []
+	for row in rows:
+		if not is_instance_valid(row):
+			continue
+		var e = row.get_meta("focus_row", null) if row.has_meta("focus_row") else null
+		if e == null or not is_instance_valid(e):
+			e = first_focusable(row)
+		if e != null:
+			entries.append(e)
+	for i in entries.size():
+		var a: Control = entries[i]
+		if i > 0:
+			a.focus_neighbor_top = entries[i - 1].get_path()
+		if i + 1 < entries.size():
+			a.focus_neighbor_bottom = entries[i + 1].get_path()
 
 ## Полоска прогресса с тонкой рамкой — общий стиль баров HUD (HP/нагрев/
 ## опыт/кулдаун). Ничего «тематического» тяжелее рамки — полоски видны

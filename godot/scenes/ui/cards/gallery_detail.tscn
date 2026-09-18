@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/cards/gallery_detail.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/ui/perk_icon_view.gd" id="2"]
+
+[node name="GalleryDetail" type="MarginContainer"]
+script = ExtResource("1")
+
+[node name="Box" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+
+[node name="IconCenter" type="CenterContainer" parent="Box"]
+unique_name_in_owner = true
+
+[node name="Icon" type="Control" parent="Box/IconCenter"]
+unique_name_in_owner = true
+script = ExtResource("2")
+
+[node name="NameLabel" type="Label" parent="Box"]
+unique_name_in_owner = true
+
+[node name="DescLabel" type="Label" parent="Box"]
+unique_name_in_owner = true
+
+[node name="Sep" type="HSeparator" parent="Box"]
+
+[node name="FooterWrap" type="VBoxContainer" parent="Box"]
+unique_name_in_owner = true

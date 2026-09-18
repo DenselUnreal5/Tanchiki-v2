@@ -1,0 +1,42 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/hub.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/ui/themed_panel.gd" id="2"]
+
+[node name="Hub" type="Control"]
+script = ExtResource("1")
+
+[node name="Dimmer" type="ColorRect" parent="."]
+unique_name_in_owner = true
+color = Color(0, 0, 0, 0.82)
+mouse_filter = 0
+
+[node name="Center" type="CenterContainer" parent="."]
+unique_name_in_owner = true
+
+[node name="HubPanel" type="MarginContainer" parent="Center"]
+unique_name_in_owner = true
+script = ExtResource("2")
+
+[node name="Box" type="VBoxContainer" parent="Center/HubPanel"]
+
+[node name="HubTabsRow" type="HBoxContainer" parent="Center/HubPanel/Box"]
+unique_name_in_owner = true
+
+[node name="HubSub" type="RichTextLabel" parent="Center/HubPanel/Box"]
+unique_name_in_owner = true
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+
+[node name="HubScroll" type="ScrollContainer" parent="Center/HubPanel/Box"]
+unique_name_in_owner = true
+
+[node name="HubBody" type="VBoxContainer" parent="Center/HubPanel/Box/HubScroll"]
+unique_name_in_owner = true
+
+[node name="CloseWrap" type="CenterContainer" parent="Center/HubPanel/Box"]
+
+[node name="CloseBtn" type="Button" parent="Center/HubPanel/Box/CloseWrap"]
+unique_name_in_owner = true
+text = ""

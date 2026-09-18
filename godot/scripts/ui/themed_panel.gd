@@ -4,7 +4,11 @@
 # скошенное стекло со свечением (sci-fi). Заменяет UiKit.panel() везде, где
 # нужен фон под текущую тему — дочерние узлы добавляются как обычно, отступы
 # держит MarginContainer.
+#
+# @tool: рисует себя и в редакторе Godot (живой предпросмотр main_menu.tscn) —
+# читает только Sets.ui_theme/Cfg.UI_*, безопасно вне настоящей партии.
 # ============================================================================
+@tool
 class_name ThemedPanel
 extends MarginContainer
 
@@ -27,8 +31,14 @@ func _ready() -> void:
 	resized.connect(_rebuild)
 	_rebuild()
 
+## Sets — автозагрузка, а её скрипт не @tool: в редакторе Godot подставляет
+## вместо неё заглушку-placeholder без настоящих полей (см. main_menu.gd —
+## та же оговорка). Тема по умолчанию — military, ровно как у Cfg.apply_theme.
+func _ui_theme() -> String:
+	return "military" if Engine.is_editor_hint() else Sets.ui_theme
+
 func _rebuild() -> void:
-	if Sets.ui_theme == "noir":
+	if _ui_theme() == "noir":
 		_jag = _jagged_outline(size, 5.0, 4)
 	queue_redraw()
 
@@ -38,7 +48,7 @@ func _border() -> Color:
 func _draw() -> void:
 	if size.x <= 0.0 or size.y <= 0.0:
 		return
-	match Sets.ui_theme:
+	match _ui_theme():
 		"noir": _draw_noir()
 		"scifi": _draw_scifi()
 		_: _draw_military()
