@@ -46,7 +46,10 @@ func rebuild(tanks: Array) -> void:
 ## числе кандидатов.
 func query(x: float, y: float, r: float) -> Array:
 	var out := []
-	var span := int(ceil(r / CELL)) + 1
+	# ceil(r / CELL) ячеек в каждую сторону от ячейки точки уже покрывают
+	# радиус r с любой позиции внутри ячейки; прежний «+1» лишь добавлял
+	# целый ряд пустых обходов (13×13 вместо 11×11 при r=400).
+	var span := int(ceil(r / CELL))
 	var kx := int(floor(x / CELL))
 	var ky := int(floor(y / CELL))
 	for dx in range(-span, span + 1):

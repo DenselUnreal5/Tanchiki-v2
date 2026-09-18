@@ -1613,7 +1613,7 @@ func _refresh_net() -> void:
 		_build_net_lobby()
 
 func _build_net_offline() -> void:
-	var steam_ok := NetTransport.SteamTransport.new().available()
+	var steam_ok := Net._steam_ready()
 
 	# Имя игрока — общее для обоих путей подключения.
 	var name_row := UiKit.hbox(8)
@@ -1644,15 +1644,16 @@ func _build_net_offline() -> void:
 			I18n.t("net.room.creating", {}, "Создаём…") if Net.lobby_pending == "host"
 				else I18n.t("net.room.searching", {}, "Подключаемся…"), 11, Cfg.UI_MUTED))
 
-	# Прямого IP больше нет: он в принципе не рассчитан работать «из коробки»
-	# у обычного игрока за NAT/файрволом — ровно то, из-за чего он и не
-	# подключался. Steam P2P (релей Valve) для того и нужен, чтобы решать
-	# эту же задачу самостоятельно. Без Steam сетевая игра сейчас недоступна.
+	# Прямой ENet по IP работает без Steam (LAN, проброшенный порт, VPN);
+	# Steam-лобби ниже — необязательный второй путь.
+	_build_net_direct()
 	if not steam_ok:
-		_net_body.add_child(UiKit.label(
-			I18n.t("net.err.noSteam", {}, "Нужен клиент Steam — сетевая игра недоступна"),
-			11, Cfg.UI_DANGER))
+		var why := NetTransport.SteamTransport.init_error
+		if why.is_empty():
+			why = NetTransport.SteamTransport.new().unavailable_reason()
+		_net_body.add_child(UiKit.label("Steam: " + why, 11, Cfg.UI_MUTED))
 		return
+	_net_body.add_child(UiKit.section("Steam", Cfg.UI_ACCENT))
 
 	match _net_mode:
 		"create":
@@ -1661,6 +1662,46 @@ func _build_net_offline() -> void:
 			_build_net_join()
 		_:
 			_build_net_choice()
+
+var _net_address := "127.0.0.1"
+var _net_port := Net.PORT
+
+func _build_net_direct() -> void:
+	_net_body.add_child(UiKit.section("LAN / IP", Cfg.UI_ACCENT))
+	var row := UiKit.hbox(8)
+	var address := LineEdit.new()
+	address.text = _net_address
+	address.placeholder_text = "IP / hostname"
+	address.custom_minimum_size = Vector2(220, 30)
+	address.text_changed.connect(func(value: String): _net_address = value)
+	row.add_child(address)
+	var port := SpinBox.new()
+	port.min_value = 1
+	port.max_value = 65535
+	port.value = _net_port
+	port.value_changed.connect(func(value: float): _net_port = int(value))
+	row.add_child(port)
+	_net_body.add_child(row)
+	var buttons := UiKit.hbox(8)
+	var host_btn := UiKit.primary(I18n.t("net.create", {}, "Создать"), 13)
+	host_btn.disabled = Net.lobby_pending != ""
+	host_btn.pressed.connect(func():
+		_net_error = ""
+		if Net.set_transport(NetTransport.EnetTransport.new(_net_port)):
+			Net.host_game(_net_port))
+	buttons.add_child(host_btn)
+	var join_btn := UiKit.secondary(I18n.t("net.join", {}, "Присоединиться"), 13)
+	join_btn.disabled = Net.lobby_pending != ""
+	join_btn.pressed.connect(func():
+		_net_error = ""
+		if Net.set_transport(NetTransport.EnetTransport.new(_net_port)):
+			Net.join_game(_net_address, _net_port))
+	buttons.add_child(join_btn)
+	_net_body.add_child(buttons)
+	if Net.lobby_pending != "":
+		var cancel := UiKit.secondary(I18n.t("net.countdown.cancel", {}, "Отмена"), 12)
+		cancel.pressed.connect(func(): Net.leave())
+		_net_body.add_child(cancel)
 
 ## Верхний уровень: ровно два выбора, как просил пользователь.
 func _build_net_choice() -> void:
@@ -1782,7 +1823,7 @@ func _build_net_lobby() -> void:
 	# не появился в общем лобби (Net.lobby пуст), честно показываем «идёт
 	# подключение», а не «подключились» — иначе разрыв связи выглядит как
 	# бесконечное молчаливое зависание.
-	var connecting := Net.role == "client" and Net.lobby.is_empty()
+	var connecting := Net.role == "client" and not Net.lobby.has(multiplayer.get_unique_id())
 	var role_text := I18n.t("net.role.host", {}, "Вы хост")
 	if connecting:
 		role_text = I18n.t("net.role.connecting", {}, "Подключаемся к хосту…")
@@ -1859,7 +1900,7 @@ func _build_net_lobby() -> void:
 			cancel_btn.pressed.connect(func(): Net.host_cancel_countdown())
 			_net_body.add_child(cancel_btn)
 	elif Net.role == "host":
-		var enough := Net.lobby.size() >= Net.MAX_LOBBY
+		var enough := Net.lobby.size() >= Net.MIN_LOBBY
 		var ready := Net.all_guests_ready()
 		var start_btn := UiKit.primary(I18n.t("net.start", {}, "Начать партию"), 13)
 		start_btn.disabled = not enough or not ready

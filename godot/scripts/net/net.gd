@@ -42,7 +42,9 @@ const INTERP_DELAY_TICKS := 7
 ## релей Valve; лобби — только точка встречи.
 ## В лобби ровно двое — хост и гость.
 const GAME_TAG := "tanchiki-v2"
-const MAX_LOBBY := 2
+const MAX_LOBBY := MAX_PLAYERS
+## Сколько человек нужно, чтобы хост мог начать партию: хост и один гость.
+const MIN_LOBBY := 2
 ## Значения enum Steam.* из GodotSteam 4.22. Держим числами, чтобы файл
 ## грузился и в сборке без расширения — там сетевой путь через Steam недоступен.
 const _LOBBY_TYPE_PUBLIC := 2
@@ -124,6 +126,8 @@ var _steam_lobby_id := 0
 ## "host" | "join", пока не пришёл асинхронный колбэк Steam — для строки
 ## «Создаём…/Подключаемся…» в UI. Пусто — операции нет.
 var lobby_pending := ""
+const CONNECT_TIMEOUT_MSEC := 20000
+var _connect_deadline := 0
 ## Название комнаты: хост задаёт при создании, гость получает при входе.
 ## Пусто офлайн и при прямом подключении по адресу.
 var room_name := ""
@@ -200,6 +204,9 @@ func _process(_delta: float) -> void:
 	# Колбэки Steam надо качать каждый кадр, иначе P2P не отвечает вовсе.
 	# Дёшево и безвредно, когда Steam не используется: внутри стоит проверка.
 	NetTransport.SteamTransport.pump()
+	if _connect_deadline > 0 and Time.get_ticks_msec() >= _connect_deadline:
+		leave()
+		net_error.emit(I18n.t("net.err.failed", {}, "Сервер не отвечает"))
 
 	if not _delayed.is_empty():
 		var now := current_tick
@@ -215,7 +222,7 @@ func _process(_delta: float) -> void:
 	# заводить незачем. У другого транспорта такой статистики может не быть —
 	# тогда rtt просто остаётся прежним, а не роняет процесс.
 	var enet := _peer as ENetMultiplayerPeer
-	if role == "client" and enet != null:
+	if role == "client" and enet != null and enet.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 		var st: ENetPacketPeer = enet.get_peer(1)
 		if st != null:
 			rtt_msec = float(st.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME))
@@ -309,6 +316,7 @@ func join_game(address: String, port: int = PORT) -> bool:
 	_peer = peer
 	multiplayer.multiplayer_peer = _peer
 	role = "client"
+	_connect_deadline = Time.get_ticks_msec() + CONNECT_TIMEOUT_MSEC
 	lobby = {}
 	lobby_changed.emit()
 	print("[net] join_game: подключаюсь к ", address, ":", port)
@@ -326,6 +334,7 @@ func leave(notify: bool = true) -> void:
 		_peer = null
 	multiplayer.multiplayer_peer = null
 	role = ""
+	_connect_deadline = 0
 	dedicated = false
 	dedicated_target_players = 2
 	lobby.clear()
@@ -364,6 +373,7 @@ func _self_info() -> Dictionary:
 		"cosmetics": Prof.equipped_cosmetics(),
 		"cannon_id": Prof.equipped_cannon,
 		"ready": false,
+		"version": NetProtocol.VERSION,
 	}
 
 # --------------------------------------------------------------- соединения
@@ -416,6 +426,12 @@ func _rpc_hello(info: Dictionary) -> void:
 	if role != "host":
 		return
 	var id := multiplayer.get_remote_sender_id()
+	# Другая сборка молча неверно декодировала бы снапшоты и ввод.
+	if int(info.get("version", -1)) != NetProtocol.VERSION:
+		print("[net] отклонён peer ", id, ": версия протокола ",
+			info.get("version", "?"), " вместо ", NetProtocol.VERSION)
+		multiplayer.multiplayer_peer.disconnect_peer(id)
+		return
 	# Партия уже идёт — новых не пускаем: спавн состава происходит один раз
 	# при старте (World._spawn_combatants()), опоздавший так и остался бы
 	# без танка и без роли в бою.
@@ -454,6 +470,8 @@ func _rpc_hello(info: Dictionary) -> void:
 @rpc("authority", "reliable")
 func _rpc_lobby(list: Dictionary) -> void:
 	lobby = list
+	if lobby.has(multiplayer.get_unique_id()):
+		_connect_deadline = 0
 	lobby_changed.emit()
 
 # -------------------------------------------------- лобби Steam: инвайты и код
@@ -472,7 +490,7 @@ func _steam() -> Object:
 	return Engine.get_singleton("Steam")
 
 static func _steam_ready() -> bool:
-	return NetTransport.SteamTransport.new().available()
+	return NetTransport.SteamTransport.new().available() and NetTransport.SteamTransport.boot()
 
 ## Колбэки матчмейкинга. Идемпотентно: экран сети пересобирается часто,
 ## а подписка нужна одна на процесс.
@@ -503,7 +521,7 @@ func _steam_connect_invite_signals() -> void:
 ## к одному и тому же лобби. Реальное соединение всё равно идёт напрямую
 ## SteamID→SteamID через релей Valve (см. _on_steam_lobby_joined) — лобби тут
 ## лишь точка встречи.
-func host_lobby(name: String) -> void:
+func host_lobby(requested_name: String) -> void:
 	if lobby_pending != "":
 		return
 	if not _steam_ready() or _steam() == null:
@@ -512,10 +530,11 @@ func host_lobby(name: String) -> void:
 	if not (transport is NetTransport.SteamTransport):
 		set_transport(NetTransport.SteamTransport.new())
 	_steam_connect_signals()
-	_pending_room_name = name.strip_edges()
+	_pending_room_name = requested_name.strip_edges()
 	if _pending_room_name == "":
 		_pending_room_name = I18n.t("net.room.default", {"name": my_name}, "Игра %s" % my_name)
 	lobby_pending = "host"
+	_connect_deadline = Time.get_ticks_msec() + CONNECT_TIMEOUT_MSEC
 	lobby_changed.emit()
 	print("[net] host_lobby: создаю лобби, название='", _pending_room_name, "'")
 	_steam().createLobby(_LOBBY_TYPE_PUBLIC, MAX_LOBBY)
@@ -523,7 +542,10 @@ func host_lobby(name: String) -> void:
 func _on_steam_lobby_created(result: int, lobby_id: int) -> void:
 	print("[net] lobby_created: result=", result, " lobby_id=", lobby_id)
 	if lobby_pending != "host":
+		if result == _STEAM_RESULT_OK and _steam() != null:
+			_steam().leaveLobby(lobby_id)
 		return
+	_connect_deadline = 0
 	lobby_pending = ""
 	var s := _steam()
 	if result != _STEAM_RESULT_OK or s == null:
@@ -556,7 +578,7 @@ func invite_overlay() -> void:
 ## Общий вход в известное Steam-лобби: приглашение или запуск по ссылке.
 ## SteamID хоста берём из getLobbyOwner ПОСЛЕ входа — наружу он не попадает.
 func join_lobby_id(lobby_id: int) -> void:
-	if lobby_id <= 0 or lobby_pending == "host":
+	if lobby_id <= 0 or lobby_pending != "":
 		return
 	if not _steam_ready() or _steam() == null:
 		net_error.emit(I18n.t("net.err.noSteamInvite", {}, "Для приглашений нужен Steam"))
@@ -565,6 +587,7 @@ func join_lobby_id(lobby_id: int) -> void:
 		set_transport(NetTransport.SteamTransport.new())
 	_steam_connect_signals()
 	lobby_pending = "join"
+	_connect_deadline = Time.get_ticks_msec() + CONNECT_TIMEOUT_MSEC
 	lobby_changed.emit()
 	print("[net] join_lobby_id: пробую войти в ", lobby_id)
 	_enter_steam_lobby(lobby_id)
@@ -618,7 +641,10 @@ func _on_steam_lobby_match_list(lobbies: Array) -> void:
 func _on_steam_lobby_joined(lobby_id: int, _perm: int, _locked: bool, response: int) -> void:
 	print("[net] lobby_joined: lobby_id=", lobby_id, " response=", response)
 	if _join_target_lobby != lobby_id:
+		if response == _STEAM_ENTER_OK and _steam() != null and lobby_id != _steam_lobby_id and lobby_pending != "host":
+			_steam().leaveLobby(lobby_id)
 		return
+	_connect_deadline = 0
 	_join_target_lobby = 0
 	var s := _steam()
 	if s == null or response != _STEAM_ENTER_OK:
@@ -636,6 +662,7 @@ func _on_steam_lobby_joined(lobby_id: int, _perm: int, _locked: bool, response: 
 	var room_here := String(s.getLobbyData(lobby_id, "room_name"))
 	# join_game() вызывает leave() — _steam_lobby_id и название ставим после него.
 	if not join_game(str(owner)):
+		s.leaveLobby(lobby_id)
 		lobby_pending = ""
 		room_name = ""
 		lobby_changed.emit()
@@ -682,7 +709,7 @@ func _parse_connect_lobby() -> int:
 		id = scan.call(OS.get_cmdline_user_args())
 	if id == 0:
 		var s := _steam()
-		if s != null:
+		if s != null and NetTransport.SteamTransport._inited:
 			id = scan.call(String(s.getLaunchCommandLine()).split(" ", false))
 	return id
 
@@ -709,7 +736,7 @@ func all_guests_ready() -> bool:
 ## Клиент отмечает готовность; хост пересобирает лобби и, если шёл отсчёт для
 ## прежнего состояния, отменяет его.
 func set_ready(v: bool) -> void:
-	if role != "client":
+	if role != "client" or not lobby.has(multiplayer.get_unique_id()):
 		return
 	_rpc_ready.rpc_id(1, v)
 
@@ -768,6 +795,21 @@ func _rpc_countdown(seconds_left: int) -> void:
 	countdown_changed.emit(seconds_left)
 
 # ------------------------------------------------------------------ партия
+## Партия закончилась, а соединение остаётся: возвращаемся в лобби для
+## реванша. Без сброса флага host_begin_countdown() и _rpc_hello() считали бы,
+## что бой всё ещё идёт.
+func end_match() -> void:
+	_match_active = false
+	countdown_left = -1
+	_countdown_token += 1
+	_snaps.clear()
+	_interp_cache_t = -1
+	_interp_cache_prev = {}
+	_last_snap_seq = -1
+	_snap_seq = 0
+	last_snap_tick = 0
+	_roster.clear()
+
 ## Матч официально идёт с точки зрения хоста ещё ДО host_start_match():
 ## World._init() спавнит игроков и часть ботов раньше, чем до него доходит
 ## очередь выставить _match_active внутри host_start_match(), и их

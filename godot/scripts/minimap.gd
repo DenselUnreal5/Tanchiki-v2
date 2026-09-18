@@ -14,6 +14,16 @@ var player: PlayerState = null
 var _cache: ImageTexture = null
 var _cache_version := -1
 var _image: Image = null
+## Пересборка кэша идёт циклом set_pixel по всем тайлам карты, а map.version
+## растёт почти каждый тик, когда мнётся лес или наступает вода «Царя горы».
+## Миникарте 4 обновлений в секунду хватает.
+const CACHE_MIN_MSEC := 250
+var _cache_msec := -100000
+## Прямая видимость врагов (DDA до 190 шагов на GDScript) — 10 раз в секунду:
+## instance_id танка -> видим ли он. Сдвиг точки на миникарте не заметен.
+const LOS_RECHECK_MSEC := 100
+var _los_msec := -100000
+var _los := {}
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -27,9 +37,16 @@ func _draw() -> void:
 	var w := size.x
 	var h := size.y
 
-	if _cache_version != world.map.version:
+	var now := Time.get_ticks_msec()
+	if _cache_version != world.map.version and (_cache == null or now - _cache_msec >= CACHE_MIN_MSEC):
 		_render_cache()
 		_cache_version = world.map.version
+		_cache_msec = now
+
+	var refresh_los := now - _los_msec >= LOS_RECHECK_MSEC
+	if refresh_los:
+		_los_msec = now
+		_los.clear()
 
 	draw_rect(Rect2(Vector2.ZERO, size), Color("#0a0a0a"))
 	if _cache != null:
@@ -66,7 +83,10 @@ func _draw() -> void:
 
 		# Врагов видно только по прямой видимости.
 		if hostile and viewer != null:
-			if not world.map.has_line_of_sight(viewer.x, viewer.y, tank.x, tank.y):
+			var tid: int = tank.get_instance_id()
+			if not _los.has(tid):
+				_los[tid] = world.map.has_line_of_sight(viewer.x, viewer.y, tank.x, tank.y)
+			if not _los[tid]:
 				continue
 
 		var palette := Cfg.team_palette(tank.color_key)

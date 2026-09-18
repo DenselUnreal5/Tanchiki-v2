@@ -412,8 +412,15 @@ func update_hud(world: World) -> void:
 		if _banner_timer == 0:
 			var tw := create_tween()
 			tw.tween_property(_banner, "modulate:a", 0.0, 0.25)
+	# Табло целиком пересобирается (queue_free + новые узлы) — раз в кадр
+	# это лишний мусор; цифры счёта успевают устареть не больше чем на 0,1 с.
 	if scoreboard_visible:
-		_render_scoreboard(world)
+		_scoreboard_frames += 1
+		if _scoreboard_frames >= 10:
+			_scoreboard_frames = 0
+			_render_scoreboard(world)
+
+var _scoreboard_frames := 0
 
 # ------------------------------------------------------------------ лента
 func add_feed(text: String, color: Color = Color.WHITE) -> void:

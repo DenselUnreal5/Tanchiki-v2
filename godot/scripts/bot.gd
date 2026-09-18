@@ -70,6 +70,13 @@ var waypoint_stall := 0
 var path_cooldown := 0
 ## Тиков до следующего пересмотра цели.
 var perception_timer := 0
+## Счёт врагов/союзников поблизости для решения «отходить или драться». Обстановка
+## за 6 тиков (0,1 с) почти не меняется, а два запроса к сетке на каждый тик
+## каждого бота при 40 танках — самая горячая точка CPU в больших боях.
+const NEARBY_RECHECK_TICKS := 6
+var _near_tick := -1000
+var _near_enemies := 0
+var _near_allies := 0
 ## Видимость до текущей цели — считается вместе с пересмотром цели, не
 ## каждый тик (см. update()): та же по духу экономия, что и у самого
 ## пересмотра, для того же самого дорогого вызова.
@@ -421,9 +428,11 @@ func _do_combat(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> v
 		return
 
 	var hp_ratio := tank.hp / tank.max_hp
-	var enemies := count_nearby(world, tank, 400.0, true)
-	var allies := count_nearby(world, tank, 400.0, false)
-	var outnumbered := enemies > allies + 1
+	if world.tick - _near_tick >= NEARBY_RECHECK_TICKS:
+		_near_tick = world.tick
+		_near_enemies = count_nearby(world, tank, 400.0, true)
+		_near_allies = count_nearby(world, tank, 400.0, false)
+	var outnumbered := _near_enemies > _near_allies + 1
 	# В режиме выживания уходим раньше и дальше: цена смерти здесь —
 	# вылет из партии, а не просто штраф.
 	var retreat_hp := 0.55 if survival else 0.3

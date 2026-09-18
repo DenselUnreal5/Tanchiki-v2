@@ -29,10 +29,19 @@ var _view := Rect2()
 # картинка; перезаливка — по разрушению (map.version) и, отдельно, по
 # таймеру — только чтобы вода и зыбучка не застывали совсем.
 const TILE_CACHE_ANIM_TICKS := 6
+## Не чаще одной перезаливки за столько тиков даже при частых изменениях
+## карты: лес под гусеницами и наводнение «Царя горы» поднимают map.version
+## почти каждый тик, а перепекается вся карта (≈8000 тайлов) целиком.
+const TILE_CACHE_MIN_TICKS := 3
 var _tile_cache_viewport: SubViewport
 var _tile_cache_view: TileBakeView
 var _tile_cache_version := -1
-var _tile_cache_timer := 0
+## world.tick последней перезаливки. Раньше здесь был счётчик кадров: на
+## 144 Гц карта перепекалась в 2,4 раза чаще, чем на 60 Гц, без всякой пользы.
+var _tile_cache_tick := 0
+## Есть ли на карте вода/зыбучка — только они анимируются. Пересчитывается
+## при смене map.version; без них периодическая перезаливка не нужна.
+var _tile_cache_anim := true
 ## SubViewport рендерит с задержкой в кадр: до первого настоящего рендера
 ## текстура пуста, и её ещё нельзя показывать — иначе первый кадр партии
 ## мигнёт пустой картой.
@@ -218,16 +227,30 @@ func _update_tile_cache() -> void:
 		_tile_cache_view.world = world
 		_tile_cache_viewport.add_child(_tile_cache_view)
 		_tile_cache_version = world.map.version
-		_tile_cache_timer = TILE_CACHE_ANIM_TICKS
+		_tile_cache_tick = world.tick
+		_tile_cache_anim = _map_has_animated_tiles()
 		return
 
 	_tile_cache_ready = true
-	_tile_cache_timer -= 1
-	if world.map.version != _tile_cache_version or _tile_cache_timer <= 0:
-		_tile_cache_version = world.map.version
-		_tile_cache_timer = TILE_CACHE_ANIM_TICKS
+	var since := world.tick - _tile_cache_tick
+	var map_changed := world.map.version != _tile_cache_version
+	# Снег плавно выбеливает землю (snow_k в _draw_tiles), значит и при
+	# снегопаде на карте без воды кэш должен обновляться.
+	var snowing: bool = world.weather != null and world.weather.snow > 0.0
+	var anim_due := (_tile_cache_anim or snowing) and since >= TILE_CACHE_ANIM_TICKS
+	if (map_changed and since >= TILE_CACHE_MIN_TICKS) or anim_due:
+		if map_changed:
+			_tile_cache_version = world.map.version
+			_tile_cache_anim = _map_has_animated_tiles()
+		_tile_cache_tick = world.tick
 		_tile_cache_view.queue_redraw()
 		_tile_cache_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+
+func _map_has_animated_tiles() -> bool:
+	for t in world.map.tiles:
+		if t == Cfg.T_WATER or t == Cfg.T_QUICKSAND:
+			return true
+	return false
 
 func _draw_tiles() -> void:
 	var map := world.map

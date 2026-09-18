@@ -19,7 +19,7 @@ class_name NetTransport
 extends RefCounted
 
 ## Порт по умолчанию для прямого подключения.
-const DEFAULT_PORT := 27015
+const DEFAULT_PORT := 8124
 
 ## Человекочитаемое имя — для меню и сообщений об ошибках.
 var name := ""
@@ -58,6 +58,9 @@ class EnetTransport extends NetTransport:
 		port = port_
 
 	func host(max_clients: int) -> MultiplayerPeer:
+		if port < 1 or port > 65535:
+			error = "Порт должен быть от 1 до 65535 / Port must be 1–65535"
+			return null
 		var peer := ENetMultiplayerPeer.new()
 		var err := peer.create_server(port, max_clients)
 		if err != OK:
@@ -67,7 +70,11 @@ class EnetTransport extends NetTransport:
 
 	func join(address: String) -> MultiplayerPeer:
 		var peer := ENetMultiplayerPeer.new()
-		var err := peer.create_client(address, port)
+		var host_address := address.strip_edges()
+		if host_address.is_empty() or port < 1 or port > 65535:
+			error = "Укажите адрес хоста и порт от 1 до 65535 / Enter a host and port 1–65535"
+			return null
+		var err := peer.create_client(host_address, port)
 		if err != OK:
 			error = I18n.t("net.err.join", {}, "Не удалось подключиться к %s" % address)
 			return null
@@ -95,6 +102,7 @@ class SteamTransport extends NetTransport:
 
 	var app_id := DEV_APP_ID
 	static var _inited := false
+	static var init_error := ""
 
 	func _init(app_id_: int = DEV_APP_ID) -> void:
 		name = "Steam"
@@ -114,7 +122,7 @@ class SteamTransport extends NetTransport:
 	## Свой идентификатор — его и сообщают тем, кто хочет подключиться.
 	## Он же играет роль адреса: у Steam нет ни IP, ни порта.
 	static func my_steam_id() -> int:
-		if not Engine.has_singleton("Steam"):
+		if not _inited or not Engine.has_singleton("Steam"):
 			return 0
 		return int(Engine.get_singleton("Steam").getSteamID())
 
@@ -125,23 +133,18 @@ class SteamTransport extends NetTransport:
 			return true
 		if not Engine.has_singleton("Steam") or not ClassDB.class_exists("SteamMultiplayerPeer"):
 			return false
-		var res: Dictionary = Engine.get_singleton("Steam").steamInitEx(app_id_, true)
+		var res: Dictionary = Engine.get_singleton("Steam").steamInitEx(app_id_, false)
 		_inited = int(res.get("status", 1)) == 0
+		init_error = "" if _inited else String(res.get("verbal", "Steam initialization failed"))
 		return _inited
 
 	## Steam инициализируется один раз на процесс. Повторный вызов безвреден,
 	## но лишний: статус кладём в статическое поле.
 	func _ensure_init() -> bool:
-		if _inited:
+		if boot(app_id):
 			return true
-		var steam := Engine.get_singleton("Steam")
-		var res: Dictionary = steam.steamInitEx(app_id, true)
-		if int(res.get("status", 1)) != 0:
-			error = I18n.t("net.err.steamInit", {"why": String(res.get("verbal", ""))},
-				"Steam не запустился: %s" % String(res.get("verbal", "")))
-			return false
-		_inited = true
-		return true
+		error = I18n.t("net.err.steamInit", {"why": init_error}, "Steam: %s" % init_error)
+		return false
 
 	## Общая часть: инициализация плюс сам peer с включённым релеем.
 	##

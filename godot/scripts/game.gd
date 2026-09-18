@@ -169,9 +169,12 @@ func _boot_dedicated_server(cli: Dictionary) -> void:
 	print("[server] слушаю порт %d, жду %d игроков (режим %s, сложность %s, уровень %s)"
 		% [port, target, ui.settings["mode"], ui.settings["difficulty"], ui.settings["level"]])
 
-## Свёрнутое окно не должно означать проигранную партию.
+## Свёрнутое окно не должно означать проигранную партию. В сетевой игре
+## пауза не ставится: хост, потерявший фокус (например, при тесте двумя окнами
+## на одном ПК), перестал бы рассылать снапшоты и заморозил бы всех клиентов.
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and state == S_PLAYING:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and state == S_PLAYING \
+			and not Net.is_online:
 		pause()
 
 func _bind_ui() -> void:
@@ -487,6 +490,15 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	_process_perk_queue()
 
 func to_menu() -> void:
+	# Без этого Net оставался в «партия идёт»: «Начать партию» молча не
+	# срабатывало, новые игроки отключались, а одиночная игра шла с ролью
+	# хоста/клиента. Закончившуюся партию оставляем в лобби для реванша,
+	# оборванную посреди боя — закрываем соединение.
+	if Net.is_online:
+		if world != null and world.finished_flag:
+			Net.end_match()
+		else:
+			Net.leave(false)
 	state = S_MENU
 	Mus.play_menu()
 	Sfx.clear_listeners()
@@ -940,6 +952,12 @@ func _apply_net_state() -> void:
 	for t in world.tanks:
 		var info = st["tanks"].get(t.net_id)
 		if info == null:
+			# Танк, пришедший надёжным _rpc_tank_spawn, мог обогнать снапшот
+			# (тот идёт ненадёжно и с задержкой интерполяции). Удалить его
+			# сразу — значит потерять подкрепление навсегда: спавн уже не
+			# повторится. Даём снапшотам время его догнать.
+			if Time.get_ticks_msec() - int(t.get_meta("born_msec", -100000)) < 3000:
+				live.append(t)
 			continue
 		seen[t.net_id] = true
 		if t != local_tank:
@@ -1014,6 +1032,7 @@ func net_spawn_puppet(info: Dictionary) -> void:
 	})
 	tank.cosmetics = info.get("cosmetics", {})
 	tank.cannon_id = String(info.get("cannon_id", "standard"))
+	tank.set_meta("born_msec", Time.get_ticks_msec())  # см. _apply_net_state
 	# Свой танк цепляется к местному игроку: иначе не будет ни камеры,
 	# ни HUD, ни прицеливания.
 	if int(info["owner_peer"]) == multiplayer.get_unique_id() and not players.is_empty():
