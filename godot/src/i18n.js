@@ -1,0 +1,525 @@
+// ============================================================================
+// i18n.js — переводы интерфейса (русский / английский).
+//
+// Русский текст остаётся источником правды в данных (perks, upgrades и т.д.)
+// и передаётся как fallback в t()/dn(). Английские переводы лежат в словаре EN.
+// Файл безопасен для Node (сервер импортирует world.js): DOM и localStorage
+// трогаются только внутри функций, вызываемых из браузера.
+// ============================================================================
+
+const STORAGE_KEY = 'tanchiki_lang';
+
+let lang = 'ru';
+try {
+  if (typeof localStorage !== 'undefined') {
+    lang = localStorage.getItem(STORAGE_KEY) || 'ru';
+  }
+} catch {
+  /* приватный режим и т.п. — остаёмся на русском */
+}
+
+/** Английский словарь: ключ → строка. Русский берётся из fallback в коде. */
+const EN = {
+  // ------------------------------------------------------------- меню
+  'menu.selectMode': '⚙️ Select Mode',
+  'menu.gametype': 'Game Type',
+  'gametype.single': '1 Player',
+  'gametype.hotseat': 'Hot Seat',
+  'menu.mode': 'Mode',
+  'mode.ffa': 'Free For All',
+  'mode.ctf': 'Capture The Flag',
+  'mode.koth': 'King of the Hill',
+  'mode.defense': 'Defense',
+  'menu.diff': 'Difficulty',
+  'diff.easy': 'Easy',
+  'diff.medium': 'Medium',
+  'diff.hard': 'Hard',
+  'menu.level': 'Level',
+  'menu.color1': 'Tank Color 1',
+  'menu.color2': 'Tank Color 2',
+  'skin.p1': 'Green',
+  'skin.p2': 'Blue',
+  'skin.p3': 'Orange',
+  'skin.p4': 'Purple',
+  'skin.p5': 'Cyan',
+  'skin.p6': 'Olive',
+  'menu.start': 'PLAY',
+  'menu.onlinePh': 'ws://host:port',
+  'menu.online': '🌐 Play Online',
+  'menu.garage': '🔧 Garage',
+  'menu.gallery': 'Perk Gallery',
+  'menu.achievements': '🏅 Achievements',
+  'menu.daily': '📅 Quests',
+  'menu.stats': 'Statistics',
+  'menu.sound.on': '🔊 Sound',
+  'menu.sound.off': '🔇 Sound',
+  'menu.reset': 'Reset Progress',
+  'menu.lang.ru': '🌐 English',
+  'menu.lang.en': '🌐 Русский',
+  'menu.profile': 'Profile',
+  'menu.perks': 'perks unlocked',
+  'menu.coins': 'coins',
+  'confirm.reset': 'Reset the entire profile progress? Unlocked perks will be lost.',
+
+  // ------------------------------------------------------------- пауза
+  'pause.title': 'PAUSE',
+  'pause.resume': 'Resume',
+  'pause.gallery': 'Perk Gallery',
+  'pause.menu': 'Main Menu',
+
+  // ------------------------------------------------------------- выбор перка
+  'perk.title': 'LEVEL UP',
+  'perk.who': '{name} — level {lvl}',
+  'perk.sub': 'Profile {lvl} · equipped {n}/{max}',
+  'perk.level': 'level',
+  'perk.profile': 'Profile',
+  'perk.equipped': 'equipped',
+  'perk.left': ' · picks left: {n}',
+  'perk.empty.none': 'No perks unlocked yet. Earn profile XP to unlock them.',
+  'perk.empty.all': 'All available perks are already equipped.',
+  'perk.eq.label': 'Equipped (click to unequip)',
+  'perk.skip': 'Continue without choosing',
+
+  // ------------------------------------------------------------- галерея
+  'gallery.title': 'Perk Gallery',
+  'gallery.sub': 'Profile level {lvl} · unlocked {n} of {total}',
+  'gallery.open': 'Unlocked',
+  'gallery.unlockAt': 'Unlocks at profile level {lvl}',
+  'btn.close': 'Close',
+  'cat.fire': 'Fire',
+  'cat.defense': 'Defense',
+  'cat.speed': 'Speed',
+  'cat.special': 'Special',
+  'cat.challenge': 'Challenges',
+  'cat.utility': 'Utility',
+
+  // ------------------------------------------------------------- гараж
+  'garage.title': '🔧 Garage',
+  'garage.sub': 'Coins: {money} 🪙 · Tank upgrades apply to both players in a match',
+  'garage.cosmetics': 'Cosmetics',
+  'cos.hull': 'Hull',
+  'cos.track': 'Tracks',
+  'cos.turret': 'Turret',
+  'cos.equipped': 'Equipped',
+  'cos.owned': 'Owned',
+  'cos.price': 'Price: {price} 🪙',
+  'cos.equip': 'Equip',
+  'cos.buy': 'Buy · {price} 🪙',
+  'upg.max': 'MAX',
+  'upg.buy': 'Upgrade · {price} 🪙',
+  'upgcat.utility': 'Utility',
+
+  // ------------------------------------------------------------- статистика
+  'stats.title': 'Statistics',
+  'stats.sub': 'Profile level {lvl} · {xp} / {need} XP · perks {n}/{total} · coins {money} 🪙',
+  'stat.ramKills': 'Ram kills',
+  'stat.bricksDestroyed': 'Bricks destroyed',
+  'stat.waterEntries': 'Water entries',
+  'stat.treesDriven': 'Trees driven',
+  'stat.healthPacksCollected': 'Health packs collected',
+  'stat.gamesWon': 'Wins',
+  'stat.gamesPlayed': 'Games played',
+  'stat.timesDied': 'Deaths',
+  'stat.totalKills': 'Total kills',
+  'stat.rapidKills': 'Best: kills in 10s',
+  'stat.cleanStreak': 'Best: streak without damage',
+  'stat.damageInGame': 'Best: damage in a match',
+  'stat.longKills': 'Kills from 400 px',
+  'stat.lowHpKills': 'Kills at HP ≤ 40%',
+
+  // ------------------------------------------------------------- достижения
+  'achievements.title': '🏅 Achievements',
+  'achievements.sub': 'Unlocked {n} of {total} · total reward {reward} 🪙',
+
+  // ------------------------------------------------------------- задания
+  'daily.title': '📅 Daily Quests',
+  'daily.sub': 'Rewards reset at midnight · completed {done} of {total}',
+  'daily.claimed': 'Claimed ✓',
+  'daily.claim': 'Claim · {reward} 🪙',
+
+  // ------------------------------------------------------------- итоги
+  'go.victory': 'VICTORY!',
+  'go.defeat': 'DEFEAT',
+  'go.won': '{name} WINS',
+  'go.player': 'PLAYER',
+  'go.meta': '{mode} · {diff} · level {lvl}',
+  'go.randomLevel': 'random',
+  'go.frags': 'Kills: <b>{n}</b>',
+  'go.deaths': 'Deaths: <b>{n}</b>',
+  'go.captures': 'Flag captures: <b>{n}</b>',
+  'go.score': 'Score: <b>{n}</b>',
+  'go.damage': 'Damage dealt: <b>{n}</b>',
+  'go.sessionLevel': 'Session level: <b>{n}</b>',
+  'go.profile': 'Profile: level {lvl}, {xp}/{need} XP, perks {n}/{total}',
+  'go.reward': 'Reward: +{total} 🪙',
+  'go.reward.kills': 'kills {n}',
+  'go.reward.captures': 'captures {n}',
+  'go.reward.wins': 'wins {n}',
+  'go.table.rank': '#',
+  'go.table.tank': 'Tank',
+  'go.table.kills': 'Kills',
+  'go.table.deaths': 'Deaths',
+  'go.replay': 'Play Again',
+  'go.menu': 'To Menu',
+
+  // ------------------------------------------------------------- подсказки
+  'hint.p1.move': 'move',
+  'hint.p1.aim': 'mouse',
+  'hint.p1.aim2': 'aim',
+  'hint.p1.fire': 'fire',
+  'hint.p1.mine': 'mine',
+  'hint.p2.turret': 'turret',
+  'hint.pause': 'pause',
+  'hint.scoreboard': 'scoreboard',
+
+  // ------------------------------------------------------------- HUD
+  'hud.shield': ' +{n} shield',
+  'hud.score': 'Score {n}',
+  'hud.wave': 'Wave {cur} / {total}   🏰 {hp} HP   ({state})',
+  'hud.left': '{n} left',
+  'hud.strikeReady': '  ✈ READY (F)',
+  'hud.strikeCd': '  ✈ {n}s',
+  'hud.alive': 'Alive {cur} / {total}   ⏱ {time}',
+  'hud.frags': 'Kills {cur} / {target}   ✝ {deaths}',
+  'hud.flags': 'Flags {a} : {b} (to {limit})',
+  'hud.flagYou': '  ⚑ you have the flag!',
+  'hud.xp': 'Lv.{lvl} · {xp}/{need} XP   |   Profile {plvl} · {pxp}/{pneed}',
+  'hud.sec': 's',
+  'render.respawn': 'Respawn in {n}...',
+  'time.night': 'night',
+  'time.dawn': 'dawn',
+  'time.day': 'day',
+  'time.dusk': 'dusk',
+  'time.evening': 'evening',
+
+  // ------------------------------------------------------------- табло
+  'sb.defense': 'Defense — wave {cur} of {total}',
+  'sb.koth': 'King of the Hill — last one standing wins',
+  'sb.ffa': 'Free For All — {target} kills to win',
+  'sb.ctf': 'CTF — Allies {a} : {b} Enemies (to {target})',
+  'sb.hint': 'Tab — hide',
+  'sb.perks': 'Perks',
+
+  // ------------------------------------------------------------- фиды и события
+  'feed.dailyDone': 'Quest complete: +{n} 🪙',
+  'feed.profileLevel': 'Profile level {n}!',
+  'feed.challengeDone': 'Challenge complete',
+  'feed.newPerk': 'New perk',
+  'feed.perkUnlocked': 'Perk unlocked: {names}',
+  'feed.achievement': 'Achievement: {names}',
+  'feed.achievementReward': 'Achievement! +{n} 🪙',
+  'player1': 'Player 1',
+  'player2': 'Player 2',
+  'feed.start.ffa': 'Free For All: be the first to reach the kill cap',
+  'feed.start.koth': 'King of the Hill: outlive everyone on the sinking map',
+  'feed.start.defense': 'Defense: hold the base against waves of enemies',
+  'feed.start.ctf': 'CTF: bring enemy flags back to your base',
+  'feed.connected': "Connected to the server. Let's play!",
+  'net.you': 'You',
+  'net.player': 'Player',
+  'net.lost': 'Connection lost',
+  'net.unreachable': 'Server unreachable: {url}',
+  'feed.reward': '+{n} 🪙 {label}',
+  'feed.flagCaptured': 'Flag captured!',
+  'feed.killSuicide': '{name} destroyed',
+  'feed.youDied': '{name}: tank destroyed',
+  'reward.kill': 'for the kill ({name})',
+  'reward.capture': 'for the flag capture ({name})',
+  'reward.win': 'for the win',
+  'reward.other': 'reward',
+  'feed.botPerk': '{name} got: {icon} {perk}',
+  'feed.sessionLevel': '{name}: level {n}!',
+  'feed.perkTook': '{name} took {icon} {perk}',
+  'fatal.title': 'The game stopped due to an error',
+
+  // ------------------------------------------------------------- мир
+  'reason.defenseBase': 'The base was destroyed — the defense fell',
+  'reason.defenseWon': 'All {n} waves repelled — the defense held',
+  'reason.allDead': 'All players destroyed',
+  'reason.kothTimeout': 'Time is up — the strongest wins',
+  'reason.ffaLimit': '{name} was the first to reach {n} kills',
+  'reason.ctfLimit': '{team} captured {n} flags',
+  'reason.lastStanding': '{name} was the last one standing',
+  'team.allies': 'Allies',
+  'team.enemies': 'Enemies',
+  'winner.horde': 'The Horde',
+  'winner.defenders': 'Defenders',
+  'winner.nobody': 'Nobody',
+  'winner.teamAllies': 'Team "Allies"',
+  'winner.teamEnemies': 'Team "Enemies"',
+  'feed.ramp': 'The enemies got stronger!',
+  'feed.airstrike': '✈ Airstrike on {n} targets!',
+  'feed.bossKilled': '{name} destroyed the BOSS! +{n} 🪙',
+  'feed.perkPicked': '{name} picked up {icon} {perk}',
+  'feed.medkit': '{name}: medkit +{n} HP',
+  'feed.weapon': '{name}: {icon} {weapon}!',
+  'feed.flagReturned': '{name} returned the flag',
+  'feed.flagTaken': '{name} took the flag',
+  'feed.flagCapturedWorld': '{name} captured the flag! {a}:{b}',
+  'feed.wave': '🌊 Wave {cur} of {total}: {n} enemies',
+  'feed.boss': '{icon} {name} — BOSS on the battlefield!',
+
+  // ------------------------------------------------------------- данные: перки
+  'perk.double_shot.name': 'Double Shot',
+  'perk.double_shot.desc': '2 parallel bullets',
+  'perk.fan_shot.name': 'Fan Shot',
+  'perk.fan_shot.desc': '3 bullets in a fan, each 45% damage',
+  'perk.rapid_fire.name': 'Rapid Fire',
+  'perk.rapid_fire.desc': 'Reload 40% faster',
+  'perk.explosive.name': 'Explosive Bullets',
+  'perk.explosive.desc': 'Area damage 32 px and breaks bricks around',
+  'perk.piercing.name': 'Piercing Shot',
+  'perk.piercing.desc': 'Bullet pierces one wall',
+  'perk.heavy_armor.name': 'Heavy Armor',
+  'perk.heavy_armor.desc': 'Max HP +50%',
+  'perk.regen.name': 'Regeneration',
+  'perk.regen.desc': '60 HP per minute (1 HP/s)',
+  'perk.reflect.name': 'Reflection',
+  'perk.reflect.desc': '20% of received damage returns to the attacker',
+  'perk.evasion.name': 'Evasion',
+  'perk.evasion.desc': '15% chance to avoid damage entirely',
+  'perk.shield.name': 'Energy Shield',
+  'perk.shield.desc': 'Shield of 30 HP, recharges every 30 s',
+  'perk.sprinter.name': 'Sprinter',
+  'perk.sprinter.desc': 'Speed +25%',
+  'perk.quick_reload.name': 'Quick Reload',
+  'perk.quick_reload.desc': 'Reload 30% faster',
+  'perk.mines.name': 'Minelayer',
+  'perk.mines.desc': 'Up to 3 mines on the map, placed with the mine key',
+  'perk.ram.name': 'Ram',
+  'perk.ram.desc': 'Collision damage x2',
+  'perk.ram.challenge': 'Destroy 3 tanks by ramming',
+  'perk.thick_armor.name': 'Thick Armor',
+  'perk.thick_armor.desc': "Damage taken −20%, but your bullets don't break bricks",
+  'perk.thick_armor.challenge': 'Break 15 bricks',
+  'perk.amphibious.name': 'Amphibian',
+  'perk.amphibious.desc': 'In water only slowdown, no damage',
+  'perk.amphibious.challenge': 'Enter water 5 times',
+  'perk.forest.name': 'Forest Dweller',
+  'perk.forest.desc': 'Drive through trees without destroying them',
+  'perk.forest.challenge': 'Drive through 5 trees',
+  'perk.magnet.name': 'Magnet',
+  'perk.magnet.desc': 'Medkit pickup radius x2',
+  'perk.magnet.challenge': 'Collect 20 medkits',
+  'perk.sniper.name': 'Sniper',
+  'perk.sniper.desc': 'Bullets fly 40% faster and deal +15% damage',
+  'perk.sniper.challenge': 'Kill 3 enemies from 400 px',
+  'perk.berserk.name': 'Berserk',
+  'perk.berserk.desc': 'Damage ×1.6 while your HP ≤ 40%',
+  'perk.berserk.challenge': 'Kill 5 enemies at HP ≤ 40%',
+  'perk.kamikaze.name': 'Kamikaze',
+  'perk.kamikaze.desc': 'Explosion of 64 px on death',
+  'perk.kamikaze.challenge': 'Die 10 times',
+  'perk.turbo.name': 'Turbo',
+  'perk.turbo.desc': 'Speed boost x1.5 for 3 s after a kill',
+  'perk.turbo.challenge': 'Kill 5 enemies in 10 seconds',
+  'perk.shadow.name': 'Shadow',
+  'perk.shadow.desc': 'Invisible on the minimap for 3 s after a kill',
+  'perk.shadow.challenge': '3 kills in a row without taking damage',
+  'perk.vampire.name': 'Vampire',
+  'perk.vampire.desc': '15% of dealt damage returns as HP',
+  'perk.vampire.challenge': 'Deal 5000 damage in one match',
+
+  // ------------------------------------------------------------- данные: перки ботов
+  'botperk.bot_rapid.name': 'Rapid Fire',
+  'botperk.bot_rapid.desc': 'Reload x0.7',
+  'botperk.bot_speed.name': 'Legs',
+  'botperk.bot_speed.desc': 'Speed x1.3',
+  'botperk.bot_tough.name': 'Thick Armor',
+  'botperk.bot_tough.desc': 'Max HP +40%',
+  'botperk.bot_double.name': 'Double Shot',
+  'botperk.bot_double.desc': '2 parallel bullets',
+  'botperk.bot_accurate.name': 'Sniper',
+  'botperk.bot_accurate.desc': 'Accuracy +15%',
+  'botperk.bot_regen.name': 'Regeneration',
+  'botperk.bot_regen.desc': '60 HP per minute',
+  'botperk.bot_heavy.name': 'Heavy Bullets',
+  'botperk.bot_heavy.desc': 'Damage +25%',
+  'botperk.bot_evasion.name': 'Evasion',
+  'botperk.bot_evasion.desc': '15% evasion chance',
+
+  // ------------------------------------------------------------- данные: улучшения
+  'upg.dmg.name': 'Powerful Barrel',
+  'upg.dmg.desc': 'Own bullet damage',
+  'upg.fire_rate.name': 'Auto Accelerator',
+  'upg.fire_rate.desc': 'Faster reload',
+  'upg.bullet_speed.name': 'Heavy Shells',
+  'upg.bullet_speed.desc': 'Bullet flight speed',
+  'upg.max_hp.name': 'Reinforced Armor',
+  'upg.max_hp.desc': 'Max HP',
+  'upg.damage_taken.name': 'Composite Armor',
+  'upg.damage_taken.desc': 'Less damage taken',
+  'upg.speed.name': 'Forced Engine',
+  'upg.speed.desc': 'Top speed',
+  'upg.ram.name': 'Armored Roller',
+  'upg.ram.desc': 'Ram damage',
+  'upg.pickup_radius.name': 'Magnetic Trawl',
+  'upg.pickup_radius.desc': 'Medkit pickup radius',
+  'upg.regen.name': 'Repair Module',
+  'upg.regen.desc': 'HP per minute',
+
+  // ------------------------------------------------------------- данные: достижения
+  'ach.first_blood.name': 'First Blood',
+  'ach.first_blood.desc': 'First kill',
+  'ach.kill_10.name': 'Veteran',
+  'ach.kill_10.desc': '10 kills',
+  'ach.kill_50.name': 'Killing Machine',
+  'ach.kill_50.desc': '50 kills',
+  'ach.kill_250.name': 'Executioner',
+  'ach.kill_250.desc': '250 kills',
+  'ach.ram_10.name': 'Ramer',
+  'ach.ram_10.desc': '10 ram kills',
+  'ach.ram_50.name': 'Armored Ram',
+  'ach.ram_50.desc': '50 ram kills',
+  'ach.bricks_100.name': 'Destroyer',
+  'ach.bricks_100.desc': 'Break 100 bricks',
+  'ach.bricks_500.name': 'Construction Tycoon',
+  'ach.bricks_500.desc': 'Break 500 bricks',
+  'ach.medkits_25.name': 'Medic',
+  'ach.medkits_25.desc': 'Collect 25 medkits',
+  'ach.medkits_100.name': 'Regiment Medic',
+  'ach.medkits_100.desc': 'Collect 100 medkits',
+  'ach.wins_5.name': 'First Victory',
+  'ach.wins_5.desc': '5 wins',
+  'ach.wins_25.name': 'Champion',
+  'ach.wins_25.desc': '25 wins',
+  'ach.games_10.name': 'Avid Player',
+  'ach.games_10.desc': 'Play 10 games',
+  'ach.games_50.name': 'Arcade Legend',
+  'ach.games_50.desc': 'Play 50 games',
+  'ach.long_20.name': 'Sniper',
+  'ach.long_20.desc': '20 kills from 400 px',
+  'ach.lowhp_10.name': 'Berserk',
+  'ach.lowhp_10.desc': '10 kills at HP ≤ 40%',
+  'ach.streak_10.name': 'Untouchable',
+  'ach.streak_10.desc': 'Streak of 10 kills without damage',
+  'ach.rapid_5.name': 'Flurry',
+  'ach.rapid_5.desc': '5 kills in 10 seconds',
+  'ach.damage_1000.name': 'Artillery',
+  'ach.damage_1000.desc': '1000 damage in a single match',
+
+  // ------------------------------------------------------------- данные: задания
+  'daily.kill_15.name': 'Hunt',
+  'daily.kill_15.desc': 'Kill 15 enemies',
+  'daily.win_2.name': 'Triumph',
+  'daily.win_2.desc': 'Win 2 matches',
+  'daily.capture_2.name': 'Flag in Hand',
+  'daily.capture_2.desc': 'Capture 2 flags',
+  'daily.coins_100.name': 'Treasurer',
+  'daily.coins_100.desc': 'Earn 100 coins',
+  'daily.games_3.name': 'Workaholic',
+  'daily.games_3.desc': 'Play 3 matches',
+  'daily.damage_2000.name': 'Artillery',
+  'daily.damage_2000.desc': 'Deal 2000 damage',
+  'daily.medkits_5.name': 'Field Medic',
+  'daily.medkits_5.desc': 'Collect 5 medkits',
+  'daily.streak_5.name': 'Fortune',
+  'daily.streak_5.desc': 'Streak of 5 kills without damage',
+
+  // ------------------------------------------------------------- данные: косметика
+  'cos.hull.none.name': 'Plain',
+  'cos.hull.stripes.name': 'Camouflage',
+  'cos.hull.star.name': 'Star',
+  'cos.hull.flames.name': 'Flames',
+  'cos.hull.cross.name': 'Cross',
+  'cos.hull.chevrons.name': 'Chevrons',
+  'cos.track.none.name': 'Standard Tracks',
+  'cos.track.gold.name': 'Golden Tracks',
+  'cos.track.steel.name': 'Steel Tracks',
+  'cos.track.ruby.name': 'Ruby Tracks',
+  'cos.turret.none.name': 'Standard Turret',
+  'cos.turret.gold.name': 'Golden Turret',
+  'cos.turret.red.name': 'Scarlet Turret',
+  'cos.turret.night.name': 'Night Turret',
+
+  // ------------------------------------------------------------- данные: оружие
+  'weapon.gatling.name': 'Machine Gun',
+  'weapon.rockets.name': 'Rockets',
+  'weapon.shotgun.name': 'Shotgun',
+
+  // ------------------------------------------------------------- данные: типы врагов
+  'enemy.grunt.name': 'Grunt',
+  'enemy.scout.name': 'Scout',
+  'enemy.heavy.name': 'Brute',
+  'enemy.sniper.name': 'Sniper',
+  'enemy.mortar.name': 'Mortar',
+  'enemy.boss.name': 'Boss',
+
+  // ------------------------------------------------------------- имена ботов
+  '_botNames': [
+    'Ginger', 'Gray', 'Black', 'White', 'Tiger', 'Hawk', 'Wolf', 'Bear',
+    'Scorpion', 'Panther', 'Falcon', 'Cobra', 'Jackal', 'Phantom', 'Raider',
+    'Thunder', 'Storm', 'Blade', 'Wild', 'Captain', 'Lynx', 'Flint',
+  ],
+  'bot.fallback': 'Bot-{n}',
+};
+
+/** Текущий язык: 'ru' | 'en'. */
+export function getLang() {
+  return lang;
+}
+
+/** Переключает язык и сохраняет выбор. */
+export function setLang(next) {
+  lang = next === 'en' ? 'en' : 'ru';
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY, lang);
+  } catch {
+    /* ignore */
+  }
+  if (typeof document !== 'undefined') document.documentElement.lang = lang;
+}
+
+/** Начальный язык из localStorage (для не-модульного «стража» в index.html). */
+export function getStoredLang() {
+  return lang;
+}
+
+/**
+ * Переводит строку интерфейса. fallback — русский текст, используется как
+ * источник правды. Плейсхолдеры вида {name} подставляются из vars.
+ */
+export function t(key, vars, fallback = '') {
+  let s = (lang === 'en' ? EN[key] : undefined) ?? fallback ?? key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      s = s.split('{' + k + '}').join(String(v));
+    }
+  }
+  return s;
+}
+
+/**
+ * Переводит поле name/desc игровых данных. ns — префикс словаря
+ * ('perk' | 'upg' | 'ach' | 'daily' | 'cos.<type>' | ...).
+ */
+export function dn(obj, field, ns) {
+  if (!obj) return '';
+  if (lang !== 'en') return obj[field] ?? '';
+  const key = `${ns}.${obj.id}.${field}`;
+  return EN[key] ?? obj[field] ?? '';
+}
+
+/** Имена ботов для текущего языка. */
+export function botNames() {
+  return lang === 'en' ? EN['_botNames'] : null;
+}
+
+/**
+ * Применяет переводы к статичной разметке:
+ *   [data-i18n]         → textContent
+ *   [data-i18n-ph]      → placeholder
+ *   [data-i18n-title]   → title
+ */
+export function applyStatic() {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n, null, el.textContent);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPh, null, el.placeholder);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    el.title = t(el.dataset.i18nTitle, null, el.title);
+  });
+}

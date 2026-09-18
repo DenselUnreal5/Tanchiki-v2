@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Тянчики — браузерный тест</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<pre id="results">запуск...</pre>
+
+<script type="module">
+// ============================================================================
+// Сквозной тест в настоящем браузере: реальная разметка index.html, реальный
+// canvas, реальный DOM. Проверяет всё, что нельзя проверить в Node:
+// render.js, hud.js, ui.js и связку в game.js.
+//
+// Запускается headless-браузером с --virtual-time-budget, результат читается
+// из #results через --dump-dom.
+// ============================================================================
+
+const log = [];
+const errors = [];
+let passed = 0;
+let failed = 0;
+
+window.addEventListener('error', (e) => errors.push(`window.onerror: ${e.message} @ ${e.filename}:${e.lineno}`));
+window.addEventListener('unhandledrejection', (e) => errors.push(`unhandledrejection: ${e.reason?.stack || e.reason}`));
+const nativeError = console.error.bind(console);
+console.error = (...args) => {
+  errors.push('console.error: ' + args.map((a) => (a?.stack || String(a))).join(' '));
+  nativeError(...args);
+};
+
+function check(name, fn) {
+  try {
+    const detail = fn();
+    passed++;
+    log.push(`OK   ${name}${detail ? ' — ' + detail : ''}`);
+  } catch (e) {
+    failed++;
+    log.push(`FAIL ${name}: ${e.message}`);
+  }
+}
+
+function assert(cond, msg) {
+  if (!cond) throw new Error(msg || 'условие не выполнено');
+}
+
+function finish() {
+  const head = failed === 0 && errors.length === 0
+    ? `BROWSER-TEST PASS (${passed})`
+    : `BROWSER-TEST FAIL (провалено ${failed}, ошибок ${errors.length}, пройдено ${passed})`;
+  document.getElementById('results').textContent =
+    [head, ...log, ...(errors.length ? ['', '--- перехваченные ошибки ---', ...errors] : [])].join('\n');
+}
+
+try {
+  // ---- поднимаем настоящую разметку из index.html -------------------------
+  const indexHtml = await (await fetch('../index.html')).text();
+  const parsed = new DOMParser().parseFromString(indexHtml, 'text/html');
+  for (const node of [...parsed.body.children]) {
+    if (node.tagName === 'SCRIPT') continue;
+    document.body.appendChild(document.importNode(node, true));
+  }
+
+  const { Game } = await import('../src/game.js');
+  const { PERKS } = await import('../src/perks.js');
+  const { MODES } = await import('../src/config.js');
+  const { UPGRADES } = await import('../src/upgrades.js');
+  const { ACHIEVEMENTS } = await import('../src/achievements.js');
+  const { STAT_KEYS } = await import('../src/profile.js');
+  const { ALL_COSMETICS } = await import('../src/cosmetics.js');
+
+  // Окно в headless по умолчанию маленькое — задаём предсказуемый размер.
+  const game = new Game();
+
+  check('игра создана, меню показано', () => {
+    assert(document.getElementById('menu').classList.contains('visible'), 'меню не видно');
+    assert(document.getElementById('hud').style.display !== 'block', 'HUD показан в меню');
+    return `canvas ${game.canvas.width}x${game.canvas.height}`;
+  });
+
+  check('в меню отображается прогресс профиля', () => {
+    const txt = document.getElementById('menu-info').textContent;
+    assert(txt.includes('Профиль'), `текст: "${txt}"`);
+  });
+
+  // ---- одиночная партия --------------------------------------------------
+  document.querySelector('#group-mode button[data-mode="ffa"]').click();
+  document.querySelector('#group-diff button[data-diff="medium"]').click();
+  document.querySelector('#group-level button[data-level="1"]').click();
+  document.getElementById('btn-start').click();
+
+  check('старт партии открывает выбор перка', () => {
+    assert(game.state === 'perk', `состояние ${game.state}`);
+    assert(document.getElementById('perk-select').classList.contains('visible'), 'оверлей не видно');
+    const cards = document.querySelectorAll('#perk-body .perk-card');
+    assert(cards.length > 0, 'нет карточек перков');
+    return `${cards.length} карточки`;
+  });
+
+  check('выбор перка экипирует его и снимает паузу', () => {
+    const card = document.querySelector('#perk-body .perk-card');
+    card.click();
+    assert(game.state === 'playing', `состояние ${game.state}`);
+    assert(game.players[0].perkIds.length === 1, `перков: ${game.players[0].perkIds.length}`);
+    assert(!document.getElementById('perk-select').classList.contains('visible'), 'оверлей не скрылся');
+    return game.players[0].perkIds[0];
+  });
+
+  check('HUD собран для одного игрока', () => {
+    assert(document.getElementById('hud').style.display === 'block', 'HUD скрыт');
+    const panels = document.querySelectorAll('.hud-panel');
+    assert(panels.length === 1, `панелей ${panels.length}`);
+    const mm = document.querySelector('.hud-panel .minimap');
+    assert(mm && mm.width > 0 && mm.height > 0, 'миникарта без размеров');
+    return `миникарта ${mm.width}x${mm.height}`;
+  });
+
+  // ---- прогоняем кадры ----------------------------------------------------
+  let t = performance.now();
+  const runFrames = (n) => {
+    for (let i = 0; i < n; i++) {
+      t += 16.7;
+      game.tickFrame(t);
+      // Выбор перка гасим сразу, чтобы прогон не вставал.
+      if (game.state === 'perk') {
+        const skip = document.querySelector('#perk-body .perk-skip');
+        if (skip) skip.click();
+      }
+    }
+  };
+
+  check('600 кадров рисуются без исключений', () => {
+    runFrames(600);
+    assert(game.world, 'мир исчез');
+    assert(game.world.tick > 100, `тиков всего ${game.world.tick}`);
+    return `тик ${game.world.tick}, танков ${game.world.tanks.length}`;
+  });
+
+  check('HUD заполнен настоящими значениями', () => {
+    const hp = document.querySelector('.hud-hp').textContent;
+    const score = document.querySelector('.hud-score').textContent;
+    const xp = document.querySelector('.hud-xp-label').textContent;
+    assert(/\d+\s*\/\s*\d+\s*HP/.test(hp), `HP: "${hp}"`);
+    assert(score.includes('Счёт'), `счёт: "${score}"`);
+    assert(xp.includes('Профиль'), `xp: "${xp}"`);
+    return hp;
+  });
+
+  check('на канвасе нарисована сцена, а не однотонная заливка', () => {
+    const ctx = game.canvas.getContext('2d');
+    const w = Math.min(400, game.canvas.width);
+    const h = Math.min(400, game.canvas.height);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    // Считаем количество РАЗНЫХ цветов: заливка одним цветом дала бы 1.
+    const palette = new Set();
+    for (let i = 0; i < data.length; i += 4) {
+      palette.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+    }
+    assert(palette.size > 20, `различных цветов всего ${palette.size} — похоже на пустую заливку`);
+    return `${palette.size} различных цветов на ${w}x${h}`;
+  });
+
+  check('миникарта отрисовала тайлы разных типов', () => {
+    const mm = document.querySelector('.hud-panel .minimap');
+    const data = mm.getContext('2d').getImageData(0, 0, mm.width, mm.height).data;
+    const palette = new Set();
+    for (let i = 0; i < data.length; i += 4) {
+      palette.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+    }
+    // Земля, стены, кирпич, вода, деревья, танки — минимум несколько оттенков.
+    assert(palette.size >= 5, `оттенков всего ${palette.size}`);
+    return `${palette.size} оттенков`;
+  });
+
+  check('табло открывается и закрывается', () => {
+    game.hud.toggleScoreboard(game.world);
+    const sb = document.querySelector('.scoreboard');
+    assert(sb.classList.contains('visible'), 'табло не показалось');
+    const rows = sb.querySelectorAll('tbody tr');
+    assert(rows.length === game.world.tanks.length, `строк ${rows.length}, танков ${game.world.tanks.length}`);
+    game.hud.toggleScoreboard(game.world);
+    assert(!sb.classList.contains('visible'), 'табло не скрылось');
+    return `${rows.length} строк`;
+  });
+
+  check('пауза и продолжение работают', () => {
+    game.pause();
+    assert(game.state === 'paused', `состояние ${game.state}`);
+    assert(document.getElementById('pause').classList.contains('visible'), 'оверлей паузы не виден');
+    const tickBefore = game.world.tick;
+    runFrames(30);
+    assert(game.world.tick === tickBefore, 'мир считался на паузе');
+    document.getElementById('btn-resume').click();
+    assert(game.state === 'playing', `состояние ${game.state}`);
+    runFrames(10);
+    assert(game.world.tick > tickBefore, 'мир не возобновился');
+  });
+
+  check('галерея показывает все перки', () => {
+    document.getElementById('btn-gallery').click();
+    const cards = document.querySelectorAll('#gallery-body .gallery-card');
+    assert(cards.length === PERKS.length, `карточек ${cards.length}, перков ${PERKS.length}`);
+    const unlocked = document.querySelectorAll('#gallery-body .gallery-card.unlocked').length;
+    document.getElementById('btn-gallery-close').click();
+    assert(!document.getElementById('gallery').classList.contains('visible'), 'галерея не закрылась');
+    return `${cards.length} карточек, открыто ${unlocked}`;
+  });
+
+  check('гараж показывает улучшения, косметику и баланс монет', () => {
+    document.getElementById('btn-garage').click();
+    const cards = document.querySelectorAll('#garage-body .upgrade-card');
+    const expected = UPGRADES.length + ALL_COSMETICS.length;
+    assert(cards.length === expected, `карточек ${cards.length}, ожидалось ${expected}`);
+    assert(document.getElementById('garage-sub').textContent.includes('Монеты'), 'нет баланса монет');
+    assert(document.querySelector('#garage-body .gallery-subsection'), 'нет секций косметики');
+    document.getElementById('btn-garage-close').click();
+    assert(!document.getElementById('garage').classList.contains('visible'), 'гараж не закрылся');
+    return `${cards.length} карточек`;
+  });
+
+  check('статистика показывает все счётчики профиля', () => {
+    document.getElementById('btn-stats').click();
+    const rows = document.querySelectorAll('#stats-body .stats-table tr');
+    assert(rows.length === STAT_KEYS.length, `строк ${rows.length}, счётчиков ${STAT_KEYS.length}`);
+    document.getElementById('btn-stats-close').click();
+    assert(!document.getElementById('stats').classList.contains('visible'), 'статистика не закрылась');
+    return `${rows.length} счётчиков`;
+  });
+
+  check('достижения показывают все карточки', () => {
+    document.getElementById('btn-achievements').click();
+    const cards = document.querySelectorAll('#achievements-body .gallery-card');
+    assert(cards.length === ACHIEVEMENTS.length, `карточек ${cards.length}, достижений ${ACHIEVEMENTS.length}`);
+    document.getElementById('btn-achievements-close').click();
+    assert(!document.getElementById('achievements').classList.contains('visible'), 'достижения не закрылись');
+    return `${cards.length} карточек`;
+  });
+
+  check('ежедневные задания открываются и закрываются', () => {
+    document.getElementById('btn-daily').click();
+    const cards = document.querySelectorAll('#daily-body .daily-card');
+    assert(cards.length > 0, 'нет карточек заданий');
+    document.getElementById('btn-daily-close').click();
+    assert(!document.getElementById('daily').classList.contains('visible'), 'задания не закрылись');
+    return `${cards.length} заданий`;
+  });
+
+  check('завершение партии показывает итоги', () => {
+    const bot = game.world.tanks.find((x) => x.isBot);
+    bot.kills = MODES.ffa.fragLimit;
+    runFrames(3);
+    assert(game.state === 'gameover', `состояние ${game.state}`);
+    const go = document.getElementById('gameover');
+    assert(go.classList.contains('visible'), 'экран итогов не виден');
+    const body = document.getElementById('go-body').textContent;
+    assert(body.includes('Фраги'), 'нет статистики игрока');
+    assert(document.getElementById('hud').style.display === 'none', 'HUD не скрыт');
+    return document.getElementById('go-title').textContent;
+  });
+
+  // ---- горячий стул ------------------------------------------------------
+  check('возврат в меню очищает состояние', () => {
+    document.getElementById('btn-tomenu').click();
+    assert(game.state === 'menu', `состояние ${game.state}`);
+    assert(game.world === null, 'мир не очищен');
+    assert(document.querySelectorAll('.hud-panel').length === 0 ||
+           document.getElementById('hud').style.display === 'none', 'HUD остался');
+  });
+
+  document.querySelector('#group-gametype button[data-gametype="hotseat"]').click();
+  document.querySelector('#group-mode button[data-mode="ctf"]').click();
+  document.getElementById('btn-start').click();
+
+  check('горячий стул: две панели HUD и разделённый экран', () => {
+    // Гасим очередь выбора перков обоих игроков.
+    let guard = 0;
+    while (game.state === 'perk' && guard++ < 10) {
+      document.querySelector('#perk-body .perk-skip').click();
+    }
+    assert(game.state === 'playing', `состояние ${game.state}`);
+    assert(game.players.length === 2, `игроков ${game.players.length}`);
+    const panels = document.querySelectorAll('.hud-panel');
+    assert(panels.length === 2, `панелей ${panels.length}`);
+    const [a, b] = game.players;
+    assert(a.viewport.w > 0 && b.viewport.w > 0, 'нулевая ширина области');
+    assert(b.viewport.x === a.viewport.w, `сплит не стыкуется: ${a.viewport.w} vs ${b.viewport.x}`);
+    assert(a.viewport.w + b.viewport.w === game.canvas.width, 'сплит не покрывает канвас');
+    return `${a.viewport.w}+${b.viewport.w} = ${game.canvas.width}`;
+  });
+
+  check('в CTF игроки в разных командах и у каждого свой танк', () => {
+    const [a, b] = game.players;
+    assert(a.tank && b.tank, 'нет танка');
+    assert(a.tank !== b.tank, 'один танк на двоих');
+    assert(a.tank.team === 'player' && b.tank.team === 'enemy', `${a.tank.team} / ${b.tank.team}`);
+    assert(a.perkIds !== b.perkIds, 'общий массив перков');
+    return `${a.tank.team} vs ${b.tank.team}`;
+  });
+
+  check('900 кадров разделённого экрана без исключений', () => {
+    runFrames(900);
+    assert(game.world.tick > 300, `тиков ${game.world.tick}`);
+    for (const p of game.players) {
+      assert(Number.isFinite(p.camera.x) && Number.isFinite(p.camera.y), 'камера NaN');
+    }
+    return `тик ${game.world.tick}`;
+  });
+
+  check('перки второго игрока не влияют на первого', () => {
+    const [a, b] = game.players;
+    b.equipPerk('heavy_armor');
+    const beforeA = a.tank.maxHP;
+    assert(b.tank.maxHP > b.tank.baseMaxHP, 'перк не подействовал на второго');
+    assert(a.tank.maxHP === beforeA, 'изменился максимум HP первого игрока');
+    b.unequipPerk('heavy_armor');
+    assert(b.tank.maxHP === b.tank.baseMaxHP, 'снятие перка не вернуло HP');
+  });
+
+  check('изменение размера окна пересобирает раскладку', () => {
+    const before = game.players[0].viewport.w;
+    game.renderer.resize(1000, 700);
+    game.layoutViewports();
+    game.hud.layout(game.players);
+    runFrames(5);
+    assert(game.players[0].viewport.w === 500, `ширина ${game.players[0].viewport.w}`);
+    assert(game.players[1].viewport.x === 500, `смещение ${game.players[1].viewport.x}`);
+    return `было ${before}, стало ${game.players[0].viewport.w}`;
+  });
+
+  check('после смены размера сцена перерисовывается, а не остаётся пустой', () => {
+    // Смена width/height канваса стирает его содержимое. Проверяем, что
+    // следующий же кадр восстанавливает картинку.
+    game.renderer.resize(900, 600);
+    game.layoutViewports();
+    game.hud.layout(game.players);
+    const ctx = game.canvas.getContext('2d');
+    const blank = new Set();
+    let d = ctx.getImageData(0, 0, 300, 300).data;
+    for (let i = 0; i < d.length; i += 4) blank.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+    assert(blank.size <= 2, `канвас после resize не пуст (${blank.size} цветов) — тест бессмысленен`);
+
+    runFrames(2);
+    const filled = new Set();
+    d = ctx.getImageData(0, 0, 300, 300).data;
+    for (let i = 0; i < d.length; i += 4) filled.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+    assert(filled.size > 20, `после resize сцена не перерисовалась (${filled.size} цветов)`);
+    return `${blank.size} → ${filled.size} цветов`;
+  });
+
+  check('счётчик всплывающих чисел урона не растёт бесконечно', () => {
+    for (let i = 0; i < 500; i++) game.renderer.addFloater(0, 0, '-10', '#fff');
+    assert(game.renderer.floaters.length <= 81, `всплывашек ${game.renderer.floaters.length}`);
+    return `${game.renderer.floaters.length}`;
+  });
+
+  // ---- «Оборона» ---------------------------------------------------------
+  game.hud.hideScoreboard();
+  document.querySelector('#group-gametype button[data-gametype="single"]').click();
+  document.querySelector('#group-mode button[data-mode="defense"]').click();
+  document.getElementById('btn-start').click();
+
+  check('Оборона: база в мире, враги из волн, HUD показывает волну', () => {
+    let guard = 0;
+    while (game.state === 'perk' && guard++ < 10) {
+      document.querySelector('#perk-body .perk-skip').click();
+    }
+    assert(game.state === 'playing', `состояние ${game.state}`);
+    const w = game.world;
+    assert(w.base && w.base.hp > 0, 'базы нет в мире');
+    assert(w.mode === 'defense', `режим ${w.mode}`);
+    const waveTxt = document.querySelector('.hud-objective').textContent;
+    assert(waveTxt.includes('Волна'), `HUD не показывает волну: "${waveTxt}"`);
+    assert(waveTxt.includes('HP'), `HUD не показывает HP базы: "${waveTxt}"`);
+    return waveTxt;
+  });
+
+  check('Оборона: 600 кадров без исключений, база существует', () => {
+    runFrames(600);
+    assert(game.world.base, 'база пропала');
+    assert(Number.isFinite(game.world.base.hp), 'HP базы NaN');
+    assert(game.world.tick > 200, `тиков ${game.world.tick}`);
+    return `база ${Math.ceil(game.world.base.hp)} HP, волна ${game.world.wave}`;
+  });
+
+  finish();
+} catch (e) {
+  failed++;
+  log.push(`FATAL: ${e.stack || e}`);
+  finish();
+}
+</script>
+</body>
+</html>

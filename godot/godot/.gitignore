@@ -1,0 +1,10 @@
+# Godot
+.godot/
+.import/
+export.cfg
+*.translation
+
+# Готовые сборки: экспортируются командой из README, в репозиторий не идут.
+build/
+
+.network-tools/
