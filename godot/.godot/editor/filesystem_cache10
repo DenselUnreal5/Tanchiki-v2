@@ -1,6 +1,6 @@
 78098b89c88a74ebe8c20117b8754620
-::res://::1789899381
-export_presets.cfg::TextFile::-1::1789899381::0::1::::<><><>0<>0<><>::
+::res://::1789908954
+export_presets.cfg::TextFile::-1::1789908954::0::1::::<><><>0<>0<><>::
 icon.ico::OtherFile::-1::1788275069::0::1::::<><><>0<>0<><>::
 icon.svg::CompressedTexture2D::2727636235757500454::1787928656::1787931073::1::::<><><>0<>0<>14605896b800f51fdeab039d8fde2a9b<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 package.json::JSON::-1::1789691088::0::1::::<><><>0<>0<><>::
@@ -110,7 +110,7 @@ updates.gd::GDScript::4450020931874397632::1788264736::0::1::::<>MarginContainer
 ::res://addons/godotsteam/linuxarm64/::1788264736
 ::res://addons/godotsteam/osx/::1788264735
 ::res://addons/godotsteam/win32/::1788264735
-::res://addons/godotsteam/win64/::1789907919
+::res://addons/godotsteam/win64/::1789908988
 ::res://addons/godot_ai/::1788264782
 client_configurator.gd::GDScript::1846084051969471465::1788264781::0::1::::McpClientConfigurator<>RefCounted<><>0<>1<><>::
 connection.gd::GDScript::3256190740644037847::1788264778::0::1::::McpConnection<>Node<><>0<>1<><>::
@@ -451,9 +451,7 @@ post_fx.gdshader::Shader::4553687491999387694::1789735194::0::1::::<><><>0<>0<><
 ::res://src/::1789715376
 ::res://suno/::1789715518
 battle v1.mp3::AudioStreamMP3::4753728558382026501::1789691094::1789715518::1::::<><><>0<>0<>62df19327ebf7721e375e6bc375b692f<>res://.godot/imported/battle v1.mp3-f835384ad3f8653f50abd50585950e2f.mp3str::
-::res://tests/::1789907868
-_stealth_check.gd::GDScript::1467790060032782852::1789907862::0::1::::<>Node<><>0<>0<><>::
-_stealth_check.tscn::PackedScene::-1::1789907868::0::1::::<><><>0<>0<><>::res://tests/_stealth_check.gd
+::res://tests/::1789908939
 art_sheet.gd::GDScript::7569179757509836739::1788257966::0::1::::<>Node<><>0<>0<><>::
 art_sheet.tscn::PackedScene::-1::1788178926::0::1::::<><><>0<>0<><>::res://tests/art_sheet.gd
 audio_dump.gd::GDScript::8989594936174849139::1788269131::0::1::::<>Node<><>0<>0<><>::
