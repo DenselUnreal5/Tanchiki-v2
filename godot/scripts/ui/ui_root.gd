@@ -1459,6 +1459,16 @@ func _build_controls_tab() -> void:
 		devices.append(["pad%d" % int(pad["id"]),
 			"%s %d: %s" % [I18n.t("dev.pad", {}, "Геймпад"), int(pad["id"]) + 1,
 				String(pad["name"])]])
+	# Сохранён геймпад, которого сейчас нет: показываем его явно, иначе
+	# список молча показывал «Авто», а в бою танк ждал отключённый джойстик.
+	for cur in [Sets.p1_device, Sets.p2_device]:
+		var known := false
+		for d in devices:
+			if String(d[0]) == cur:
+				known = true
+		if not known and String(cur).begins_with("pad"):
+			devices.append([cur, "%s %d: %s" % [I18n.t("dev.pad", {}, "Геймпад"),
+				int(String(cur).substr(3)) + 1, I18n.t("dev.pad.off", {}, "не подключён")]])
 	var labels := []
 	for d in devices:
 		labels.append(String(d[1]))

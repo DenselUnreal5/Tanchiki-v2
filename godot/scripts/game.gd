@@ -361,8 +361,11 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		# оба слушали бы один и тот же device); два и больше — по одному
 		# каждому. Явный ручной выбор хотя бы у одного из игроков в
 		# Настройках отключает автоопределение целиком — уважаем его.
-		var p1_dev := Sets.p1_device
-		var p2_dev := Sets.p2_device
+		# Геймпад, выбранный в Настройках, мог быть отключён. Тогда схема
+		# слушала бы несуществующее устройство, и танк не реагировал бы ни на
+		# что — откатываемся на «Авто», чтобы работали клавиатура и мышь.
+		var p1_dev := _connected_or_auto(Sets.p1_device)
+		var p2_dev := _connected_or_auto(Sets.p2_device)
 		if hotseat and p1_dev == Sets.DEV_AUTO and p2_dev == Sets.DEV_AUTO:
 			var pads := Sets.pads()
 			if pads.size() >= 1:
@@ -375,7 +378,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		# игра с устройством «Как обычно»: в «горячем стуле» устройства
 		# закреплены за игроками на старте матча (выше), смешивать на лету
 		# нельзя, иначе оба танка начнут слушать один и тот же джойстик.
-		if not hotseat and Sets.p1_device == Sets.DEV_AUTO:
+		if not hotseat and p1_dev == Sets.DEV_AUTO:
 			players[0].enable_auto_device_switch(players[0].scheme, Ctl.GamepadScheme.new(0))
 		if hotseat and not Net.is_online:
 			players.append(PlayerState.new(1, I18n.t("player2", {}, "Игрок 2"),
@@ -650,6 +653,17 @@ func _sync_steam() -> void:
 
 func _on_leaderboard_found(_handle, found: int) -> void:
 	SteamStats.on_leaderboard_found(found != 0)
+
+## Устройство из настроек, если оно есть; отключённый геймпад → «Авто».
+func _connected_or_auto(device: String) -> String:
+	if not device.begins_with("pad"):
+		return device
+	var id := int(device.substr(3))
+	for pad in Sets.pads():
+		if int(pad["id"]) == id:
+			return device
+	push_warning("Геймпад %d из настроек не подключён — управление «Авто»" % (id + 1))
+	return Sets.DEV_AUTO
 
 ## Схема управления по настройке игрока.
 ##

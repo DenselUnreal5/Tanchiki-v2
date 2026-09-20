@@ -132,6 +132,7 @@ var EN := {
 	"dev.kbm": "Keyboard and mouse",
 	"dev.keys": "Keyboard only",
 	"dev.pad": "Gamepad",
+	"dev.pad.off": "not connected",
 	"set.pad.none": "No gamepad found. Connect one and reopen settings.",
 	"set.pad.deadzone": "Stick dead zone",
 	"set.pad.deadzone.hint": "Below this threshold the stick counts as released. Too small and the tank drifts on its own.",
