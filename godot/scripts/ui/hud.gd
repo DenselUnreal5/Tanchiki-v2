@@ -23,6 +23,12 @@ var _map_aspect := 200.0 / 114.0
 var _feed_box: VBoxContainer
 var _banner: Label
 var _banner_timer := 0
+## Общий (не по-игрочно) индикатор волны/таймера «Обороны» вверху по
+## центру экрана — крупнее и заметнее прежней мелкой строки в панели
+## игрока, и не дублируется в сплит-экране.
+var _wave_box: VBoxContainer
+var _wave_title: Label
+var _wave_sub: Label
 var _scoreboard: ThemedPanel
 var _scoreboard_body: VBoxContainer
 var scoreboard_visible := false
@@ -41,6 +47,17 @@ func _ready() -> void:
 	_banner.modulate.a = 0.0
 	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_banner)
+
+	_wave_box = UiKit.vbox(2)
+	_wave_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_wave_box.visible = false
+	add_child(_wave_box)
+	_wave_title = UiKit.label("", 18, Cfg.UI_GOLD, true)
+	_wave_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_wave_box.add_child(_wave_title)
+	_wave_sub = UiKit.label("", 12, Cfg.UI_TEXT)
+	_wave_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_wave_box.add_child(_wave_sub)
 
 	_scoreboard = UiKit.panel()
 	_scoreboard.visible = false
@@ -162,10 +179,13 @@ func build(players: Array, world: World) -> void:
 			"ability_fill": cd_fill,
 			"minimap": mm, "last_perks": "",
 		}
-	layout(players)
+	layout(players, world)
 
-## Позиционирует панели по областям просмотра.
-func layout(players: Array) -> void:
+## Позиционирует панели по областям просмотра. world нужен только чтобы
+## знать, показывать ли верхний индикатор волны «Обороны» (world может
+## быть null на самом первом layout() до старта матча — тогда индикатор
+## просто остаётся скрытым, как и раньше).
+func layout(players: Array, world: World = null) -> void:
 	var split := players.size() > 1
 	for player in players:
 		if not panels.has(player.index):
@@ -200,7 +220,17 @@ func layout(players: Array) -> void:
 	# Размер берём у окна: собственный size у Control может быть ещё не пересчитан
 	# в тот кадр, когда HUD только собран.
 	var screen := get_viewport_rect().size
-	_feed_box.position = Vector2(screen.x * 0.5 - 180.0, 132.0 if split else 10.0)
+	var wave_ui := world != null and world.mode == "defense"
+	_wave_box.visible = wave_ui
+	var feed_y := 132.0 if split else 10.0
+	if wave_ui:
+		_wave_box.position = Vector2(screen.x * 0.5 - 150.0, 10.0)
+		_wave_box.custom_minimum_size = Vector2(300, 0)
+		_wave_box.size = Vector2(300, 46)
+		# Индикатор волны занимает верхний центр — тосты-ленту сдвигаем
+		# ниже него, чтобы не перекрывались.
+		feed_y = maxf(feed_y, 66.0)
+	_feed_box.position = Vector2(screen.x * 0.5 - 180.0, feed_y)
 	_feed_box.custom_minimum_size = Vector2(360, 0)
 	_banner.position = Vector2(screen.x * 0.5 - 300.0, screen.y * 0.22)
 	_banner.size = Vector2(600, 40)
@@ -326,8 +356,6 @@ func update_hud(world: World) -> void:
 		match world.mode:
 			"defense":
 				var base_hp := int(ceil(float(world.base["hp"]))) if world.base != null else 0
-				var left := int(progress["current"])
-				var state := "…" if world.wave_state == "delay" else I18n.t("hud.left", {"n": left}, "%d в поле" % left)
 				var strike := ""
 				# Только первый игрок владеет авиаударом — индикатор у него же.
 				if player.index == 0:
@@ -336,17 +364,10 @@ func update_hud(world: World) -> void:
 						strike = I18n.t("hud.strikeCd", {"n": secs}, "  ✈ %dс" % secs)
 					else:
 						strike = I18n.t("hud.strikeReady", {}, "  ✈ ГОТОВ (F)")
-				var total_waves := int(Cfg.MODES["defense"]["waves"])
-				if world.wave > total_waves:
-					# Стандартные волны позади — дальше без предела: «из скольки»
-					# тут больше не имеет смысла.
-					objective.text = I18n.t("hud.wave.endless",
-						{"cur": world.wave, "hp": base_hp, "state": state},
-						"Волна %d ∞   🏰 %d HP   (%s)" % [world.wave, base_hp, state]) + strike
-				else:
-					objective.text = I18n.t("hud.wave",
-						{"cur": world.wave, "total": total_waves, "hp": base_hp, "state": state},
-						"Волна %d / %d   🏰 %d HP   (%s)" % [world.wave, total_waves, base_hp, state]) + strike
+				# Номер волны и таймер — в общем индикаторе вверху по центру
+				# экрана (_wave_title/_wave_sub, см. конец update_hud), не
+				# дублируются тут: раньше в сплит-экране дублировалось дважды.
+				objective.text = I18n.t("hud.base", {"hp": base_hp}, "🏰 %d HP" % base_hp) + strike
 			"koth":
 				var left_ticks := maxi(0, world.time_limit - world.tick)
 				var sec := int(ceil(float(left_ticks) / 60.0))
@@ -425,6 +446,23 @@ func update_hud(world: World) -> void:
 				slot.add_child(slot_row)
 				box.add_child(slot)
 
+	if world.mode == "defense":
+		var total_waves := int(Cfg.MODES["defense"]["waves"])
+		if world.wave > total_waves:
+			_wave_title.text = I18n.t("hud.wave.big.endless", {"cur": world.wave},
+				"ВОЛНА %d ∞" % world.wave)
+		else:
+			_wave_title.text = I18n.t("hud.wave.big", {"cur": world.wave, "total": total_waves},
+				"ВОЛНА %d / %d" % [world.wave, total_waves])
+		if world.wave_state == "delay":
+			var secs := int(ceil(float(maxi(0, world.wave_timer)) / float(Cfg.TICK_HZ)))
+			var time_str := "%d:%02d" % [secs / 60, secs % 60]
+			_wave_sub.text = I18n.t("hud.wave.next", {"time": time_str},
+				"Следующая волна через %s" % time_str)
+		else:
+			var left := int(world.progress_for(world.players[0])["current"]) if not world.players.is_empty() else 0
+			_wave_sub.text = I18n.t("hud.left", {"n": left}, "%d в поле" % left)
+
 	_tick_feed()
 	if _banner_timer > 0:
 		_banner_timer -= 1
@@ -474,9 +512,10 @@ func _tick_feed() -> void:
 
 # ------------------------------------------------------------------ баннер
 ## Крупное сообщение в центре (открыт перк, забрали флаг и т.п.).
-func banner(text: String, color: Color = Cfg.UI_GOLD, ticks: int = 150) -> void:
+func banner(text: String, color: Color = Cfg.UI_GOLD, ticks: int = 150, font_size: int = 24) -> void:
 	_banner.text = text
 	_banner.add_theme_color_override("font_color", color)
+	_banner.add_theme_font_size_override("font_size", font_size)
 	_banner.modulate.a = 1.0
 	_banner_timer = ticks
 

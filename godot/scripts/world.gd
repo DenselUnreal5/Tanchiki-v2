@@ -9,6 +9,10 @@ class_name World
 extends RefCounted
 
 signal feed(text: String, color: Color)
+## «Оборона»: старт новой волны (включая первую) — отдельно от feed, чтобы
+## по нему можно было показать крупный баннер по центру экрана, не завязываясь
+## на текст бокового тоста.
+signal wave_started(n: int)
 signal damage_number(x: float, y: float, text: String, color: Color)
 signal kill(victim, killer, source: String, suicide: bool)
 signal player_died(player)
@@ -700,6 +704,7 @@ func _setup_defense() -> void:
 func _setup_wave(n: int) -> void:
 	wave = n
 	wave_state = "active"
+	wave_started.emit(n)
 	var base_size := Cfg.DEFENSE_FIRST_WAVE
 	var level_bonus := 0
 	if Cfg.DEFENSE_PLAYER_LEVEL_BONUS:

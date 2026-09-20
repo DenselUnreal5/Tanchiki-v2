@@ -590,7 +590,40 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 		if not Perks.is_perk_allowed_in_mode(id, String(settings["mode"])):
 			continue
 		available.append(id)
-	var choices := rng.shuffled(available).slice(0, PERK_CHOICES)
+
+	# Билд-гарантия (см. PlayerState.build_pity): если игрок недавно
+	# экипировал часть тематического билда, один из трёх слотов резервируем
+	# под недостающую часть — иначе собрать конкретные 2-3 перка из полусотни
+	# открытых чистой случайностью почти нереально. Гарантия расходуется,
+	# только если её вообще можно выполнить в этот раз (часть уже открыта и
+	# разрешена в режиме) — иначе окно не тратится впустую.
+	var guaranteed_id := ""
+	var guaranteed_build := ""
+	for build_id in player.build_pity.keys():
+		if int(player.build_pity[build_id]) <= 0:
+			continue
+		var build := Perks.get_build(String(build_id))
+		if build.is_empty():
+			continue
+		var missing := []
+		for pid in (build["perks"] as Array):
+			if available.has(pid):
+				missing.append(pid)
+		if not missing.is_empty():
+			guaranteed_id = String(rng.pick(missing))
+			guaranteed_build = String(build_id)
+			break
+
+	var pool := available.duplicate()
+	if guaranteed_id != "":
+		pool.erase(guaranteed_id)
+	var slots := PERK_CHOICES - (1 if guaranteed_id != "" else 0)
+	var choices := rng.shuffled(pool).slice(0, slots)
+	if guaranteed_id != "":
+		choices = rng.shuffled(choices + [guaranteed_id])
+		player.build_pity[guaranteed_build] = int(player.build_pity[guaranteed_build]) - 1
+		if int(player.build_pity[guaranteed_build]) <= 0:
+			player.build_pity.erase(guaranteed_build)
 	# Предложенная тройка остаётся доступной снаружи: по ней тест снимков
 	# ищет расклад с активным перком, не повторяя логику отбора у себя.
 	last_perk_choices = choices

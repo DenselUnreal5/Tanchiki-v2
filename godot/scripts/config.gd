@@ -321,6 +321,14 @@ const SKY_STRIKE_COOLDOWN := 720
 const CHAIN_LIGHTNING_RADIUS := 140.0
 const CHAIN_LIGHTNING_MAX_TARGETS := 3
 const CHAIN_LIGHTNING_DMG_MULT := 0.5
+
+## Экипировав первую часть тематического билда (Perks.BUILDS), игрок
+## получает это число гарантированных level-up'ов подряд, где среди
+## предложенных перков обязательно будет одна из недостающих частей — см.
+## PlayerState.build_pity / UiRoot.show_perk_select(). Без этого собрать
+## билд из нескольких конкретных перков чистой случайностью почти нереально
+## (для «Грозового билда» — 3 конкретных перка из полусотни открытых).
+const BUILD_PITY_WINDOW := 2
 ## Сколько следов от ударов хранится: дальше старые вытесняются.
 const MAX_SCORCH := 40
 

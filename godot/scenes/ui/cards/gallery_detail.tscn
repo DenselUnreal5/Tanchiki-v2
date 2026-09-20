@@ -22,6 +22,9 @@ unique_name_in_owner = true
 [node name="DescLabel" type="Label" parent="Box"]
 unique_name_in_owner = true
 
+[node name="BuildLabel" type="Label" parent="Box"]
+unique_name_in_owner = true
+
 [node name="Sep" type="HSeparator" parent="Box"]
 
 [node name="FooterWrap" type="VBoxContainer" parent="Box"]

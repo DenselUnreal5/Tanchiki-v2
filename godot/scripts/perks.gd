@@ -563,6 +563,32 @@ static func unlock_level_of(perk_id: String) -> int:
 			return lvl
 	return 0
 
+## Тематические билды: несколько перков, которые вместе дают синергию
+## (например «Повелитель молний» + «Небесный удар» + «Цепная молния»).
+## Чисто справочные данные — сама механика синергии живёт в каждом перке
+## отдельно (см. world.gd/tank.gd), здесь только список для системы
+## гарантированных предложений в PlayerState.equip_perk()/show_perk_select().
+const BUILDS := [
+	{"id": "lightning", "name": "Грозовой билд",
+		"perks": ["lightning_lord", "sky_strike", "chain_lightning"],
+		"bonus": "Все три перка сразу: шанс «Повелителя молний» ударить молнией в грозу растёт с 25% до 75%"},
+]
+
+## Билды, в которые входит этот перк (обычно один, но список — на случай
+## пересечения билдов в будущем).
+static func builds_with_perk(perk_id: String) -> Array:
+	var out := []
+	for b in BUILDS:
+		if (b["perks"] as Array).has(perk_id):
+			out.append(b)
+	return out
+
+static func get_build(build_id: String) -> Dictionary:
+	for b in BUILDS:
+		if b["id"] == build_id:
+			return b
+	return {}
+
 ## Собирает итоговые модификаторы из набора перков.
 ## Множители перемножаются, прибавки складываются, шансы объединяются
 ## вероятностно (1 - произведение промахов), чтобы не превысить 100%.

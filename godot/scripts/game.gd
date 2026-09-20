@@ -248,7 +248,7 @@ func _reset_progress() -> void:
 func _on_resize() -> void:
 	_layout_viewports()
 	if not players.is_empty():
-		hud.layout(players)
+		hud.layout(players, world)
 
 ## Раскладка областей просмотра: один экран или вертикальный сплит.
 func _layout_viewports() -> void:
@@ -530,6 +530,11 @@ func _bind_world_events(w: World) -> void:
 		hud.add_feed(text, color)
 		if Net.role == "host":
 			Net.host_event("feed", {"text": text, "color": color.to_html()}))
+
+	w.wave_started.connect(func(n: int):
+		hud.banner(I18n.t("hud.waveBanner", {"n": n}, "ВОЛНА %d" % n), Cfg.UI_GOLD, 90, 40)
+		if Net.role == "host":
+			Net.host_event("wave_started", {"n": n}))
 
 	w.damage_number.connect(func(x: float, y: float, text: String, color: Color):
 		if floaters.size() > 80:
@@ -1049,6 +1054,9 @@ func net_apply_event(kind: String, args: Dictionary) -> void:
 	match kind:
 		"feed":
 			hud.add_feed(String(args.get("text", "")), Color(args.get("color", "#ffffff")))
+		"wave_started":
+			var n := int(args.get("n", 0))
+			hud.banner(I18n.t("hud.waveBanner", {"n": n}, "ВОЛНА %d" % n), Cfg.UI_GOLD, 90, 40)
 		"mapsum":
 			# Расхождение чиним не «подкруткой», а запросом карты целиком:
 			# знать, какие именно тайлы разошлись, клиент не может.

@@ -148,6 +148,12 @@ var stat_tank_spawn_out := 0  # ушедших host_tank_spawned (хост)
 var rtt_msec := 0.0        # время оборота до хоста
 var last_snap_tick := 0    # current_tick, когда пришёл последний снапшот
 
+## Строки диагностики подключения ("[net] ..."), копим сами и пишем сами
+## (см. save_log_to_game_folder()) — не полагаемся на файловый лог движка:
+## он ещё открыт на запись, пока игра работает, и не обязательно сброшен
+## на диск в момент выхода из сети.
+var _net_log: PackedStringArray = []
+
 ## Номер исходящей команды и последний принятый номер по каждому игроку.
 var _cmd_seq := 0
 var _cmd_last := {}
@@ -277,7 +283,7 @@ func host_game(port: int = PORT) -> bool:
 	role = "host"
 	lobby = {1: _self_info()}
 	lobby_changed.emit()
-	print("[net] host_game: слушаю порт ", port)
+	_netlog("[net] host_game: слушаю порт %d" % port)
 	return true
 
 ## Выделенный сервер: та же ENet-хостовая партия, но без своего игрока —
@@ -311,7 +317,7 @@ func join_game(address: String, port: int = PORT) -> bool:
 	role = "client"
 	lobby = {}
 	lobby_changed.emit()
-	print("[net] join_game: подключаюсь к ", address, ":", port)
+	_netlog("[net] join_game: подключаюсь к %s:%d" % [address, port])
 	return true
 
 ## @param notify сообщить игре, что партия оборвалась. Ложь только там,
@@ -321,6 +327,12 @@ func leave(notify: bool = true) -> void:
 	# сообщения игре клиент оставался в бою с застывшей картинкой: снапшоты
 	# больше не приходят, а мир он не считает.
 	var was_playing := _match_active and role == "client"
+	# Был реально в сети (не просто сброс перед новой попыткой из host_game()/
+	# join_game() при role == "") — сохраняем лог рядом с игрой: не лезть за
+	# ним потом в %APPDATA% вручную, диагностика уже под рукой сразу после
+	# выхода.
+	if role != "":
+		save_log_to_game_folder()
 	if _peer != null:
 		_peer.close()
 		_peer = null
@@ -357,6 +369,29 @@ func leave(notify: bool = true) -> void:
 	if was_playing and notify:
 		disconnected.emit()
 
+## Пишет строку и в консоль/файловый лог движка (как обычный print), и в
+## свой список — на случай если движковый лог не будет вовремя сброшен
+## на диск (см. save_log_to_game_folder()).
+func _netlog(msg: String) -> void:
+	print(msg)
+	_net_log.append(msg)
+
+## Пишет накопленные строки диагностики в файл рядом с .exe —
+## network_log.txt. Вызывается из leave(), когда сетевая сессия реально
+## была (см. там). Сами открываем/пишем/закрываем файл в этом же вызове —
+## никакой зависимости от того, сброшен ли на диск буфер файлового лога
+## движка (он ещё открыт на запись, пока игра работает, поэтому просто
+## копировать его файл ненадёжно — раньше это давало пустой network_log.txt).
+func save_log_to_game_folder() -> void:
+	if _net_log.is_empty():
+		return
+	var dst := OS.get_executable_path().get_base_dir().path_join("network_log.txt")
+	var f := FileAccess.open(dst, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string("\n".join(_net_log))
+	f.close()
+
 func _self_info() -> Dictionary:
 	return {
 		"name": my_name,
@@ -370,7 +405,7 @@ func _self_info() -> Dictionary:
 func _on_peer_connected(id: int) -> void:
 	if role != "host":
 		return
-	print("[net] peer_connected: ", id)
+	_netlog("[net] peer_connected: %d" % id)
 	# Новичку отдаём весь лобби-список, себя объявляем ему отдельно.
 	_rpc_lobby.rpc_id(id, lobby)
 
@@ -397,16 +432,16 @@ func _on_peer_disconnected(id: int) -> void:
 	lobby_changed.emit()
 
 func _on_connected() -> void:
-	print("[net] connected_to_server")
+	_netlog("[net] connected_to_server")
 	_rpc_hello.rpc_id(1, _self_info())
 
 func _on_connect_failed() -> void:
-	print("[net] connection_failed")
+	_netlog("[net] connection_failed")
 	net_error.emit(I18n.t("net.err.failed", {}, "Сервер не отвечает"))
 	leave()
 
 func _on_server_disconnected() -> void:
-	print("[net] server_disconnected")
+	_netlog("[net] server_disconnected")
 	net_error.emit(I18n.t("net.err.lost", {}, "Соединение с хостом потеряно"))
 	disconnected.emit()
 	leave(false)
@@ -517,11 +552,11 @@ func host_lobby(name: String) -> void:
 		_pending_room_name = I18n.t("net.room.default", {"name": my_name}, "Игра %s" % my_name)
 	lobby_pending = "host"
 	lobby_changed.emit()
-	print("[net] host_lobby: создаю лобби, название='", _pending_room_name, "'")
+	_netlog("[net] host_lobby: создаю лобби, название='%s'" % _pending_room_name)
 	_steam().createLobby(_LOBBY_TYPE_PUBLIC, MAX_LOBBY)
 
 func _on_steam_lobby_created(result: int, lobby_id: int) -> void:
-	print("[net] lobby_created: result=", result, " lobby_id=", lobby_id)
+	_netlog("[net] lobby_created: result=%d lobby_id=%d" % [result, lobby_id])
 	if lobby_pending != "host":
 		return
 	lobby_pending = ""
@@ -566,7 +601,7 @@ func join_lobby_id(lobby_id: int) -> void:
 	_steam_connect_signals()
 	lobby_pending = "join"
 	lobby_changed.emit()
-	print("[net] join_lobby_id: пробую войти в ", lobby_id)
+	_netlog("[net] join_lobby_id: пробую войти в %d" % lobby_id)
 	_enter_steam_lobby(lobby_id)
 
 func _enter_steam_lobby(lobby_id: int) -> void:
@@ -589,11 +624,11 @@ func refresh_lobby_list() -> void:
 	var s := _steam()
 	s.addRequestLobbyListStringFilter("game", GAME_TAG, _LOBBY_CMP_EQUAL)
 	s.addRequestLobbyListDistanceFilter(_LOBBY_DIST_WORLDWIDE)
-	print("[net] refresh_lobby_list: запрашиваю список (tag=", GAME_TAG, ")")
+	_netlog("[net] refresh_lobby_list: запрашиваю список (tag=%s)" % GAME_TAG)
 	s.requestLobbyList()
 
 func _on_steam_lobby_match_list(lobbies: Array) -> void:
-	print("[net] lobby_match_list: найдено ", lobbies.size(), " лобби")
+	_netlog("[net] lobby_match_list: найдено %d лобби" % lobbies.size())
 	var s := _steam()
 	var out := []
 	if s != null:
@@ -603,8 +638,8 @@ func _on_steam_lobby_match_list(lobbies: Array) -> void:
 			var room_name_here := String(s.getLobbyData(id, "room_name"))
 			var members := int(s.getNumLobbyMembers(id))
 			var max_members := int(s.getLobbyMemberLimit(id))
-			print("[net]   лобби ", id, ": host='", host_name, "' room='", room_name_here,
-				"' ", members, "/", max_members)
+			_netlog("[net]   лобби %d: host='%s' room='%s' %d/%d" %
+				[id, host_name, room_name_here, members, max_members])
 			out.append({
 				"id": id,
 				"host_name": host_name,
@@ -616,7 +651,7 @@ func _on_steam_lobby_match_list(lobbies: Array) -> void:
 	lobby_list_updated.emit()
 
 func _on_steam_lobby_joined(lobby_id: int, _perm: int, _locked: bool, response: int) -> void:
-	print("[net] lobby_joined: lobby_id=", lobby_id, " response=", response)
+	_netlog("[net] lobby_joined: lobby_id=%d response=%d" % [lobby_id, response])
 	if _join_target_lobby != lobby_id:
 		return
 	_join_target_lobby = 0

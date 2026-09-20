@@ -330,6 +330,25 @@ func _select_gallery_perk(id: String) -> void:
 ## @onready-поля (%Icon и т.д.), которые Godot проставляет только в _ready(),
 ## а _ready() узла срабатывает лишь при входе в дерево (add_child), не при
 ## самом instantiate() — тот же порядок нужен и во всех *_card() ниже.
+## Тематический билд (Perks.BUILDS) для перка — например «Грозовой билд»:
+## Повелитель молний + Небесный удар + Цепная молния вместе утраивают шанс
+## удара молнии (см. world.gd::_update_lightning_lord). Раньше эта синергия
+## нигде не объяснялась игроку — только жила в коде. Пустая строка, если
+## перк ни в какой билд не входит.
+func _build_synergy_text(id: String) -> String:
+	var builds := Perks.builds_with_perk(id)
+	if builds.is_empty():
+		return ""
+	var b: Dictionary = builds[0]
+	var member_names := []
+	for pid in b["perks"]:
+		member_names.append(I18n.dn(Perks.get_perk(String(pid)), "name", "perk"))
+	return "⚡ %s\n%s\n%s" % [
+		I18n.dn(b, "name", "build").to_upper(),
+		" + ".join(member_names),
+		I18n.dn(b, "bonus", "build"),
+	]
+
 func _build_gallery_detail(perk: Dictionary, parent: Node) -> Control:
 	var panel: GalleryDetail = GalleryDetailScene.instantiate()
 	parent.add_child(panel)
@@ -337,18 +356,21 @@ func _build_gallery_detail(perk: Dictionary, parent: Node) -> Control:
 		return panel
 	var id := String(perk["id"])
 	var unlocked := Prof.is_unlocked(id)
+	var is_active := perk.has("active")
 	var name_text := I18n.dn(perk, "name", "perk")
 	var desc_text := I18n.dn(perk, "desc", "perk")
+	var build_text := _build_synergy_text(id)
 	if unlocked:
-		panel.set_perk(id, name_text, desc_text, true, {}, _tr("gallery.open", "ОТКРЫТ"))
+		panel.set_perk(id, name_text, desc_text, true, {}, _tr("gallery.open", "ОТКРЫТ"), "", is_active, build_text)
 	elif perk.has("challenge"):
 		var pr := Prof.challenge_progress(id)
 		var task := I18n.t("perk." + id + ".challenge", {}, String(pr["desc"]))
-		panel.set_perk(id, name_text, desc_text, false, pr, "", task)
+		panel.set_perk(id, name_text, desc_text, false, pr, "", task, is_active, build_text)
 	else:
 		var lvl := Perks.unlock_level_of(id)
 		panel.set_perk(id, name_text, desc_text, false, {},
-			_tr("gallery.unlockAt", "Откроется на уровне профиля %d" % lvl, {"lvl": lvl}))
+			_tr("gallery.unlockAt", "Откроется на уровне профиля %d" % lvl, {"lvl": lvl}),
+			"", is_active, build_text)
 	return panel
 
 # ------------------------------------------------------------------ ГАРАЖ

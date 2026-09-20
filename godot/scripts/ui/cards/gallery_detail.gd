@@ -38,6 +38,7 @@ extends ThemedPanel
 @onready var _icon: PerkIconView = %Icon
 @onready var _name_label: Label = %NameLabel
 @onready var _desc_label: Label = %DescLabel
+@onready var _build_label: Label = %BuildLabel
 @onready var _footer: VBoxContainer = %FooterWrap
 
 func _ready() -> void:
@@ -63,8 +64,20 @@ func _ready() -> void:
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_desc_label.custom_minimum_size = Vector2(208, 0)
 
+	_build_label.add_theme_font_override("font", Fonts.bold)
+	_build_label.add_theme_font_size_override("font_size", 10)
+	_build_label.add_theme_color_override("font_color", Cfg.UI_ACCENT)
+	_build_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_build_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_build_label.custom_minimum_size = Vector2(208, 0)
+	_build_label.visible = false
+
 	if Engine.is_editor_hint():
-		set_perk("rapid_fire", "Скорострел", "Перезарядка на 20% быстрее", true, {}, "ОТКРЫТ")
+		set_perk("lightning_lord", "Повелитель молний",
+			"Во время грозы — 25% шанс, что молния ударит по ближайшему вражескому танку",
+			true, {}, "ОТКРЫТ", "", false,
+			"⚡ ГРОЗОВОЙ БИЛД\nПовелитель молний + Небесный удар + Цепная молния\n" +
+			"Все три перка сразу: шанс «Повелителя молний» растёт с 25% до 75%")
 
 ## unlocked — уже открыт (footer: одна кнопка "ОТКРЫТ"). challenge —
 ## непустой словарь {"desc","current","need"} для перка-испытания в
@@ -72,12 +85,21 @@ func _ready() -> void:
 ## перк не challenge. unlock_level — для остальных locked-перков (footer:
 ## "Откроется на уровне профиля N"). Тексты (task/unlock label) уже
 ## переведены вызывающим кодом (hub.gd), карточка сама I18n не читает.
+## is_active — перк-способность по кнопке (perk.has("active")), а не
+## пассивный бонус: подсвечиваем золотой рамкой панели независимо от
+## unlocked/challenge/locked — это свойство самого перка, не его статуса.
+## build_text — готовый (переведённый вызывающим кодом) блок про тематический
+## билд (Perks.BUILDS), если перк — часть одного; пустая строка — перк ни в
+## каком билде не участвует, блок скрыт.
 func set_perk(perk_id: String, name_text: String, desc_text: String, unlocked: bool,
-		challenge: Dictionary, unlock_label_text: String, task_label_text: String = "") -> void:
+		challenge: Dictionary, unlock_label_text: String, task_label_text: String = "",
+		is_active: bool = false, build_text: String = "") -> void:
 	_icon.perk_id = perk_id
 	_icon.icon_color = Cfg.UI_TEXT if unlocked else Cfg.UI_MUTED
 	_name_label.text = name_text
 	_desc_label.text = desc_text
+	_build_label.text = build_text
+	_build_label.visible = build_text != ""
 
 	for c in _footer.get_children():
 		c.queue_free()
@@ -97,3 +119,10 @@ func set_perk(perk_id: String, name_text: String, desc_text: String, unlocked: b
 		_footer.add_child(prog)
 	else:
 		_footer.add_child(UiKit.unlock_button(unlock_label_text, "locked"))
+
+	# UI_GOLD в теме Sci-Fi — мятно-бирюзовый (#a2f0dc), не жёлтый: рамка
+	# сливалась бы с остальным интерфейсом именно в этой теме. UI_WARN во
+	# всех трёх темах — стабильно жёлто-янтарный, это и даёт настоящий
+	# жёлтый цвет, а не «золотой» по названию слота.
+	border_color = Cfg.UI_WARN if is_active else Color.TRANSPARENT
+	queue_redraw()

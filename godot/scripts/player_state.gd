@@ -32,6 +32,10 @@ var equipped_cannon := "standard"
 
 ## Экипированные перки. Танк держит ссылку на этот же массив.
 var perk_ids: Array = []
+## Гарантия по тематическим билдам (Perks.BUILDS): build_id -> сколько ещё
+## level-up'ов подряд среди предложенных перков гарантированно будет одна
+## из недостающих частей этого билда. Заводится/обновляется в equip_perk().
+var build_pity: Dictionary = {}
 
 var session_xp := 0
 var session_level := 1
@@ -77,9 +81,26 @@ func equip_perk(id: String) -> bool:
 	perk_ids.append(id)
 	while perk_ids.size() > Cfg.MAX_EQUIPPED_PERKS:
 		perk_ids.pop_front()
+	_update_build_pity(id)
 	if tank != null:
 		tank.recompute()
 	return true
+
+## Взяв часть тематического билда, заводит/обновляет гарантию на
+## недостающие части (см. build_pity выше). Полностью собранный билд
+## гарантию снимает — предлагать больше нечего.
+func _update_build_pity(equipped_id: String) -> void:
+	for b in Perks.builds_with_perk(equipped_id):
+		var build_id: String = b["id"]
+		var complete := true
+		for pid in (b["perks"] as Array):
+			if not has_perk(pid):
+				complete = false
+				break
+		if complete:
+			build_pity.erase(build_id)
+		else:
+			build_pity[build_id] = Cfg.BUILD_PITY_WINDOW
 
 func unequip_perk(id: String) -> bool:
 	var i := perk_ids.find(id)
@@ -93,6 +114,7 @@ func unequip_perk(id: String) -> bool:
 ## Сбрасывает всё, что относится к одной партии.
 func reset_for_match() -> void:
 	perk_ids.clear()
+	build_pity.clear()
 	upgrade_mods = {}
 	session_xp = 0
 	session_level = 1

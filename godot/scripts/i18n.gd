@@ -361,8 +361,11 @@ var EN := {
 	# ------------------------------------------------------------- HUD
 	"hud.shield": " +{n} shield",
 	"hud.score": "Score {n}",
-	"hud.wave": "Wave {cur} / {total}   🏰 {hp} HP   ({state})",
-	"hud.wave.endless": "Wave {cur} ∞   🏰 {hp} HP   ({state})",
+	"hud.base": "🏰 {hp} HP",
+	"hud.wave.big": "WAVE {cur} / {total}",
+	"hud.wave.big.endless": "WAVE {cur} ∞",
+	"hud.wave.next": "Next wave in {time}",
+	"hud.waveBanner": "WAVE {n}",
 	"hud.left": "{n} left",
 	"hud.strikeReady": "  ✈ READY (F)",
 	"hud.strikeCd": "  ✈ {n}s",
@@ -539,6 +542,10 @@ var EN := {
 	"perk.breaker.desc": "5 seconds of shells punching through structures, wrecking them four times harder",
 	"perk.silencer.desc": "6 seconds where bots can't hear your shots at all",
 	"perk.repair.desc": "The crew's field kit instantly restores a third of your max HP",
+
+	# ------------------------------------------------------------- данные: тематические билды
+	"build.lightning.name": "Storm build",
+	"build.lightning.bonus": "All three perks together: Lightning Lord's chance to strike during a storm triples from 25% to 75%",
 
 	# ------------------------------------------------------------- данные: перки ботов
 	"botperk.bot_rapid.name": "Rapid Fire",
