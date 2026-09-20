@@ -127,6 +127,22 @@ func _in_view(x: float, y: float, margin: float) -> bool:
 func _rect(x: float, y: float, w: float, h: float, c: Color) -> void:
 	draw_rect(Rect2(x, y, w, h), c)
 
+## Значок перка по центру pos; если растрового значка нет — прежний эмодзи.
+func _draw_perk_icon(id: String, pos: Vector2, px: float, color: Color) -> void:
+	var tex: Texture2D = PerkIcons.texture_of(id)
+	if tex != null:
+		draw_texture_rect(tex, Rect2(pos - Vector2(px, px) * 0.5, Vector2(px, px)), false, color)
+	else:
+		_text_center(Perks.any_perk_icon(id), pos, int(px * 0.8), color)
+
+## Растровый значок по ключу PerkIcons.TEXTURE_PATHS, иначе — запасной текст.
+func _draw_icon_or_text(tex_id: String, fallback: String, pos: Vector2, px: float, color: Color) -> void:
+	var tex: Texture2D = PerkIcons.texture_of(tex_id)
+	if tex != null:
+		draw_texture_rect(tex, Rect2(pos - Vector2(px, px) * 0.5, Vector2(px, px)), false, color)
+	else:
+		_text_center(fallback, pos, int(px * 0.75), color)
+
 func _text_center(text: String, pos: Vector2, size: int, color: Color, bold: bool = false) -> void:
 	var font: Font = Fonts.bold if bold else Fonts.regular
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
@@ -1190,7 +1206,7 @@ func _draw_weapon_pickups() -> void:
 		outline.append(pts[0])
 		draw_polyline(outline, weapon["color"], 2.0)
 
-		_text_center(String(weapon["icon"]), Vector2(p.x, y), 13, Color.WHITE)
+		_draw_icon_or_text("weapon_" + String(p.weapon_id), String(weapon["icon"]), Vector2(p.x, y), 22.0, Color.WHITE)
 
 ## Выпавшие из убитых перки («Царь горы»).
 func _draw_perk_drops() -> void:
@@ -1202,7 +1218,7 @@ func _draw_perk_drops() -> void:
 		draw_circle(Vector2(drop.x, y), 20, Color(1, 0.53, 1, 0.25))
 		draw_circle(Vector2(drop.x, y), 15, Color(0.16, 0.06, 0.19, 0.85))
 		draw_arc(Vector2(drop.x, y), 15, 0, TAU, 28, Color("#ff88ff"), 1.5)
-		_text_center(Perks.perk_icon(drop.perk_id), Vector2(drop.x, y), 14, Color.WHITE)
+		_draw_perk_icon(drop.perk_id, Vector2(drop.x, y), 22.0, Color.WHITE)
 
 func _draw_flags() -> void:
 	for flag in world.flags:
@@ -1613,7 +1629,7 @@ func _draw_tank(tank: Tank) -> void:
 				var ring: Color = weapon["color"]
 				ring.a = 0.8
 				draw_arc(Vector2(0, -20), 13, -PI / 2.0, -PI / 2.0 + frac * TAU, 32, ring, 2.0)
-				_text_center(String(weapon["icon"]), Vector2(0, -20), 10, Color.WHITE)
+				_draw_icon_or_text("weapon_" + String(tank.weapon), String(weapon["icon"]), Vector2(0, -20), 16.0, Color.WHITE)
 
 		# Маркер «это ты» — важно в разделённом экране.
 		if is_viewer:
@@ -1636,10 +1652,11 @@ func _draw_tank(tank: Tank) -> void:
 			_text_center(tank.name, Vector2(tank.x, tank.y - 32), 10, name_color)
 			# Перки бота видно над именем — понятно, почему он вдруг стал опасным.
 			if not tank.perk_ids.is_empty():
-				var icons := ""
-				for id in tank.perk_ids:
-					icons += Perks.any_perk_icon(id)
-				_text_center(icons, Vector2(tank.x, tank.y - 43), 9, Color("#ffcc66"))
+				var n: int = tank.perk_ids.size()
+				var step := 16.0
+				for i in n:
+					_draw_perk_icon(String(tank.perk_ids[i]),
+						Vector2(tank.x + (i - (n - 1) * 0.5) * step, tank.y - 45), 14.0, Color("#ffcc66"))
 
 		if tank.carrying_flag:
 			_text_center("⚑", Vector2(tank.x + 16, tank.y - 16), 14, Color("#ffee55"))

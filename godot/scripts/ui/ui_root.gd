@@ -645,7 +645,11 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 			var perk := Perks.get_perk(id)
 			if perk.is_empty():
 				continue
-			var chip := UiKit.secondary("%s %s ✕" % [perk["icon"], I18n.dn(perk, "name", "perk")], 11)
+			var chip := UiKit.secondary("%s ✕" % I18n.dn(perk, "name", "perk"), 11)
+			var chip_tex := PerkIcons.texture_of(id)
+			if chip_tex != null:
+				chip.icon = chip_tex
+				chip.add_theme_constant_override("icon_max_width", 14)
 			chip.pressed.connect(func():
 				player.unequip_perk(id)
 				show_perk_select(player, queue_left, rng))
@@ -989,10 +993,15 @@ func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 			"Урона нанесено: %d" % int(round(player.damage_dealt))), 11, Cfg.UI_MUTED))
 		box.add_child(UiKit.label(I18n.t("go.sessionLevel", {"n": player.session_level},
 			"Уровень в партии: %d" % player.session_level), 11, Cfg.UI_MUTED))
-		var icons := ""
-		for id in player.perk_ids:
-			icons += Perks.perk_icon(id) + " "
-		box.add_child(UiKit.label(icons if icons != "" else "—", 15, Cfg.UI_GOLD))
+		if player.perk_ids.is_empty():
+			box.add_child(UiKit.label("—", 15, Cfg.UI_GOLD))
+		else:
+			var icons := HFlowContainer.new()
+			icons.add_theme_constant_override("h_separation", 4)
+			icons.add_theme_constant_override("v_separation", 4)
+			for id in player.perk_ids:
+				icons.add_child(PerkIcons.make_view(String(id), 20, Cfg.UI_GOLD))
+			box.add_child(icons)
 		players_row.add_child(card)
 
 	var profile_line := UiKit.label(I18n.t("go.profile", {

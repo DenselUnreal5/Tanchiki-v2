@@ -631,13 +631,12 @@ static var ICONS := {
 	],
 }
 
-## Растровые значки перков — сняты «как есть» с референса пользователя
-## (Pictures/GameCenter/icons pack ref/icons.png), без перерисовки, по той же
-## раскладке, что уже использовал набросок выше (см. комментарии "— Rapid
-## Fire" и т.п. у соответствующих ключей ICONS). PerkIconView сперва ищет
+## Растровые значки перков — белый силуэт на прозрачном фоне, 128×128,
+## вырезаны из листа иконок пользователя (по одному на каждый перк игрока
+## плюс два значка боссов), и отдельного листа для улучшений гаража (upg_*),
+## пушек (cannon_*) и оружия с карты (weapon_*). PerkIconView сперва ищет
 ## текстуру здесь; ICONS[id] остаётся только как фон для того, чему пары
-## нет — достижения (ach_*), апгрейды гаража (upg_*), косметика (cos_*) и
-## "forest" (в референсе такого значка не было).
+## нет — достижения (ach_*) и косметика (cos_*).
 ## Ключи ботов указывают на текстуру одноимённого перка игрока.
 static var TEXTURE_PATHS := {
 	"rapid_fire": "res://art/perks/rapid_fire.png",
@@ -688,6 +687,11 @@ static var TEXTURE_PATHS := {
 	"smoke": "res://art/perks/smoke.png",
 	"repair": "res://art/perks/repair.png",
 	"quick_reload": "res://art/perks/quick_reload.png",
+	"forest": "res://art/perks/forest.png",
+	"predator": "res://art/perks/predator.png",
+	"lightning_lord": "res://art/perks/lightning_lord.png",
+	"sky_strike": "res://art/perks/sky_strike.png",
+	"chain_lightning": "res://art/perks/chain_lightning.png",
 	# --- боты: та же текстура, что у одноимённого перка игрока
 	"bot_rapid": "res://art/perks/rapid_fire.png",
 	"bot_speed": "res://art/perks/sprinter.png",
@@ -699,9 +703,41 @@ static var TEXTURE_PATHS := {
 	"bot_regen": "res://art/perks/regen.png",
 	"bot_heavy": "res://art/perks/heavy_shell.png",
 	"bot_evasion": "res://art/perks/evasion.png",
+	"bot_lightning_lord": "res://art/perks/lightning_lord.png",
+	"bot_sky_strike": "res://art/perks/sky_strike.png",
+	"bot_chain_lightning": "res://art/perks/chain_lightning.png",
+	# --- боссы: свои значки
+	"bot_boss_twin": "res://art/perks/bot_boss_twin.png",
+	"bot_boss_barrage": "res://art/perks/bot_boss_barrage.png",
+	# --- улучшения гаража, пушки и оружие с карты
+	"upg_dmg": "res://art/upgrades/dmg.png",
+	"upg_fire_rate": "res://art/upgrades/fire_rate.png",
+	"upg_bullet_speed": "res://art/upgrades/bullet_speed.png",
+	"upg_max_hp": "res://art/upgrades/max_hp.png",
+	"upg_damage_taken": "res://art/upgrades/damage_taken.png",
+	"upg_speed": "res://art/upgrades/speed.png",
+	"upg_ram": "res://art/upgrades/ram.png",
+	"upg_pickup_radius": "res://art/upgrades/pickup_radius.png",
+	"upg_regen": "res://art/upgrades/regen.png",
+	"cannon_standard": "res://art/cannons/standard.png",
+	"cannon_ice": "res://art/cannons/ice.png",
+	"cannon_acid": "res://art/cannons/acid.png",
+	"weapon_gatling": "res://art/weapons/gatling.png",
+	"weapon_rockets": "res://art/weapons/rockets.png",
+	"weapon_shotgun": "res://art/weapons/shotgun.png",
 }
 
 static var _textures := {}
+
+## Узел-значок заданного размера и цвета — для строк интерфейса, где раньше
+## стоял эмодзи из Perks.perk_icon().
+static func make_view(id: String, px: float, color: Color = Color.WHITE) -> Control:
+	var v := PerkIconView.new()
+	v.perk_id = id
+	v.icon_color = color
+	v.icon_size = Vector2(px, px)
+	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return v
 
 ## Текстура перка, если для него есть растровый значок — иначе null (тогда
 ## PerkIconView рисует старый векторный ICONS[id]).

@@ -131,6 +131,8 @@ func build(players: Array, world: World) -> void:
 		var ability_row := UiKit.hbox(6)
 		ability_row.visible = false
 		bottom.add_child(ability_row)
+		var ability_icon := PerkIcons.make_view("", 14, Color.WHITE)
+		ability_row.add_child(ability_icon)
 		var ability_label := UiKit.label("", 10, Cfg.UI_TEXT)
 		ability_row.add_child(ability_label)
 		var cd_bar := UiKit.rounded_bar(90, 6, Cfg.UI_ACCENT)
@@ -156,6 +158,7 @@ func build(players: Array, world: World) -> void:
 			"score": score, "objective": objective, "weather": weather_label,
 			"xp_label": xp_label, "xp_fill": xp_fill, "perks": perks,
 			"ability_row": ability_row, "ability_label": ability_label,
+			"ability_icon": ability_icon,
 			"ability_fill": cd_fill,
 			"minimap": mm, "last_perks": "",
 		}
@@ -260,6 +263,17 @@ func _update_ability(panel: Dictionary, player) -> void:
 	var key := "Q" if player.index == 0 else "Num -"
 	var icon := String(ab.get("icon", "✦"))
 	var name := I18n.dn(ab, "name", "ability")
+	# Растровый значок перка, который выдаёт способность; есть он — эмодзи
+	# из подписи убираем.
+	var icon_view: PerkIconView = panel["ability_icon"]
+	var tex_id: String = tank.ability_id
+	if PerkIcons.texture_of(tex_id) == null:
+		tex_id = "bot_" + tank.ability_id
+	var has_tex := PerkIcons.texture_of(tex_id) != null
+	icon_view.visible = has_tex
+	if has_tex:
+		icon_view.perk_id = tex_id
+		icon = ""
 
 	if tank.ability_timer > 0:
 		label.text = I18n.t("hud.ability.active", {"icon": icon, "name": name},
@@ -278,6 +292,8 @@ func _update_ability(panel: Dictionary, player) -> void:
 		label.modulate = Color(1, 1, 1, 0.55)
 		fill.size.x = 90.0 * tank.ability_ready
 	fill.color = ab.get("color", Cfg.UI_ACCENT)
+	label.text = label.text.strip_edges()
+	icon_view.modulate = label.modulate
 
 func update_hud(world: World) -> void:
 	for player in world.players:
@@ -402,8 +418,11 @@ func update_hud(world: World) -> void:
 				st.content_margin_top = 2
 				st.content_margin_bottom = 2
 				slot.add_theme_stylebox_override("panel", st)
-				slot.add_child(UiKit.label("%s %s" % [Perks.perk_icon(id), I18n.dn(perk, "name", "perk")],
-					10, Cfg.UI_GOLD))
+				var slot_row := HBoxContainer.new()
+				slot_row.add_theme_constant_override("separation", 4)
+				slot_row.add_child(PerkIcons.make_view(id, 15, Cfg.UI_GOLD))
+				slot_row.add_child(UiKit.label(I18n.dn(perk, "name", "perk"), 10, Cfg.UI_GOLD))
+				slot.add_child(slot_row)
 				box.add_child(slot)
 
 	_tick_feed()
@@ -522,10 +541,11 @@ func _render_scoreboard(world: World) -> void:
 		grid.add_child(name_label)
 		grid.add_child(UiKit.label(str(r["kills"]), 12, color))
 		grid.add_child(UiKit.label(str(r["deaths"]), 12, color))
-		var icons := ""
+		var icons := HBoxContainer.new()
+		icons.add_theme_constant_override("separation", 2)
 		for id in r["perks"]:
-			icons += Perks.any_perk_icon(id)
-		grid.add_child(UiKit.label(icons, 12, Cfg.UI_GOLD))
+			icons.add_child(PerkIcons.make_view(String(id), 14, Cfg.UI_GOLD))
+		grid.add_child(icons)
 
 	var hint := UiKit.label(I18n.t("sb.hint", {}, "Tab — скрыть"), 10, Cfg.UI_MUTED)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
