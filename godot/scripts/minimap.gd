@@ -60,9 +60,16 @@ func _draw() -> void:
 		var is_viewer: bool = tank == viewer
 		var hostile := world.are_hostile(viewer, tank) if viewer != null else true
 
-		# «Тень» скрывает танк с чужой миникарты.
+		# «Тень» скрывает танк с чужой миникарты. «Острый слух» вскрывает
+		# замаскированного врага вблизи (см. world_view.gd::_is_stealth_hidden
+		# — та же формула для экрана).
 		if not is_viewer and tank.shadow_timer > 0 and hostile:
-			continue
+			var revealed := false
+			if viewer != null and float(viewer.mods.get("hearingMult", 1.0)) > 1.0:
+				var range: float = Cfg.KEEN_EAR_STEALTH_RANGE * float(tank.mods.get("noiseMult", 1.0))
+				revealed = Vector2(tank.x - viewer.x, tank.y - viewer.y).length() <= range
+			if not revealed:
+				continue
 
 		# Врагов видно только по прямой видимости.
 		if hostile and viewer != null:

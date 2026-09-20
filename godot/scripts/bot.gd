@@ -746,6 +746,8 @@ func _track_stuck(tank: Tank) -> void:
 func _target_valid(tank: Tank, world, t) -> bool:
 	if t == null or not t.alive or not world.are_hostile(tank, t):
 		return false
+	if t.shadow_timer > 0:
+		return false
 	var dx: float = t.x - tank.x
 	var dy: float = t.y - tank.y
 	var sight := sight_range(world)
@@ -777,6 +779,10 @@ static func find_best_threat(tank: Tank, world):
 		if other == tank or not other.alive:
 			continue
 		if not world.are_hostile(tank, other):
+			continue
+		# «Тень»: полностью скрывает цель от ботов, а не только сокращает
+		# дистанцию видимости, как «Дымовая завеса».
+		if other.shadow_timer > 0:
 			continue
 		var dx: float = other.x - tank.x
 		var dy: float = other.y - tank.y

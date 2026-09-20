@@ -1407,7 +1407,24 @@ func _draw_tanks() -> void:
 	for tank in world.tanks:
 		if not tank.alive or not _in_view(tank.x, tank.y, 40):
 			continue
+		if _is_stealth_hidden(tank):
+			continue
 		_draw_tank(tank)
+
+## «Тень»: скрывает вражеский танк с экрана (миникартой отдельно занимается
+## Minimap._draw). «Острый слух» вскрывает замаскированного врага в радиусе
+## Cfg.KEEN_EAR_STEALTH_RANGE, уменьшенном noiseMult цели («Глушение»
+## усложняет обнаружение даже контрперком).
+func _is_stealth_hidden(tank: Tank) -> bool:
+	if tank.shadow_timer <= 0 or player == null or player.tank == null or tank == player.tank:
+		return false
+	if not world.are_hostile(player.tank, tank):
+		return false
+	if float(player.tank.mods.get("hearingMult", 1.0)) > 1.0:
+		var range: float = Cfg.KEEN_EAR_STEALTH_RANGE * float(tank.mods.get("noiseMult", 1.0))
+		if Vector2(tank.x - player.tank.x, tank.y - player.tank.y).length() <= range:
+			return false
+	return true
 
 func _draw_tank(tank: Tank) -> void:
 	var palette := Cfg.team_palette(tank.color_key)

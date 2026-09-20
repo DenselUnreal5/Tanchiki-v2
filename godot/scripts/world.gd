@@ -1100,13 +1100,20 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 	# у игроков brain нет, и бонус против них не мог сработать вовсе.
 	# last_attacker/last_attacker_tick уже ведутся на каждом танке для
 	# начисления фрага и одинаково доступны у игроков и ботов — не новое
-	# состояние, а переиспользование существующего.
+	# состояние, а переиспользование существующего. «Глушитель» форсирует
+	# засаду на любое попадание, пока активен, — активка получает прямую
+	# боевую отдачу вместо чисто оборонительной тишины.
 	var is_ambush: bool = attacker != null and source == "bullet" \
-		and (target.last_attacker != attacker \
+		and (attacker.ability_active("silencer") \
+			or target.last_attacker != attacker \
 			or tick - target.last_attacker_tick > Cfg.AMBUSH_UNAWARE_TICKS)
-	# «Глушение» — это и есть плата за тишину, иначе перк только отваживал цели.
-	if is_ambush and float(attacker.mods["ambushDmgMult"]) > 1.0:
-		amount *= float(attacker.mods["ambushDmgMult"])
+	# Засадный билд (Хищник + Лесной житель + Тень) превращает засаду в крит;
+	# без полного билда действует обычный бонус «Глушения».
+	if is_ambush:
+		if attacker.flags.has("predator") and attacker.flags.has("forest") and attacker.flags.has("shadow"):
+			amount *= Cfg.STEALTH_HUNTER_CRIT_MULT
+		elif float(attacker.mods["ambushDmgMult"]) > 1.0:
+			amount *= float(attacker.mods["ambushDmgMult"])
 
 	var res: Dictionary = target.take_damage(self, amount, attacker, source)
 	if bool(res["evaded"]) or float(res["applied"]) <= 0.0:
@@ -1287,7 +1294,7 @@ func _credit_player_kill(player, victim, source: String) -> void:
 		if float(killer_tank.mods["turboOnKill"]) > 0.0:
 			killer_tank.turbo_timer = int(killer_tank.mods["turboOnKill"])
 		if float(killer_tank.mods["shadowOnKill"]) > 0.0:
-			killer_tank.shadow_timer = int(killer_tank.mods["shadowOnKill"])
+			killer_tank.shadow_timer += int(killer_tank.mods["shadowOnKill"])
 
 func _maybe_give_bot_perk(bot) -> void:
 	if bot.perk_ids.size() >= Cfg.BOT_MAX_PERKS:

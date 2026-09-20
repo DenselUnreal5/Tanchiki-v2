@@ -385,11 +385,10 @@ const EXPLOSIVE_SPLASH := 0.5
 const SHIELD_HP := 30.0
 const SHIELD_COOLDOWN := 30 * 60
 const TURBO_DURATION := 180
-const SHADOW_DURATION := 180
+const SHADOW_DURATION := 300
 
 # ---------------------------------------------------------------- аптечки
 const PICKUP_R := 20.0
-const PICKUP_R_MAGNET := 40.0
 const PICKUP_HEAL_FRACTION := 0.3
 const PICKUP_RESPAWN := 900
 const PICKUP_MIN := 4
@@ -550,6 +549,15 @@ const HEAT_RESUME := 0.30
 ## уже ведутся на каждом танке для начисления фрага, поэтому это не новое
 ## состояние, а переиспользование существующего.
 const AMBUSH_UNAWARE_TICKS := 180
+
+## Засадный билд: Хищник + Лесной житель + Тень — засадное попадание
+## становится критическим.
+const STEALTH_HUNTER_CRIT_MULT := 2.5
+
+## «Острый слух» вскрывает замаскированную Тенью цель в этом радиусе;
+## радиус жертвы дополнительно масштабируется её noiseMult («Глушение»
+## делает цель труднее обнаружимой даже контрперком).
+const KEEN_EAR_STEALTH_RANGE := 260.0
 
 ## «Ледяная пушка» — заморозка.
 const ICE_FREEZE_TICKS := 240        # 4 секунды при 60 Гц

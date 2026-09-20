@@ -169,11 +169,12 @@ func control(t: Tank, world) -> void:
 			_auto_pad_scheme.device = Sets.last_pad_device
 	scheme.apply(t, self, world)
 
-## Радиус подбора аптечек с учётом перка «Магнит».
+## Радиус подбора аптечек и оружия с учётом перка «Магнит» и апгрейда
+## «Магнитный трал» — оба множат pickupRadiusMult, поэтому складываются.
 var pickup_radius: float:
 	get:
 		var mult: float = float(tank.mods["pickupRadiusMult"]) if tank != null else 1.0
-		return Cfg.PICKUP_R_MAGNET if mult > 1.0 else Cfg.PICKUP_R
+		return Cfg.PICKUP_R * mult
 
 # ------------------------------------------------------------------ камера
 ## Держит камеру на танке, аккуратно обрабатывая случай, когда карта меньше
