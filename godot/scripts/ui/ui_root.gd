@@ -706,7 +706,10 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 func _perk_card(player, id: String) -> Control:
 	var perk := Perks.get_perk(id)
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(170, 130)
+	# Высота выросла со 130 до 200: описания перков теперь двухстрочные
+	# (флавор-фраза + «Эффект: ...»), 130px хватало только на одну строку
+	# и текст обрезался краем карточки (см. _tmp_desc_shot в истории сессии).
+	btn.custom_minimum_size = Vector2(190, 200)
 	var normal := UiKit.flat(Color("#161616"), Cfg.RADIUS_MD, 2, Cfg.UI_BORDER)
 	var hover := UiKit.flat(Color("#1c1c1c"), Cfg.RADIUS_MD, 2, Cfg.UI_GOLD)
 	btn.add_theme_stylebox_override("normal", normal)
@@ -748,7 +751,7 @@ func _perk_card(player, id: String) -> Control:
 	var desc := UiKit.label(I18n.dn(perk, "desc", "perk"), 10, Cfg.UI_MUTED)
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.custom_minimum_size = Vector2(150, 0)
+	desc.custom_minimum_size = Vector2(170, 0)
 	desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(desc)
 	return btn

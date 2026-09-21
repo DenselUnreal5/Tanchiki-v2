@@ -110,7 +110,7 @@ updates.gd::GDScript::4450020931874397632::1788264736::0::1::::<>MarginContainer
 ::res://addons/godotsteam/linuxarm64/::1788264736
 ::res://addons/godotsteam/osx/::1788264735
 ::res://addons/godotsteam/win32/::1788264735
-::res://addons/godotsteam/win64/::1789990204
+::res://addons/godotsteam/win64/::1789991068
 ::res://addons/godot_ai/::1788264782
 client_configurator.gd::GDScript::1846084051969471465::1788264781::0::1::::McpClientConfigurator<>RefCounted<><>0<>1<><>::
 connection.gd::GDScript::3256190740644037847::1788264778::0::1::::McpConnection<>Node<><>0<>1<><>::
@@ -363,7 +363,7 @@ cannon_card.tscn::PackedScene::-1::1789733397::0::1::::<><><>0<>0<><>::res://scr
 cosmetic_card.tscn::PackedScene::-1::1789727174::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/cosmetic_card.gd<>res://scripts/ui/perk_icon_view.gd
 gallery_detail.tscn::PackedScene::-1::1789898750::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/gallery_detail.gd<>res://scripts/ui/perk_icon_view.gd
 upgrade_card.tscn::PackedScene::-1::1789733544::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/upgrade_card.gd<>res://scripts/ui/perk_icon_view.gd<>res://scripts/ui/focus_ring_panel.gd
-::res://scripts/::1789989798
+::res://scripts/::1789991054
 abilities.gd::GDScript::358552042098184283::1789989644::0::1::::Abilities<>RefCounted<><>0<>0<><>::
 achievements.gd::GDScript::9215880570170937460::1789726854::0::1::::Achievements<>RefCounted<><>0<>1<><>::
 audio.gd::GDScript::1963427527760383837::1788686454::0::1::::<>Node<><>0<>0<><>::
@@ -378,7 +378,7 @@ entities.gd::GDScript::6435990306499678281::1789987546::0::1::::Ent<>RefCounted<
 fonts.gd::GDScript::283160381254097390::1789720830::0::1::::<>Node<><>0<>1<><>::
 game.gd::GDScript::3618699815177207155::1789979409::0::1::::<>Node<><>0<>0<><>::
 game_map.gd::GDScript::869548647071203478::1788257222::0::1::::GameMap<>RefCounted<><>0<>0<><>::
-i18n.gd::GDScript::7752327099371892178::1789989798::0::1::::<>Node<><>0<>0<><>::
+i18n.gd::GDScript::7752327099371892178::1789991054::0::1::::<>Node<><>0<>0<><>::
 input_schemes.gd::GDScript::6466869239133353224::1789197792::0::1::::Ctl<>RefCounted<><>0<>0<><>::
 level_gen.gd::GDScript::1997713937418890681::1788259356::0::1::::LevelGen<>RefCounted<><>0<>0<><>::
 materials.gd::GDScript::9096667548189479692::1788015895::0::1::::Materials<>RefCounted<><>0<>0<><>::
@@ -386,7 +386,7 @@ menu_tips.gd::GDScript::7941142830139344::1789726892::0::1::::MenuTips<>RefCount
 minimap.gd::GDScript::5513988171960333537::1789907662::0::1::::Minimap<>Control<><>0<>0<><>::
 music.gd::GDScript::1643407548200799452::1788693504::0::1::::<>Node<><>0<>0<><>::
 pathfinding.gd::GDScript::378613925687663127::1787992847::0::1::::Pathfinding<>RefCounted<><>0<>0<><>::
-perks.gd::GDScript::2801985067983166019::1789989634::0::1::::Perks<>RefCounted<><>0<>1<><>::
+perks.gd::GDScript::2801985067983166019::1789991037::0::1::::Perks<>RefCounted<><>0<>1<><>::
 player_state.gd::GDScript::6464840981130109074::1789907669::0::1::::PlayerState<>RefCounted<><>0<>0<><>::
 profile.gd::GDScript::7433347860996163935::1789464187::0::1::::<>Node<><>0<>0<><>::
 ranks.gd::GDScript::3306022463822778668::1789726881::0::1::::Ranks<>RefCounted<><>0<>1<><>::
