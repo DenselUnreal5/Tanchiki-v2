@@ -38,7 +38,10 @@ const LIST := {
 		"id": "sniper", "name": "Снайпер", "icon": "🎯",
 		"hp_mult": 0.9, "speed_mult": 1.0, "fire_rate_mult": 2.2, "dmg_scale": 2.5,
 		"accuracy_bonus": 0.18, "react_mult": 1.3,
-		"fire_range": 650.0, "keep_min": 300.0, "keep_max": 450.0,
+		# fire_range был выше Cfg.BOT_SIGHT (500) — цель дальше обзора бот
+		# физически не может выбрать (find_best_threat отсеивает по sight),
+		# так что дальнобойность на деле не работала совсем.
+		"fire_range": 480.0, "keep_min": 300.0, "keep_max": 450.0,
 		"chassis": "sniper", "role": "defender", "color_key": "sniper",
 		"weight": 10, "unlock_ramp": 1.16, "lobbed": false, "boss": false,
 	},
@@ -46,7 +49,8 @@ const LIST := {
 		"id": "mortar", "name": "Миномёт", "icon": "💣",
 		"hp_mult": 1.1, "speed_mult": 0.85, "fire_rate_mult": 2.5, "dmg_scale": 1.2,
 		"accuracy_bonus": 0.0, "react_mult": 1.2,
-		"fire_range": 600.0, "keep_min": 320.0, "keep_max": 420.0,
+		# Та же причина, что у снайпера выше: 600 было больше Cfg.BOT_SIGHT.
+		"fire_range": 480.0, "keep_min": 320.0, "keep_max": 420.0,
 		"chassis": "mortar", "role": "defender", "color_key": "mortar",
 		"weight": 8, "unlock_ramp": 1.16, "lobbed": true, "boss": false,
 	},

@@ -44,6 +44,11 @@ var react_timer := 0
 var strafe_dir := 1
 var strafe_timer := 0
 var dodge_timer := 0
+## Сканирование входящих пуль (find_incoming_bullet) — единственный в этом
+## файле «горячий» цикл без троттлинга: O(пуль) каждый тик у каждого бота,
+## пока остальная часть мозга (цель, видимость) специально разрежена.
+## Раз в 1-2 тика вразнобой достаточно для уклонения и ощутимо дешевле.
+var dodge_scan_timer := 0
 var path: Array = []
 var path_idx := 0
 var path_timer := 0
@@ -163,7 +168,7 @@ func update(tank: Tank, world) -> void:
 	# несколько тиков, а прицеливание и стрельба остаются покадровыми.
 	perception_timer -= 1
 	if perception_timer <= 0 or target == null or not _target_valid(tank, world, target):
-		target = find_best_threat(tank, world)
+		target = find_best_threat(tank, world, lobbed)
 		perception_timer = 3 + int(rng.nextf() * 3.0)
 		# Видимость пересчитывается вместе с целью, а не каждый тик: то же
 		# рассуждение, что и у самого пересмотра выше — 40 ботов в «Царе горы»
@@ -177,13 +182,19 @@ func update(tank: Tank, world) -> void:
 	var has_shot := false
 	if tgt != null:
 		target_dist = Vector2(tgt.x - tank.x, tgt.y - tank.y).length()
-		has_shot = _los_cache
+		# Миномёт бьёт по дуге над укрытиями — ему прямая видимость не нужна
+		# вовсе. Раньше её всё равно требовали и на выбор цели, и на выстрел,
+		# так что архетип «через стены» никогда не мог этим воспользоваться.
+		has_shot = true if lobbed else _los_cache
 
 	# ---- активная способность --------------------------------------------
 	_maybe_use_ability(tank, world, target_dist, has_shot)
 
 	# ---- уклонение от летящей пули ---------------------------------------
 	if dodge_timer <= 0:
+		dodge_scan_timer -= 1
+	if dodge_timer <= 0 and dodge_scan_timer <= 0:
+		dodge_scan_timer = 1 + int(rng.nextf() * 2.0)
 		var incoming = find_incoming_bullet(tank, world, Cfg.BOT_DODGE_LOOKAHEAD)
 		if incoming != null:
 			var bullet_angle: float = atan2(incoming.vy, incoming.vx)
@@ -282,7 +293,12 @@ func _decide(tank: Tank, world, tgt, target_dist: float) -> void:
 	var engage := Cfg.BOT_COMBAT_RANGE
 	if world.mode == "ctf" and role != "defender" and not tank.carrying_flag:
 		engage = Cfg.BOT_CTF_ENGAGE_RANGE
-	if tgt != null and target_dist < engage:
+	# Гистерезис: уже находясь в бою, держим состояние до отхода на 30%
+	# дальше границы вступления, а не ровно на ней. Без этого дистанция,
+	# колеблющаяся у границы engage, каждый раз выбрасывала бота в патруль
+	# и обратно, заново сбрасывая react_timer — бой «спотыкался».
+	var stay_range := engage * 1.3 if state == STATE_COMBAT else engage
+	if tgt != null and target_dist < stay_range:
 		if state != STATE_COMBAT:
 			state = STATE_COMBAT
 			# Задержка реакции: бот «замечает» противника не мгновенно.
@@ -386,9 +402,15 @@ func _pick_patrol_point(tank: Tank, world) -> Vector2:
 	if own != null:
 		options.append({"x": own.x, "y": own.y, "spread": 6.0})
 	options.append({"x": mw / 2.0, "y": mh / 2.0, "spread": 8.0})
-	var enemy_home = world.enemy_home_for(tank.team)
-	if enemy_home != null:
-		options.append({"x": enemy_home.x, "y": enemy_home.y, "spread": 8.0})
+	# Раненый бот, только что вышедший из боя (см. _do_combat: tgt == null ->
+	# STATE_PATROL), не должен патрулировать в сторону вражеской базы — это
+	# прямо противоположно тому, зачем он отступал.
+	var hp_ratio := tank.hp / tank.max_hp if tank.max_hp > 0.0 else 1.0
+	var retreat_hp := 0.55 if survival else 0.3
+	if hp_ratio >= retreat_hp:
+		var enemy_home = world.enemy_home_for(tank.team)
+		if enemy_home != null:
+			options.append({"x": enemy_home.x, "y": enemy_home.y, "spread": 8.0})
 	# В FFA баз нет — добавляем случайные точки по карте.
 	if options.size() < 3:
 		options.append({"x": rng.nextf() * mw, "y": rng.nextf() * mh, "spread": 4.0})
@@ -502,14 +524,17 @@ func _maybe_use_ability(tank: Tank, world, target_dist: float, has_shot: bool) -
 			if target_dist < Cfg.SHOCKWAVE_R * 0.85:
 				tank.use_ability(world)
 		"nitro":
-			if target_dist > 260.0 and target_dist < INF:
+			# Раньше срабатывало только на сближение — при отходе на низком HP
+			# цель почти всегда БЛИЖЕ 260, а без цели вовсе target_dist == INF,
+			# так что рывок мобильности никогда не помогал ни бежать, ни
+			# гнаться за флагом/точкой без цели в поле зрения.
+			var hp_ratio := tank.hp / tank.max_hp if tank.max_hp > 0.0 else 1.0
+			var fleeing := hp_ratio < (0.55 if survival else 0.3)
+			if fleeing or (target_dist > 260.0 and target_dist < INF):
 				tank.use_ability(world)
-		"bulwark":
-			if tank.max_hp > 0.0 and tank.hp / tank.max_hp < 0.45:
-				tank.use_ability(world)
-		"overdrive":
-			if has_shot and target_dist < 420.0:
-				tank.use_ability(world)
+		# "bulwark"/"overdrive" сюда никогда не попадают: ни один перк из
+		# Perks.BOT_LIST не выдаёт боту эти активки (Perks.active_ability_of()
+		# ищет только по BOT_LIST) — две ветки были мёртвым кодом.
 		"boss_barrage":
 			# Замах долгий (BOSS_BARRAGE_WINDUP), поэтому запускаем только
 			# когда уже стреляли по цели этой же дистанции — иначе залп
@@ -750,8 +775,15 @@ func _target_valid(tank: Tank, world, t) -> bool:
 		return false
 	var dx: float = t.x - tank.x
 	var dy: float = t.y - tank.y
+	var d2 := dx * dx + dy * dy
+	# «Дымовая завеса»: та же проверка, что и в find_best_threat() — иначе
+	# бот, уже прицелившийся до того, как цель включила дым, продолжает
+	# держать её как валидную цель и стрелять сквозь дым как ни в чём не
+	# бывало, полностью обесценивая перк против уже вовлечённого бота.
+	if t.ability_active("smoke") and d2 > Cfg.SMOKE_VISION * Cfg.SMOKE_VISION:
+		return false
 	var sight := sight_range(world)
-	return dx * dx + dy * dy <= sight * sight
+	return d2 <= sight * sight
 
 ## Оценка угроз: приоритет тем, кто ближе, слабее по HP и несёт наш флаг.
 ##
@@ -759,8 +791,12 @@ func _target_valid(tank: Tank, world, t) -> bool:
 ## делается не для всех врагов в радиусе обзора, а только для нескольких
 ## ближайших: в «Царе горы» на поле бывает 40 ботов, и полный перебор
 ## съедал больше времени, чем вся остальная симуляция вместе взятая.
-## На выбор это не влияет — оценка и так падает с расстоянием.
-const THREAT_CANDIDATES := 6
+## На выбор это не влияет — оценка и так падает с расстоянием. Но в тесной
+## толпе может случиться, что все N ближайших по прямой дистанции спрятаны
+## за укрытиями, а видимый враг чуть дальше — бот в этом случае молчит
+## с целью прямо на виду. 6→9 не устраняет случай полностью, но заметно
+## снижает его частоту почти без роста стоимости кадра.
+const THREAT_CANDIDATES := 9
 
 ## Дальность зрения бота с учётом погоды. Ночью и в тумане бот видит
 ## меньше — ровно настолько же, насколько меньше видит игрок. Без этого
@@ -770,7 +806,7 @@ static func sight_range(world) -> float:
 		return Cfg.BOT_SIGHT
 	return Cfg.BOT_SIGHT * world.weather.vision_scale
 
-static func find_best_threat(tank: Tank, world):
+static func find_best_threat(tank: Tank, world, lobbed: bool = false):
 	var sight := sight_range(world)
 	var sight2 := sight * sight
 	# Ближайшие кандидаты: простая вставка в короткий массив.
@@ -805,7 +841,7 @@ static func find_best_threat(tank: Tank, world):
 	var best_score := -INF
 	for entry in near:
 		var other = entry[1]
-		if not world.map.has_line_of_sight(tank.x, tank.y, other.x, other.y):
+		if not lobbed and not world.map.has_line_of_sight(tank.x, tank.y, other.x, other.y):
 			continue
 		var d := sqrt(float(entry[0]))
 		var score := (sight - d) / sight                      # ближе — важнее

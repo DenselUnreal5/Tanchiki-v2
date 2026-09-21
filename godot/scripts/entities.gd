@@ -573,11 +573,11 @@ class Pickup extends RefCounted:
 	var respawn_timer := 0
 	var bob := 0.0
 
-	func _init(x_: float, y_: float, type_: String = "health") -> void:
+	func _init(x_: float, y_: float, type_: String = "health", rng: Rng = null) -> void:
 		x = x_
 		y = y_
 		type = type_
-		bob = randf() * TAU
+		bob = (rng.nextf() if rng != null else randf()) * TAU
 
 	func consume() -> void:
 		active = false
@@ -597,11 +597,11 @@ class PerkPickup extends RefCounted:
 	var life := 60 * 60
 	var bob := 0.0
 
-	func _init(x_: float, y_: float, perk_id_: String) -> void:
+	func _init(x_: float, y_: float, perk_id_: String, rng: Rng = null) -> void:
 		x = x_
 		y = y_
 		perk_id = perk_id_
-		bob = randf() * TAU
+		bob = (rng.nextf() if rng != null else randf()) * TAU
 
 	func update() -> void:
 		if active:
@@ -623,11 +623,11 @@ class WeaponPickup extends RefCounted:
 	var life := 60 * 25
 	var bob := 0.0
 
-	func _init(x_: float, y_: float, weapon_id_: String) -> void:
+	func _init(x_: float, y_: float, weapon_id_: String, rng: Rng = null) -> void:
 		x = x_
 		y = y_
 		weapon_id = weapon_id_
-		bob = randf() * TAU
+		bob = (rng.nextf() if rng != null else randf()) * TAU
 
 	func update() -> void:
 		if active:

@@ -80,6 +80,10 @@ var match_rewards := {"kills": 0, "captures": 0, "wins": 0}
 ## Жив ли сейчас босс — одновременно босс один.
 var boss_alive := false
 
+## Собран ли уже «Грозовой билд» (см. maybe_summon_storm) — гроза призвана
+## раз и навсегда до конца партии, повторно проверять/призывать не нужно.
+var storm_summoned := false
+
 ## Оборона: база, номер волны и таймер до следующей волны.
 var base = null            # {x, y, max_hp, hp, radius}
 var wave := 0
@@ -154,6 +158,13 @@ func _init(opts: Dictionary) -> void:
 	_storm_rng = Rng.new((int(level["seed"]) ^ 0x57012) & 0xFFFFFFFF)
 	particles = Ent.ParticleSystem.new()
 
+	# База «Обороны» нужна и клиенту-марионетке — иначе у него никогда не
+	# появляется world.base, и HP/значок/отрисовка базы у него молча пропадают
+	# на весь матч (сверка с хостом в game.gd::_apply_net_extra() тоже требует
+	# world.base != null). Сама волна врагов — забота хоста, эта часть ниже.
+	if mode == "defense":
+		_setup_defense_base()
+
 	# У клиента сетевой партии мир — марионетка: карта та же (собрана по тому
 	# же seed), но танки, аптечки и флаги не рождаются здесь, а приходят
 	# от хоста. Иначе на каждом экране была бы своя расстановка.
@@ -168,7 +179,7 @@ func _init(opts: Dictionary) -> void:
 	if mode == "koth":
 		_setup_koth()
 	if mode == "defense":
-		_setup_defense()
+		_setup_defense_wave_start()
 
 ## Сколько тиков отметка выстрела держится на миникарте: слух даёт свежее
 ## направление, а не постоянную картинку.
@@ -305,6 +316,30 @@ func _chain_lightning(x: float, y: float, attacker, already_hit: Dictionary) -> 
 		while scorches.size() > Cfg.MAX_SCORCH:
 			scorches.pop_front()
 		particles.burst(t.x, t.y, [Cfg.bolt_core, Cfg.bolt_glow], 10, 2, 5, 14, 26, rng)
+
+## Собранный целиком «Грозовой билд» призывает настоящую грозу до конца
+## партии. Все три его перка работают только в грозу, а сама гроза по весам
+## WeatherSystem.TYPES выпадает лишь изредка — билд занимал все 3 слота
+## ради эффекта, живого ~10% партии. Теперь сбор билда сам меняет погоду:
+## редкость становится наградой, а не проклятием выбора.
+func maybe_summon_storm(player) -> void:
+	if player == null or storm_summoned or weather == null:
+		return
+	var build := Perks.get_build("lightning")
+	if build.is_empty():
+		return
+	for pid in (build["perks"] as Array):
+		if not player.has_perk(String(pid)):
+			return
+	storm_summoned = true
+	# set_condition() сама выставляет длительность через _duration(), но это
+	# не важно: locked = true ниже полностью отключает у update() смену
+	# условия по таймеру (см. update(): "if not locked: timer -= 1; ...").
+	weather.set_condition("storm")
+	weather.locked = true
+	feed.emit(I18n.t("feed.stormSummoned", {"name": player.name},
+		"%s собрал Грозовой билд — гроза теперь не утихнет до конца партии" % player.name),
+		Color("#8899ff"))
 
 ## «Повелитель молний»: во время грозы, в том же ритме, что и обычный
 ## разряд, каждый носитель перка независимо бросает свой шанс ударить
@@ -666,14 +701,14 @@ func _spawn_pickups() -> void:
 	for i in count:
 		var spot := map.find_free_spot(rng, level["areas"]["any"], 16, 16)
 		if spot != Vector2.INF:
-			pickups.append(Ent.Pickup.new(spot.x, spot.y))
+			pickups.append(Ent.Pickup.new(spot.x, spot.y, "health", rng))
 
 ## Разбрасывает power-up оружия — по одному каждого типа.
 func _spawn_weapon_pickups() -> void:
 	for id in Weapons.ids():
 		var spot := map.find_free_spot(rng, level["areas"]["any"], 16, 16)
 		if spot != Vector2.INF:
-			weapon_pickups.append(Ent.WeaponPickup.new(spot.x, spot.y, id))
+			weapon_pickups.append(Ent.WeaponPickup.new(spot.x, spot.y, id, rng))
 
 func _spawn_flags() -> void:
 	if mode != "ctf":
@@ -685,7 +720,7 @@ func _spawn_flags() -> void:
 
 # ------------------------------------------------------- «Оборона»
 ## Подготовка режима: база в центре карты и первая волна.
-func _setup_defense() -> void:
+func _setup_defense_base() -> void:
 	var home = level["homes"]["player"]
 	base = {
 		"x": home.x, "y": home.y,
@@ -693,7 +728,10 @@ func _setup_defense() -> void:
 		"hp": float(Cfg.MODES["defense"]["base_hp"]),
 		"radius": float(Cfg.MODES["defense"]["base_radius"]),
 	}
-	# Первая волна выходит через start_delay после старта.
+
+## Первая волна выходит через start_delay после старта. Не для клиента:
+## волну запускает и считает только хост, клиент получает её номер по сети.
+func _setup_defense_wave_start() -> void:
 	wave = 0
 	wave_state = "delay"
 	wave_timer = int(Cfg.MODES["defense"]["start_delay"])
@@ -892,6 +930,8 @@ func _scatter_mines() -> void:
 		for c in range(2, map.cols - 2):
 			if map.get_tile(r, c) == Cfg.T_EMPTY:
 				empty.append([r, c])
+	if empty.is_empty():
+		return
 	var count := maxi(1, int(float(empty.size()) * Cfg.MINE_SCATTER_FRACTION))
 	# Частичный Фишер-Йетс: первые count позиций — случайные.
 	for i in count:
@@ -944,6 +984,7 @@ func _update_perk_drops() -> void:
 				continue
 			if tank.owner != null:
 				tank.owner.equip_perk(drop.perk_id)
+				maybe_summon_storm(tank.owner)
 				Sfx.play("pickup")
 				damage_number.emit(tank.x, tank.y - 26, String(perk["icon"]), Color("#ff88ff"))
 				feed.emit(I18n.t("feed.perkPicked",
@@ -1195,7 +1236,31 @@ func execute_frozen_kill(victim, attacker) -> void:
 		Sfx.play("hit")
 	_kill_tank(victim, attacker, "ram")
 
+## Билд «Таран» (ram+thick_armor+kamikaze): убийство тараном отдаётся
+## маленькой ударной волной — толкает и слегка бьёт вражеские танки рядом
+## с местом столкновения. source == "ram" покрывает и обычный _try_ram(),
+## и execute_frozen_kill() (гарантированный таран по замороженной цели) —
+## оба буквально таран.
+func _juggernaut_shock(killer, ox: float, oy: float) -> void:
+	for other in tanks:
+		if other == killer or not other.alive or not are_hostile(killer, other):
+			continue
+		var dx: float = other.x - ox
+		var dy: float = other.y - oy
+		var d := sqrt(dx * dx + dy * dy)
+		if d > Cfg.JUGGERNAUT_SHOCK_R or d <= 0.001:
+			continue
+		var k: float = 1.0 - d / Cfg.JUGGERNAUT_SHOCK_R
+		deal_damage(other, Cfg.JUGGERNAUT_SHOCK_DMG * k, killer, "blast")
+		other.vx += (dx / d) * Cfg.JUGGERNAUT_SHOCK_PUSH * k
+		other.vy += (dy / d) * Cfg.JUGGERNAUT_SHOCK_PUSH * k
+	particles.burst(ox, oy, [Color("#ffaa33"), Color("#ff5533"), Color.WHITE], 16, 2, 5, 16, 30, rng)
+	add_shake(5.0, ox, oy)
+
 func _kill_tank(victim, killer, source: String) -> void:
+	if source == "ram" and killer != null and killer.alive \
+			and killer.flags.has("ram") and killer.flags.has("thickArmor") and killer.flags.has("kamikaze"):
+		_juggernaut_shock(killer, victim.x, victim.y)
 	victim.on_death(self, killer)
 	victim.respawn_timer = Cfg.RESPAWN_DELAY
 	if Sets.wrecks:
@@ -1326,7 +1391,7 @@ func _drop_perk(victim) -> void:
 	if allowed.is_empty():
 		return
 	var perk: Dictionary = rng.pick(allowed)
-	perk_drops.append(Ent.PerkPickup.new(victim.x, victim.y, String(perk["id"])))
+	perk_drops.append(Ent.PerkPickup.new(victim.x, victim.y, String(perk["id"]), rng))
 	particles.burst(victim.x, victim.y, [Color("#ff88ff"), Color.WHITE], 8, 2, 4, 12, 18, rng)
 
 # ------------------------------------------------------------- постройки

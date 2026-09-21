@@ -346,6 +346,12 @@ const SHOCKWAVE_R := 118.0
 const SHOCKWAVE_DMG := 42.0
 const SHOCKWAVE_TILE_DAMAGE := 150.0
 const SHOCKWAVE_PUSH := 5.5
+## Билд «Таран» (ram+thick_armor+kamikaze): убийство тараном бьёт маленькой
+## ударной волной по соседям — скромнее «Ударной волны» и без урона по
+## постройкам, зато без кулдауна: срабатывает с любого тарана насмерть.
+const JUGGERNAUT_SHOCK_R := 90.0
+const JUGGERNAUT_SHOCK_DMG := 12.0
+const JUGGERNAUT_SHOCK_PUSH := 4.0
 ## «Форсаж»: множитель времени перезарядки, пока способность активна.
 const OVERDRIVE_RELOAD_MULT := 0.5
 

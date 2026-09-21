@@ -781,8 +781,17 @@ func shoot(world) -> bool:
 		directions = [-0.15, 0.0, 0.15]
 	# С «Веером» урон на пулю снижен и без «Двойного ствола» (0.45× — так
 	# было всегда), иначе комбо удваивало бы урон веера поверх и так
-	# утроенного числа пуль.
-	var per_bullet_scale := 0.45 * scale_v if flags.has("fanShot") else scale_v
+	# утроенного числа пуль. «Двойной ствол» бил полным уроном каждой из
+	# двух пуль — то есть давал x2 урона по одиночной цели бесплатно, ведь
+	# в отличие от расходящегося веера его пули летят параллельно и обе
+	# почти всегда попадают в одну и ту же цель. 0.6× за пулю держит его на
+	# уровне «Тяжёлого снаряда»/«Снайпера» (≈x1.2 по одной цели), а не
+	# выше всех перков огня разом.
+	var per_bullet_scale := scale_v
+	if flags.has("fanShot"):
+		per_bullet_scale *= 0.45
+	if flags.has("doubleShot"):
+		per_bullet_scale *= 0.6
 	if flags.has("doubleShot"):
 		var perp := turret_angle + PI / 2.0
 		var ox := cos(perp) * 6.0
@@ -1144,6 +1153,13 @@ func respawn(nx: float, ny: float) -> void:
 	acid_attacker = null
 	last_attacker = null
 	flag = null
+	# Ярость босса — состояние ЭТОЙ жизни, не должна переживать смерть: иначе
+	# босс, однажды дошедший до фазы 2/3, остаётся навсегда быстрее и
+	# скорострельнее после каждого следующего возрождения.
+	boss_phase = 1
+	enrage_speed_mult = 1.0
+	enrage_fire_rate_mult = 1.0
+	recompute()
 	if brain != null:
 		brain.reset()
 

@@ -93,7 +93,7 @@ func _ready() -> void:
 	# Скорострельность обязана снимать и нагрев: одна лишь перезарядка упирается
 	# в жар и не поднимает устойчивый темп (замер давал +4 урона в секунду).
 	_expect("rapid_fire", tank, func(): return float(tank.mods["heatPerShotMult"]), 1.0, 0.7)
-	_expect("quick_reload", tank, func(): return float(tank.mods["heatPerShotMult"]), 1.0, 0.8)
+	_expect("quick_reload", tank, func(): return float(tank.mods["heatPerShotMult"]), 1.0, 0.55)
 
 	# «Веер» и «Двойной ствол» обязаны работать вместе, а не выбирать один
 	# из двух: раньше это было if/elif, и при обоих надетых перках стрелял

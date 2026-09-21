@@ -436,7 +436,11 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		"puppet": is_client,
 		"weather": String(s.get("weather", "auto")),
 		"daytime": String(s.get("daytime", "auto")),
-		"rng_seed": int(net_opts.get("rng_seed", -1)),
+		# Тот же net_seed, что уже уходит в LevelGen.generate() выше — раньше
+		# тут читался несуществующий ключ "rng_seed", и World.rng у клиента
+		# никогда не совпадал с хостовым (сейчас неважно — рендер марионетки
+		# не завязан на world.rng, но это ловушка на будущее).
+		"rng_seed": seed_override,
 	})
 	if is_client:
 		# Состав приходит от хоста: свои танки клиент не порождает.
@@ -713,6 +717,8 @@ func _process_perk_queue() -> void:
 func _on_perk_chosen(player, perk_id: String) -> void:
 	if perk_id != "":
 		player.equip_perk(perk_id)
+		if world != null:
+			world.maybe_summon_storm(player)
 		var perk := Perks.get_perk(perk_id)
 		hud.add_feed(I18n.t("feed.perkTook",
 			{"name": player.name, "icon": perk["icon"], "perk": I18n.dn(perk, "name", "perk")},
@@ -1006,10 +1012,10 @@ func _apply_net_extra(extra: Dictionary) -> void:
 		world.flags.append(fl)
 	world.pickups.clear()
 	for p in extra.get("pickups", []):
-		world.pickups.append(Ent.Pickup.new(float(p[0]), float(p[1])))
+		world.pickups.append(Ent.Pickup.new(float(p[0]), float(p[1]), "health", world.rng))
 	world.weapon_pickups.clear()
 	for w in extra.get("weapons", []):
-		world.weapon_pickups.append(Ent.WeaponPickup.new(float(w[0]), float(w[1]), String(w[2])))
+		world.weapon_pickups.append(Ent.WeaponPickup.new(float(w[0]), float(w[1]), String(w[2]), world.rng))
 	if extra.has("score"):
 		world.team_score = extra["score"]
 	if extra.has("wave"):
@@ -1111,9 +1117,12 @@ func net_apply_perk(peer_id: int, perk_id: String) -> void:
 	for rp in remote_players:
 		if int(rp.peer_id) != peer_id:
 			continue
-		if rp.equip_perk(perk_id) and rp.tank != null:
-			rp.tank.perk_ids = rp.perk_ids
-			rp.tank.recompute()
+		if rp.equip_perk(perk_id):
+			if world != null:
+				world.maybe_summon_storm(rp)
+			if rp.tank != null:
+				rp.tank.perk_ids = rp.perk_ids
+				rp.tank.recompute()
 		return
 
 ## Звук слышен «из камеры»: громкость, панорама и глухость далёких
