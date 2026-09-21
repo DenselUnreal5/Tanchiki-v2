@@ -280,6 +280,11 @@ func _after_shot() -> void:
 		# get_cannon() возвращает {} для неизвестного id (см. cannons.gd) —
 		# .get(...) с дефолтом безопасно откатывается на обычный нагрев.
 		heat_mult = float(Cannons.get_cannon(cannon_id).get("heat_mult", 1.0))
+		# «Охлаждённый ствол» снижает именно тройной штраф «Ледяной пушки»,
+		# а не нагрев вообще — на обычной пушке/оружии iceHeatMult ни на что
+		# не влияет (heat_mult тут всегда 1.0 не для ледяной пушки).
+		if cannon_id == "ice":
+			heat_mult *= float(mods["iceHeatMult"])
 	var gain: float = Cfg.HEAT_PER_SHOT * float(mods["heatPerShotMult"]) * heat_mult
 	if ability_active("overclock"):
 		gain = 0.0
@@ -406,8 +411,24 @@ func update(world) -> void:
 			acid_tick_timer -= 1
 			if acid_tick_timer <= 0:
 				acid_tick_timer = Cfg.ACID_TICK_INTERVAL
-				var tick_dmg: float = Cfg.ACID_DMG_PER_STACK_TICK * float(acid_stacks) * acid_dmg_scale
+				# «Едкая кислота»: читаем мод у того, кто наложил яд, а не у
+				# жертвы — тик остаётся «атакой» attacker'а на всём протяжении.
+				var acid_mult: float = float(acid_attacker.mods["acidDmgMult"]) if acid_attacker != null else 1.0
+				var tick_dmg: float = Cfg.ACID_DMG_PER_STACK_TICK * float(acid_stacks) * acid_dmg_scale * acid_mult
 				world.deal_damage(self, tick_dmg, acid_attacker, "acid")
+				# «Едкое облако»: на максимуме стаков цель раз в тик забрызгивает
+				# ближайших врагов (относительно того, кто наложил яд) своим
+				# стаком — распространение работает и без прямого попадания.
+				if acid_stacks >= Cfg.ACID_STACK_MAX and acid_attacker != null \
+						and acid_attacker.alive and acid_attacker.flags.has("acidCloud"):
+					for other in world.tanks:
+						if other == self or not other.alive or not world.are_hostile(acid_attacker, other):
+							continue
+						var dx_ac: float = other.x - x
+						var dy_ac: float = other.y - y
+						if dx_ac * dx_ac + dy_ac * dy_ac > Cfg.ACID_CLOUD_RADIUS * Cfg.ACID_CLOUD_RADIUS:
+							continue
+						other.apply_acid(world, acid_attacker, acid_dmg_scale)
 
 	# «Небесный удар»: заряд копится только в грозу, как и «Повелитель
 	# молний» — вне грозы просто ждёт на месте, не тратя впустую 12 секунд.
@@ -939,6 +960,8 @@ func use_ability(world) -> bool:
 			hp = minf(max_hp, hp + max_hp * Cfg.REPAIR_FRACTION)
 			world.particles.burst(x, y, [Color("#55dd77"), Color("#aaffcc")],
 				18, 2, 5, 12, 22, world.rng)
+		"acid_bomb":
+			_acid_bomb(world)
 		"overclock", "grip", "breaker", "silencer", "smoke":
 			# Эффект этих способностей живёт в других местах: в нагреве,
 			# в покрытии, в пуле, в слышимости и в глазах ботов. Здесь
@@ -956,7 +979,7 @@ func use_ability(world) -> bool:
 				10, 2, 4, 10, 16, world.rng)
 
 	Sfx.play("thunder" if ability_id == "boss_barrage" \
-		else ("explosion" if ability_id == "shockwave" else "pickup"), x, y)
+		else ("explosion" if ability_id == "shockwave" or ability_id == "acid_bomb" else "pickup"), x, y)
 	if owner != null:
 		world.stat.emit("abilityUses", 1, "add")
 	return true
@@ -995,6 +1018,23 @@ func _shockwave(world) -> void:
 		other.vy += (dy / d) * Cfg.SHOCKWAVE_PUSH * k
 
 	world.particles.burst(x, y, [Color("#ff55ff"), Color("#ffaaff"), Color.WHITE],
+		30, 3, 7, 26, 52, world.rng)
+	world.add_shake(9.0, x, y)
+
+## «Кислотная бомба» — активка билда «Кислотный охотник» (Perks.BUILDS,
+## active_ability_of()): тот же радиус, что у «Ударной волны», но вместо
+## урона и построек — стаки яда по танкам. Урон приходит позже обычными
+## тиками apply_acid()/update(), не здесь.
+func _acid_bomb(world) -> void:
+	for other in world.tanks:
+		if other == self or not other.alive or not world.are_hostile(self, other):
+			continue
+		var dx: float = other.x - x
+		var dy: float = other.y - y
+		if dx * dx + dy * dy > Cfg.SHOCKWAVE_R * Cfg.SHOCKWAVE_R:
+			continue
+		other.apply_acid(world, self, dmg_scale, Cfg.ACID_BOMB_STACKS)
+	world.particles.burst(x, y, [Color("#9dff5c"), Color("#4a7a2a"), Color.WHITE],
 		30, 3, 7, 26, 52, world.rng)
 	world.add_shake(9.0, x, y)
 
@@ -1050,7 +1090,13 @@ func apply_freeze(world, attacker, ticks: int) -> bool:
 	if float(mods["evasionChance"]) > 0.0 and world.rng.nextf() < float(mods["evasionChance"]):
 		world.particles.burst(x, y, [Color("#00ffff"), Color("#aaffff")], 5, 2, 3, 10, 14, world.rng)
 		return false
-	freeze_ticks = ticks
+	# «Глубокая заморозка»: держит дольше. «Ледяной рывок»: успешное попадание
+	# заморозкой сразу даёт стрелку рывок скорости, как «Хищник» — общий
+	# ресурс с ним и с «Турбо» (turbo_timer), просто ещё один источник.
+	var duration_mult: float = float(attacker.mods["freezeDurationMult"]) if attacker != null else 1.0
+	freeze_ticks = int(round(float(ticks) * duration_mult))
+	if attacker != null and float(attacker.mods["freezeDashTicks"]) > 0.0:
+		attacker.turbo_timer = maxi(attacker.turbo_timer, int(attacker.mods["freezeDashTicks"]))
 	vx = 0.0
 	vy = 0.0
 	world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE], 10, 2, 4, 12, 20, world.rng)
@@ -1059,7 +1105,7 @@ func apply_freeze(world, attacker, ticks: int) -> bool:
 ## Стак «Кислотной пушки»: сам урон приходит периодическими тиками из
 ## update() через deal_damage() — так вампиризм/отражение/берсерк и
 ## статистика урона считают каждый тик как обычное попадание.
-func apply_acid(world, attacker, dmg_scale_value: float) -> bool:
+func apply_acid(world, attacker, dmg_scale_value: float, stacks: int = 1) -> bool:
 	if not alive or spawn_protect > 0:
 		return false
 	if shield_hp > 0.0:
@@ -1068,7 +1114,7 @@ func apply_acid(world, attacker, dmg_scale_value: float) -> bool:
 	if float(mods["evasionChance"]) > 0.0 and world.rng.nextf() < float(mods["evasionChance"]):
 		world.particles.burst(x, y, [Color("#00ffff"), Color("#aaffff")], 5, 2, 3, 10, 14, world.rng)
 		return false
-	acid_stacks = mini(Cfg.ACID_STACK_MAX, acid_stacks + 1)
+	acid_stacks = mini(Cfg.ACID_STACK_MAX, acid_stacks + stacks)
 	acid_ticks_left = Cfg.ACID_DURATION_TICKS
 	if acid_tick_timer <= 0:
 		acid_tick_timer = Cfg.ACID_TICK_INTERVAL

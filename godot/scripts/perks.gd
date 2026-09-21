@@ -53,6 +53,14 @@ static func base_modifiers() -> Dictionary:
 		"ambushDashTicks": 0.0,  # рывок скорости при попадании из засады, тиков
 
 		"scavengeHeal": 0.0,     # лечение за снесённую поблизости постройку
+
+		# --- «Ледяная пушка» (см. Cannons.LIST, id "ice")
+		"freezeDurationMult": 1.0, # множитель длительности заморозки
+		"freezeDashTicks": 0.0,    # рывок скорости при попадании заморозкой, тиков
+		"iceHeatMult": 1.0,        # дополнительный множитель нагрева именно ледяной пушки
+
+		# --- «Кислотная пушка» (см. Cannons.LIST, id "acid")
+		"acidDmgMult": 1.0,        # множитель урона тика стакающегося яда
 	}
 
 ## Категории перков. Порядок задаёт порядок разделов в галерее.
@@ -123,6 +131,7 @@ const LIST := [
 	{
 		"id": "evasion", "name": "Уклонение", "icon": "💨",
 		"desc": "Отточенные манёвры: 15% шанс полностью уйти от удара", "category": "defense",
+		"flags": ["evasion"],
 		"mods": {"evasionChance": 0.15},
 	},
 	{
@@ -157,6 +166,44 @@ const LIST := [
 		"id": "chain_lightning", "name": "Цепная молния", "icon": "🔗",
 		"desc": "Ваши удары молнии перекидываются на 3 ближайших вражеских танка в радиусе, нанося им 50% урона",
 		"category": "special", "flags": ["chainLightning"],
+	},
+
+	# ------------------------------------------------------ «Ледяная пушка»
+	{
+		"id": "deep_freeze", "name": "Глубокая заморозка", "icon": "🧊",
+		"desc": "Заморозка «Ледяной пушки» держит на 50% дольше. Вместе с «Ледяным рывком» и «Охлаждённым стволом» сам выстрел добивает замороженную цель без тарана (кроме боссов)",
+		"category": "special", "flags": ["deepFreeze"],
+		"mods": {"freezeDurationMult": 1.5},
+	},
+	{
+		"id": "frost_dash", "name": "Ледяной рывок", "icon": "💨",
+		"desc": "Попадание заморозкой даёт 1.5 секунды рывка скорости — успеть доехать и таранить, пока цель не оттаяла",
+		"category": "special", "flags": ["frostDash"],
+		"mods": {"freezeDashTicks": 90.0},
+	},
+	{
+		"id": "chilled_barrel", "name": "Охлаждённый ствол", "icon": "❄️",
+		"desc": "Тройной штраф к нагреву «Ледяной пушки» снижен на 35% — можно стрелять чаще, не упираясь в перегрев после первого же выстрела",
+		"category": "special", "flags": ["chilledBarrel"],
+		"mods": {"iceHeatMult": 0.65},
+	},
+
+	# ------------------------------------------------------ «Кислотная пушка»
+	{
+		"id": "corrosive_acid", "name": "Едкая кислота", "icon": "🧪",
+		"desc": "Каждый тик стакающегося яда бьёт на 50% сильнее",
+		"category": "special", "flags": ["corrosiveAcid"],
+		"mods": {"acidDmgMult": 1.5},
+	},
+	{
+		"id": "acid_cloud", "name": "Едкое облако", "icon": "☁️",
+		"desc": "Цель на максимуме стаков (5) время от времени забрызгивает ближайших врагов собственным стаком яда",
+		"category": "special", "flags": ["acidCloud"],
+	},
+	{
+		"id": "corroding_armor", "name": "Разъедающая броня", "icon": "🦴",
+		"desc": "Пока на цели есть стаки яда, она получает на 40% больше урона от любых других источников — кислота ест броню",
+		"category": "special", "flags": ["corrodingArmor"],
 	},
 
 	# ------------------------------------------------------- челленджи
@@ -195,12 +242,13 @@ const LIST := [
 	},
 	{
 		"id": "sniper", "name": "Снайпер", "icon": "🔭",
-		"desc": "Снаряды летят на 25% быстрее и бьют на 10% сильнее", "category": "challenge",
+		"desc": "Снаряды летят на 25% быстрее и бьют на 10% сильнее. Вместе с «Уклонением» и «Острым слухом» превращает дальний выстрел в критический", "category": "challenge",
 		# Раньше забирал сильную сторону «Тяжёлого снаряда» (dmgMult) и
 		# «Лёгкого снаряда» (bulletSpeedMult) одновременно без их компромиссов
 		# — чистое превосходство над обоими перками огня. Теперь уступает
 		# каждому из них на его собственной оси, оставаясь ровно «понемногу
 		# от обоих», а не «лучше всех сразу».
+		"flags": ["sniper"],
 		"mods": {"bulletSpeedMult": 1.25, "dmgMult": 1.1},
 		"challenge": {"desc": "Убей 3 врагов с дистанции 50 м", "stat": "longKills", "need": 3},
 	},
@@ -423,6 +471,7 @@ const EXTRA_LIST := [
 	{
 		"id": "keen_ear", "name": "Острый слух", "icon": "👂",
 		"desc": "Улучшенные микрофоны слышат дальние выстрелы и отмечают их на миникарте, а также вскрывают замаскированных «Тенью» врагов поблизости", "category": "special",
+		"flags": ["keenEar"],
 		"mods": {"hearingMult": 1.7},
 	},
 	{
@@ -494,6 +543,21 @@ const EXTRA_ACTIVE := [
 static func active_ability_of(perk_ids: Array, bot: bool = false) -> String:
 	if perk_ids == null:
 		return ""
+	# Билд с полем "active" (например «Кислотный охотник» → «Кислотная
+	# бомба») даёт особую активку взамен обычного поиска: сами перки билда
+	# пассивны поодиночке, а собранный целиком билд открывает то, чего нет
+	# ни у одного из них по отдельности.
+	if not bot:
+		for b in BUILDS:
+			if String(b.get("active", "")) == "":
+				continue
+			var complete := true
+			for pid in (b["perks"] as Array):
+				if not perk_ids.has(pid):
+					complete = false
+					break
+			if complete:
+				return String(b["active"])
 	for id in perk_ids:
 		var perk: Dictionary = get_bot_perk(String(id)) if bot else get_perk(String(id))
 		if perk.has("active"):
@@ -510,6 +574,17 @@ const MODE_BANNED := {"koth": ["amphibious"]}
 static func is_perk_allowed_in_mode(id: String, mode: String) -> bool:
 	var banned: Array = MODE_BANNED.get(mode, [])
 	return not banned.has(id)
+
+## Пушки из гаража (Cannons.LIST, mode != "standard") переопределяют
+## выстрел целиком в Tank.shoot() и никогда не доходят до ветки «Веер»/
+## «Двойной ствол» ниже по коду — эти два перка на такой пушке ничего не
+## делают. Не предлагаем их в выборе, пока экипирована такая пушка.
+const CANNON_INCOMPATIBLE := ["fan_shot", "double_shot"]
+
+static func is_perk_allowed_for_cannon(id: String, cannon_id: String) -> bool:
+	if cannon_id == "" or cannon_id == "standard":
+		return true
+	return not CANNON_INCOMPATIBLE.has(id)
 
 static func filter_perks_for_mode(ids: Array, mode: String) -> Array:
 	var out := []
@@ -564,8 +639,13 @@ const UNLOCK_TABLE := {
 	# прогрессии (тот же приём, что и «Повелитель молний» на 19-м).
 	17: ["muffler", "breaker", "predator"],
 	# --- вершина: наибольший замеренный вклад
-	18: ["shockwave"],
-	19: ["heat_sink", "lightning_lord", "sky_strike"],
+	# Три перка «Ледяной пушки» открываются вместе — точно так же, как
+	# «Повелитель молний»+«Небесный удар» на 19-м: до полного билда сразу
+	# рукой подать, а не растянуто по уровням. Три перка «Кислотной пушки» —
+	# тем же приёмом, на соседнем уровне.
+	18: ["shockwave", "deep_freeze", "frost_dash", "chilled_barrel"],
+	19: ["heat_sink", "lightning_lord", "sky_strike",
+		"corrosive_acid", "acid_cloud", "corroding_armor"],
 	# «Цепная молния» замыкает грозовой билд — все три слота перков под
 	# «Повелитель молний»+«Небесный удар»+«Цепная молния» открываются
 	# полностью только на 20-м уровне (см. LIGHTNING_LORD_SYNERGY_CHANCE).
@@ -594,6 +674,16 @@ const BUILDS := [
 	{"id": "juggernaut", "name": "Таран",
 		"perks": ["ram", "thick_armor", "kamikaze"],
 		"bonus": "Все три перка сразу: убийство тараном отдаётся маленькой ударной волной — толкает и задевает вражеские танки рядом с местом столкновения"},
+	{"id": "ghost_sniper", "name": "Призрак-снайпер",
+		"perks": ["sniper", "evasion", "keen_ear"],
+		"bonus": "Все три перка сразу: попадание с дистанции 50 м и дальше становится критическим и наносит в 1,6 раза больше урона"},
+	{"id": "ice_hunter", "name": "Ледяной охотник",
+		"perks": ["deep_freeze", "frost_dash", "chilled_barrel"],
+		"bonus": "Все три перка сразу: попадание из «Ледяной пушки» само добивает замороженную цель — таран для этого больше не нужен (кроме боссов)"},
+	{"id": "acid_hunter", "name": "Кислотный охотник",
+		"perks": ["corrosive_acid", "acid_cloud", "corroding_armor"],
+		"active": "acid_bomb",
+		"bonus": "Все три перка сразу: открывает активную способность «Кислотная бомба» — как «Ударная волна», но вместо урона даёт всем врагам в радиусе поражения 3 стака яда (откат 15 с)"},
 ]
 
 ## Билды, в которые входит этот перк (обычно один, но список — на случай
@@ -628,13 +718,13 @@ static func compute_modifiers(perk_ids: Array, bot: bool = false) -> Dictionary:
 			var v: float = float(mods[key])
 			match key:
 				"maxHPMult", "speedMult", "fireRateMult", "dmgMult", "bulletSpeedMult", \
-				"damageTakenMult", "ramMult", "pickupRadiusMult", "buildingDmgMult", 				"heatPerShotMult", "heatCoolMult", "roadSpeedMult", 				"woodDmgMult", "brickDmgMult", "concreteDmgMult", "metalDmgMult", 				"hearingMult", "noiseMult", "ambushDmgMult":
+				"damageTakenMult", "ramMult", "pickupRadiusMult", "buildingDmgMult", 				"heatPerShotMult", "heatCoolMult", "roadSpeedMult", 				"woodDmgMult", "brickDmgMult", "concreteDmgMult", "metalDmgMult", 				"hearingMult", "noiseMult", "ambushDmgMult", 				"freezeDurationMult", "iceHeatMult", "acidDmgMult":
 					m[key] = float(m[key]) * v
 				"accuracyBonus", "reflectFraction", "lifestealFraction", "regenPerMinute", 				"heatResumeAdd", "softGrip", "scavengeHeal":
 					m[key] = float(m[key]) + v
 				"evasionChance":
 					evasion_miss *= (1.0 - v)
-				"turboOnKill", "shadowOnKill", "ambushDashTicks":
+				"turboOnKill", "shadowOnKill", "ambushDashTicks", "freezeDashTicks":
 					m[key] = maxf(float(m[key]), v)
 	m["evasionChance"] = 1.0 - evasion_miss
 	return m

@@ -265,7 +265,10 @@ class Bullet extends RefCounted:
 				continue
 
 			if cannon_kind == "freeze":
-				tank.apply_freeze(world, owner, Cfg.ICE_FREEZE_TICKS)
+				if tank.apply_freeze(world, owner, Cfg.ICE_FREEZE_TICKS):
+					# Билд «Ледяной охотник»: сам выстрел добивает замороженную
+					# цель без тарана (кроме боссов) — см. World.maybe_freeze_shot_kill.
+					world.maybe_freeze_shot_kill(tank, owner)
 				alive = false
 				world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE], 8, 2, 4, 10, 20, world.rng)
 				return true

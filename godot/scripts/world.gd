@@ -1156,6 +1156,27 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		elif float(attacker.mods["ambushDmgMult"]) > 1.0:
 			amount *= float(attacker.mods["ambushDmgMult"])
 
+	# Билд «Призрак-снайпер» (Снайпер+Уклонение+Острый слух): попадание с
+	# дистанции свыше Cfg.GHOST_SNIPER_RANGE само по себе критическое —
+	# та же дистанция, что и у собственного испытания «Снайпера» (50 м),
+	# так что "дальний бой" у билда и у перка означают одно и то же число.
+	if source == "bullet" and attacker != null and attacker.alive \
+			and attacker.flags.has("sniper") and attacker.flags.has("evasion") and attacker.flags.has("keenEar"):
+		var dx_gs: float = attacker.x - target.x
+		var dy_gs: float = attacker.y - target.y
+		if dx_gs * dx_gs + dy_gs * dy_gs >= Cfg.GHOST_SNIPER_RANGE * Cfg.GHOST_SNIPER_RANGE:
+			amount *= Cfg.GHOST_SNIPER_CRIT_MULT
+
+	# «Разъедающая броня»: пока на цели есть стаки кислоты, наложенные
+	# носителем этого перка, она получает больше урона от ЛЮБОГО источника,
+	# кроме самих тиков яда (у тех своя прибавка — «Едкая кислота»,
+	# складывать оба множителя на одном и том же тике было бы двойным
+	# начислением). Броня объективно съедена — работает даже для союзника,
+	# который её вообще не накладывал.
+	if source != "acid" and target.acid_stacks > 0 and target.acid_attacker != null \
+			and target.acid_attacker.flags.has("corrodingArmor"):
+		amount *= Cfg.CORRODING_ARMOR_MULT
+
 	var res: Dictionary = target.take_damage(self, amount, attacker, source)
 	if bool(res["evaded"]) or float(res["applied"]) <= 0.0:
 		return 0.0
@@ -1211,11 +1232,16 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 ## её лечением незачем. source остаётся "ram" (не отдельная строка) —
 ## _kill_tank() начисляет ramKills-статистику и перк «Таран» именно по
 ## source == "ram", а это буквально таран.
+##
+## БОСС переживает первый такой таран: вместо полного HP снимается только
+## Cfg.FROZEN_BOSS_RAM_FRACTION от максимума — иначе полноценная встреча с
+## боссом сводилась бы к «найти лёд, таранить один раз».
 func execute_frozen_kill(victim, attacker) -> void:
 	if victim == null or not victim.alive:
 		return
-	var amount: float = victim.hp
-	victim.hp = 0.0
+	var is_boss: bool = not victim.enemy_type.is_empty() and bool(victim.enemy_type.get("boss", false))
+	var amount: float = victim.max_hp * Cfg.FROZEN_BOSS_RAM_FRACTION if is_boss else victim.hp
+	victim.hp = maxf(0.0, victim.hp - amount)
 	victim.freeze_ticks = 0
 	victim.last_attacker = attacker
 	victim.last_attacker_tick = tick
@@ -1234,7 +1260,22 @@ func execute_frozen_kill(victim, attacker) -> void:
 		victim.owner.damage_flash = 12
 		victim.owner.shake = maxf(victim.owner.shake, 8.0)
 		Sfx.play("hit")
-	_kill_tank(victim, attacker, "ram")
+	if victim.hp <= 0.0:
+		_kill_tank(victim, attacker, "ram")
+
+## Билд «Ледяной охотник» (deep_freeze+frost_dash+chilled_barrel): сам
+## выстрел, наложивший заморозку, гарантированно добивает цель — таран для
+## этого больше не нужен. Боссов не касается вовсе: даже частичный урон
+## execute_frozen_kill() для них (FROZEN_BOSS_RAM_FRACTION) здесь неуместен
+## — полноценная встреча с боссом не должна решаться одним выстрелом.
+func maybe_freeze_shot_kill(victim, attacker) -> void:
+	if victim == null or not victim.alive or attacker == null or not attacker.alive:
+		return
+	if not victim.enemy_type.is_empty() and bool(victim.enemy_type.get("boss", false)):
+		return
+	if not (attacker.flags.has("deepFreeze") and attacker.flags.has("frostDash") and attacker.flags.has("chilledBarrel")):
+		return
+	execute_frozen_kill(victim, attacker)
 
 ## Билд «Таран» (ram+thick_armor+kamikaze): убийство тараном отдаётся
 ## маленькой ударной волной — толкает и слегка бьёт вражеские танки рядом

@@ -215,6 +215,9 @@ func _fill_gallery_tab() -> void:
 	left_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list_scroll.add_child(left_col)
 
+	if not Perks.BUILDS.is_empty():
+		left_col.add_child(_build_builds_overview())
+
 	var first_id := ""
 	var _prev_band_last: SkillNode = null
 	for cat in Perks.CATEGORIES:
@@ -348,6 +351,44 @@ func _build_synergy_text(id: String) -> String:
 		" + ".join(member_names),
 		I18n.dn(b, "bonus", "build"),
 	]
+
+## Обзор всех тематических билдов (Perks.BUILDS) сразу, сверху вкладки —
+## иначе о существовании билда узнать можно было только кликнув на один из
+## его перков (см. _build_synergy_text). Имена перков красятся по факту
+## разблокировки, как и остальная Галерея — открытые ярче запертых.
+func _build_builds_overview() -> Control:
+	var section := UiKit.vbox(8)
+	section.add_child(UiKit.section(_tr("gallery.builds", "Билды"), Cfg.UI_ACCENT))
+
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 10)
+	flow.add_theme_constant_override("v_separation", 10)
+	section.add_child(flow)
+
+	for b in Perks.BUILDS:
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", UiKit.card_style())
+		card.custom_minimum_size = Vector2(220, 0)
+		flow.add_child(card)
+
+		var box := UiKit.vbox(4)
+		card.add_child(box)
+
+		box.add_child(UiKit.label(I18n.dn(b, "name", "build").to_upper(), 11, Cfg.UI_ACCENT, true))
+
+		var names_bbcode := []
+		for pid in (b["perks"] as Array):
+			var perk := Perks.get_perk(String(pid))
+			var col := Cfg.UI_TEXT if Prof.is_unlocked(String(pid)) else Cfg.UI_MUTED
+			names_bbcode.append("[color=#%s]%s[/color]" % [col.to_html(false), I18n.dn(perk, "name", "perk")])
+		box.add_child(UiKit.rich(" + ".join(names_bbcode), 9, Cfg.UI_MUTED))
+
+		var bonus_label := UiKit.label(I18n.dn(b, "bonus", "build"), 9, Cfg.UI_WARN)
+		bonus_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		bonus_label.custom_minimum_size = Vector2(210, 0)
+		box.add_child(bonus_label)
+
+	return section
 
 func _build_gallery_detail(perk: Dictionary, parent: Node) -> Control:
 	var panel: GalleryDetail = GalleryDetailScene.instantiate()

@@ -584,10 +584,13 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 	# В режимах с запретами («Амфибия» в «Царе горы») такие перки не предлагаем:
 	# иначе игрок получит перк, который просто не работает.
 	var available := []
+	var equipped_cannon: String = String(player.tank.cannon_id) if player.tank != null else ""
 	for id in Prof.available_perk_ids():
 		if player.has_perk(id):
 			continue
 		if not Perks.is_perk_allowed_in_mode(id, String(settings["mode"])):
+			continue
+		if not Perks.is_perk_allowed_for_cannon(id, equipped_cannon):
 			continue
 		available.append(id)
 
