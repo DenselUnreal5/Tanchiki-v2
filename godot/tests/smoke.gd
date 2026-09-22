@@ -1,33 +1,17 @@
-# ============================================================================
-# smoke.gd — дымовой тест: прогоняет все четыре режима без участия человека.
-#
-# Запуск:
-#   godot --headless --path godot tests/smoke.tscn
-#
-# Что проверяется: генерация уровня, спавн, боты с A*, урон, режимные правила,
-# сборка HUD и отрисовка. Любая ошибка времени выполнения всплывёт в консоли.
-# ============================================================================
 extends Node
 
-## Сколько логических тиков прогонять на каждый режим (60 тиков = 1 сек).
 const TICKS_PER_MODE := 3600
 
-## autopilot — вместо человека танком управляет обычный «мозг» бота.
-## Это эталонный игрок средней руки: по нему видно, насколько режим тяжёлый,
-## тогда как неподвижный болванчик проигрывает всегда и ничего не показывает.
 const CASES := [
 	{"mode": "ffa", "game_type": "single", "difficulty": "medium"},
 	{"mode": "ffa", "game_type": "hotseat", "difficulty": "hard"},
 	{"mode": "ctf", "game_type": "single", "difficulty": "medium", "autopilot": true, "ticks": 20000},
 	{"mode": "koth", "game_type": "single", "difficulty": "easy"},
 	{"mode": "defense", "game_type": "single", "difficulty": "medium", "autopilot": true, "ticks": 14000},
-	# Отдельный прогон под активные способности: перк выдаётся принудительно,
-	# потому что автопилот перков не выбирает.
 	{"mode": "ffa", "game_type": "single", "difficulty": "medium", "ticks": 3600,
 		"autopilot": true, "perk": "shockwave"},
 ]
 
-## Схема управления «как бот»: подставляется вместо мыши и клавиатуры.
 class Autopilot:
 	var brain: BotBrain
 	var world_ref
@@ -39,9 +23,6 @@ class Autopilot:
 
 	func apply(tank: Tank, player, world) -> void:
 		brain.update(tank, world)
-		# Способность жмётся сразу, как только откатилась. В обычных
-		# случаях автопилот перков не берёт вовсе (см. _dismiss_perk_dialogs),
-		# поэтому срабатывает это только в случае с выданным перком.
 		if tank.ability_id != "" and tank.ability_cd <= 0:
 			tank.use_ability(world)
 		if use_airstrike and world.airstrike_cooldown <= 0:
@@ -85,11 +66,6 @@ func _run_case(case: Dictionary) -> int:
 		print("ОШИБКА [%s]: мир не создан" % case["mode"])
 		return 1
 
-	# Режимные счётчики: как часто дерутся за флаг и сколько врагов приходит.
-	# Словарь, а не два int: лямбда захватывает локальные переменные по
-	# значению, и увеличение обычного счётчика внутри неё пропало бы.
-	# Счётчик способностей: лямбда захватывает переменные по значению,
-	# поэтому копится он в словаре, а не в int.
 	var ability_stats := {"uses": 0}
 	world.stat.connect(func(key: String, value: int, _kind: String):
 		if key == "abilityUses":
@@ -102,8 +78,6 @@ func _run_case(case: Dictionary) -> int:
 		elif type == "returned":
 			flag_stats["returned"] += 1)
 
-	# Считаем пройденный ботами путь: «живые, но неподвижные» боты — самая
-	# коварная регрессия, по одному лишь числу выживших её не видно.
 	var travelled := {}
 	var last_pos := {}
 	for t in world.tanks:
@@ -129,7 +103,6 @@ func _run_case(case: Dictionary) -> int:
 				var now := Vector2(t.x, t.y)
 				travelled[t.id] = float(travelled[t.id]) + now.distance_to(last_pos[t.id])
 				last_pos[t.id] = now
-		# Уровень в партии повышается — закрываем окно выбора перка.
 		var pending := false
 		for p in game.players:
 			if p.pending_level_ups > 0:
@@ -147,7 +120,6 @@ func _run_case(case: Dictionary) -> int:
 	if world.tanks.is_empty():
 		print("ОШИБКА [%s]: не заспавнено ни одного танка" % case["mode"])
 		problems += 1
-	# Танк не должен уезжать за пределы карты.
 	for t in world.tanks:
 		if t.x < 0.0 or t.x > world.map.width or t.y < 0.0 or t.y > world.map.height:
 			print("ОШИБКА [%s]: танк %s вне карты (%.1f, %.1f)" % [case["mode"], t.name, t.x, t.y])
@@ -181,16 +153,11 @@ func _run_case(case: Dictionary) -> int:
 		print("ОШИБКА [%s]: боты почти не двигались (в среднем %.0f px)" % [case["mode"], avg_travel])
 		problems += 1
 
-	# Несколько живых кадров: так отрабатывают _draw мира, миникарта и HUD.
 	for i in 8:
 		await get_tree().process_frame
 
-	# Стоимость одного логического шага: бюджет кадра при 60 Гц — 16.7 мс,
-	# и симуляция должна занимать в нём малую долю.
 	var ms_per_tick := float(Time.get_ticks_usec() - t0) / 1000.0 / maxf(1.0, float(ticks))
 
-	# Доля времени, которое бот провёл упираясь в стену, — главный показатель
-	# качества навигации.
 	var wall_share := 100.0 * float(blocked) / maxf(1.0, float(bot_count * ticks))
 	var worst_share := 100.0 * float(worst_blocked) / maxf(1.0, float(ticks))
 	var avg_stall := float(stalls) / maxf(1.0, float(bot_count))
@@ -210,7 +177,6 @@ func _run_case(case: Dictionary) -> int:
 		float(GameMap.stat_los_calls) / float(ticks),
 		float(Pathfinding.stat_calls) / float(ticks),
 		float(Pathfinding.stat_expanded) / float(ticks)])
-	# Темп стрельбы игрока — то, ради чего вводился перегрев ствола.
 	var pt = game.players[0].tank
 	if pt != null:
 		var minutes: float = float(ticks) / 60.0 / 60.0
@@ -218,7 +184,6 @@ func _run_case(case: Dictionary) -> int:
 			% [pt.shots_fired, float(pt.shots_fired) / (float(ticks) / 60.0),
 				pt.overheats, pt.kills])
 
-	# Итоговые счётчики режима.
 	var kills := 0
 	for t in world.tanks:
 		kills += t.kills
@@ -240,7 +205,6 @@ func _run_case(case: Dictionary) -> int:
 	game.to_menu()
 	return problems
 
-## Закрывает все окна выбора перка, ничего не выбирая.
 func _dismiss_perk_dialogs() -> void:
 	var guard := 0
 	while game.state == "perk" and guard < 20:

@@ -1,20 +1,6 @@
-# ============================================================================
-# districts.gd — застройка квартала по его району.
-#
-# Третий этап конвейера. Раньше тип квартала бросался кубиком независимо
-# от соседей, и склад оказывался между парком и жилым домом. На референсах
-# видно обратное: город состоит из связных зон — центр, жильё, промышленность,
-# парк, — и каждая узнаётся с одного взгляда.
-#
-# Район квартала приходит из плана; здесь он превращается в тайлы.
-# Каждая функция красит один квартал и ничего не знает об остальной карте:
-# так их можно менять и добавлять по одной.
-# ============================================================================
 class_name Districts
 extends RefCounted
 
-## Раскладка квартала по типу района.
-## @param loc правила локации: чем застелена земля и дворы
 static func paint(map: GameMap, rng: Rng, block: Dictionary,
 		loc: Dictionary = {}) -> void:
 	var ground: int = int(loc.get("ground_tile", Cfg.T_GRASS))
@@ -23,7 +9,6 @@ static func paint(map: GameMap, rng: Rng, block: Dictionary,
 	var r1: int = int(block["r1"])
 	var c0: int = int(block["c0"])
 	var c1: int = int(block["c1"])
-	# Узкие полоски у кромки карты застраивать нечем — газон.
 	if r1 - r0 < 2 or c1 - c0 < 2:
 		_fill(map, r0, r1, c0, c1, ground)
 		return
@@ -35,12 +20,11 @@ static func paint(map: GameMap, rng: Rng, block: Dictionary,
 			_industrial(map, rng, r0, r1, c0, c1, yard)
 		"park":
 			_park(map, rng, r0, r1, c0, c1, ground)
+		"adobe_village":
+			VillageGen.paint(map, rng, r0, r1, c0, c1, ground, loc)
 		_:
 			_residential(map, rng, r0, r1, c0, c1, ground)
 
-# --------------------------------------------------------------- деловой
-## Центр: плотная застройка во всю глубину квартала, узкие дворы,
-## изредка площадь. Здесь дерутся в упор.
 static func _downtown(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
 		yard: int) -> void:
 	if rng.nextf() < 0.14:
@@ -51,15 +35,12 @@ static func _downtown(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int
 	for lot in lots:
 		_tower(map, rng, int(lot[0]), int(lot[1]), int(lot[2]), int(lot[3]))
 
-## Высокая коробка с бетонным каркасом и сквозной подворотнёй.
 static func _tower(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -> void:
 	var h := r1 - r0 + 1
 	var w := c1 - c0 + 1
 	if h < 2 or w < 2:
 		return
 	_fill(map, r0, r1, c0, c1, Cfg.T_BRICK)
-	# Несущие колонны: их не сбить ничем, и разрушенный дом всё равно
-	# оставляет укрытие.
 	if h >= 4 and w >= 4:
 		map.set_tile(r0 + h / 2, c0 + w / 2, Cfg.T_WALL)
 		if rng.nextf() < 0.6:
@@ -70,9 +51,6 @@ static func _tower(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int) -
 		map.set_tile(r0, gate, Cfg.T_EMPTY)
 		map.set_tile(r0 + 1, gate, Cfg.T_EMPTY)
 
-# ----------------------------------------------------------------- жильё
-## Жилой квартал: дома мельче, между ними сады и проезды. Боя в упор
-## меньше, зато больше обходных путей.
 static func _residential(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
 		ground: int) -> void:
 	_fill(map, r0, r1, c0, c1, ground)
@@ -83,35 +61,28 @@ static func _residential(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: 
 		var lc0: int = int(lot[2])
 		var lc1: int = int(lot[3])
 		if rng.nextf() < 0.22:
-			# Двор: деревья и кусты вместо дома.
 			for r in range(lr0, lr1 + 1):
 				for c in range(lc0, lc1 + 1):
 					if rng.nextf() < 0.30:
 						map.set_tile(r, c, Cfg.T_TREE)
 			continue
-		# Дом не на всю глубину участка: остаётся палисадник у улицы.
 		_fill(map, lr0, maxi(lr0, lr1 - 1), lc0, lc1, Cfg.T_BRICK)
 
-# --------------------------------------------------------- промышленность
-## Промзона: длинные склады и открытые площадки под погрузку. Простреливается
-## насквозь, укрытий мало — противоположность центру.
 static func _industrial(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
 		yard: int) -> void:
 	_fill(map, r0, r1, c0, c1, yard)
 	var lots := _subdivide(rng, r0 + 1, r1 - 1, c0 + 1, c1 - 1, 7, 0.35)
 	for lot in lots:
 		if rng.nextf() < 0.35:
-			continue  # площадка под погрузку
+			continue
 		var lr0: int = int(lot[0])
 		var lr1: int = int(lot[1])
 		var lc0: int = int(lot[2])
 		var lc1: int = int(lot[3])
 		_fill(map, lr0, lr1, lc0, lc1, Cfg.T_BRICK)
-		# Ворота в торце: склад без входа выглядит глухой коробкой.
 		if lc1 - lc0 >= 3:
 			map.set_tile(lr1, lc0 + (lc1 - lc0) / 2, Cfg.T_EMPTY)
 
-# ------------------------------------------------------------------ парк
 static func _park(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
 		ground: int) -> void:
 	_fill(map, r0, r1, c0, c1, ground)
@@ -128,14 +99,13 @@ static func _park(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
 			if q < 0.17:
 				map.set_tile(r, c, Cfg.T_TREE)
 			elif q < 0.19:
-				map.set_tile(r, c, Cfg.T_BRICK)  # скамейки и киоски
+				map.set_tile(r, c, Cfg.T_BRICK)
 
 	if r1 - r0 >= 5 and c1 - c0 >= 5 and rng.nextf() < 0.3:
 		var pr := r0 + 1 + int(rng.nextf() * float(r1 - r0 - 3))
 		var pc := c0 + 1 + int(rng.nextf() * float(c1 - c0 - 3))
 		_fill(map, pr, pr + 1, pc, pc + 2, Cfg.T_WATER)
 
-## Площадь или парковка: сплошной асфальт с редкими киосками.
 static func _plaza(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
 		yard: int) -> void:
 	_fill(map, r0, r1, c0, c1, yard)
@@ -144,9 +114,6 @@ static func _plaza(map: GameMap, rng: Rng, r0: int, r1: int, c0: int, c1: int,
 		var kc := c0 + int(rng.nextf() * float(maxi(1, c1 - c0)))
 		_fill(map, kr, kr + 1, kc, kc + 1, Cfg.T_BRICK)
 
-# ------------------------------------------------------------- помощники
-## Режет квартал на участки переулками. cell — желаемая сторона участка,
-## chance — вероятность реза по каждой оси.
 static func _subdivide(rng: Rng, r0: int, r1: int, c0: int, c1: int,
 		cell: int, chance: float) -> Array:
 	if r1 < r0 or c1 < c0:

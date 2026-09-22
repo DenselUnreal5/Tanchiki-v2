@@ -1,14 +1,3 @@
-# ============================================================================
-# steam_stats_check.gd — отражение прогресса в Steam.
-#
-# Проверяет две разные вещи и не путает их:
-#   1. отображение имён — целиком наше дело, обязано быть верным всегда;
-#   2. приём вызовов Steam — зависит от App ID, и на тестовом 480 наши
-#      достижения не заведены, поэтому отказ здесь ОЖИДАЕМ и не ошибка.
-#
-# Запуск:
-#   godot --headless --path godot tests/steam_stats_check.tscn
-# ============================================================================
 extends Node
 
 var failures := 0
@@ -16,7 +5,6 @@ var failures := 0
 func _ready() -> void:
 	await get_tree().process_frame
 
-	# ---- отображение имён ----------------------------------------------
 	var seen := {}
 	var bad := []
 	for a in Achievements.LIST:
@@ -33,7 +21,6 @@ func _ready() -> void:
 		"каждому достижению своё имя: %d из %d" % [seen.size(), Achievements.LIST.size()])
 	print("  пример: first_blood -> %s" % SteamStats.api_name("first_blood"))
 
-	# ---- доступность Steam ----------------------------------------------
 	var live := SteamStats.ready()
 	print("  Steam доступен: %s" % live)
 	if not live:
@@ -41,7 +28,6 @@ func _ready() -> void:
 		_finish()
 		return
 
-	# ---- что Steam принимает --------------------------------------------
 	var ids := []
 	for a in Achievements.LIST:
 		ids.append(String(a["id"]))
@@ -54,8 +40,6 @@ func _ready() -> void:
 	var pushed := SteamStats.push_stats(stats)
 	print("  показателей принято Steam: %d из %d" % [pushed, SteamStats.STAT_KEYS.size()])
 
-	# Решающий опыт: выдаём НАСТОЯЩЕЕ достижение Spacewar. Если пройдёт оно,
-	# значит конвейер рабочий, а ноль выше — только про чужие имена.
 	var steam: Object = Engine.get_singleton("Steam")
 	var has_req := false
 	for m in steam.get_method_list():
@@ -75,8 +59,6 @@ func _ready() -> void:
 		steam.storeStats()
 		print("  (выдача отменена, профиль не тронут)")
 
-	# Отказ на тестовом App ID — не провал теста: имена достижений там чужие.
-	# Провал был бы, если бы вызов уронил игру.
 	_check(true, "вызовы Steam проходят без падения")
 	_finish()
 

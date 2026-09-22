@@ -1,11 +1,3 @@
-# ============================================================================
-# enemy_types.gd — типы врагов-ботов и мини-босс.
-#
-# Тип влияет на характеристики танка (HP/скорость/скорострельность), на урон
-# и на поведение «мозга» (дальность боя, дистанция удержания, точность).
-# Выбор типа при спавне идёт по весам, сложные типы открываются по мере роста
-# «рампы» сложности. Босс редок, огромен по запасу прочности и щедро платит.
-# ============================================================================
 class_name EnemyTypes
 extends RefCounted
 
@@ -38,9 +30,6 @@ const LIST := {
 		"id": "sniper", "name": "Снайпер", "icon": "🎯",
 		"hp_mult": 0.9, "speed_mult": 1.0, "fire_rate_mult": 2.2, "dmg_scale": 2.5,
 		"accuracy_bonus": 0.18, "react_mult": 1.3,
-		# fire_range был выше Cfg.BOT_SIGHT (500) — цель дальше обзора бот
-		# физически не может выбрать (find_best_threat отсеивает по sight),
-		# так что дальнобойность на деле не работала совсем.
 		"fire_range": 480.0, "keep_min": 300.0, "keep_max": 450.0,
 		"chassis": "sniper", "role": "defender", "color_key": "sniper",
 		"weight": 10, "unlock_ramp": 1.16, "lobbed": false, "boss": false,
@@ -49,18 +38,12 @@ const LIST := {
 		"id": "mortar", "name": "Миномёт", "icon": "💣",
 		"hp_mult": 1.1, "speed_mult": 0.85, "fire_rate_mult": 2.5, "dmg_scale": 1.2,
 		"accuracy_bonus": 0.0, "react_mult": 1.2,
-		# Та же причина, что у снайпера выше: 600 было больше Cfg.BOT_SIGHT.
 		"fire_range": 480.0, "keep_min": 320.0, "keep_max": 420.0,
 		"chassis": "mortar", "role": "defender", "color_key": "mortar",
 		"weight": 8, "unlock_ramp": 1.16, "lobbed": true, "boss": false,
 	},
 	"boss": {
 		"id": "boss", "name": "Бронемонстр", "icon": "👹",
-		# dmg_scale ниже, чем можно ждать от 5x HP: с этой версии спаренные
-		# стволы (bot_boss_twin) стреляют по-настоящему двумя пулями за
-		# выстрел вместо одной, так что per-shot урон и так примерно
-		# удвоился — задирать dmg_scale поверх этого значило бы удвоить
-		# DPS ещё раз.
 		"hp_mult": 5.0, "speed_mult": 0.75, "fire_rate_mult": 1.2, "dmg_scale": 1.15,
 		"accuracy_bonus": 0.1, "react_mult": 1.0,
 		"fire_range": 420.0, "keep_min": 100.0, "keep_max": 300.0,
@@ -74,8 +57,6 @@ const ORDER := ["grunt", "scout", "heavy", "sniper", "mortar", "boss"]
 static func get_type(id: String) -> Dictionary:
 	return LIST.get(id, {})
 
-## Случайный тип с учётом рампы сложности. Тяжёлые/дальнобойные типы
-## открываются позже, босс — редко и только на поздней рампе.
 static func pick(ramp: float, rng: Rng, forced: String = "") -> Dictionary:
 	if forced != "":
 		return LIST.get(forced, LIST["grunt"])
@@ -84,7 +65,6 @@ static func pick(ramp: float, rng: Rng, forced: String = "") -> Dictionary:
 		var type: Dictionary = LIST[key]
 		if float(type["unlock_ramp"]) > ramp:
 			continue
-		# На старте рампы вес тяжёлых типов почти нулевой — они раскрываются позже.
 		var ramp_weight := 0.35 if ramp < float(type["unlock_ramp"]) + 0.2 else 1.0
 		var n := int(float(type["weight"]) * ramp_weight)
 		for i in n:

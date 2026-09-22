@@ -1,18 +1,3 @@
-# ============================================================================
-# click_check.gd — проверяет вкладки хаба (Гараж/Галерея/Достижения)
-# настоящим кликом, а не прямым вызовом open_garage()/open_gallery().
-#
-# Раньше эти экраны проверялись только через shot.gd, который дёргает
-# game.ui.open_garage() напрямую — это подтверждает, что САМА ФУНКЦИЯ
-# работает, но полностью обходит настоящий конвейер ввода Godot (подбор
-# под курсором, доставка события кнопке). Баг именно в доставке клика
-# такой тест никогда бы не поймал. Здесь клик — настоящее событие
-# InputEventMouseButton, отправленное через Viewport.push_input(), как
-# от живой мыши.
-#
-# Запуск:
-#   godot --path godot --resolution 1280x720 res://tests/click_check.tscn
-# ============================================================================
 extends Node
 
 var game: Node
@@ -35,21 +20,12 @@ func _ready() -> void:
 	game.ui.close_achievements()
 	await _frames(5)
 
-	# Вкладки внутри уже открытого хаба: открываем через прямой вызов
-	# (этот путь уже подтверждён скриншотами), дальше кликаем по вкладкам.
 	game.ui.open_gallery()
 	await _frames(10)
 	await _check_hub_tab("ГАРАЖ", "garage")
 	await _check_hub_tab("ДОСТИЖЕНИЯ", "achievements")
 	await _check_hub_tab("ГАЛЕРЕЯ ПЕРКОВ", "gallery")
 
-	# Воспроизведение жалобы: «после смены темы в Настройках Гараж/Перки/
-	# Достижения перестают открываться». Меняем тему настоящим кликом по
-	# переключателю в Настройках, закрываем Настройки, и повторяем ровно
-	# те же проверки, что и в начале файла. Хаб из предыдущего блока проверок
-	# остался открытым — закрываем его первым, иначе его дим-подложка
-	# перекрывает настройки, чего в реальной игре быть не может (кнопка
-	# «Настройки» на главном меню недоступна, пока хаб открыт).
 	game.ui.close_hub()
 	await _frames(5)
 	game.ui.open_settings()
@@ -77,8 +53,6 @@ func _ready() -> void:
 		print("ПРОВАЛЕНО ПРОВЕРОК: %d" % failures)
 	get_tree().quit()
 
-## Клик по кнопке с заданной подписью (без проверки состояния после) —
-## для переключателя темы в Настройках, где интересен сам факт клика.
 func _check_and_click(label_substr: String, ok: Callable) -> void:
 	var btn := _find_button(game.ui, label_substr)
 	if btn == null:
@@ -123,8 +97,6 @@ func _check_hub_tab(label_substr: String, expect_tab: String) -> void:
 		print("  ПРОВАЛ: клик по «%s» не переключил вкладку (осталась «%s»)" % [label_substr, active])
 		failures += 1
 
-## Ищет первую видимую кнопку, чей текст содержит подстроку (без учёта
-## регистра не делаем — подписи собраны с известным регистром).
 func _find_button(root: Node, label_substr: String) -> Button:
 	if root is Button and String(root.text).contains(label_substr):
 		return root
@@ -134,8 +106,6 @@ func _find_button(root: Node, label_substr: String) -> Button:
 			return found
 	return null
 
-## Настоящий клик мышью: нажатие и отпускание в центре кнопки, через
-## Viewport.push_input() — тот же путь, что и события от реального устройства.
 func _click(ctrl: Control) -> void:
 	var pos := ctrl.global_position + ctrl.size * 0.5
 	var down := InputEventMouseButton.new()

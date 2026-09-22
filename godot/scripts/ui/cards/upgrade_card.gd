@@ -1,18 +1,3 @@
-# ============================================================================
-# upgrade_card.gd — одна карточка улучшения во вкладке «Гараж» Хаба. Раньше
-# собиралась в ui_root.gd:_upgrade_card() на каждое улучшение заново; теперь
-# сцена — размер иконки и ширина карточки редактируются в инспекторе.
-#
-# Подвал карточки — два взаимоисключающих состояния: «МАКС» (FocusRingPanel,
-# нужна только чтобы фокус геймпада/клавиатуры не срывался с прокачанной
-# до предела карточки) или кнопка «Улучшить · N 🪙». Число сегментов
-# прогресс-полоски зависит от max_level конкретного улучшения — это, в
-# отличие от размера иконки, не константа, поэтому по-прежнему строится
-# кодом в set_data(), а не как фиксированные узлы сцены.
-#
-# @tool: живой предпросмотр. Автозагрузки (Prof/I18n) не читаются — Hub
-# передаёт уже готовые строки/числа.
-# ============================================================================
 @tool
 class_name UpgradeCard
 extends PanelContainer
@@ -72,7 +57,6 @@ func _ready() -> void:
 func _on_buy_pressed() -> void:
 	buy_pressed.emit()
 
-## Донор стилбоксов/шрифта — тот же приём, что в cosmetic_card.gd/main_menu.gd.
 func _style_button(target: Button, donor: Button) -> void:
 	for prop in ["normal", "hover", "pressed", "disabled"]:
 		var sb := donor.get_theme_stylebox(prop)
@@ -84,11 +68,6 @@ func _style_button(target: Button, donor: Button) -> void:
 		target.add_theme_color_override(col, donor.get_theme_color(col))
 	donor.queue_free()
 
-## perk_id — "upg_"+id, level/max_level — прогресс-сегменты, buy_text/
-## max_text — уже переведённые подписи (кнопки покупки и метки "МАКС" —
-## карточка не читает I18n сама, как и остальные три). card_id — тот же
-## ключ, что раньше вручную ставился на кнопку/MaxWrap в ui_root.gd, нужен
-## hub.gd для восстановления фокуса после покупки.
 func set_data(perk_id: String, name_text: String, desc_text: String,
 		level: int, max_level: int, buy_text: String, max_text: String,
 		maxed: bool, can_buy: bool, card_id: String) -> void:

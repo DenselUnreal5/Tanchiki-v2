@@ -1,16 +1,7 @@
-# ============================================================================
-# pathfinding.gd — A* по тайловой сетке.
-#
-# Буферы переиспользуются между вызовами: до 22 ботов ищут путь каждые ~60
-# тиков, и аллокация массивов на каждый вызов заметно нагружает сборщик.
-# Есть жёсткий лимит раскрытых узлов, чтобы одиночный безнадёжный запрос
-# не съедал кадр.
-# ============================================================================
 class_name Pathfinding
 extends RefCounted
 
 const SQRT2 := 1.4142135623730951
-## Максимум раскрытых узлов на один запрос.
 const NODE_BUDGET := 4000
 
 static var _cells := 0
@@ -23,7 +14,6 @@ static var _heap_keys := PackedFloat64Array()
 static var _heap_size := 0
 static var _generation := 0
 
-## Счётчики для профилировки (используются дымовым тестом).
 static var stat_calls := 0
 static var stat_expanded := 0
 
@@ -38,7 +28,6 @@ static func _ensure(size: int) -> void:
 	_heap_items.resize(size + 8)
 	_heap_keys.resize(size + 8)
 
-# ---------------------------------------------------------------- куча
 static func _heap_clear() -> void:
 	_heap_size = 0
 
@@ -85,9 +74,6 @@ static func _heap_pop() -> int:
 			i = smallest
 	return top
 
-# ---------------------------------------------------------------- поиск
-## Ищет маршрут по проезжаемым тайлам.
-## @return Array[Vector2] путевые точки в пикселях (без стартовой)
 static func find_path(map: GameMap, start_x: float, start_y: float,
 		end_x: float, end_y: float) -> Array:
 	stat_calls += 1
@@ -101,7 +87,6 @@ static func find_path(map: GameMap, start_x: float, start_y: float,
 	if not map.in_bounds(start_row, start_col):
 		return []
 
-	# Если цель в стене или воде — берём ближайший проезжаемый тайл рядом.
 	if not map.is_drivable(end_row, end_col):
 		var alt := _nearest_drivable(map, end_row, end_col, 6)
 		if alt.x < 0:
@@ -156,7 +141,6 @@ static func find_path(map: GameMap, start_x: float, start_y: float,
 				var nc := cc + dc
 				if not map.is_drivable(nr, nc):
 					continue
-				# По диагонали нельзя «срезать» угол между двумя стенами.
 				if dr != 0 and dc != 0:
 					if not map.is_drivable(cr + dr, cc) or not map.is_drivable(cr, cc + dc):
 						continue
@@ -174,7 +158,6 @@ static func find_path(map: GameMap, start_x: float, start_y: float,
 				_came_from[next] = current
 				_heap_push(next, tentative + _heuristic(nr, nc, end_row, end_col))
 
-	# Полного пути нет — идём хотя бы в сторону цели.
 	if best_node != start:
 		return _reconstruct(map, best_node, gen)
 	return []
@@ -182,7 +165,6 @@ static func find_path(map: GameMap, start_x: float, start_y: float,
 static func _heuristic(r1: int, c1: int, r2: int, c2: int) -> float:
 	var dr := float(absi(r1 - r2))
 	var dc := float(absi(c1 - c2))
-	# Восьминаправленная (октильная) метрика — согласована с ценой шага.
 	return (dr + dc) + (SQRT2 - 2.0) * minf(dr, dc)
 
 static func _reconstruct(map: GameMap, node: int, gen: int) -> Array:
@@ -196,13 +178,10 @@ static func _reconstruct(map: GameMap, node: int, gen: int) -> Array:
 			break
 		cur = _came_from[cur]
 	raw.reverse()
-	# Первый элемент — стартовый тайл, он не нужен.
 	if raw.size() > 0:
 		raw.remove_at(0)
 	return _smooth(map, raw)
 
-## Убирает лишние точки: если из точки A видно точку C по чистой прямой
-## (без прорезания углов), промежуточная B не нужна.
 static func _smooth(map: GameMap, cells: Array) -> Array:
 	var cols := map.cols
 	var points := []
@@ -227,8 +206,6 @@ static func _smooth(map: GameMap, cells: Array) -> Array:
 		anchor = furthest
 	return out
 
-## Поиск ближайшего проезжаемого тайла в радиусе. Возвращает Vector2(row, col)
-## или Vector2(-1, -1).
 static func _nearest_drivable(map: GameMap, row: int, col: int, radius: int) -> Vector2:
 	for rad in range(1, radius + 1):
 		for dr in range(-rad, rad + 1):

@@ -1,21 +1,3 @@
-# ============================================================================
-# hub.gd — Хаб: Галерея перков / Гараж / Достижения, три вкладки одного
-# оверлея. Раньше строился целиком в ui_root.gd (_build_hub() и все
-# _fill_*_tab()); теперь оболочка — сцена (scenes/ui/hub.tscn), а содержимое
-# вкладок по-прежнему строится кодом (число карточек зависит от Prof/
-# Upgrades/Achievements/Perks — статично не авторится), но каждая отдельная
-# карточка — сама сцена (scenes/ui/cards/*.tscn) с редактируемым в
-# инспекторе размером иконки, вместо литералов Vector2(26,26) и т.п.
-#
-# UiRoot остаётся диспетчером экранов (видимость, стек фокуса, L1/R1) —
-# Hub сообщает о закрытии сигналом close_requested и не знает о других
-# оверлеях игры.
-#
-# @tool: живой предпросмотр оболочки в редакторе — без реального Prof
-# показывает по одному статичному образцу каждой карточки (см. низ файла).
-# Настоящая работа с иконками делается на самих файлах карточек
-# (upgrade_card.tscn и т.д.), которые полностью живые и Prof не читают.
-# ============================================================================
 @tool
 class_name Hub
 extends Control
@@ -34,10 +16,6 @@ const GalleryDetailScene := preload("res://scenes/ui/cards/gallery_detail.tscn")
 
 var active_tab: String = "gallery"
 
-## Автозагрузка без @tool: в редакторе — заглушка. Хаб не пишет I18n.lang
-## напрямую (это уже читает сам I18n.t()/dn() через fallback), обёртка
-## нужна только там, где вызов идёт вне set_data()-цепочек, во время
-## первичной сборки оболочки.
 func _tr(key: String, fallback: String, params: Dictionary = {}) -> String:
 	return fallback if Engine.is_editor_hint() else I18n.t(key, params, fallback)
 
@@ -86,7 +64,6 @@ func _ready() -> void:
 func _on_close_pressed() -> void:
 	close_requested.emit()
 
-## Донор стилбоксов/шрифта — тот же приём, что в main_menu.gd/карточках.
 func _style_button(target: Button, donor: Button) -> void:
 	for prop in ["normal", "hover", "pressed", "disabled"]:
 		var sb := donor.get_theme_stylebox(prop)
@@ -98,9 +75,6 @@ func _style_button(target: Button, donor: Button) -> void:
 		target.add_theme_color_override(col, donor.get_theme_color(col))
 	donor.queue_free()
 
-# ------------------------------------------------------------ фокус-хелперы
-## Первый видимый фокусируемый Control в поддереве (копия UiRoot._first_
-## focusable — самодостаточность Hub важнее переиспользования пары строк).
 func _first_focusable(node: Node) -> Control:
 	if node is Control and node.visible and node.focus_mode != Control.FOCUS_NONE:
 		return node
@@ -129,7 +103,6 @@ func _grab(ctrl) -> void:
 	if is_instance_valid(ctrl):
 		ctrl.grab_focus.call_deferred()
 
-# ---------------------------------------------------------------- вкладки
 func tab_items() -> Array:
 	return [
 		{"key": "gallery", "label": _tr("menu.gallery", "Галерея перков")},
@@ -147,10 +120,6 @@ func _rebuild_tabs() -> void:
 	_tabs_row = new_row
 	UiKit.chain_horizontal(_tabs_row.get_children(), true)
 
-## focus_id — id карточки (meta "card_id"), на которую нужно вернуть фокус
-## после пересборки, вместо вкладки — используется, когда вызов пришёл не
-## от клика по вкладке, а от обновления её же содержимого (покупка в
-## гараже — фокус должен остаться на той же карточке).
 func switch_tab(key: String, focus_id: String = "") -> void:
 	active_tab = key
 	_rebuild_tabs()
@@ -181,7 +150,6 @@ func refresh_language() -> void:
 	if visible:
 		_fill_tab(active_tab)
 
-# ---------------------------------------------------------------- раскладка
 func _body_budget() -> float:
 	var screen := get_viewport_rect().size
 	return maxf(minf(screen.y * 0.86, 900.0) - HUB_HEADER_H, 200.0)
@@ -193,7 +161,6 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		_resize_scroll()
 
-# ------------------------------------------------------------ ГАЛЕРЕЯ ПЕРКОВ
 func _fill_gallery_tab() -> void:
 	_sub.text = _tr("gallery.sub",
 		"Уровень профиля %d · открыто %d из %d" % [Prof.global_level, Prof.unlocked.size(), Perks.all().size()],
@@ -326,18 +293,6 @@ func _select_gallery_perk(id: String) -> void:
 	_gallery_detail_panel = _build_gallery_detail(Perks.get_perk(id), _gallery_row)
 	_resize_scroll()
 
-## Собирает GalleryDetail для перка — пустой (не выбрано) или с данными,
-## переведёнными здесь и переданными как готовые строки (см. gallery_
-## detail.gd:set_perk).
-## parent — куда добавить панель ДО заполнения данными: set_perk() трогает
-## @onready-поля (%Icon и т.д.), которые Godot проставляет только в _ready(),
-## а _ready() узла срабатывает лишь при входе в дерево (add_child), не при
-## самом instantiate() — тот же порядок нужен и во всех *_card() ниже.
-## Тематический билд (Perks.BUILDS) для перка — например «Грозовой билд»:
-## Повелитель молний + Небесный удар + Цепная молния вместе утраивают шанс
-## удара молнии (см. world.gd::_update_lightning_lord). Раньше эта синергия
-## нигде не объяснялась игроку — только жила в коде. Пустая строка, если
-## перк ни в какой билд не входит.
 func _build_synergy_text(id: String) -> String:
 	var builds := Perks.builds_with_perk(id)
 	if builds.is_empty():
@@ -352,10 +307,6 @@ func _build_synergy_text(id: String) -> String:
 		I18n.dn(b, "bonus", "build"),
 	]
 
-## Обзор всех тематических билдов (Perks.BUILDS) сразу, сверху вкладки —
-## иначе о существовании билда узнать можно было только кликнув на один из
-## его перков (см. _build_synergy_text). Имена перков красятся по факту
-## разблокировки, как и остальная Галерея — открытые ярче запертых.
 func _build_builds_overview() -> Control:
 	var section := UiKit.vbox(8)
 	section.add_child(UiKit.section(_tr("gallery.builds", "Билды"), Cfg.UI_ACCENT))
@@ -414,7 +365,6 @@ func _build_gallery_detail(perk: Dictionary, parent: Node) -> Control:
 			"", is_active, build_text)
 	return panel
 
-# ------------------------------------------------------------------ ГАРАЖ
 func _fill_garage_tab() -> void:
 	_sub.text = "[center]" + _tr("garage.sub",
 		"Монеты: [b]%d[/b] 🪙 · Улучшения танка действуют на обоих игроков в партии" % Prof.money,
@@ -431,10 +381,6 @@ func _fill_garage_tab() -> void:
 		var grid := HFlowContainer.new()
 		grid.add_theme_constant_override("h_separation", 10)
 		grid.add_theme_constant_override("v_separation", 10)
-		# grid — в дерево ДО заполнения карточками: set_data() внутри
-		# _upgrade_card() трогает @onready-поля, которые заведёт только
-		# _ready() карточки, а он сработает лишь когда карточка реально
-		# войдёт в SceneTree — то есть уже после того, как в неё войдёт grid.
 		_body.add_child(grid)
 		for up in ups:
 			_upgrade_card(up, grid)
@@ -580,7 +526,6 @@ func _garage_color_row(label_text: String, slot: int, equipped_key: String) -> C
 		flow.add_child(btn)
 	return box
 
-# -------------------------------------------------------------- ДОСТИЖЕНИЯ
 func _fill_achievements_tab() -> void:
 	var unlocked := []
 	var total_reward := 0
@@ -615,13 +560,5 @@ func _fill_achievements_tab() -> void:
 		if top_tab != null:
 			top_tab.focus_neighbor_bottom = cards[0].get_path()
 
-# ---------------------------------------------------------- предпросмотр
-## В редакторе Prof/Achievements-данных для настоящего состояния профиля
-## нет — вместо попытки подделать Prof показываем по одному статичному
-## образцу каждой карточки, только чтобы оболочка не выглядела пустой.
-## Карточка сама заполняет себя образцом в своём _ready() под
-## Engine.is_editor_hint() — здесь достаточно её просто добавить в дерево
-## (set_data() до add_child() обращался бы к ещё не готовым @onready-полям).
-## Точная настройка размера иконок — на самих файлах карточек, они живые.
 func _editor_preview_body() -> void:
 	_body.add_child(UpgradeCardScene.instantiate())

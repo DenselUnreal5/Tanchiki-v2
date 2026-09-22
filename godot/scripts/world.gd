@@ -1,17 +1,7 @@
-# ============================================================================
-# world.gd — состояние партии и правила режимов.
-#
-# World — единственный владелец игрового состояния. Он же отвечает за
-# начисление урона и фрагов. Всё, что нужно показать на экране, World отдаёт
-# сигналами и ничего не знает про интерфейс.
-# ============================================================================
 class_name World
 extends RefCounted
 
 signal feed(text: String, color: Color)
-## «Оборона»: старт новой волны (включая первую) — отдельно от feed, чтобы
-## по нему можно было показать крупный баннер по центру экрана, не завязываясь
-## на текст бокового тоста.
 signal wave_started(n: int)
 signal damage_number(x: float, y: float, text: String, color: Color)
 signal kill(victim, killer, source: String, suicide: bool)
@@ -32,7 +22,6 @@ const BOT_NAMES := [
 	"Гром", "Шторм", "Клинок", "Дикий", "Капитан", "Барс", "Кремень",
 ]
 
-## Сколько тиков брошенный флаг лежит до автоматического возврата.
 const FLAG_RETURN_TIMEOUT := 15 * 60
 
 var map: GameMap
@@ -45,21 +34,16 @@ var player_level := 1
 
 var rng: Rng
 var weather: WeatherSystem
-## Локация партии и то, чем на ней замощены дороги. Держится в мире, а не
-## ищется по словарю: покрытие спрашивается каждым танком каждый тик.
 var location := Locations.CITY
 var road_kind := "asphalt"
 
 var tanks: Array = []
-## Кто рядом с кем — перестраивается раз за тик (см. step()), читают
-## _separate_tanks/Tank._try_ram/BotBrain.count_nearby/Bullet._hit_tanks.
 var tank_grid := SpatialGrid.new()
+var bullet_grid := SpatialGrid.new()
 var bullets: Array = []
 var mines: Array = []
 var perk_drops: Array = []
-## Горящие остовы подбитых танков — только декорация.
 var wrecks: Array = []
-## Обломки разрушенных построек.
 var debris: Array = []
 var pickups: Array = []
 var weapon_pickups: Array = []
@@ -74,30 +58,21 @@ var team_score := {"player": 0, "enemy": 0}
 var finished_flag := false
 var result := {}
 
-## Накопленные за партию монеты (для итогового разбора наград).
 var match_rewards := {"kills": 0, "captures": 0, "wins": 0}
 
-## Жив ли сейчас босс — одновременно босс один.
 var boss_alive := false
 
-## Собран ли уже «Грозовой билд» (см. maybe_summon_storm) — гроза призвана
-## раз и навсегда до конца партии, повторно проверять/призывать не нужно.
 var storm_summoned := false
 
-## Оборона: база, номер волны и таймер до следующей волны.
-var base = null            # {x, y, max_hp, hp, radius}
+var base = null
 var wave := 0
-var wave_state := "delay"  # delay — пауза, active — враги на поле
+var wave_state := "delay"
 var wave_timer := 0
-## Сколько врагов вышло в текущей волне — от этого зависит штраф точности
-## (см. _spawn_bot): чем плотнее перекрёстный огонь, тем крупнее штраф.
 var defense_wave_size := 0
 
-## Авиаудар («Оборона»): тиков до готовности, 0 — доступен.
 var airstrike_cooldown := 0
 var airstrikes: Array = []
 
-## «Царь горы»: лимит времени и затопление.
 var time_limit := 0
 var flood_duration := 1
 var flood_tiles: Array = []
@@ -106,17 +81,10 @@ var max_flood_depth := 1
 var flood_level := 0.0
 
 var used_names := {}
-## Мир клиента: шага симуляции нет, состояние приходит по сети.
 var puppet := false
-## Разряды молний и следы от них. Разряд живёт доли секунды, след —
-## до конца партии.
 var bolts: Array = []
 var scorches: Array = []
 
-## Повал деревьев в грозу. _storm_rng — детерминированная случайность выбора
-## дерева (см. _init); _tree_tiles — кэш координат стоящих деревьев,
-## перестраивается лениво, потому что деревья дербанят и танки, и пули;
-## _trees_felled — счётчик до Cfg.STORM_FELL_MAX.
 var _storm_rng: Rng
 var _tree_tiles: PackedInt32Array = PackedInt32Array()
 var _tree_cache_tick := -100000
@@ -133,41 +101,24 @@ func _init(opts: Dictionary) -> void:
 	for p in players:
 		p.map = map
 
-	# Затравка обычно мешается со временем: две партии на одной карте не
-	# должны разыгрываться одинаково. Замер перков — исключение: он сравнивает
-	# партии между собой, и при разных стартах разница перка тонет в разбросе.
 	var seed_mix: int = (Time.get_ticks_msec() ^ (int(level["seed"]) * 2654435761)) & 0xFFFFFFFF
 	var fixed_seed: int = int(opts.get("rng_seed", -1))
 	if fixed_seed >= 0:
 		seed_mix = fixed_seed & 0xFFFFFFFF
 	rng = Rng.new(seed_mix)
 
-	# Погода и атмосфера — детерминированы по seed карты.
-	# Локация решает, какая погода тут вообще бывает, и чем замощены дороги.
-	# И то и другое читается один раз: спрашивать словарь локации каждый тик
-	# для каждого танка — впустую.
 	location = String(level.get("location", Locations.CITY))
 	var loc := Locations.get_location(location)
 	road_kind = String(loc.get("road_kind", "asphalt"))
 	var wx_opts := _weather_opts(opts)
 	wx_opts["allowed"] = loc.get("weather", [])
 	weather = WeatherSystem.new(int(level["seed"]), wx_opts)
-	# Своя случайность для повала деревьев в грозу: она мутирует карту, а
-	# значит должна воспроизводиться один в один от seed карты и не сдвигать
-	# общий поток world.rng. Тот же приём, что и у KOTH-затопления.
 	_storm_rng = Rng.new((int(level["seed"]) ^ 0x57012) & 0xFFFFFFFF)
 	particles = Ent.ParticleSystem.new()
 
-	# База «Обороны» нужна и клиенту-марионетке — иначе у него никогда не
-	# появляется world.base, и HP/значок/отрисовка базы у него молча пропадают
-	# на весь матч (сверка с хостом в game.gd::_apply_net_extra() тоже требует
-	# world.base != null). Сама волна врагов — забота хоста, эта часть ниже.
 	if mode == "defense":
 		_setup_defense_base()
 
-	# У клиента сетевой партии мир — марионетка: карта та же (собрана по тому
-	# же seed), но танки, аптечки и флаги не рождаются здесь, а приходят
-	# от хоста. Иначе на каждом экране была бы своя расстановка.
 	puppet = bool(opts.get("puppet", false))
 	if puppet:
 		return
@@ -181,26 +132,16 @@ func _init(opts: Dictionary) -> void:
 	if mode == "defense":
 		_setup_defense_wave_start()
 
-## Сколько тиков отметка выстрела держится на миникарте: слух даёт свежее
-## направление, а не постоянную картинку.
 const PING_LIFE := 150
 
-## Недавние выстрелы: {x, y, tick, team, reach}. Читает миникарта — «Острый
-## слух» показывает точку там, где стреляли, даже если стрелка не видно.
 var shot_pings: Array = []
 
-## Выстрел слышен. Боты без цели идут проверять источник — это и делает
-## «Глушитель» и «Глушение» осмысленными: тихая стрельба не собирает толпу.
 func notify_shot(shooter) -> void:
 	if shooter == null or shooter.ability_active("silencer"):
 		return
-	# Гроза глушит стрельбу: в непогоду бот слышит чужой выстрел ближе,
-	# и отметка на миникарте тоже ставится только вблизи.
 	var wx_noise: float = weather.noise_scale if weather != null else 1.0
 	var reach: float = Cfg.BOT_HEAR_RANGE * float(shooter.mods.get("noiseMult", 1.0)) * wx_noise
 
-	# Та же дальность идёт и в отметку на миникарте: заглушенный выстрел
-	# должен и слышаться ближе, и отмечаться только вблизи.
 	shot_pings.append({
 		"x": shooter.x, "y": shooter.y, "tick": tick,
 		"team": shooter.team, "reach": reach,
@@ -220,9 +161,6 @@ func notify_shot(shooter) -> void:
 			continue
 		t.brain.hear_shot(shooter.x, shooter.y)
 
-## Гроза бьёт разрядами в землю рядом с игроком. Именно рядом: молния
-## в другом конце карты — это звук без картинки, а игроку нужно видеть,
-## куда ударило, и успеть отъехать.
 func _update_storm() -> void:
 	for i in range(bolts.size() - 1, -1, -1):
 		bolts[i]["life"] -= 1
@@ -236,7 +174,6 @@ func _update_storm() -> void:
 	if rng.nextf() > Cfg.LIGHTNING_CHANCE:
 		return
 
-	# Точка удара: рядом с кем-то из живых игроков, но не в упор.
 	var anchor = null
 	for p in players:
 		if p.tank != null and p.tank.alive:
@@ -248,19 +185,12 @@ func _update_storm() -> void:
 	var dist := 120.0 + rng.nextf() * 260.0
 	var x := clampf(anchor.x + cos(angle) * dist, 32.0, map.width - 32.0)
 	var y := clampf(anchor.y + sin(angle) * dist, 32.0, map.height - 32.0)
-	# В стену молния не бьёт: удар должен быть виден на открытом месте.
 	if not map.is_drivable(map.row_at(y), map.col_at(x)):
 		return
 
 	strike_lightning(x, y)
 
-## Разряд в точку: урон, след, звук и вспышка. attacker — чей это удар (null
-## у случайного разряда в грозу — тот бьёт безлично, ни в чей актив не идёт);
-## носителю «Цепной молнии» позволяет цеплять соседей (см. ниже).
 func strike_lightning(x: float, y: float, attacker = null) -> void:
-	# Номер разряда нужен только для формы ломаной, поэтому берётся из
-	# счётчика тиков и целой части случайного числа — своего метода
-	# у Rng для целых нет.
 	bolts.append({"x": x, "y": y, "life": 14,
 		"seed": tick * 31 + int(rng.nextf() * 100000.0)})
 	scorches.append(Vector2(x, y))
@@ -285,15 +215,9 @@ func strike_lightning(x: float, y: float, attacker = null) -> void:
 	Sfx.play("thunder", x, y)
 	weather.flash = maxf(weather.flash, 0.45)
 
-	# «Цепная молния»: только у носителя перка, и только от его собственных
-	# ударов — случайный безличный разряд (attacker == null) не цепляет,
-	# иначе одна гроза могла бы включить эффект чужого перка.
 	if attacker != null and attacker.alive and attacker.flags.has("chainLightning"):
 		_chain_lightning(x, y, attacker, hit)
 
-## Добор целей для «Цепной молнии»: ближайшие враги вне уже задетого пятна,
-## каждому — половина урона разряда. Радиус шире основного LIGHTNING_RADIUS
-## умышленно — иначе почти всегда совпадал бы с ним и цеплять было бы некого.
 func _chain_lightning(x: float, y: float, attacker, already_hit: Dictionary) -> void:
 	var candidates := []
 	var r2: float = Cfg.CHAIN_LIGHTNING_RADIUS * Cfg.CHAIN_LIGHTNING_RADIUS
@@ -317,11 +241,6 @@ func _chain_lightning(x: float, y: float, attacker, already_hit: Dictionary) -> 
 			scorches.pop_front()
 		particles.burst(t.x, t.y, [Cfg.bolt_core, Cfg.bolt_glow], 10, 2, 5, 14, 26, rng)
 
-## Собранный целиком «Грозовой билд» призывает настоящую грозу до конца
-## партии. Все три его перка работают только в грозу, а сама гроза по весам
-## WeatherSystem.TYPES выпадает лишь изредка — билд занимал все 3 слота
-## ради эффекта, живого ~10% партии. Теперь сбор билда сам меняет погоду:
-## редкость становится наградой, а не проклятием выбора.
 func maybe_summon_storm(player) -> void:
 	if player == null or storm_summoned or weather == null:
 		return
@@ -332,19 +251,12 @@ func maybe_summon_storm(player) -> void:
 		if not player.has_perk(String(pid)):
 			return
 	storm_summoned = true
-	# set_condition() сама выставляет длительность через _duration(), но это
-	# не важно: locked = true ниже полностью отключает у update() смену
-	# условия по таймеру (см. update(): "if not locked: timer -= 1; ...").
 	weather.set_condition("storm")
 	weather.locked = true
 	feed.emit(I18n.t("feed.stormSummoned", {"name": player.name},
 		"%s собрал Грозовой билд — гроза теперь не утихнет до конца партии" % player.name),
 		Color("#8899ff"))
 
-## «Повелитель молний»: во время грозы, в том же ритме, что и обычный
-## разряд, каждый носитель перка независимо бросает свой шанс ударить
-## молнией в ближайшего врага. Отдельно от _update_storm() — это
-## дополнительное событие поверх обычного случайного разряда, не замена.
 func _update_lightning_lord() -> void:
 	if weather == null or weather.condition != "storm":
 		return
@@ -353,10 +265,6 @@ func _update_lightning_lord() -> void:
 	for holder in tanks:
 		if not holder.alive or not holder.flags.has("lightningLord"):
 			continue
-		# Полный грозовой билд (все три перка сразу) поднимает шанс — иначе
-		# «Цепная молния»/«Небесный удар» без самого «Повелителя молний»
-		# почти нечем было бы запускать: он единственный, кто бьёт сам,
-		# без выстрела/попадания.
 		var chance := Cfg.LIGHTNING_LORD_CHANCE
 		if holder.flags.has("skyStrike") and holder.flags.has("chainLightning"):
 			chance = Cfg.LIGHTNING_LORD_SYNERGY_CHANCE
@@ -366,10 +274,6 @@ func _update_lightning_lord() -> void:
 		if target != null:
 			strike_lightning(target.x, target.y, holder)
 
-## Ближайший живой враг без ограничений по дальности/видимости — для
-## магических эффектов вроде «Повелителя молний», в отличие от
-## BotBrain.find_best_threat(), которому для прицельной стрельбы нужны
-## дальность обзора и прямая видимость.
 func _nearest_hostile(tank):
 	var best = null
 	var best_d2 := INF
@@ -384,14 +288,6 @@ func _nearest_hostile(tank):
 			best = other
 	return best
 
-## Ветер грозы валит деревья: раз в Cfg.STORM_FELL_EVERY тиков одно стоящее
-## дерево ложится, но не больше Cfg.STORM_FELL_MAX за партию. Дерево —
-## проезжаемый тайл, поэтому повал открывает линию, а не строит стену;
-## связность карты от этого только растёт.
-##
-## Мутация тайла идёт через map.set_tile, значит попадает в net_log и
-## доезжает до клиента тем же путём, что и KOTH-затопление, — клиент сам
-## этот шаг не считает (step_cosmetic), только повторяет дельты хоста.
 func _update_treefall() -> void:
 	if weather == null or not weather.fells_trees:
 		return
@@ -400,9 +296,6 @@ func _update_treefall() -> void:
 	if tick % Cfg.STORM_FELL_EVERY != 0:
 		return
 
-	# Кэш деревьев устаревает: их сминают танки и сбивают пули. Раз в
-	# несколько секунд пересобираем, между пересборками пропускаем клетки,
-	# где дерева уже нет.
 	if _tree_tiles.is_empty() or tick - _tree_cache_tick > 600:
 		_rebuild_tree_cache()
 	if _tree_tiles.is_empty():
@@ -432,9 +325,6 @@ func _rebuild_tree_cache() -> void:
 				_tree_tiles.append(r * map.cols + c)
 	_tree_cache_tick = tick
 
-# ------------------------------------------------------------------- сеть
-## Описание танка для клиента: всё, что не меняется каждый тик и потому
-## не место ему в снапшоте — имя, команда, расцветка, силуэт, косметика.
 static func tank_info(t: Tank) -> Dictionary:
 	return {
 		"id": t.net_id, "team": t.team, "name": t.name,
@@ -450,9 +340,6 @@ func roster() -> Array:
 		out.append(tank_info(t))
 	return out
 
-## Косметический шаг для клиента: время идёт, частицы летят, погода меняется,
-## но ни одно правило игры не выполняется — иначе клиент начал бы спорить
-## с хостом о том, кто в кого попал.
 func step_cosmetic() -> void:
 	tick += 1
 	Sfx.advance()
@@ -473,15 +360,11 @@ func step_cosmetic() -> void:
 			live_wrecks.append(w)
 	wrecks = live_wrecks
 
-## Выбор игрока из меню превращается в закреплённые условия. «Своя» и
-## «Цикл» ничего не закрепляют — погода идёт сама, как раньше.
 static func _weather_opts(opts: Dictionary) -> Dictionary:
 	var out := {}
 	var wx := String(opts.get("weather", "auto"))
 	if wx != "auto" and wx != "":
 		out["condition"] = wx
-	# Фаза цикла: 0 — рассвет, 0.25 — день, 0.5 — закат, 0.75 — ночь.
-	# Полночь берётся серединой ночной половины, там темнее всего.
 	var tod := String(opts.get("daytime", "auto"))
 	match tod:
 		"day":
@@ -491,14 +374,9 @@ static func _weather_opts(opts: Dictionary) -> Dictionary:
 		"night":
 			out["phase"] = 0.70
 		"midnight":
-			# Ровно ключевая точка «ночь» — самая тёмная в цикле. Замер
-			# поймал обратное: фаза 0.88 уже ползёт к рассвету, и «полночь»
-			# получалась светлее «ночи».
 			out["phase"] = 0.75
 	return out
 
-# ------------------------------------------------------------------ команды
-## Враждебность определяется только несовпадением команд.
 func are_hostile(a, b) -> bool:
 	if a == null or b == null:
 		return false
@@ -514,7 +392,6 @@ func enemy_home_for(team: String):
 		return null
 	return level["homes"]["enemy"] if team == "player" else level["homes"]["player"]
 
-## Зона респауна для команды.
 func area_for(team: String) -> Dictionary:
 	if mode == "ctf":
 		return level["areas"]["player"] if team == "player" else level["areas"]["enemy"]
@@ -524,7 +401,6 @@ func area_for(team: String) -> Dictionary:
 		return level["areas"]["enemy"]
 	return level["areas"]["any"]
 
-# ------------------------------------------------------------------ создание
 func _unique_bot_name(type: Dictionary) -> String:
 	var list: Array = I18n.bot_names()
 	if list.is_empty():
@@ -556,11 +432,8 @@ func _spawn_combatants() -> void:
 	var is_ctf := mode == "ctf"
 	var is_defense := mode == "defense"
 
-	# ---- люди -----------------------------------------------------------
 	for i in players.size():
 		var player = players[i]
-		# В FFA у каждого своя команда, в CTF первый игрок ведёт «player»,
-		# второй — «enemy». В «Обороне» все люди на одной стороне.
 		var team := ""
 		if is_ctf:
 			team = "player" if i == 0 else "enemy"
@@ -570,33 +443,25 @@ func _spawn_combatants() -> void:
 			team = "human_%d" % i
 		_spawn_player_tank(player, team)
 
-	# ---- боты -----------------------------------------------------------
 	if is_ctf:
 		var size: int = Cfg.MODES["ctf"]["team_size"]
-		# Команда игрока получает на одного бота меньше за каждого живого
-		# человека в ней, чтобы составы были равными.
 		var humans_player := 1
 		var humans_enemy := players.size() - humans_player
 		_spawn_bot_team("player", maxi(0, size - humans_player), "ally")
 		_spawn_bot_team("enemy", maxi(0, size - humans_enemy), "enemy")
 	elif mode == "koth":
-		# «Царь горы»: ровно столько врагов, сколько задано в режиме.
 		for i in int(Cfg.MODES["koth"]["enemies"]):
 			_spawn_bot("bot_%d" % i, "enemy")
 	elif mode == "defense":
-		# «Оборона»: враги приходят волнами, первая ставится в _setup_defense.
 		pass
 	else:
 		for i in int(difficulty["enemies"]):
 			_spawn_bot("bot_%d" % i, "enemy")
 
-## Один игрок: точка спавна, танк, авторитетное объявление сети — тот же
-## приём, каким уже размножаются боты в _spawn_bot() (см. её финал).
 func _spawn_player_tank(player, team: String) -> Tank:
 	var spot := _free_spot(team)
 	var hp: float = float(difficulty["player_hp"])
 	if mode == "defense":
-		# В «Обороне» игрок один против орды — запас прочности выше.
 		hp = round(hp * Cfg.DEFENSE_PLAYER_HP_MULT)
 	var tank := Tank.new({
 		"x": spot.x, "y": spot.y, "team": team, "name": player.name,
@@ -617,25 +482,12 @@ func _spawn_player_tank(player, team: String) -> Tank:
 	return tank
 
 func _spawn_bot_team(team: String, count: int, color_key: String) -> void:
-	# Раньше союзники были принудительно только рядовыми, а противники брались
-	# из общего пула по рампе — к концу долгой партии у врага уже были
-	# громилы и снайперы, а союзники оставались рядовыми навсегда. Теперь
-	# обе команды тянут состав из одного и того же пула по одной и той же
-	# рампе — сильнее враг, сильнее и подмога.
 	for i in count:
 		_spawn_bot(team, color_key)
 
-## Создаёт бота. Тип выбирается по рампе сложности.
-##
-## Цвет корпуса задаёт вызывающий, и только для врагов он уступает цвету
-## типа: тогда по силуэту видно, кто перед тобой — разведчик, тяжёлый или
-## босс. Союзники всегда синие («ally»), иначе в командном бою их не
-## отличить от противника — до этой правки аргумент color_key просто
-## терялся, и союзные боты в CTF выезжали в красном.
 func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Tank:
 	var diff := difficulty
 	var type := EnemyTypes.pick(ramp, rng, forced_type)
-	# Босс на поле боя только один: пока жив — не спавним второго.
 	if bool(type["boss"]) and boss_alive:
 		type = EnemyTypes.get_type("grunt")
 	var boss_mult := {"hp": 1.0, "dmg": 1.0}
@@ -657,18 +509,9 @@ func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Ta
 	if bool(type["boss"]):
 		tank.is_boss = true
 		tank.boss_stat_mult = float(boss_mult["hp"])
-		# Спаренные стволы и «Шквальный залп» — форсированно, а не через
-		# случайную раздачу (см. _maybe_give_bot_perk), и обязательно через
-		# perk_ids, а не прямой поправкой tank.flags/ability_id: recompute()
-		# вызывается регулярно (ramp, случайный перк за фраг) и стёр бы
-		# любую правку в обход perk_ids.
 		tank.perk_ids = ["bot_boss_twin", "bot_boss_barrage"]
 		tank.recompute()
 		boss_alive = true
-	# В «Обороне» враги метят чуть хуже: их много, и перекрёстный огонь
-	# из всех стволов убивал защитника ещё до подхода к базе. Штраф растёт
-	# вместе с волной — на 30 врагах плотность огня совсем не та, что на
-	# первых пяти, и константа тут стала занижать позднюю оборону.
 	var acc_bonus := float(type["accuracy_bonus"])
 	if mode == "defense" and defense_wave_size > 0:
 		var wave_factor := float(defense_wave_size) / float(Cfg.DEFENSE_FIRST_WAVE)
@@ -690,8 +533,6 @@ func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Ta
 		feed.emit(I18n.t("feed.boss", {"icon": type["icon"], "name": tank.name},
 			"%s %s — БОСС на поле боя!" % [type["icon"], tank.name]), Color("#e74c3c"))
 	tanks.append(tank)
-	# Волны «Обороны» и подкрепления рождаются посреди партии: снапшот
-	# их только двигает, а кто это такой — приходит отдельно и надёжно.
 	if Net.role == "host":
 		Net.host_tank_spawned(tank_info(tank))
 	return tank
@@ -703,7 +544,6 @@ func _spawn_pickups() -> void:
 		if spot != Vector2.INF:
 			pickups.append(Ent.Pickup.new(spot.x, spot.y, "health", rng))
 
-## Разбрасывает power-up оружия — по одному каждого типа.
 func _spawn_weapon_pickups() -> void:
 	for id in Weapons.ids():
 		var spot := map.find_free_spot(rng, level["areas"]["any"], 16, 16)
@@ -718,8 +558,6 @@ func _spawn_flags() -> void:
 	for s in level["flag_spots"]["player"]:
 		flags.append(Ent.Flag.new(s.x, s.y, "player"))
 
-# ------------------------------------------------------- «Оборона»
-## Подготовка режима: база в центре карты и первая волна.
 func _setup_defense_base() -> void:
 	var home = level["homes"]["player"]
 	base = {
@@ -729,16 +567,11 @@ func _setup_defense_base() -> void:
 		"radius": float(Cfg.MODES["defense"]["base_radius"]),
 	}
 
-## Первая волна выходит через start_delay после старта. Не для клиента:
-## волну запускает и считает только хост, клиент получает её номер по сети.
 func _setup_defense_wave_start() -> void:
 	wave = 0
 	wave_state = "delay"
 	wave_timer = int(Cfg.MODES["defense"]["start_delay"])
 
-## Запускает волну: спавнит врагов и переводит режим в активное состояние.
-## Первая волна — ровно DEFENSE_FIRST_WAVE, каждая следующая — столько же
-## плюс вклад уровня игрока (с капом) и небольшой рост по номеру волны.
 func _setup_wave(n: int) -> void:
 	wave = n
 	wave_state = "active"
@@ -747,24 +580,16 @@ func _setup_wave(n: int) -> void:
 	var level_bonus := 0
 	if Cfg.DEFENSE_PLAYER_LEVEL_BONUS:
 		level_bonus = mini(Cfg.DEFENSE_LEVEL_BONUS_CAP, maxi(0, player_level - 1))
-	# Рост волн стал линейным: раньше он был вдвое медленнее (n-1)/2, и на
-	# «Средне» оборона держалась почти без усилий.
 	var wave_growth := n - 1
 	var size := mini(Cfg.DEFENSE_WAVE_CAP, base_size + level_bonus + wave_growth)
 	defense_wave_size = size
-	# Волна сложнее — типы врагов становятся злее.
 	ramp = minf(Cfg.RAMP_MAX, 1.0 + float(n - 1) * Cfg.DEFENSE_RAMP_STEP)
 	for i in size:
-		# Вся волна — одна команда «enemy»: враги воюют только с защитниками.
 		_spawn_bot("enemy", "enemy")
 	var total_waves := int(Cfg.MODES["defense"]["waves"])
-	# После стандартных волн босс возвращается регулярно, а не только на
-	# волнах из DEFENSE_BOSS_WAVES — иначе бесконечное продолжение быстро
-	# стало бы однообразной толпой рядовых без всякой кульминации.
 	var endless_boss := n > total_waves and (n - total_waves) % Cfg.DEFENSE_ENDLESS_BOSS_EVERY == 0
 	if Cfg.DEFENSE_BOSS_WAVES.has(n) or endless_boss:
 		_spawn_boss()
-	# Волна не ждёт полной зачистки: по истечении таймаута выходит следующая.
 	wave_timer = Cfg.DEFENSE_WAVE_TIMEOUT
 	if n <= total_waves:
 		feed.emit(I18n.t("feed.wave",
@@ -773,22 +598,16 @@ func _setup_wave(n: int) -> void:
 				I18n.plural(size, "враг", "врага", "врагов")]),
 			Color("#ff8833"))
 	else:
-		# Бесконечное продолжение — «из скольки» тут больше нет.
 		feed.emit(I18n.t("feed.wave.endless", {"cur": n, "n": size},
 			"🌊 Волна %d: %d %s" % [n, size, I18n.plural(size, "враг", "врага", "врагов")]),
 			Color("#ff8833"))
 
-## Гарантированный босс: даже если с ранних волн жив ещё один.
 func _spawn_boss() -> Tank:
 	boss_alive = false
 	var tank := _spawn_bot("enemy", "enemy", "boss")
 	boss_alive = true
 	return tank
 
-## Множитель характеристик босса от глубины волны «Обороны» и числа игроков
-## в партии. Без него ramp упирается в RAMP_MAX = 1.8 и дальше бесконечная
-## «Оборона» гоняет одного и того же босса что на 10-й волне, что на 60-й,
-## а лобби на четверых видит того же босса, что и один игрок.
 func _boss_stat_mult() -> Dictionary:
 	var extra_players := maxf(0.0, float(players.size() - 1))
 	var wave_depth := 0.0
@@ -803,12 +622,10 @@ func _boss_stat_mult() -> Dictionary:
 		"dmg": clampf(dmg_mult, 1.0, Cfg.BOSS_DMG_MULT_CAP),
 	}
 
-## Каждый тик «Оборона»: урон базе и контроль волн.
 func _update_defense() -> void:
 	if finished_flag or base == null:
 		return
 
-	# Враги рядом с базой ломают её.
 	if float(base["hp"]) > 0.0:
 		var attackers := 0
 		for tank in tanks:
@@ -822,15 +639,12 @@ func _update_defense() -> void:
 		if attackers > 0:
 			base["hp"] = maxf(0.0, float(base["hp"]) - attackers * float(Cfg.MODES["defense"]["base_dps"]))
 
-	# Режим проигран — база уничтожена. Побеждать «Оборона» больше не умеет —
-	# только сколько волн продержались, вот и итог.
 	if float(base["hp"]) <= 0.0:
 		_finish(I18n.t("winner.horde", {}, "Орда"), -1, "",
 			I18n.t("reason.defenseBase", {"n": wave},
 				"База уничтожена на волне %d — оборона пала" % wave))
 		return
 
-	# В паузе база лечится (пока её никто не бьёт), потом ждём следующую волну.
 	if wave_state == "delay":
 		if _alive_enemy_count() == 0 and float(base["hp"]) < float(base["max_hp"]):
 			base["hp"] = minf(float(base["max_hp"]),
@@ -840,15 +654,7 @@ func _update_defense() -> void:
 			_setup_wave(wave + 1)
 		return
 
-	# В активной фазе: когда все враги волны мертвы — короткая пауза, потом
-	# следующая волна. Стандартных волн когда-то было ровно 7 и на этом
-	# «Оборона» заканчивалась победой; теперь по их исчерпании она просто
-	# продолжается — правильный вопрос не «отбились ли вы», а «докуда
-	# дотянули». Разовая награда за волну 7 — как раньше была награда
-	# за победу, чтобы это не осталось вовсе без отдачи.
 	if _alive_enemy_count() > 0:
-		# Затянувшуюся волну подпирает следующая: без этого осторожный игрок
-		# отстреливал врагов по одному сколько угодно долго.
 		wave_timer -= 1
 		if wave_timer <= 0:
 			_setup_wave(wave + 1)
@@ -869,9 +675,6 @@ func _alive_enemy_count() -> int:
 			n += 1
 	return n
 
-# ------------------------------------------------------------- авиаудар
-## Супер-способность «Обороны»: на каждого живого врага с неба летит
-## самонаводящаяся ракета. Только первый игрок, только в этом режиме.
 func trigger_airstrike(player) -> bool:
 	if mode != "defense" or finished_flag or airstrike_cooldown > 0:
 		return false
@@ -902,20 +705,16 @@ func _update_airstrike() -> void:
 	if airstrike_cooldown > 0:
 		airstrike_cooldown -= 1
 
-# ------------------------------------------------------- «Царь горы»
-## Подготовка режима: мины и карта затопления.
 func _setup_koth() -> void:
 	time_limit = int(Cfg.MODES["koth"]["duration"])
-	# Затопление идёт быстрее лимита партии.
 	flood_duration = int(Cfg.MODES["koth"]["flood_duration"])
 	_scatter_mines()
-	# Дистанция до ближайшего края карты в тайлах — по ней идёт затопление.
 	flood_tiles = []
 	for r in map.rows:
 		for c in map.cols:
 			var tile := map.get_tile(r, c)
 			if tile == Cfg.T_WALL:
-				continue  # бетон не тонет
+				continue
 			var depth: int = mini(mini(r, map.rows - 1 - r), mini(c, map.cols - 1 - c))
 			flood_tiles.append([depth, r, c])
 	flood_tiles.sort_custom(func(a, b): return a[0] < b[0])
@@ -923,7 +722,6 @@ func _setup_koth() -> void:
 	max_flood_depth = mini(map.rows, map.cols) / 2
 	flood_level = 0.0
 
-## Мины на 5% пустой площади карты, подальше от точек спавна.
 func _scatter_mines() -> void:
 	var empty := []
 	for r in range(2, map.rows - 2):
@@ -933,7 +731,6 @@ func _scatter_mines() -> void:
 	if empty.is_empty():
 		return
 	var count := maxi(1, int(float(empty.size()) * Cfg.MINE_SCATTER_FRACTION))
-	# Частичный Фишер-Йетс: первые count позиций — случайные.
 	for i in count:
 		var j := int(rng.nextf() * empty.size()) % empty.size()
 		var tmp = empty[i]
@@ -946,7 +743,6 @@ func _scatter_mines() -> void:
 		i2 += 1
 		var x: float = cell[1] * Cfg.TILE + Cfg.TILE * 0.5
 		var y: float = cell[0] * Cfg.TILE + Cfg.TILE * 0.5
-		# Не класть мины впритык к танкам — чтобы не взрываться на респауне.
 		var near_tank := false
 		for t in tanks:
 			if t.alive and Vector2(t.x - x, t.y - y).length() < Cfg.TILE * 2:
@@ -957,7 +753,6 @@ func _scatter_mines() -> void:
 		mines.append(Ent.Mine.new(x, y, null, Cfg.SCATTER_MINE_LIFE))
 		placed += 1
 
-## Медленно заливает карту водой от краёв к центру.
 func _update_flood() -> void:
 	flood_level = (float(tick) / float(flood_duration)) * float(max_flood_depth)
 	while flood_idx < flood_tiles.size():
@@ -968,7 +763,6 @@ func _update_flood() -> void:
 			map.set_tile(t[1], t[2], Cfg.T_WATER)
 		flood_idx += 1
 
-## Обновляет выпавшие перки и проверяет их подбор.
 func _update_perk_drops() -> void:
 	for drop in perk_drops:
 		drop.update()
@@ -991,7 +785,6 @@ func _update_perk_drops() -> void:
 					{"name": tank.name, "icon": perk["icon"], "perk": I18n.dn(perk, "name", "perk")},
 					"%s подобрал перк %s %s" % [tank.name, perk["icon"], perk["name"]]), Color("#ff88ff"))
 			else:
-				# Бот тоже подбирает, пока не упрётся в лимит перков.
 				if tank.perk_ids.size() < Cfg.BOT_MAX_PERKS and not tank.perk_ids.has(drop.perk_id):
 					tank.perk_ids.append(drop.perk_id)
 					tank.recompute()
@@ -1006,7 +799,6 @@ func _update_perk_drops() -> void:
 			kept.append(d)
 	perk_drops = kept
 
-# ------------------------------------------------------------------ шаг
 func step() -> void:
 	if finished_flag:
 		return
@@ -1019,12 +811,9 @@ func step() -> void:
 	_update_lightning_lord()
 	_update_treefall()
 
-	# До хода: _try_ram/count_nearby читают её изнутри Tank.update() ниже.
 	tank_grid.rebuild(tanks)
 	for tank in tanks:
 		tank.update(self)
-	# После хода: позиции обновились у всех — пересчитываем для расталкивания
-	# и для проверок попаданий пуль дальше по тику.
 	tank_grid.rebuild(tanks)
 	_separate_tanks()
 
@@ -1035,6 +824,9 @@ func step() -> void:
 		if b.alive:
 			live_bullets.append(b)
 	bullets = live_bullets
+	# Даёт ботам (BotBrain.find_incoming_bullet) искать угрожающие пули по
+	# сетке вместо перебора всех пуль на карте на каждого бота.
+	bullet_grid.rebuild(bullets)
 
 	for m in mines:
 		m.update(self)
@@ -1083,13 +875,6 @@ func step() -> void:
 	if not finished_flag:
 		_check_victory()
 
-## Мягкое расталкивание: без него боты слипаются в кучу в узких проходах.
-##
-## separate_from() толкает сразу обе стороны пары (tank.gd), поэтому важно
-## обработать каждую пару ровно один раз — раньше это давал перебор i<j по
-## индексу массива, здесь ту же роль играет сравнение по id: устойчивая
-## личность танка, в отличие от индекса, не зависящая от порядка обхода
-## ячеек сетки.
 func _separate_tanks() -> void:
 	for a in tanks:
 		if not a.alive:
@@ -1114,52 +899,28 @@ func _update_ramp() -> void:
 	for tank in tanks:
 		if not tank.is_bot:
 			continue
-		# Меняем БАЗОВУЮ характеристику и пересчитываем — иначе бонус затёрся бы
-		# при следующем пересчёте перков. Множитель типа врага сохраняется,
-		# а у босса ещё и boss_stat_mult (волна/число игроков, см.
-		# _boss_stat_mult) — иначе этот пересчёт стирал бы его каждые
-		# RAMP_INTERVAL тиков до значения "как у голого типа".
 		var hp_mult := float(tank.enemy_type.get("hp_mult", 1.0)) if not tank.enemy_type.is_empty() else 1.0
 		tank.base_max_hp = round(float(difficulty["enemy_hp"]) * hp_mult * ramp * tank.boss_stat_mult)
 		tank.recompute()
 	feed.emit(I18n.t("feed.ramp", {}, "Враги стали сильнее!"), Color("#ff8833"))
 
-# ------------------------------------------------------------------ урон
-## Единая точка нанесения урона. Здесь же — вся атрибуция.
-## source: bullet | ram | mine | water | kamikaze | reflect | airstrike
 func deal_damage(target, amount: float, attacker, source: String) -> float:
 	if target == null or not target.alive or amount <= 0.0:
 		return 0.0
-	# «Берсерк»: пока HP атакующего ≤ 40%, его урон увеличен.
 	if attacker != null and attacker.alive and attacker.flags.has("berserk"):
 		var ratio: float = attacker.hp / attacker.max_hp if attacker.max_hp > 0.0 else 0.0
 		if ratio <= 0.4:
 			amount *= 1.6
-	# «Глушение»/«Хищник»: попадание по тому, кто вас (именно вас) не бил и
-	# не видел последние Cfg.AMBUSH_UNAWARE_TICKS тиков, — внезапная атака.
-	# Раньше это проверялось через target.brain.target (текущая цель бота) —
-	# у игроков brain нет, и бонус против них не мог сработать вовсе.
-	# last_attacker/last_attacker_tick уже ведутся на каждом танке для
-	# начисления фрага и одинаково доступны у игроков и ботов — не новое
-	# состояние, а переиспользование существующего. «Глушитель» форсирует
-	# засаду на любое попадание, пока активен, — активка получает прямую
-	# боевую отдачу вместо чисто оборонительной тишины.
 	var is_ambush: bool = attacker != null and source == "bullet" \
 		and (attacker.ability_active("silencer") \
 			or target.last_attacker != attacker \
 			or tick - target.last_attacker_tick > Cfg.AMBUSH_UNAWARE_TICKS)
-	# Засадный билд (Хищник + Лесной житель + Тень) превращает засаду в крит;
-	# без полного билда действует обычный бонус «Глушения».
 	if is_ambush:
 		if attacker.flags.has("predator") and attacker.flags.has("forest") and attacker.flags.has("shadow"):
 			amount *= Cfg.STEALTH_HUNTER_CRIT_MULT
 		elif float(attacker.mods["ambushDmgMult"]) > 1.0:
 			amount *= float(attacker.mods["ambushDmgMult"])
 
-	# Билд «Призрак-снайпер» (Снайпер+Уклонение+Острый слух): попадание с
-	# дистанции свыше Cfg.GHOST_SNIPER_RANGE само по себе критическое —
-	# та же дистанция, что и у собственного испытания «Снайпера» (50 м),
-	# так что "дальний бой" у билда и у перка означают одно и то же число.
 	if source == "bullet" and attacker != null and attacker.alive \
 			and attacker.flags.has("sniper") and attacker.flags.has("evasion") and attacker.flags.has("keenEar"):
 		var dx_gs: float = attacker.x - target.x
@@ -1167,12 +928,6 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		if dx_gs * dx_gs + dy_gs * dy_gs >= Cfg.GHOST_SNIPER_RANGE * Cfg.GHOST_SNIPER_RANGE:
 			amount *= Cfg.GHOST_SNIPER_CRIT_MULT
 
-	# «Разъедающая броня»: пока на цели есть стаки кислоты, наложенные
-	# носителем этого перка, она получает больше урона от ЛЮБОГО источника,
-	# кроме самих тиков яда (у тех своя прибавка — «Едкая кислота»,
-	# складывать оба множителя на одном и том же тике было бы двойным
-	# начислением). Броня объективно съедена — работает даже для союзника,
-	# который её вообще не накладывал.
 	if source != "acid" and target.acid_stacks > 0 and target.acid_attacker != null \
 			and target.acid_attacker.flags.has("corrodingArmor"):
 		amount *= Cfg.CORRODING_ARMOR_MULT
@@ -1181,21 +936,15 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 	if bool(res["evaded"]) or float(res["applied"]) <= 0.0:
 		return 0.0
 
-	# «Хищник»: рывок скорости за попадание из засады — сработавшая, а не
-	# просто попытанная (уклонение выше уже отсеяно). Не требует «Глушения»,
-	# но усиливается им — попал незамеченным, добавил урона, оторвался.
 	if is_ambush and float(attacker.mods["ambushDashTicks"]) > 0.0:
 		attacker.turbo_timer = maxi(attacker.turbo_timer, int(attacker.mods["ambushDashTicks"]))
 
 	target.last_attacker = attacker
 	target.last_attacker_tick = tick
 
-	# Обратный урон от «Отражения» — до проверки смерти, чтобы взаимное
-	# уничтожение работало предсказуемо.
 	if float(res["reflected"]) > 0.0 and attacker != null and attacker.alive:
 		deal_damage(attacker, float(res["reflected"]), target, "reflect")
 
-	# Учёт нанесённого урона и вампиризм.
 	if attacker != null:
 		attacker.damage_dealt += float(res["applied"])
 		if attacker.owner != null:
@@ -1206,7 +955,6 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 			if heal > 0.0:
 				attacker.hp = minf(attacker.max_hp, attacker.hp + heal)
 
-	# Обратная связь: цифры урона и вспышка только у пострадавшего игрока.
 	damage_number.emit(target.x, target.y - 20,
 		"-%d" % int(round(float(res["applied"]))),
 		Color("#ff4444") if target.owner != null else Color("#ffee55"))
@@ -1214,28 +962,14 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		target.owner.damage_flash = 12
 		target.owner.shake = maxf(target.owner.shake, 5.0)
 		target.owner.clean_streak = 0
-		# По себе попадание слышно всегда, где бы ни стояла камера.
 		Sfx.play("hit")
 	elif source == "bullet":
-		# Чужие попадания — с привязкой к месту: перестрелка на другом
-		# конце карты должна доноситься, а не бить в ухо.
 		Sfx.play("hit", target.x, target.y)
 
 	if bool(res["killed"]):
 		_kill_tank(target, attacker, source)
 	return float(res["applied"])
 
-## Гарантированное убийство: таран по цели, замороженной «Ледяной пушкой».
-## В обход take_damage() — щит/броня/уклонение/damageTakenMult не спасают,
-## это осознанное решение (см. план «пушки»). Вампиризм/отражение не
-## начисляются: гарантированный килл — уже сам по себе награда, дублировать
-## её лечением незачем. source остаётся "ram" (не отдельная строка) —
-## _kill_tank() начисляет ramKills-статистику и перк «Таран» именно по
-## source == "ram", а это буквально таран.
-##
-## БОСС переживает первый такой таран: вместо полного HP снимается только
-## Cfg.FROZEN_BOSS_RAM_FRACTION от максимума — иначе полноценная встреча с
-## боссом сводилась бы к «найти лёд, таранить один раз».
 func execute_frozen_kill(victim, attacker) -> void:
 	if victim == null or not victim.alive:
 		return
@@ -1245,10 +979,6 @@ func execute_frozen_kill(victim, attacker) -> void:
 	victim.freeze_ticks = 0
 	victim.last_attacker = attacker
 	victim.last_attacker_tick = tick
-	# Урон в статистику засчитывается, как и у deal_damage() — иначе гарантированный
-	# килл тараном не давал бы очков урона: замер "Царя горы" по таймауту
-	# сравнивает damage_dealt, а на табло в конце матча — "Урон нанесён".
-	# Вампиризм/отражение сознательно не начисляются (см. коммент выше).
 	if attacker != null:
 		attacker.damage_dealt += amount
 		if attacker.owner != null:
@@ -1263,11 +993,6 @@ func execute_frozen_kill(victim, attacker) -> void:
 	if victim.hp <= 0.0:
 		_kill_tank(victim, attacker, "ram")
 
-## Билд «Ледяной охотник» (deep_freeze+frost_dash+chilled_barrel): сам
-## выстрел, наложивший заморозку, гарантированно добивает цель — таран для
-## этого больше не нужен. Боссов не касается вовсе: даже частичный урон
-## execute_frozen_kill() для них (FROZEN_BOSS_RAM_FRACTION) здесь неуместен
-## — полноценная встреча с боссом не должна решаться одним выстрелом.
 func maybe_freeze_shot_kill(victim, attacker) -> void:
 	if victim == null or not victim.alive or attacker == null or not attacker.alive:
 		return
@@ -1277,11 +1002,6 @@ func maybe_freeze_shot_kill(victim, attacker) -> void:
 		return
 	execute_frozen_kill(victim, attacker)
 
-## Билд «Таран» (ram+thick_armor+kamikaze): убийство тараном отдаётся
-## маленькой ударной волной — толкает и слегка бьёт вражеские танки рядом
-## с местом столкновения. source == "ram" покрывает и обычный _try_ram(),
-## и execute_frozen_kill() (гарантированный таран по замороженной цели) —
-## оба буквально таран.
 func _juggernaut_shock(killer, ox: float, oy: float) -> void:
 	for other in tanks:
 		if other == killer or not other.alive or not are_hostile(killer, other):
@@ -1307,22 +1027,18 @@ func _kill_tank(victim, killer, source: String) -> void:
 	if Sets.wrecks:
 		wrecks.append(Ent.Wreck.new(victim, rng))
 
-	# Босс убит — можно снова спавнить нового.
 	if not victim.enemy_type.is_empty() and bool(victim.enemy_type.get("boss", false)):
 		boss_alive = false
 
-	# «Царь горы»: убитый роняет случайный перк.
 	if mode == "koth":
 		_drop_perk(victim)
 
-	# Флаг выпадает на месте гибели.
 	if victim.flag != null:
 		var f = victim.flag
 		victim.flag = null
 		f.drop(victim.x, victim.y, FLAG_RETURN_TIMEOUT)
 		flag_event.emit("dropped", f, victim)
 
-	# ---- начисление фрага ----------------------------------------------
 	var suicide: bool = killer == null or killer == victim
 	if not suicide and are_hostile(killer, victim):
 		killer.kills += 1
@@ -1334,9 +1050,6 @@ func _kill_tank(victim, killer, source: String) -> void:
 	if victim.owner != null:
 		victim.owner.deaths += 1
 		victim.owner.clean_streak = 0
-		# Геймпадный жёсткий лок переживает смерть/возрождение (схема — одна
-		# на весь матч) — без сброса новая жизнь наследует прицел от старой.
-		# У схемы мышью такого метода нет, отсюда has_method.
 		if victim.owner.scheme.has_method("release_lock"):
 			victim.owner.scheme.release_lock()
 		player_died.emit(victim.owner)
@@ -1354,7 +1067,6 @@ func _credit_player_kill(player, victim, source: String) -> void:
 		session_level_up.emit(player, levels)
 	global_xp.emit(Cfg.XP_PER_KILL)
 
-	# Бонус за босса: щедрый куш в монетах и XP.
 	if not victim.enemy_type.is_empty() and bool(victim.enemy_type.get("boss", false)):
 		var boss_reward := Cfg.REWARD_KILL * 5
 		match_rewards["kills"] += boss_reward
@@ -1365,14 +1077,12 @@ func _credit_player_kill(player, victim, source: String) -> void:
 		feed.emit(I18n.t("feed.bossKilled", {"name": player.name, "n": boss_reward},
 			"%s уничтожил БОССА! +%d 🪙" % [player.name, boss_reward]), Color("#e74c3c"))
 
-	# Челлендж «убей 5 врагов за 10 секунд».
 	player.kill_ticks.append(tick)
 	var cutoff := tick - 10 * Cfg.TICK_HZ
 	while not player.kill_ticks.is_empty() and int(player.kill_ticks[0]) < cutoff:
 		player.kill_ticks.pop_front()
 	stat.emit("rapidKills", player.kill_ticks.size(), "max")
 
-	# Серия без полученного урона.
 	player.clean_streak += 1
 	stat.emit("cleanStreak", player.clean_streak, "max")
 	stat.emit("totalKills", 1, "add")
@@ -1380,7 +1090,6 @@ func _credit_player_kill(player, victim, source: String) -> void:
 	if source == "ram":
 		stat.emit("ramKills", 1, "add")
 
-	# Челленджи «Снайпер» и «Берсерк».
 	var killer_tank = player.tank
 	if killer_tank != null:
 		var kill_dist := Vector2(killer_tank.x - victim.x, killer_tank.y - victim.y).length()
@@ -1388,14 +1097,11 @@ func _credit_player_kill(player, victim, source: String) -> void:
 			stat.emit("longKills", 1, "add")
 		if kill_dist >= 800.0:
 			stat.emit("sniperKills", 1, "add")
-		# Мост — единственная переправа через реку и самое узкое место
-		# на карте: убийство, сделанное стоя на нём, засчитывается отдельно.
 		if map.tile_at_pixel(killer_tank.x, killer_tank.y) == Cfg.T_BRIDGE:
 			stat.emit("bridgeKills", 1, "add")
 		if killer_tank.max_hp > 0.0 and killer_tank.hp / killer_tank.max_hp <= 0.4:
 			stat.emit("lowHpKills", 1, "add")
 
-	# Перки «Турбо» и «Тень» — на конкретном танке.
 	if killer_tank != null:
 		if float(killer_tank.mods["turboOnKill"]) > 0.0:
 			killer_tank.turbo_timer = int(killer_tank.mods["turboOnKill"])
@@ -1409,8 +1115,6 @@ func _maybe_give_bot_perk(bot) -> void:
 		return
 	var available := []
 	for p in Perks.BOT_LIST:
-		# boss_only — не выпадает случайно, только форсированно боссу при
-		# спавне (см. _spawn_bot).
 		if bool(p.get("boss_only", false)):
 			continue
 		if not bot.perk_ids.has(p["id"]):
@@ -1423,7 +1127,6 @@ func _maybe_give_bot_perk(bot) -> void:
 	particles.burst(bot.x, bot.y - 20, [Color("#ffee55"), Color("#ffffaa")], 8, 2, 4, 15, 20, rng)
 	bot_perk.emit(bot, perk)
 
-## Роняет перк на месте гибели — только перки, разрешённые в режиме.
 func _drop_perk(victim) -> void:
 	var allowed := []
 	for p in Perks.LIST:
@@ -1435,29 +1138,19 @@ func _drop_perk(victim) -> void:
 	perk_drops.append(Ent.PerkPickup.new(victim.x, victim.y, String(perk["id"]), rng))
 	particles.burst(victim.x, victim.y, [Color("#ff88ff"), Color.WHITE], 8, 2, 4, 12, 18, rng)
 
-# ------------------------------------------------------------- постройки
-## Максимум обломков на карте: больше на экране всё равно не читается,
-## а рисовать их дешевле, чем копить.
 const MAX_DEBRIS := 300
 
-## Единая точка попадания по постройке: и пули, и взрывы, и мины идут сюда.
-## Следы на материале остаются при любом попадании, обломки и звук — только
-## при разрушении.
 func hit_building(row: int, col: int, amount: float, source: String,
 		x: float, y: float, owner_tank) -> void:
-	var mat := Materials.at(row, col)
-	# «Осадные снаряды» усиливают любое своё попадание по постройке —
-	# и пулю, и мину, и ударную волну. Поэтому множитель применяется здесь,
-	# а не в каждом источнике урона по отдельности.
+	var mat := Materials.at(row, col, map.get_tile(row, col))
 	if owner_tank != null and amount > 0.0:
 		amount *= float(owner_tank.mods.get("buildingDmgMult", 1.0))
-		# Перки по материалу: железо пулями почти не берётся, поэтому
-		# «Консервный нож» и его собратья бьют именно туда, где стена
-		# иначе непроходима.
 		match String(mat["id"]):
 			"wood":
 				amount *= float(owner_tank.mods.get("woodDmgMult", 1.0))
 			"brick":
+				amount *= float(owner_tank.mods.get("brickDmgMult", 1.0))
+			"adobe":
 				amount *= float(owner_tank.mods.get("brickDmgMult", 1.0))
 			"concrete":
 				amount *= float(owner_tank.mods.get("concreteDmgMult", 1.0))
@@ -1465,19 +1158,14 @@ func hit_building(row: int, col: int, amount: float, source: String,
 				amount *= float(owner_tank.mods.get("metalDmgMult", 1.0))
 		if owner_tank.ability_active("breaker"):
 			amount *= Cfg.BREAKER_BUILDING_MULT
-	# Выбоина в месте попадания: цвет берётся у материала, поэтому дерево
-	# сыплет щепой, а бетон — светлой крошкой.
 	particles.burst(x, y, [mat["light"], mat["base"], mat["dark"]], 5, 2, 4, 8, 16, rng)
 	if int(mat["sparks"]) > 0 and source != "blast":
-		# Рикошет по железу: пуля высекает искры, но почти не вредит.
 		particles.burst(x, y, [Color("#fff2c0"), Color("#ffb347")], 3, 1, 2, 6, 12, rng)
 	if amount <= 0.0:
 		return
 	if map.apply_damage(row, col, amount, source):
 		_destroy_building(row, col, mat, owner_tank)
 
-## Разрушение постройки: разлёт обломков, облако пыли, звук и тряска —
-## всё берётся из материала, поэтому у каждого типа зданий свой характер.
 func _destroy_building(row: int, col: int, mat: Dictionary, owner_tank) -> void:
 	var cx := col * Cfg.TILE + Cfg.TILE * 0.5
 	var cy := row * Cfg.TILE + Cfg.TILE * 0.5
@@ -1489,7 +1177,6 @@ func _destroy_building(row: int, col: int, mat: Dictionary, owner_tank) -> void:
 			cx + (rng.nextf() - 0.5) * Cfg.TILE * 0.6,
 			cy + (rng.nextf() - 0.5) * Cfg.TILE * 0.6, mat, rng))
 
-	# Пыль: у бетона она гуще и живёт дольше, это задано в материале.
 	var dust_amount := 10 + int(mat["pieces"])
 	particles.burst(cx, cy, [mat["dust"], mat["light"], mat["base"]],
 		dust_amount, 3, 7, 20, 46, rng)
@@ -1497,7 +1184,6 @@ func _destroy_building(row: int, col: int, mat: Dictionary, owner_tank) -> void:
 		particles.burst(cx, cy, [Color("#fff2c0"), Color("#ffcc55")],
 			int(mat["sparks"]), 1, 3, 10, 22, rng)
 
-	# «Мародёр»: обломки идут в дело.
 	if owner_tank != null and owner_tank.alive:
 		var heal: float = float(owner_tank.mods.get("scavengeHeal", 0.0))
 		if heal > 0.0 and owner_tank.hp < owner_tank.max_hp:
@@ -1509,8 +1195,6 @@ func _destroy_building(row: int, col: int, mat: Dictionary, owner_tank) -> void:
 	add_shake(float(mat["shake"]), cx, cy)
 	if owner_tank != null and owner_tank.owner != null:
 		stat.emit("bricksDestroyed", 1, "add")
-		# Бетон и железо держат втрое больше дерева, поэтому их снос —
-		# отдельная веха, а не часть общего счётчика.
 		var mid := String(mat["id"])
 		if mid == "concrete" or mid == "metal":
 			stat.emit("concreteDestroyed", 1, "add")
@@ -1523,15 +1207,12 @@ func on_water_entered(tank) -> void:
 	if tank.owner != null:
 		stat.emit("waterEntries", 1, "add")
 
-## Тряска добавляется каждому игроку, который видит точку взрыва.
 func add_shake(amount: float, x: float = INF, y: float = INF) -> void:
 	for p in players:
 		if is_inf(x) or Vector2(p.camera.x - x, p.camera.y - y).length() < 700.0:
 			p.shake = maxf(p.shake, amount * Sets.screen_shake)
 
-# ------------------------------------------------------------------ аптечки
 func _update_pickups() -> void:
-	# В «Царе горы» аптечки подбирают и боты, в остальных режимах — только люди.
 	var candidates := []
 	for player in players:
 		if player.tank != null and player.tank.alive:
@@ -1571,7 +1252,6 @@ func _update_pickups() -> void:
 					"%s: аптечка +%d HP" % [tank.name, gained]), Color("#44ff44"))
 			break
 
-# ------------------------------------------------------------------ power-up оружия
 func _update_weapon_pickups() -> void:
 	for pickup in weapon_pickups:
 		if not pickup.active:
@@ -1605,9 +1285,7 @@ func _update_weapon_pickups() -> void:
 			kept.append(p)
 	weapon_pickups = kept
 
-# ------------------------------------------------------------------ флаги
 func _update_flags() -> void:
-	# 1. Подбор и возврат при касании.
 	for flag in flags:
 		if flag.carried:
 			continue
@@ -1618,7 +1296,6 @@ func _update_flags() -> void:
 				continue
 
 			if flag.team == tank.team:
-				# Свой флаг: если он не дома — возвращаем касанием.
 				if not flag.at_home:
 					flag.return_home()
 					Sfx.play("flag")
@@ -1636,11 +1313,9 @@ func _update_flags() -> void:
 					Color("#ffee55") if tank.owner != null else Color("#ff8833"))
 			break
 
-	# 2. Флаг едет вместе с носителем.
 	for flag in flags:
 		if flag.carrier != null:
 			if not flag.carrier.alive:
-				# Страховка: носитель умер вне _kill_tank.
 				var carrier = flag.carrier
 				carrier.flag = null
 				flag.drop(carrier.x, carrier.y, FLAG_RETURN_TIMEOUT)
@@ -1648,13 +1323,11 @@ func _update_flags() -> void:
 			flag.x = flag.carrier.x
 			flag.y = flag.carrier.y
 		elif flag.state == "dropped":
-			# Брошенный флаг сам возвращается домой по таймеру.
 			flag.return_timer -= 1
 			if flag.return_timer <= 0:
 				flag.return_home()
 				flag_event.emit("returned", flag, null)
 
-	# 3. Захват: носитель доехал до своей базы.
 	for flag in flags:
 		var carrier = flag.carrier
 		if carrier == null or not carrier.alive:
@@ -1688,17 +1361,14 @@ func _update_flags() -> void:
 			{"name": carrier.name, "a": team_score["player"], "b": team_score["enemy"]},
 			"%s захватил флаг! %d:%d" % [carrier.name, team_score["player"], team_score["enemy"]]),
 			Color("#ffee55"))
-		break  # за тик засчитываем один захват
+		break
 
-# ------------------------------------------------------------------ респаун
 func _update_respawns() -> void:
-	# «Царь горы»: без возрождения — побеждает последний выживший.
 	if mode == "koth":
 		return
 	for tank in tanks:
 		if tank.alive:
 			continue
-		# «Оборона»: враги волн не возрождаются, люди — да.
 		if mode == "defense" and tank.is_bot:
 			continue
 		tank.respawn_timer -= 1
@@ -1712,20 +1382,16 @@ func _update_respawns() -> void:
 			tank.owner.update_camera()
 			respawned.emit(tank.owner)
 
-# ------------------------------------------------------------------ победа
 func _check_victory() -> void:
-	# «Оборона»: победу и поражение считает _update_defense.
 	if mode == "defense":
 		return
 
-	# «Царь горы»: побеждает последний выживший. Время истекло — сильнейший.
 	if mode == "koth":
 		var alive := []
 		for t in tanks:
 			if t.alive:
 				alive.append(t)
 
-		# Игроков-людей больше нет — партия окончена (поражение).
 		var humans_left := false
 		for p in players:
 			if p.tank != null and p.tank.alive:
@@ -1743,7 +1409,6 @@ func _check_victory() -> void:
 					"%s остался последним" % winner.name))
 			return
 
-		# Тайм-аут: побеждает тот, кто нанёс больше урона.
 		if tick >= time_limit:
 			var best = alive[0]
 			for t in alive:
@@ -1787,8 +1452,6 @@ func _check_victory() -> void:
 			"%s захватили %d %s" % [team_name, limit,
 				I18n.plural(limit, "флаг", "флага", "флагов")]))
 
-## Завершает партию. victory считается от лица первого игрока, но в результате
-## есть и явный победитель — «горячему стулу» нужно показывать, кто выиграл.
 func _finish(winner_name: String, winner_player_index: int, winner_team: String, reason: String) -> void:
 	finished_flag = true
 	var victory := winner_player_index == 0
@@ -1805,12 +1468,6 @@ func _finish(winner_name: String, winner_player_index: int, winner_team: String,
 	}
 	finished.emit(result)
 
-# ------------------------------------------------------------------ уборка
-## Разрывает циклические ссылки партии.
-##
-## Tank.owner ↔ PlayerState.tank и Tank.flag ↔ Flag.carrier — это циклы, а
-## RefCounted считает ссылки и цикл сам не разорвёт: без этого каждая
-## сыгранная партия навсегда оставалась бы в памяти.
 func dispose() -> void:
 	for f in flags:
 		f.carrier = null
@@ -1844,8 +1501,6 @@ func dispose() -> void:
 	players = []
 	particles.clear()
 
-# ------------------------------------------------------------------ табло
-## Данные для таблицы результатов, отсортированные по фрагам.
 func scoreboard() -> Array:
 	var rows := []
 	for tank in tanks:
@@ -1872,7 +1527,6 @@ func alive_enemies_for(team: String) -> int:
 			n += 1
 	return n
 
-## Прогресс режима (для полосок в HUD).
 func progress_for(player) -> Dictionary:
 	if mode == "koth":
 		var alive := 0

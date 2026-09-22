@@ -1,22 +1,9 @@
-# ============================================================================
-# cosmetics.gd — косметика за монеты: рисунки корпуса, гусеницы и башни.
-#
-# Никакой механики не добавляет — только влияет на отрисовку танка.
-# «none» бесплатен и доступен всем; остальное покупается в Гараже.
-#
-# @tool: без этого by_type()/статические списки пустые в редакторе Godot —
-# см. Cfg для полного объяснения. Чистые данные, безопасно.
-# ============================================================================
 @tool
 class_name Cosmetics
 extends RefCounted
 
-## Камуфляж идёт первым: это базовая окраска корпуса, поверх которой
-## ложится рисунок (звезда, пламя и прочие наклейки).
 const TYPES := ["camo", "hull", "track", "turret"]
 
-## Камуфляжи. Два цвета пятен смешиваются с командным цветом, а не заменяют
-## его: иначе в командном режиме свои и чужие стали бы неразличимы.
 static var CAMOS := [
 	{"id": "none", "type": "camo", "name": "Без камуфляжа", "icon": "⬛", "price": 0},
 	{"id": "digital", "type": "camo", "name": "Цифра", "icon": "🟩", "price": 150,
@@ -33,7 +20,6 @@ static var CAMOS := [
 		"a": Color("#d5dde4"), "b": Color("#8f9aa6")},
 ]
 
-## Рисунки корпуса.
 const HULLS := [
 	{"id": "none", "type": "hull", "name": "Без рисунка", "icon": "⬛", "price": 0},
 	{"id": "stripes", "type": "hull", "name": "Камуфляж", "icon": "🎨", "price": 120},
@@ -43,7 +29,6 @@ const HULLS := [
 	{"id": "chevrons", "type": "hull", "name": "Шевроны", "icon": "🔺", "price": 140},
 ]
 
-## Гусеницы.
 static var TRACKS := [
 	{"id": "none", "type": "track", "name": "Стандартные", "icon": "⬜", "price": 0},
 	{"id": "gold", "type": "track", "name": "Золотые", "icon": "✨", "price": 180, "color": Color("#d4af37")},
@@ -51,7 +36,6 @@ static var TRACKS := [
 	{"id": "ruby", "type": "track", "name": "Рубиновые", "icon": "🔴", "price": 130, "color": Color("#c0392b")},
 ]
 
-## Башни.
 static var TURRETS := [
 	{"id": "none", "type": "turret", "name": "Стандартная", "icon": "🔘", "price": 0},
 	{"id": "gold", "type": "turret", "name": "Золотая", "icon": "👑", "price": 160, "color": Color("#d4af37")},
@@ -79,14 +63,12 @@ static func all() -> Array:
 	out.append_array(TURRETS)
 	return out
 
-## Поиск по типу и id: id уникальны внутри типа, но повторяются между типами.
 static func get_cosmetic(type: String, id: String) -> Dictionary:
 	for c in by_type(type):
 		if c["id"] == id:
 			return c
 	return {}
 
-## Цвет косметики или заданный запасной.
 static func color_of(type: String, id: String, fallback: Color) -> Color:
 	if id == "" or id == "none":
 		return fallback

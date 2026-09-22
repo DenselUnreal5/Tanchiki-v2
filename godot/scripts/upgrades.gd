@@ -1,19 +1,7 @@
-# ============================================================================
-# upgrades.gd — постоянные улучшения танка за валюту (Гараж).
-#
-# Улучшения живут в профиле и действуют на каждого живого игрока в партии.
-# Эффект задаётся так же, как у перков: профильный бонус перемножается
-# с бонусом перков в Tank.recompute().
-#
-# @tool: без этого статические var (CATEGORIES) остаются пустыми в
-# редакторе Godot — см. Cfg для полного объяснения. Чистые данные,
-# безопасно.
-# ============================================================================
 @tool
 class_name Upgrades
 extends RefCounted
 
-## Категории улучшений — порядок разделов в Гараже.
 static var CATEGORIES := [
 	{"id": "fire", "name": "Огонь", "color": Color("#e2803a")},
 	{"id": "defense", "name": "Защита", "color": Color("#4d95c9")},
@@ -21,9 +9,6 @@ static var CATEGORIES := [
 	{"id": "utility", "name": "Полезное", "color": Color("#5fbf83")},
 ]
 
-## cost_base/cost_step — цена уровня: base + (level - 1) * step.
-## mult_step — шаг эффекта, mult_mode: add (1 + lvl*step), sub (1 - lvl*step),
-## flat (lvl*step).
 const LIST := [
 	{
 		"id": "dmg", "name": "Мощный ствол", "icon": "💥", "desc": "Урон своих пуль",
@@ -78,12 +63,10 @@ static func get_upgrade(id: String) -> Dictionary:
 			return u
 	return {}
 
-## Цена следующего уровня (level — уже купленный уровень).
 static func cost(up: Dictionary, level: int) -> int:
 	var next_level := level + 1
 	return int(round(float(up["cost_base"]) + float(next_level - 1) * float(up["cost_step"])))
 
-## Итоговый множитель (или прибавка) на купленном уровне.
 static func mult(up: Dictionary, level: int) -> float:
 	var step: float = float(up["mult_step"])
 	match String(up["mult_mode"]):

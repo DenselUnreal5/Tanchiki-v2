@@ -1,11 +1,3 @@
-# ============================================================================
-# perks_check.gd — проверка, что каждый перк действительно что-то делает.
-#
-# Список перков легко пополнить строкой в таблице, и так же легко получить
-# перк, который красиво описан и ни на что не влияет. Здесь каждый новый
-# перк надевается на танк, и сравнивается то число, на которое он обязан
-# влиять: нагрев, ход по покрытию, урон по материалу, слышимость.
-# ============================================================================
 extends Node
 
 var game: Node
@@ -29,7 +21,6 @@ func _ready() -> void:
 	var world = game.world
 	var tank: Tank = game.players[0].tank
 
-	# Все перки вообще есть в общем списке и открываются по уровням.
 	var total := Perks.all().size()
 	var unlockable := {}
 	for lvl in Perks.UNLOCK_TABLE.keys():
@@ -43,13 +34,10 @@ func _ready() -> void:
 	if not orphans.is_empty():
 		print("  не открываются ничем: %s" % str(orphans))
 
-	# ---- нагрев ----------------------------------------------------------
 	_expect("heat_sink", tank, func(): return float(tank.mods["heatCoolMult"]), 1.0, 1.6)
 	_expect("thermal", tank, func(): return float(tank.mods["heatPerShotMult"]), 1.0, 0.75)
 	_expect("quick_vent", tank, func(): return float(tank.mods["heatResumeAdd"]), 0.0, 0.25)
 
-	# ---- покрытие --------------------------------------------------------
-	# Ставим танк на газон и смотрим, отыгрывает ли «Вездеход» штраф.
 	var map = world.map
 	var spot := _find_tile(map, Cfg.T_GRASS)
 	if spot.x >= 0:
@@ -65,7 +53,6 @@ func _ready() -> void:
 		var gripped := tank.surface_speed
 		_check(gripped > plain, "«Вездеход» на газоне: %.2f -> %.2f" % [plain, gripped])
 
-		# «Шипы» — то же, но по нажатию и на любом грунте.
 		tank.perk_ids = ["grip"]
 		tank.recompute()
 		tank.ability_cd = 0
@@ -76,40 +63,23 @@ func _ready() -> void:
 	else:
 		_check(false, "газон на карте не найден")
 
-	# ---- материалы -------------------------------------------------------
-	# «Лесоруб» проверяется поведением, а не числом: прежний множитель урона
-	# по дереву был числом, которое ничего не меняло — дом из досок и так
-	# падал с одного попадания. Теперь перк даёт сквозной выстрел, и признак
-	# этого один — две деревянные постройки, снесённые одной пулей.
 	_check_wood_pierce(world, tank)
 	_expect("can_opener", tank, func(): return float(tank.mods["metalDmgMult"]), 1.0, 2.5)
 	_expect("concrete_breaker", tank, func(): return float(tank.mods["concreteDmgMult"]), 1.0, 2.2)
 
-	# ---- слышимость ------------------------------------------------------
 	_expect("keen_ear", tank, func(): return float(tank.mods["hearingMult"]), 1.0, 1.7)
 	_expect("muffler", tank, func(): return float(tank.mods["noiseMult"]), 1.0, 0.5)
 	_expect("muffler", tank, func(): return float(tank.mods["ambushDmgMult"]), 1.0, 1.5)
 
-	# Скорострельность обязана снимать и нагрев: одна лишь перезарядка упирается
-	# в жар и не поднимает устойчивый темп (замер давал +4 урона в секунду).
 	_expect("rapid_fire", tank, func(): return float(tank.mods["heatPerShotMult"]), 1.0, 0.7)
 	_expect("quick_reload", tank, func(): return float(tank.mods["heatPerShotMult"]), 1.0, 0.55)
 
-	# «Веер» и «Двойной ствол» обязаны работать вместе, а не выбирать один
-	# из двух: раньше это было if/elif, и при обоих надетых перках стрелял
-	# только веер. Теперь — 3 направления × 2 пули на направление.
-	# Пушка из гаража (Prof.equipped_cannon) читается из общего profile.json —
-	# тот же файл, которым пользуется живая игра. Если в гараже сейчас
-	# экипирована не стандартная пушка, она молча переопределила бы выстрел
-	# и здесь (см. Tank.shoot()), поэтому явно возвращаем стандартную —
-	# «Веер»/«Двойной ствол» проверяются именно на ней.
 	tank.cannon_id = "standard"
 	_check(_bullets_fired(world, tank, ["fan_shot"]) == 3, "«Веер» сам по себе даёт 3 пули")
 	_check(_bullets_fired(world, tank, ["double_shot"]) == 2, "«Двойной ствол» сам по себе даёт 2 пули")
 	_check(_bullets_fired(world, tank, ["fan_shot", "double_shot"]) == 6,
 		"«Веер»+«Двойной ствол» вместе дают 6 пуль, а не побеждает один из них")
 
-	# «Глушитель» обязан отменять оповещение ботов о выстреле.
 	tank.perk_ids = ["silencer"]
 	tank.recompute()
 	tank.ability_cd = 0
@@ -123,8 +93,6 @@ func _ready() -> void:
 	_check(heard_silent == 0 and heard_loud > 0,
 		"«Глушитель»: услышали %d ботов, без него %d" % [heard_silent, heard_loud])
 
-	# «Острый слух» обещает отметки на миникарте. Раньше это была неправда:
-	# перк менял только громкость в аудиомиксе.
 	world.shot_pings.clear()
 	world.notify_shot(tank)
 	_check(not world.shot_pings.is_empty(),
@@ -133,11 +101,8 @@ func _ready() -> void:
 	print("=== ПРОВЕРКА ПЕРКОВ ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
 
-## Сквозной выстрел по дереву: одна пуля обязана снести две постройки подряд.
 func _check_wood_pierce(world, tank: Tank) -> void:
 	var map = world.map
-	# Материал выводится из координат, поэтому нужна не любая пара клеток,
-	# а пара, которая окажется именно деревянной.
 	var spot := Vector2i(-1, -1)
 	for r in range(4, map.rows - 4):
 		for c in range(4, map.cols - 5):
@@ -178,12 +143,10 @@ func _check_wood_pierce(world, tank: Tank) -> void:
 	tank.perk_ids = []
 	tank.recompute()
 
-## Сколько ботов пошло на звук выстрела.
 func _count_alerted(world, shooter: Tank) -> int:
 	for t in world.tanks:
 		if t.brain != null:
 			t.brain.noise_timer = 0
-	# Ставим ботов рядом, чтобы дальность заведомо не мешала.
 	var n := 0
 	for t in world.tanks:
 		if t == shooter or t.brain == null:
@@ -208,7 +171,6 @@ func _find_tile(map: GameMap, tile: int) -> Vector2i:
 				return Vector2i(r, c)
 	return Vector2i(-1, -1)
 
-## Надевает перк и сверяет модификатор до и после.
 func _expect(perk_id: String, tank: Tank, probe: Callable, before: float, after: float) -> void:
 	tank.perk_ids = []
 	tank.recompute()
@@ -219,7 +181,6 @@ func _expect(perk_id: String, tank: Tank, probe: Callable, before: float, after:
 	_check(absf(got_before - before) < 0.001 and absf(got_after - after) < 0.001,
 		"%s: %.2f -> %.2f (ждали %.2f -> %.2f)" % [perk_id, got_before, got_after, before, after])
 
-## Надевает набор перков, стреляет один раз и возвращает число новых пуль.
 func _bullets_fired(world, tank: Tank, perk_ids: Array) -> int:
 	tank.perk_ids = perk_ids
 	tank.recompute()

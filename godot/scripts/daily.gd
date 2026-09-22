@@ -1,17 +1,6 @@
-# ============================================================================
-# daily.gd — ежедневные задания с наградой монетами.
-#
-# Прогресс сбрасывается в полночь. Задания сдвигаются по кругу: каждый день
-# выбирается подмножество из общего списка.
-#
-# Прогресс пополняется вызовом Prof.bump_daily(counter, amount) из игровых
-# событий. Ключи-счётчики: kills, wins, captures, coins, games, damage,
-# medkits, streak.
-# ============================================================================
 class_name Daily
 extends RefCounted
 
-## Ключ текущего дня в формате YYYY-MM-DD (локальное время).
 static func today_key() -> String:
 	var d := Time.get_datetime_dict_from_system(false)
 	return "%04d-%02d-%02d" % [d["year"], d["month"], d["day"]]
@@ -27,10 +16,8 @@ const LIST := [
 	{"id": "streak_5", "name": "Фортуна", "desc": "Серия 5 убийств без урона", "icon": "🍀", "counter": "streak", "need": 5, "reward": 60},
 ]
 
-## Сколько заданий выдаётся в день.
 const PER_DAY := 4
 
-## Выбирает подмножество заданий дня по дате (детерминированно).
 static func selection() -> Array:
 	var key := today_key()
 	var sum := 0

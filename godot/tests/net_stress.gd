@@ -1,20 +1,5 @@
-# ============================================================================
-# net_stress.gd — сетевая партия в плохих условиях.
-#
-# Обычный net_peer проверяет, что связь вообще работает. Здесь проверяется
-# то, ради чего netcode и пишут: партия под потерями пакетов, задержкой
-# и обрывом посреди боя.
-#
-#   godot --headless --path . tests/net_stress.tscn -- host
-#   godot --headless --path . tests/net_stress.tscn -- client
-#
-# Условия задаются обеим сторонам одинаково: хост портит снапшоты,
-# клиент — свой ввод.
-# ============================================================================
 extends Node
 
-## Четверть пакетов в никуда и 120 мс в одну сторону — заметно хуже, чем
-## бывает на домашнем интернете, и ровно то, на чём ломается наивный netcode.
 const LOSS := 0.25
 const LAG_MSEC := 120.0
 
@@ -41,13 +26,9 @@ func _ready() -> void:
 	await _frames(2)
 	get_tree().quit(1 if failures > 0 else 0)
 
-# ------------------------------------------------------------------- хост
 func _run_host() -> void:
 	Net.my_name = "Хост"
 	_check(Net.host_game(), "порт открыт")
-	# Настенные часы, не число кадров: headless крутит process_frame то
-	# быстрее, то медленнее 60 Гц под нагрузкой, а ENet-рукопожатие всё
-	# равно займёт своё реальное время (см. тот же приём в net_peer.gd).
 	var wait_started := Time.get_ticks_msec()
 	while Net.lobby.size() < 2 and Time.get_ticks_msec() - wait_started < 15000:
 		await _frames(1)
@@ -72,7 +53,6 @@ func _run_host() -> void:
 		% [st["snap_out"], st["cmd_in"], st["cmd_late"]])
 	_check(int(st["cmd_in"]) > 0, "ввод клиента доходит сквозь потери")
 
-	# ---- обрыв: клиент уходит, хост обязан прибраться ---------------------
 	print("  ждём обрыва связи с клиентом…")
 	var leave_wait_started := Time.get_ticks_msec()
 	while Net.lobby.size() > 1 and Time.get_ticks_msec() - leave_wait_started < 15000:
@@ -83,13 +63,8 @@ func _run_host() -> void:
 	_check(game.remote_players.is_empty(), "игрок убран из партии")
 	_check(Net.command_of(2).is_empty(), "ввод отключившегося стёрт")
 	if remote_tank != null:
-		# Танк-призрак: до правки он ехал по последней команде до конца
-		# партии. Проверять сдвиг оказалось неверно — мёртвый корпус
-		# всё равно расталкивает физика. Правильная проверка: его вообще
-		# нет в мире.
 		_check(not game.world.tanks.has(remote_tank), "танк ушедшего убран из мира")
 
-# ----------------------------------------------------------------- клиент
 func _run_client() -> void:
 	Net.my_name = "Клиент"
 	_check(Net.join_game("127.0.0.1"), "подключение начато")
@@ -100,7 +75,6 @@ func _run_client() -> void:
 		return
 	_dismiss_perks()
 
-	# Копим статистику под потерями.
 	await _frames(420)
 	var st := Net.stats()
 	var total: int = int(st["snap_in"]) + int(st["snap_lost"])
@@ -115,7 +89,6 @@ func _run_client() -> void:
 	_check(loss_pct > 10.0 and loss_pct < 45.0,
 		"измеренные потери близки к заданным 25%% (вышло %.0f%%)" % loss_pct)
 
-	# Главное: картинка не встала. Танки должны двигаться, несмотря на дыры.
 	var before := _positions()
 	await _frames(90)
 	var moved := 0
@@ -125,7 +98,6 @@ func _run_client() -> void:
 			moved += 1
 	_check(moved > 0, "мир продолжает двигаться под потерями (танков сдвинулось %d)" % moved)
 
-	# Уходим посреди партии — хост это проверит у себя.
 	print("  клиент отключается посреди партии")
 	Net.leave()
 	await _frames(120)

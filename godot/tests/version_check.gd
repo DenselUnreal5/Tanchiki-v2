@@ -1,13 +1,3 @@
-# ============================================================================
-# version_check.gd — версия сборки задана и не разъехалась.
-#
-# Номер версии живёт в трёх местах: project.godot, свойства .exe и надпись
-# в меню. Разойтись им нельзя: отчёт игрока привязывается к тому, что он
-# видит на экране, а разбирается по тому, что записано в сборке.
-#
-# Запуск:
-#   godot --headless --path godot tests/version_check.tscn
-# ============================================================================
 extends Node
 
 var failures := 0
@@ -17,7 +7,6 @@ func _ready() -> void:
 	print("версия в project.godot: «%s»" % ver)
 	_check(ver != "", "версия задана")
 
-	# Формат «числа через точку»: по нему сравнивают сборки между собой.
 	var parts := ver.split(".")
 	var numeric := parts.size() >= 2
 	for p in parts:
@@ -25,7 +14,6 @@ func _ready() -> void:
 			numeric = false
 	_check(numeric, "формат версии пригоден для сравнения (%s)" % ver)
 
-	# То же число обязано попасть в свойства .exe.
 	var cfg := ConfigFile.new()
 	var err := cfg.load("res://export_presets.cfg")
 	if err != OK:

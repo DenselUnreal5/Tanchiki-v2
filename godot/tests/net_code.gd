@@ -1,13 +1,3 @@
-# ============================================================================
-# net_code.gd — лобби: готовность гостей, разбор ссылки «Join Game».
-#
-# Путь через Steam (createLobby/requestLobbyList/приглашения) headless не
-# проверить — нужен запущенный клиент Steam. Здесь только та логика, что от
-# Steam не зависит.
-#
-# Запуск:
-#   godot --headless --path godot tests/net_code.tscn
-# ============================================================================
 extends Node
 
 var failures := 0
@@ -19,7 +9,6 @@ func _ready() -> void:
 	print("=== ПРОВЕРКА ЛОББИ ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
 
-## all_guests_ready(): нужен хост, хотя бы один гость и готовность всех гостей.
 func _check_guests_ready() -> void:
 	var role0 := Net.role
 	var lobby0 := Net.lobby.duplicate(true)
@@ -44,12 +33,10 @@ func _check_guests_ready() -> void:
 	Net.role = role0
 	Net.lobby = lobby0
 
-## «+connect_lobby <id>» из аргументов запуска. Без него — 0 (обычный старт),
-## и никакого автоподключения не затевается.
 func _check_connect_lobby() -> void:
 	_check(Net._parse_connect_lobby() == 0, "без «+connect_lobby» автоджойна нет")
 	_check(Net.pending_invite.is_empty(), "на старте нет висящего приглашения")
-	Net.accept_pending_invite()  # пусто — просто не должно падать
+	Net.accept_pending_invite()
 	_check(Net.role == "" and Net.lobby_pending == "", "accept без приглашения — no-op")
 
 func _check(ok: bool, what: String) -> void:

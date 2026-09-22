@@ -1,17 +1,3 @@
-# ============================================================================
-# cannon_card.gd — одна карточка пушки во вкладке «Гараж» Хаба. Раньше
-# собиралась в ui_root.gd:_cannon_card() на каждую пушку заново; теперь
-# сцена — размер и кегль значка-эмодзи редактируются в инспекторе.
-#
-# Значок — эмодзи-Label (🔫/❄️/🧪), не PerkIconView: так было и раньше,
-# у пушек нет отдельных векторных иконок в PerkIcons.
-#
-# Одна кнопка на два состояния (как и раньше): «Купить · N 🪙» / «Надеть»
-# (или задизейбленное «Надето») — какое из двух решает hub.gd по Prof.*.
-#
-# @tool: живой предпросмотр. Автозагрузки (Prof/I18n) не читаются — Hub
-# передаёт уже готовые строки/числа/цвета.
-# ============================================================================
 @tool
 class_name CannonCard
 extends PanelContainer
@@ -70,7 +56,6 @@ func _ready() -> void:
 func _on_action_pressed() -> void:
 	action_pressed.emit()
 
-## Донор стилбоксов/шрифта — тот же приём, что в cosmetic_card.gd/main_menu.gd.
 func _style_button(target: Button, donor: Button) -> void:
 	for prop in ["normal", "hover", "pressed", "disabled"]:
 		var sb := donor.get_theme_stylebox(prop)
@@ -104,8 +89,6 @@ func set_data(icon_text: String, icon_color: Color, name_text: String, state_tex
 	var border := Cfg.UI_ACCENT_DIM if equipped else (Color(Cfg.UI_GOLD, 0.45) if can_buy else Cfg.UI_BORDER)
 	add_theme_stylebox_override("panel", UiKit.card_style(border))
 
-	# card_id == "cannon_<id>" — тот же ключ, что в PerkIcons.TEXTURE_PATHS.
-	# Есть растровый значок — рисуем его поверх пустой подписи, нет — эмодзи.
 	var has_tex := PerkIcons.texture_of(card_id) != null
 	_icon.text = "" if has_tex else icon_text
 	_icon.add_theme_color_override("font_color", icon_color)

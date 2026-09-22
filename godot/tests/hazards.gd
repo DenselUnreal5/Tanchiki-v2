@@ -1,14 +1,3 @@
-# ============================================================================
-# hazards.gd — опасный рельеф: вода, зыбучий песок, барханы.
-#
-# Тайл, который «должен вредить», обязан вредить измеримо. В этом проекте уже
-# дважды находился код, который выглядел рабочим и не исполнялся ни разу,
-# поэтому здесь всё проверяется числом: сколько HP снял тайл за секунду и
-# насколько просел ход.
-#
-# Запуск:
-#   godot --headless --path godot tests/hazards.tscn
-# ============================================================================
 extends Node
 
 var failures := 0
@@ -33,7 +22,6 @@ func _ready() -> void:
 	var map: GameMap = world.map
 	var tank: Tank = game.players[0].tank
 
-	# ---- пустошь действительно пустошь ---------------------------------
 	var counts := _count(map)
 	print("пустошь: барханов %d, зыбучки %d, воды %d, асфальта %d"
 		% [counts[Cfg.T_DUNE], counts[Cfg.T_QUICKSAND], counts[Cfg.T_WATER],
@@ -43,7 +31,6 @@ func _ready() -> void:
 	_check(counts[Cfg.T_WATER] > 0, "оазисы на карте есть")
 	_check(world.road_kind == "dirt", "дороги пустоши — грунтовка (%s)" % world.road_kind)
 
-	# ---- урон от воды и зыбучки ----------------------------------------
 	var water_dps := _hazard_dps(world, tank, Cfg.T_WATER, [])
 	print("вода: %.0f урона/с" % water_dps)
 	_check(water_dps > 5.0, "вода наносит урон")
@@ -60,7 +47,6 @@ func _ready() -> void:
 	print("зыбучка с «Амфибией»: %.0f урона/с" % quick_amph)
 	_check(quick_amph > 5.0, "«Амфибия» от зыбучки НЕ спасает")
 
-	# ---- ход по покрытиям ----------------------------------------------
 	var road := _surface_speed(world, tank, Cfg.T_ROAD)
 	var sand := _surface_speed(world, tank, Cfg.T_SAND)
 	var dune := _surface_speed(world, tank, Cfg.T_DUNE)
@@ -71,7 +57,6 @@ func _ready() -> void:
 	_check(quick < dune, "зыбучка медленнее бархана")
 	_check(road > sand, "дорога быстрее песка даже без асфальта")
 
-	# ---- погода по локациям --------------------------------------------
 	for loc_id in Locations.ORDER:
 		var loc := Locations.get_location(loc_id)
 		var seen := _weather_run(loc)
@@ -88,9 +73,6 @@ func _ready() -> void:
 	print("=== ПРОВЕРКА РЕЛЬЕФА ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
 
-# ------------------------------------------------------------------ замеры
-## Урон в секунду от стояния на тайле. Танк держится живым принудительно:
-## считается скорость урона, а не то, сколько он протянет.
 func _hazard_dps(world: World, tank: Tank, tile: int, perks: Array) -> float:
 	var spot := _find(world.map, tile)
 	if spot.x < 0:
@@ -112,7 +94,6 @@ func _hazard_dps(world: World, tank: Tank, tile: int, perks: Array) -> float:
 	tank.hp = tank.max_hp
 	return lost
 
-## Множитель хода на тайле.
 func _surface_speed(world: World, tank: Tank, tile: int) -> float:
 	var spot := _find(world.map, tile)
 	if spot.x < 0:
@@ -122,8 +103,6 @@ func _surface_speed(world: World, tank: Tank, tile: int) -> float:
 	tank._update_surface(world)
 	return tank.surface_speed
 
-## Триста смен погоды подряд: если запрещённое условие вообще может выпасть,
-## за столько попыток оно выпадет.
 func _weather_run(loc: Dictionary) -> Array:
 	var wx := WeatherSystem.new(12345, {"allowed": loc.get("weather", [])})
 	var seen := {}

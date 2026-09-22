@@ -1,16 +1,3 @@
-# ============================================================================
-# art_sheet.gd — выгрузка каталога графики.
-#
-# В игре нет ни одной текстуры: тайлы, танки и эффекты рисуются примитивами
-# в _draw(). Поэтому «посмотреть файлы ассетов» нельзя — вместо этого сцена
-# прогоняет НАСТОЯЩИЙ рендерер (WorldView) по синтетическим кусочкам карты
-# и по танкам каждого типа и сохраняет то, что он нарисовал.
-#
-# Запуск (с окном, не headless — иначе SubViewport отдаёт пустоту):
-#   godot --path godot tests/art_sheet.tscn
-#
-# Результат: PNG плюс manifest.json в user://artsheet.
-# ============================================================================
 extends Node
 
 const OUT := "user://artsheet/"
@@ -27,7 +14,6 @@ func _ready() -> void:
 
 	var level: Dictionary = LevelGen.generate(1, "ffa")
 	ps = PlayerState.new(0, "P1", "p1", null)
-	# puppet — мир без спавна: танки и предметы расставляем сами.
 	world = World.new({
 		"map": level["map"], "level": level, "mode": "ffa",
 		"difficulty": "medium", "players": [ps], "puppet": true,
@@ -50,7 +36,6 @@ func _ready() -> void:
 	print("ГОТОВО: изображений ", manifest.size())
 	get_tree().quit(0)
 
-# ------------------------------------------------------------------ съёмка
 func _shot(id: String, size: Vector2i, group: String, title: String, note: String) -> void:
 	vp.size = size
 	ps.viewport = Rect2(0.0, 0.0, float(size.x), float(size.y))
@@ -88,7 +73,6 @@ func _box(m: GameMap, r0: int, r1: int, c0: int, c1: int, tile: int) -> void:
 		for c in range(c0, c1 + 1):
 			m.set_tile(r, c, tile)
 
-## Ставит синтетическую карту и план города вместо настоящих.
 func _use(m: GameMap, plan: Dictionary) -> void:
 	world.map = m
 	ps.map = m
@@ -118,9 +102,6 @@ func _tiles() -> void:
 	_use(m, empty_plan)
 	await _shot("tile_brick", VIEW9, "env", "Здание (T_BRICK)",
 		"Пять вариантов крыши по (строка, столбец). Разрушается")
-	# Вид крыши и материал постройки — одно число. Чтобы каталог показал все
-	# пять видов по отдельности, выгружаем карту вариантов: смещение камеры
-	# на этом кадре нулевое, поэтому тайл (r, c) лежит по пикселям (c*32, r*32).
 	var variants := []
 	for r in range(2, 7):
 		for c in range(2, 7):
@@ -203,7 +184,6 @@ func _tiles() -> void:
 	await _shot("tile_base_e", VIEW9, "env", "База противника (T_BASE_E)",
 		"Один тайл, режим «Захват флага»")
 
-# ------------------------------------------------------------------- танки
 const TANK_VIEW := Vector2i(160, 128)
 
 func _tank_shot(id: String, group: String, title: String, note: String,
@@ -217,15 +197,11 @@ func _tank_shot(id: String, group: String, title: String, note: String,
 		"max_hp": 100.0, "speed": 2.0, "fire_rate": 30,
 		"chassis": chassis, "color_key": color_key, "cosmetics": cosmetics,
 	})
-	# Стволом вправо: так виден и силуэт корпуса, и вылет ствола.
 	t.angle = 0.0
 	t.body_angle = 0.0
 	t.turret_angle = 0.0
-	# Кольцо неуязвимости после спавна для каталога — помеха: оно закрывает
-	# корпус ровно тем, что к внешнему виду танка отношения не имеет.
 	t.spawn_protect = 0
 	world.tanks = [t]
-	# Танк-«зритель»: у своего танка рендерер не рисует ни имени, ни полоски HP.
 	ps.tank = t
 	await _shot(id, TANK_VIEW, group, title, note)
 	world.tanks = []
@@ -267,7 +243,6 @@ func _tanks() -> void:
 			String(tu["name"]), "цена %d" % int(tu["price"]),
 			"standard", "p1", {"turret": String(tu["id"])})
 
-# ------------------------------------------------------------------- сцены
 const SCENE_VIEW := Vector2i(640, 400)
 
 func _scenes(level: Dictionary) -> void:
@@ -278,9 +253,6 @@ func _scenes(level: Dictionary) -> void:
 	world.tanks = []
 	ps.tank = null
 
-	# Точки съёмки выбираются не на глаз, а замером окна 19x11 тайлов:
-	# «город» — где больше всего асфальта и застройки и нет воды,
-	# «река» — где вода сходится с переправой.
 	var city := _find_spot(real_map, false)
 	var river := _find_spot(real_map, true)
 
@@ -309,7 +281,6 @@ func _scenes(level: Dictionary) -> void:
 	await _shot("scene_river", SCENE_VIEW, "scene", "Река, набережная и мост",
 		"фрагмент карты 640x400 px = 20x12.5 тайлов")
 
-	# Локации: одна и та же точка съёмки на каждой земле.
 	for loc_id in Locations.ORDER:
 		var lvl := LevelGen.generate(1, "ffa", -1, loc_id)
 		var m: GameMap = lvl["map"]
@@ -320,7 +291,6 @@ func _scenes(level: Dictionary) -> void:
 		ps.tank = null
 		ps.camera = _find_spot(m, false)
 		var loc := Locations.get_location(loc_id)
-		# Оазис снимается отдельно: он маленький и в общий кадр не попадает.
 		var oasis := _find_tile_spot(m, Cfg.T_QUICKSAND)
 		if oasis.x >= 0:
 			var keep := ps.camera
@@ -333,8 +303,6 @@ func _scenes(level: Dictionary) -> void:
 			"%s %s" % [String(loc["icon"]), String(loc["name"])],
 			"музыка: music/%s" % String(loc["music"]))
 
-## Ищет окно карты с нужным содержимым. water — искать переправу через реку,
-## иначе плотную застройку с улицами.
 func _find_spot(m: GameMap, water_wanted: bool) -> Vector2:
 	var best := Vector2(m.width * 0.5, m.height * 0.5)
 	var best_score := -999999
@@ -368,7 +336,6 @@ func _find_spot(m: GameMap, water_wanted: bool) -> Vector2:
 	return best
 
 
-## Первая клетка нужного тайла — в пикселях, для наводки камеры.
 func _find_tile_spot(m: GameMap, tile: int) -> Vector2:
 	for r in range(2, m.rows - 2):
 		for c in range(2, m.cols - 2):

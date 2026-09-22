@@ -1,36 +1,14 @@
-# ============================================================================
-# perk_bench.gd — замер боевой ценности перков.
-#
-# perks_check отвечает на вопрос «перк вообще что-то делает?». Этот тест
-# отвечает на другой: «а в бою от него есть толк?». Разница между ними —
-# ровно разница между строкой в таблице и перком.
-#
-# Как считается. Одна и та же партия разыгрывается несколько раз: карта,
-# расстановка и затравка мира заданы жёстко (rng_seed), меняется только
-# набор перков у игрока. За танк играет обычный «мозг» бота — эталонный
-# игрок средней руки, одинаковый во всех прогонах.
-#
-# Запуск:
-#   godot --headless --path godot tests/perk_bench.tscn
-# ============================================================================
 extends Node
 
-## Тиков на прогон: 60 секунд боя.
 const TICKS := 3600
-## Сколько разных стартов усредняем. Переопределяется PERK_BENCH_SEEDS —
-## одним стартом удобно проверять сам тест, не дожидаясь получаса.
 const SEEDS := 6
 
 var seeds := SEEDS
 var seed0 := 0
 var out_path := ""
 var ids: Array = IDS.duplicate()
-## Уровень профиля на время замера. Профиль растёт от боя к бою, а вместе
-## с ним и сила врагов: без заморозки поздние прогоны идут против других
-## противников, и разница перков смешивается с разницей сложности.
 const FROZEN_LEVEL := 5
 
-## Замеряемый набор: двадцать перков второй волны плюс контроль без перков.
 const IDS := [
 	"",
 	"heat_sink", "thermal", "quick_vent", "heavy_shell", "light_shell",
@@ -40,7 +18,6 @@ const IDS := [
 	"coolant", "overclock", "grip", "breaker", "silencer", "smoke", "repair",
 ]
 
-## Схема управления «как бот». Активную способность жмёт сразу, как откатится.
 class Autopilot:
 	var brain: BotBrain
 
@@ -64,15 +41,10 @@ func _ready() -> void:
 	var env := OS.get_environment("PERK_BENCH_SEEDS")
 	if env != "":
 		seeds = maxi(1, int(env))
-	# Замер режется на части и раскладывается по процессам: одно ядро считает
-	# 21 набор по полчаса, четыре — за четверть этого.
 	var env0 := OS.get_environment("PERK_BENCH_SEED0")
 	if env0 != "":
 		seed0 = int(env0)
 	out_path = OS.get_environment("PERK_BENCH_OUT")
-	# Список наборов можно подменить снаружи: «-» означает контроль без перков.
-	# Нужно для диагностики — например, чтобы прогнать контроль дважды и
-	# увидеть, не зависит ли исход от порядка прогонов.
 	var env_ids := OS.get_environment("PERK_BENCH_IDS")
 	if env_ids != "":
 		ids = []
@@ -98,7 +70,6 @@ func _ready() -> void:
 		print("сырые числа: ", out_path)
 	get_tree().quit(0)
 
-# --------------------------------------------------------------------- прогон
 func _run(seed_index: int, perk_id: String) -> Dictionary:
 	game.ui.settings["mode"] = "ffa"
 	game.ui.settings["game_type"] = "single"
@@ -110,10 +81,6 @@ func _run(seed_index: int, perk_id: String) -> Dictionary:
 
 	var player = game.players[0]
 	player.scheme = Autopilot.new(game.world.rng)
-	# Массив перков переиспользуется, а не подменяется: танк держит на него
-	# ссылку с момента рождения, и присваивание нового списка игроку оставило
-	# бы танк с прежним — первый прогон этого теста выдал всем двадцати перкам
-	# одинаковые цифры именно поэтому.
 	player.perk_ids.clear()
 	if perk_id != "":
 		player.perk_ids.append(perk_id)
@@ -124,8 +91,6 @@ func _run(seed_index: int, perk_id: String) -> Dictionary:
 	_verify(player, perk_id)
 
 	var world: World = game.world
-	# Постройки считаем по сигналу: у игрока такого счётчика нет, а именно
-	# он показывает, работают ли перки на материалы.
 	var walls := {"n": 0}
 	world.stat.connect(func(key: String, value: int, _kind: String):
 		if key == "bricksDestroyed" or key == "concreteDestroyed":
@@ -142,8 +107,6 @@ func _run(seed_index: int, perk_id: String) -> Dictionary:
 		if t != null:
 			if t.alive:
 				alive_ticks += 1
-				# Считаем только просадки: возрождение поднимает HP скачком,
-				# и без этой проверки оно засчиталось бы как отрицательный урон.
 				if t.hp < prev_hp:
 					taken += prev_hp - t.hp
 			prev_hp = t.hp
@@ -155,7 +118,6 @@ func _run(seed_index: int, perk_id: String) -> Dictionary:
 		if pending:
 			game._process_perk_queue()
 			_dismiss_perks()
-			# Уровень мог выдать перк — набор держим ровно тем, что замеряем.
 			player.perk_ids.clear()
 			if perk_id != "":
 				player.perk_ids.append(perk_id)
@@ -172,16 +134,11 @@ func _run(seed_index: int, perk_id: String) -> Dictionary:
 		"taken": taken / minutes,
 		"walls": float(walls["n"]) / minutes,
 		"alive": float(alive_ticks) / float(maxi(1, ticks)),
-		# Длительность партии обязана попасть в отчёт: показатели считаются
-		# «в минуту», и если партия обрывается по лимиту фрагов на разной
-		# секунде, то и знаменатель у прогонов разный.
 		"ticks": float(ticks),
 		"shots": (float(tank.shots_fired) / minutes) if tank != null else 0.0,
 		"overheats": (float(tank.overheats) / minutes) if tank != null else 0.0,
 	}
 
-## Перк обязан доехать до танка. Молчаливая потеря набора превращает замер
-## в двадцать одинаковых строк — и выглядит это как «перки ничего не решают».
 func _verify(player, perk_id: String) -> void:
 	if perk_id == "":
 		return
@@ -210,7 +167,6 @@ func _dismiss_perks() -> void:
 		guard += 1
 		game._on_perk_chosen(game.perk_player, "")
 
-# ---------------------------------------------------------------------- отчёт
 func _avg(rows: Array, key: String) -> float:
 	var s := 0.0
 	for r in rows:
@@ -224,8 +180,6 @@ func _sd(rows: Array, key: String) -> float:
 		s += pow(float(r[key]) - m, 2.0)
 	return sqrt(s / float(maxi(1, rows.size())))
 
-## Парная разница: перк минус контроль на ТОМ ЖЕ старте. Разброс между
-## картами куда больше разницы от перка, и без спаривания она в нём тонет.
 func _paired(id: String, key: String) -> Array:
 	var base: Array = results[""]
 	var rows: Array = results[id]
@@ -272,7 +226,6 @@ func _report() -> void:
 		var dd := _paired(id, "dealt")
 		var dt := _paired(id, "taken")
 		var dw := _paired(id, "walls")
-		# Оценка в долях от контроля: разные величины иначе не складываются.
 		var score := 0.0
 		score += _mean(dk) / maxf(0.01, bk) * 50.0
 		score += _mean(dd) / maxf(1.0, bd) * 30.0

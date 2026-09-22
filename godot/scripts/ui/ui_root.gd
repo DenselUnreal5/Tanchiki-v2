@@ -1,10 +1,3 @@
-# ============================================================================
-# ui_root.gd — экраны вне игрового процесса: меню, пауза, выбор перка,
-# галерея перков, гараж, статистика, достижения, задания, итоги партии.
-#
-# Ui ничего не знает о правилах игры: он только показывает данные и сообщает
-# о действиях пользователя сигналами.
-# ============================================================================
 class_name UiRoot
 extends Control
 
@@ -18,28 +11,19 @@ signal garage_changed
 signal daily_reward_claimed(reward: int)
 signal quit_requested
 
-## Сколько вариантов показывать при повышении уровня.
 const PERK_CHOICES := 3
 
-## Предел мёртвой зоны стика: половина хода. Выше — стик уже не отзывается.
 const MAX_DEADZONE := 0.5
 
-## Версия сборки. Источник один — project.godot, чтобы показанное на экране
-## и записанное в свойствах .exe не разъезжались.
 static func game_version() -> String:
 	return String(ProjectSettings.get_setting("application/config/version", "0.0.0"))
 
 var settings := {
 	"game_type": "single", "mode": "ffa", "difficulty": "medium",
-	"level": 1,
-	# "auto" — погода, время суток и локация выбираются сами.
+	"level": -1,
 	"weather": "auto", "daytime": "auto", "location": "auto",
 }
 
-## Главное меню — сцена (scenes/ui/main_menu.tscn, см. main_menu.gd).
-## _menu/_menu_settings* — тонкие ссылки на её узлы (%StartBtn и т.д.),
-## заведённые в _build_menu(): остальной UiRoot обращается к ним так же,
-## как раньше, когда меню строилось прямо здесь кодом.
 var main_menu: MainMenu
 var _menu: Control
 var _menu_settings: Control
@@ -51,13 +35,8 @@ var _net: Control
 var _net_body: VBoxContainer
 var _net_sub: RichTextLabel
 var _net_error := ""
-## "" — верхний выбор Создать/Присоединиться, "create" — ввод названия
-## комнаты, "join" — поиск + список лобби.
 var _net_mode := ""
-## Название комнаты, вводимое на экране создания.
 var _net_room_name := ""
-## Строка поиска на экране «Присоединиться» — фильтрует
-## Net.lobby_browser_results на клиенте (см. _build_net_join()).
 var _net_search := ""
 
 var _settings: Control
@@ -74,15 +53,8 @@ var _gameover_panel: ThemedPanel
 var _gameover_title: Label
 var _gameover_body: VBoxContainer
 
-## Галерея перков, Гараж и Достижения объединены в одну вкладочную оболочку —
-## теперь сцена (scenes/ui/hub.tscn, см. hub.gd) вместо кода здесь. _hub —
-## тонкая ссылка на неё (= hub), под старым именем, которым пользуются
-## handle_cancel()/hide_all_overlays()/тесты (tests/click_check.gd,
-## tests/ui_nav_check.gd).
 var hub: Hub
 var _hub: Control
-## Только чтение — реальное состояние живёт на hub.active_tab; тест
-## game.ui.get("_hub_active_tab") продолжает читать это же имя.
 var _hub_active_tab: String:
 	get: return hub.active_tab if hub != null else "gallery"
 
@@ -97,18 +69,15 @@ var _confirm: ConfirmationDialog
 
 var _last_gameover := {}
 
-## Навигация геймпадом/клавиатурой: тема с рамкой фокуса, подсказки по
-## кнопкам и стек фокуса для возврата при закрытии оверлеев.
 var _nav_theme: Theme
 var _pad_hints: Array = []
 var _focus_stack: Array = []
 var _menu_focus_cache := {}
-## Кнопки, на которые ставится фокус при открытии экрана.
 var _menu_start_btn: Button
 var _pause_resume_btn: Button
 var _gameover_replay_btn: Button
-## Игрок, которому сейчас показан выбор перка — для отмены по «назад».
 var _perk_player = null
+var _perk_pending_id := ""
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -143,16 +112,11 @@ func _ready() -> void:
 		if ov != null:
 			ov.visibility_changed.connect(_on_menu_overlay_visibility.bind(ov))
 
-	# Тема на весь интерфейс несёт ровно одну запись — рамку фокуса кнопки.
-	# Её мы и подменяем при смене режима навигации: кольцо для геймпада,
-	# пусто для мыши. add_theme_stylebox_override у самих кнопок больше нет
-	# (ui_kit.gd:_style_button), поэтому тема доходит до всех.
 	_nav_theme = Theme.new()
 	theme = _nav_theme
 	Sets.ui_input_mode_changed.connect(_apply_nav_mode)
 	_apply_nav_mode(Sets.pad_ui)
 
-# ---------------------------------------------------------------- каркас
 func _make_overlay(dim: bool) -> Control:
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -163,10 +127,6 @@ func _make_overlay(dim: bool) -> Control:
 	add_child(root)
 	return root
 
-# =============================================== навигация геймпадом/клавой
-## Подсказка по кнопкам геймпада внизу экрана. Видна только в режиме
-## навигации (см. _apply_nav_mode). Каждая штука регистрируется в _pad_hints.
-## adjust — показывать ли «‹↔› изменить» (для экранов с ползунками/списками).
 func _pad_hint_strip(adjust: bool = false) -> RichTextLabel:
 	var parts := [
 		"‹A› " + I18n.t("nav.select", {}, "выбрать"),
@@ -181,28 +141,20 @@ func _pad_hint_strip(adjust: bool = false) -> RichTextLabel:
 	_pad_hints.append(strip)
 	return strip
 
-## Смена режима навигации: кольцо фокуса и подсказки по кнопкам видны только
-## когда последний ввод был не мышью.
 func _apply_nav_mode(pad_ui: bool) -> void:
 	if _nav_theme != null:
 		_nav_theme.set_stylebox("focus", "Button",
 			UiKit.focus_ring() if pad_ui else StyleBoxEmpty.new())
-		# Слайдеры (громкость/деадзона/тряска и т.п.) — не Button, без этой
-		# записи кольцо фокуса на них не рисуется вовсе, падает на
-		# невзрачную рамку движка по умолчанию.
 		_nav_theme.set_stylebox("focus", "HSlider",
 			UiKit.focus_ring() if pad_ui else StyleBoxEmpty.new())
 	for strip in _pad_hints:
 		if is_instance_valid(strip):
 			strip.visible = pad_ui
 
-## Отложенный захват фокуса: большинство экранов сначала строят детей, потом
-## ставят visible в том же кадре, а раскладка меню ещё и через call_deferred.
 func _grab(ctrl) -> void:
 	if is_instance_valid(ctrl):
 		ctrl.grab_focus.call_deferred()
 
-## Первый видимый фокусируемый Control в поддереве.
 func _first_focusable(node: Node) -> Control:
 	if node is Control and node.visible and node.focus_mode != Control.FOCUS_NONE:
 		return node
@@ -212,8 +164,6 @@ func _first_focusable(node: Node) -> Control:
 			return f
 	return null
 
-## Ищет потомка с заданной meta-парой — восстановить фокус на ту же
-## карточку после пересборки тела вкладки (см. _switch_hub_tab).
 func _find_by_meta(node: Node, meta_key: String, value: String) -> Control:
 	if node is Control and node.has_meta(meta_key) and String(node.get_meta(meta_key)) == value:
 		return node
@@ -223,8 +173,6 @@ func _find_by_meta(node: Node, meta_key: String, value: String) -> Control:
 			return f
 	return null
 
-## Кнопка вкладки по её ключу (см. UiKit.plain_tabs: set_meta("tab_key", ...)) —
-## искать по ключу, а не по тексту подписи, который зависит от языка.
 func _find_tab_button(row: Control, key: String) -> Control:
 	for c in row.get_children():
 		if c.has_meta("tab_key") and String(c.get_meta("tab_key")) == key:
@@ -241,8 +189,6 @@ func _pop_focus() -> void:
 	if is_instance_valid(prev):
 		_grab(prev)
 
-## Пока открыт оверлей, вызванный из меню, кнопки меню за его подложкой не
-## должны ловить фокус с крестовины (мышь-то ловит подложка, а фокус — нет).
 func _set_menu_focusable(on: bool) -> void:
 	if on:
 		for id in _menu_focus_cache:
@@ -251,20 +197,14 @@ func _set_menu_focusable(on: bool) -> void:
 				c.focus_mode = _menu_focus_cache[id]
 		_menu_focus_cache.clear()
 	elif _menu_focus_cache.is_empty() and _menu != null:
-		# Уже отключено вложенным оверлеем — не перекэшировать (иначе в кэш
-		# попадёт FOCUS_NONE и восстановить будет нечего).
 		_cache_focus_off(_menu)
 
-## Есть ли сейчас открытый оверлей, вызванный из меню.
 func _any_menu_overlay_open() -> bool:
 	for ov in [_settings, _net, _stats, _daily, _hub]:
 		if ov != null and ov.visible:
 			return true
 	return false
 
-## Открытие/закрытие оверлея из меню: подхват и возврат фокуса, глушение
-## фокуса кнопок меню за подложкой. Централизованно через visibility_changed,
-## чтобы не расставлять по десятку open_/close_ методов.
 func _on_menu_overlay_visibility(ov: Control) -> void:
 	if ov.visible:
 		_push_focus()
@@ -283,13 +223,7 @@ func _cache_focus_off(node: Node) -> void:
 	for c in node.get_children():
 		_cache_focus_off(c)
 
-## _chain_horizontal/_chain_vertical переехали в UiKit.chain_horizontal/
-## chain_vertical — общий дом для UiRoot и MainMenu (main_menu.gd), без
-## циклической зависимости между ними.
 
-## «Назад» (Esc / кнопка B): закрывает верхний открытый оверлей. Возвращает
-## true, если что-то закрыл. Вызывается из game.gd:_unhandled_input и
-## заменяет прежние ветки закрытия по Esc, которые жили там.
 func handle_cancel() -> bool:
 	if _perk != null and _perk.visible:
 		perk_chosen.emit(_perk_player, "")
@@ -312,7 +246,6 @@ func handle_cancel() -> bool:
 	if _pause != null and _pause.visible:
 		resume_requested.emit()
 		return true
-	# Раскрытая панель настроек боя в меню — сворачиваем.
 	if _menu != null and _menu.visible and _menu_settings_panel != null \
 			and _menu_settings_panel.visible:
 		_menu_settings_panel.visible = false
@@ -320,14 +253,8 @@ func handle_cancel() -> bool:
 		_layout_menu()
 		_grab(_menu_settings_btn)
 		return true
-	# Голое главное меню и экран итогов — «назад» не делает ничего.
 	return false
 
-## L1/R1 геймпада переключают активную вкладку в открытых Настройках или
-## Хабе (Галерея/Гараж/Достижения) — действия заводит settings.gd:
-## _ensure_input_actions. В бою те же кнопки заняты рывком/авиаударом
-## (сырой опрос в GamepadScheme, не через action) — конфликта нет, вкладки
-## открываются только на паузе/в меню, где танк не тикает.
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event.is_action_pressed("tab_next") or event.is_action_pressed("tab_prev")):
 		return
@@ -339,7 +266,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		hub.switch_tab(_neighbor_tab_key(hub.tab_items(), hub.active_tab, dir))
 		get_viewport().set_input_as_handled()
 
-## Соседний ключ вкладки по кругу: direction = 1 — следующая, -1 — предыдущая.
 func _neighbor_tab_key(items: Array, current: String, direction: int) -> String:
 	var idx := 0
 	for i in items.size():
@@ -349,15 +275,6 @@ func _neighbor_tab_key(items: Array, current: String, direction: int) -> String:
 	idx = (idx + direction + items.size()) % items.size()
 	return String(items[idx]["key"])
 
-## Свой повтор ui_down/ui_up, пока направление удерживается: встроенный
-## повтор Godot у аналогового стика (в отличие от эха клавиатуры на
-## удержание клавиши) не настолько надёжен — зажатый стик мог не
-## докручивать длинные списки (Настройки/Гараж/Достижения/Галерея) дальше
-## первого шага. Только вертикаль: горизонталь занята слайдерами/
-## choice_row («‹↔› изменить») и вводом текста, трогать её не нужно.
-## Работает поверх обычной навигации, не вместо неё — первый переход
-## фокуса как и раньше делает сам Godot по первому нажатию, задержка
-## перед стартом повтора не даёт задвоить этот самый первый шаг.
 const _NAV_REPEAT_DELAY := 0.35
 const _NAV_REPEAT_INTERVAL := 0.1
 var _nav_repeat_dir := ""
@@ -389,9 +306,6 @@ func _advance_focus(dir: String) -> void:
 	if nxt != null:
 		nxt.grab_focus()
 
-## @param title_key ключ перевода заголовка. Именно ключ, а не готовая
-##        строка: заголовок и кнопка «Закрыть» собираются один раз при
-##        запуске, и при смене языка их надо перевести заново.
 func _overlay_body(root: Control, title_key: String, title_fallback: String,
 		sub: Control, on_close: Callable, width: float = 760.0) -> VBoxContainer:
 	var title_text := I18n.t(title_key, {}, title_fallback)
@@ -448,14 +362,6 @@ func _notification(what: int) -> void:
 		_resize_overlays()
 		_layout_menu()
 
-# ================================================================== МЕНЮ
-## Главное меню — теперь Godot-сцена (scenes/ui/main_menu.tscn), а не код:
-## её содержимое строит main_menu.gd (класс MainMenu). UiRoot заводит
-## сигналы и тонкие ссылки на её узлы (%StartBtn и т.д.) под теми же
-## именами полей, что были у частей меню, построенных прямо здесь раньше —
-## handle_cancel()/hide_all_overlays()/_refresh_screens() и тесты
-## (tests/shot.gd, tests/ui_nav_check.gd, tests/menu_fit.gd) продолжают
-## работать без изменений.
 func _build_menu() -> void:
 	main_menu = preload("res://scenes/ui/main_menu.tscn").instantiate()
 	main_menu.settings = settings
@@ -471,8 +377,6 @@ func _build_menu() -> void:
 	main_menu.start_pressed.connect(func(): start_requested.emit())
 	main_menu.nav_pressed.connect(_on_menu_nav)
 
-## Назначения плиток нижней сетки меню — раньше были Callable'ами, собранными
-## прямо в _build_menu(), теперь MainMenu просто сообщает id нажатой плитки.
 func _on_menu_nav(id: String) -> void:
 	match id:
 		"garage": open_garage()
@@ -511,7 +415,6 @@ func hide_all_overlays() -> void:
 		if c != null:
 			c.visible = false
 
-# ================================================================== ПАУЗА
 func _build_pause() -> void:
 	_pause = _make_overlay(true)
 	var center := CenterContainer.new()
@@ -557,7 +460,6 @@ func hide_pause() -> void:
 	_pause.visible = false
 	_pop_focus()
 
-# ============================================================ ВЫБОР ПЕРКА
 func _build_perk() -> void:
 	_perk = _make_overlay(true)
 	var center := CenterContainer.new()
@@ -576,13 +478,9 @@ func _build_perk() -> void:
 	box.add_child(_perk_body)
 	box.add_child(_pad_hint_strip())
 
-## Показывает выбор перка для конкретного игрока.
-## Последняя предложенная тройка перков — для тестов и отладки.
 var last_perk_choices: Array = []
 
 func show_perk_select(player, queue_left: int, rng: Rng) -> void:
-	# В режимах с запретами («Амфибия» в «Царе горы») такие перки не предлагаем:
-	# иначе игрок получит перк, который просто не работает.
 	var available := []
 	var equipped_cannon: String = String(player.tank.cannon_id) if player.tank != null else ""
 	for id in Prof.available_perk_ids():
@@ -594,12 +492,6 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 			continue
 		available.append(id)
 
-	# Билд-гарантия (см. PlayerState.build_pity): если игрок недавно
-	# экипировал часть тематического билда, один из трёх слотов резервируем
-	# под недостающую часть — иначе собрать конкретные 2-3 перка из полусотни
-	# открытых чистой случайностью почти нереально. Гарантия расходуется,
-	# только если её вообще можно выполнить в этот раз (часть уже открыта и
-	# разрешена в режиме) — иначе окно не тратится впустую.
 	var guaranteed_id := ""
 	var guaranteed_build := ""
 	for build_id in player.build_pity.keys():
@@ -627,12 +519,11 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 		player.build_pity[guaranteed_build] = int(player.build_pity[guaranteed_build]) - 1
 		if int(player.build_pity[guaranteed_build]) <= 0:
 			player.build_pity.erase(guaranteed_build)
-	# Предложенная тройка остаётся доступной снаружи: по ней тест снимков
-	# ищет расклад с активным перком, не повторяя логику отбора у себя.
 	last_perk_choices = choices
 
 	for c in _perk_body.get_children():
 		c.queue_free()
+	_perk_pending_id = ""
 
 	var head := UiKit.vbox(3)
 	var who := UiKit.label("%s — %s %d" % [player.name, I18n.t("perk.level", {}, "уровень"), player.session_level],
@@ -658,17 +549,39 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 		empty.custom_minimum_size = Vector2(560, 0)
 		_perk_body.add_child(empty)
 	var first_card: Control = null
+	var confirm_btn := UiKit.primary(I18n.t("perk.confirm.placeholder", {}, "Подтвердить выбор"), 14)
+	confirm_btn.visible = false
 	if not choices.is_empty():
+		var card_buttons: Array = []
+		var group := ButtonGroup.new()
 		var grid := UiKit.hbox(12)
 		grid.alignment = BoxContainer.ALIGNMENT_CENTER
 		_perk_body.add_child(grid)
 		for id in choices:
-			var card := _perk_card(player, id)
+			var card := _perk_card(player, id) as Button
+			card.toggle_mode = true
+			card.button_group = group
+			card.pressed.connect(func():
+				_perk_pending_id = id
+				var chosen := Perks.get_perk(id)
+				confirm_btn.text = I18n.t("perk.confirm",
+					{"name": I18n.dn(chosen, "name", "perk")},
+					"Подтвердить: %s" % I18n.dn(chosen, "name", "perk"))
+				confirm_btn.visible = true
+				for c2 in card_buttons:
+					c2.focus_neighbor_bottom = confirm_btn.get_path()
+				confirm_btn.focus_neighbor_top = card_buttons[0].get_path()
+				_grab(confirm_btn))
 			if first_card == null:
 				first_card = card
+			card_buttons.append(card)
 			grid.add_child(card)
+		UiKit.chain_horizontal(card_buttons, true)
+		var confirm_wrap := CenterContainer.new()
+		confirm_wrap.add_child(confirm_btn)
+		_perk_body.add_child(confirm_wrap)
+	confirm_btn.pressed.connect(func(): perk_chosen.emit(player, _perk_pending_id))
 
-	# Экипированные — можно снять.
 	if not player.perk_ids.is_empty():
 		var wrap := UiKit.vbox(8)
 		var label := UiKit.label(I18n.t("perk.eq.label", {}, "Экипировано (нажмите, чтобы снять)"),
@@ -706,17 +619,14 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 func _perk_card(player, id: String) -> Control:
 	var perk := Perks.get_perk(id)
 	var btn := Button.new()
-	# Высота выросла со 130 до 200: описания перков теперь двухстрочные
-	# (флавор-фраза + «Эффект: ...»), 130px хватало только на одну строку
-	# и текст обрезался краем карточки (см. _tmp_desc_shot в истории сессии).
 	btn.custom_minimum_size = Vector2(190, 200)
 	var normal := UiKit.flat(Color("#161616"), Cfg.RADIUS_MD, 2, Cfg.UI_BORDER)
 	var hover := UiKit.flat(Color("#1c1c1c"), Cfg.RADIUS_MD, 2, Cfg.UI_GOLD)
+	var selected := UiKit.flat(Color("#1c1c1c"), Cfg.RADIUS_MD, 3, Cfg.UI_WARN)
 	btn.add_theme_stylebox_override("normal", normal)
 	btn.add_theme_stylebox_override("hover", hover)
-	btn.add_theme_stylebox_override("pressed", hover)
-	# Рамка фокуса — от темы UiRoot (кольцо в режиме навигации, пусто в мыши).
-	btn.pressed.connect(func(): perk_chosen.emit(player, id))
+	btn.add_theme_stylebox_override("pressed", selected)
+	btn.add_theme_stylebox_override("hover_pressed", selected)
 
 	var box := UiKit.vbox(4)
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -738,8 +648,6 @@ func _perk_card(player, id: String) -> Control:
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(name_label)
 
-	# Активный перк надо отличать до выбора, а не после: остальные работают
-	# сами, а этот бесполезен, если не знать клавишу.
 	if perk.has("active"):
 		var key := "Q" if player.index == 0 else "Num -"
 		var badge := UiKit.label(I18n.t("perk.active.badge", {"key": key},
@@ -759,14 +667,6 @@ func _perk_card(player, id: String) -> Control:
 func hide_perk_select() -> void:
 	_perk.visible = false
 
-# ============================================================ АРСЕНАЛ (вкладки)
-## Галерея перков, Гараж и Достижения были тремя разными оверлеями — теперь
-## это вкладки одной панели, оформленной по военно-технической рамке (см.
-## план реформы интерфейса): верхняя строка вкладок, тело меняется по клику.
-## Хаб — теперь Godot-сцена (scenes/ui/hub.tscn, класс Hub), а не код: её
-## содержимое строит hub.gd. UiRoot только заводит сигналы и тонкую ссылку
-## _hub (= hub), которой пользуются handle_cancel()/hide_all_overlays()/
-## тесты — то же имя поля, что было у оверлея, построенного прямо здесь.
 func _build_hub() -> void:
 	hub = preload("res://scenes/ui/hub.tscn").instantiate()
 	add_child(hub)
@@ -786,7 +686,6 @@ func _refresh_hub_language() -> void:
 	if hub != null:
 		hub.refresh_language()
 
-# ------------------------------------------------------------ ГАЛЕРЕЯ ПЕРКОВ
 func open_gallery() -> void:
 	_open_hub_tab("gallery")
 
@@ -797,11 +696,7 @@ func close_gallery() -> void:
 var is_gallery_open: bool:
 	get: return _hub != null and _hub.visible and _hub_active_tab == "gallery"
 
-## _fill_gallery_tab()/_gallery_spine()/_gallery_node()/_select_gallery_
-## perk()/_gallery_detail() переехали в hub.gd — вкладка «Галерея перков»
-## строится там же, где и остальные две вкладки Хаба.
 
-# ================================================================== ГАРАЖ
 func open_garage(focus_id: String = "") -> void:
 	_open_hub_tab("garage", focus_id)
 
@@ -812,11 +707,7 @@ func close_garage() -> void:
 var is_garage_open: bool:
 	get: return _hub != null and _hub.visible and _hub_active_tab == "garage"
 
-## _fill_garage_tab()/_upgrade_card()/_cosmetic_card()/_cannon_card()/
-## _garage_color_row() переехали в hub.gd вместе с остальными вкладками
-## Хаба; карточки теперь отдельные сцены (scenes/ui/cards/*.tscn).
 
-# ================================================================ СТАТИСТИКА
 func open_stats() -> void:
 	_stats_sub.text = "[center]" + I18n.t("stats.sub", {
 		"lvl": Prof.global_level, "xp": Prof.global_xp, "need": Prof.xp_to_next_level(),
@@ -852,7 +743,6 @@ func close_stats() -> void:
 var is_stats_open: bool:
 	get: return _stats != null and _stats.visible
 
-# ================================================================ ДОСТИЖЕНИЯ
 func open_achievements() -> void:
 	_open_hub_tab("achievements")
 
@@ -863,16 +753,8 @@ func close_achievements() -> void:
 var is_achievements_open: bool:
 	get: return _hub != null and _hub.visible and _hub_active_tab == "achievements"
 
-## _fill_achievements_tab() переехала в hub.gd — карточки достижений
-## теперь сцена (scenes/ui/cards/achievement_card.tscn).
 
-# ============================================================ ЕЖЕДНЕВНЫЕ
 func open_daily() -> void:
-	# Пересборка на лету (кнопка «Забрать» тоже вызывает open_daily() —
-	# см. ниже) сносит и пересоздаёт весь список карточек, включая ту,
-	# что держала фокус — без восстановления геймпад/клавиатура упирались
-	# в невалидного владельца фокуса и не могли сдвинуться к следующей
-	# награде (тот же приём, что и в open_settings()).
 	var was_visible := _daily.visible
 	var quests := Daily.selection()
 	var done := 0
@@ -882,9 +764,6 @@ func open_daily() -> void:
 	_daily_sub.text = "[center]" + I18n.t("daily.sub", {"done": done, "total": quests.size()},
 		"Награды сбрасываются в полночь · выполнено [b]%d[/b] из %d" % [done, quests.size()]) + "[/center]"
 
-	# remove_child() ДО queue_free() — см. тот же приём и его причину в
-	# _fill_hub_tab(): без него _first_focusable() мог поймать старую,
-	# уже обречённую карточку вместо новой, и фокус пропадал через кадр.
 	for c in _daily_body.get_children():
 		_daily_body.remove_child(c)
 		c.queue_free()
@@ -938,7 +817,6 @@ func close_daily() -> void:
 var is_daily_open: bool:
 	get: return _daily != null and _daily.visible
 
-# ================================================================== ИТОГИ
 func _build_gameover() -> void:
 	_gameover = _make_overlay(true)
 	var center := CenterContainer.new()
@@ -1052,7 +930,6 @@ func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 	profile_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_gameover_body.add_child(profile_line)
 
-	# Награда за партию.
 	var rw: Dictionary = result["rewards"]
 	var total: int = int(rw["kills"]) + int(rw["captures"]) + int(rw["wins"])
 	var parts := []
@@ -1069,7 +946,6 @@ func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 	reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_gameover_body.add_child(reward_label)
 
-	# Итоговая таблица.
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 16)
@@ -1092,11 +968,7 @@ func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
 func hide_game_over() -> void:
 	_gameover.visible = false
 
-# ---------------------------------------------------------------- язык
 func _on_language_changed() -> void:
-	# Заголовки окон и кнопка «Закрыть» живут вне меню: они собираются один
-	# раз в _ready и пересборкой меню не затрагиваются. Поэтому в английской
-	# игре над сетевым окном оставалась надпись «Сетевая игра».
 	for root in [_stats, _daily, _net, _gameover]:
 		if root == null or not root.has_meta("title_key"):
 			continue
@@ -1111,32 +983,16 @@ func _on_language_changed() -> void:
 	_refresh_settings_language()
 	_refresh_screens()
 
-## Общая пересборка после смены языка или темы интерфейса. Главное меню и
-## пауза строятся заново — их кнопки несут цвет, запечённый в StyleBox при
-## постройке, одной перерисовки мало; окна вроде настроек/статистики просто
-## переоткрываются — они и так собирают тело с нуля при каждом открытии.
 func _refresh_screens() -> void:
 	var was_menu := _menu.visible
 	var settings_open := _menu_settings_panel.visible
-	# queue_free() освобождает узел только в конце кадра — до этого старое
-	# меню остаётся в дереве. move_child(_menu, 0) ниже кладёт НОВОЕ меню
-	# на дно z-порядка (как и задумано, чтобы оверлеи были поверх), но это
-	# заодно поднимает ещё живое старое меню НАД новым: на один кадр экран
-	# рисует старое (сейчас будет удалено) меню поверх нового, а клик может
-	# попасть между ними — по кнопке, которой уже фактически нет. Прячем
-	# старое сразу, а не ждём его освобождения.
 	_menu.visible = false
 	_menu.queue_free()
 	_build_menu()
-	# Новое меню должно остаться под оверлеями.
 	move_child(_menu, 0)
 	_menu_settings_panel.visible = settings_open
 	_refresh_mode_button()
 	_menu.visible = was_menu
-	# Позиция левой панели меню считается от get_combined_minimum_size(),
-	# который обновляется отложенно через сигнал minimum_size_changed —
-	# раскладываем сразу, иначе кнопки на кадр-другой остаются на (0, 0)
-	# и не попадают под клик.
 	_layout_menu()
 	_layout_menu.call_deferred()
 
@@ -1153,16 +1009,11 @@ func _refresh_screens() -> void:
 		open_stats()
 	if is_daily_open:
 		open_daily()
-	# Сетевого окна в этом списке не было — оно единственное оставалось
-	# на прежнем языке/теме до закрытия и повторного открытия.
 	if _net != null and _net.visible:
 		_refresh_net()
 	if not _last_gameover.is_empty() and _gameover.visible:
 		show_game_over(_last_gameover["result"], _last_gameover["world"], _last_gameover["hotseat"])
 
-## Смена темы интерфейса вживую (см. Sets.ui_theme / Cfg.apply_theme) —
-## галерея/гараж/достижения пересобираются полностью (форма узлов дерева
-## умений зависит от темы), остальные экраны — через общий _refresh_screens().
 func _on_theme_changed() -> void:
 	var hub_open := _hub.visible
 	var hub_tab := _hub_active_tab
@@ -1173,12 +1024,6 @@ func _on_theme_changed() -> void:
 		_open_hub_tab(hub_tab)
 	_refresh_screens()
 
-# ================================================================ НАСТРОЙКИ
-## Настройки — та же вкладочная оболочка, что и у хаба (Галерея перков/
-## Гараж/Достижения, см. _build_hub): ряд вкладок и подзаголовок остаются
-## на месте, меняется только тело вкладки в своём скролле. Раньше это был
-## один длинный список из пяти секций подряд — четыре вкладки читаются
-## заметно легче.
 func _build_settings_shell() -> void:
 	_settings = _make_overlay(true)
 	var center := CenterContainer.new()
@@ -1217,8 +1062,6 @@ func _build_settings_shell() -> void:
 
 	_rebuild_settings_tabs()
 
-## Подписи вкладок собираются заново при каждой перестройке — язык мог
-## смениться, отдельно кэшировать их незачем (см. _hub_tab_items).
 func _settings_tab_items() -> Array:
 	return [
 		{"key": "general", "label": I18n.t("settings.tab.general", {}, "Общие")},
@@ -1241,13 +1084,8 @@ func _switch_settings_tab(key: String) -> void:
 	_settings_active_tab = key
 	_rebuild_settings_tabs()
 	_fill_settings_tab(key)
-	# Та же причина, что у _switch_hub_tab: кнопка вкладки была пересобрана,
-	# фокус без этого пропадал — до самих настроек было не добраться.
 	_grab(_find_tab_button(_settings_tabs_row, key))
 
-## Собирает выбранную вкладку заново при каждом переключении: значения
-## берутся прямо из Sets, поэтому вкладка всегда показывает текущее
-## состояние.
 func _fill_settings_tab(key: String) -> void:
 	for c in _settings_body.get_children():
 		c.queue_free()
@@ -1257,12 +1095,6 @@ func _fill_settings_tab(key: String) -> void:
 		"graphics": _build_graphics_tab()
 		"controls": _build_controls_tab()
 
-	# Ряды настроек связываем по вертикали: каждая строка выставляет
-	# meta("focus_row") на свой элемент (choice_row/slider_row/switch_row).
-	# Внутри choice_row варианты — по горизонтали с переносом. Ряд вкладок
-	# сверху — первое звено цепочки: с него «вниз» ведёт в тело вкладки,
-	# а свои кнопки внутри ряда линкуются по горизонтали, иначе геймпад/
-	# клавиатура не могут переключить вкладку вовсе (FOCUS_NONE раньше).
 	UiKit.chain_horizontal(_settings_tabs_row.get_children(), true)
 	for row in _settings_body.get_children():
 		if row.has_meta("focus_flow"):
@@ -1271,10 +1103,6 @@ func _fill_settings_tab(key: String) -> void:
 	UiKit.chain_vertical([_settings_tabs_row] + _settings_body.get_children())
 	_resize_settings_scroll()
 
-## Та же формула бюджета высоты, что и у тела Хаба (hub.gd:_body_budget) —
-## форма оболочки идентична (ряд вкладок + подзаголовок сверху, тело в
-## скролле), только теперь считается отдельно по обе стороны: Хаб — сам
-## в hub.gd, Настройки — здесь.
 const _TABBED_SHELL_HEADER_H := 90.0
 
 func _resize_settings_scroll() -> void:
@@ -1288,14 +1116,9 @@ func open_settings() -> void:
 	var was_visible := _settings.visible
 	_settings.visible = true
 	_switch_settings_tab(_settings_active_tab)
-	# Пересборка на лету (смена темы/режима экрана/языка дёргает
-	# open_settings заново) — фокус улетел, вернём на первую строку.
 	if was_visible:
 		_grab(_first_focusable(_settings_body))
 
-## Перевод настроек на смену языка: кнопка «Закрыть» живёт вне переоткрытия
-## вкладки (создаётся один раз в _build_settings_shell), поэтому
-## переводится отдельно — тот же приём, что и у хаба (_refresh_hub_language).
 func _refresh_settings_language() -> void:
 	if _settings == null:
 		return
@@ -1303,10 +1126,6 @@ func _refresh_settings_language() -> void:
 	if btn != null:
 		btn.text = I18n.t("btn.close", {}, "Закрыть")
 
-## Тема интерфейса переключается вживую и сразу сохраняется — как и все
-## остальные настройки здесь (см. README «каждое изменение применяется
-## сразу»). Смена формы узлов дерева умений и панелей происходит через
-## _on_theme_changed(), которая пересобирает открытые экраны.
 func _build_general_tab() -> void:
 	var theme_keys := ["noir", "military", "scifi"]
 	var theme_labels := [
@@ -1323,16 +1142,8 @@ func _build_general_tab() -> void:
 			Cfg.apply_theme(Sets.ui_theme)
 			_on_theme_changed()))
 
-	# Кнопка-тумблер, а не выбор: подпись сама показывает целевой язык,
-	# на который переключит клик. Тело вкладки и так пересобирается целиком
-	# при каждой смене языка (_on_language_changed -> _refresh_screens ->
-	# open_settings), отдельно обновлять подпись не нужно.
 	var lang_row := UiKit.hbox(8)
 	var lang_label := UiKit.label(I18n.t("set.lang", {}, "Язык интерфейса"), 12, Cfg.UI_TEXT)
-	# Та же фиксированная ширина подписи, что у choice_row/switch_row/
-	# keybind_row (ui_kit.gd) — без неё кнопка вставала сразу за текстом
-	# и не совпадала по горизонтали с вариантами темы интерфейса строкой
-	# выше, вкладка выглядела неровно.
 	lang_label.custom_minimum_size = Vector2(178, 0)
 	lang_row.add_child(lang_label)
 	var lang_btn := UiKit.secondary(
@@ -1350,9 +1161,6 @@ func _build_general_tab() -> void:
 	wrap.add_child(reset)
 	_settings_body.add_child(wrap)
 
-	# Ниже настроек — сброс самого профиля (достижения/перки/деньги/
-	# уровень), более серьёзное действие, чем сброс технических настроек
-	# выше. Раньше жила отдельной кнопкой прямо на главном экране.
 	var reset_progress := UiKit.danger(I18n.t("menu.reset", {}, "Сбросить прогресс"), 12)
 	reset_progress.pressed.connect(func():
 		_confirm.dialog_text = I18n.t("confirm.reset", {},
@@ -1362,9 +1170,6 @@ func _build_general_tab() -> void:
 	progress_wrap.add_child(reset_progress)
 	_settings_body.add_child(progress_wrap)
 
-## Экран и графические эффекты вместе — обе прежние секции («Видео» и
-## «Графика») про то, как выглядит игра. Два под-заголовка внутри вкладки
-## сохраняют границу между ними.
 func _build_graphics_tab() -> void:
 	_settings_body.add_child(UiKit.section(I18n.t("set.screen", {}, "Экран"), Cfg.UI_MUTED))
 
@@ -1378,11 +1183,8 @@ func _build_graphics_tab() -> void:
 			Sets.display_mode = v
 			Sets.apply_video()
 			Sets.save()
-			# Список разрешений имеет смысл только в оконном режиме.
 			_switch_settings_tab.call_deferred("graphics")))
 
-	# Разрешение применимо только в окне: в полноэкранных режимах его
-	# задаёт сам монитор.
 	var res_list := Sets.available_resolutions()
 	var labels := []
 	var current := 0
@@ -1449,14 +1251,11 @@ func _build_graphics_tab() -> void:
 			Sets.screen_shake = v
 			Sets.save()))
 
-## Действия вкладки «Управление» в порядке отображения — см. Ctl.DEFAULT_KEYS.
 const _P1_KEY_ACTIONS := ["p1_up", "p1_down", "p1_left", "p1_right",
 	"p1_fire", "p1_mine", "p1_dash", "p1_airstrike", "p1_ability"]
 const _P2_KEY_ACTIONS := ["p2_up", "p2_down", "p2_left", "p2_right",
 	"p2_turret_left", "p2_turret_right", "p2_fire", "p2_mine", "p2_dash", "p2_ability"]
 
-## Подпись действия — общий словарь понятий: «вперёд»/«огонь»/... читаются
-## одной строкой у обоих игроков, различаются только сами клавиши.
 func _key_action_label(action_id: String) -> String:
 	match action_id:
 		"p1_up", "p2_up": return I18n.t("key.up", {}, "Вперёд")
@@ -1472,9 +1271,6 @@ func _key_action_label(action_id: String) -> String:
 		"p2_turret_right": return I18n.t("key.turretRight", {}, "Башня вправо")
 	return action_id
 
-## Общий обработчик всех keybind_row на вкладке «Управление»: клавиша,
-## уже занятая другим действием (любого игрока), не применяется — только
-## показывает предупреждение, старая привязка не трогается.
 func _assign_key(action_id: String, keycode: int) -> void:
 	for other_id in Ctl.DEFAULT_KEYS.keys():
 		if other_id == action_id:
@@ -1498,8 +1294,6 @@ func _build_controls_tab() -> void:
 		devices.append(["pad%d" % int(pad["id"]),
 			"%s %d: %s" % [I18n.t("dev.pad", {}, "Геймпад"), int(pad["id"]) + 1,
 				String(pad["name"])]])
-	# Сохранён геймпад, которого сейчас нет: показываем его явно, иначе
-	# список молча показывал «Авто», а в бою танк ждал отключённый джойстик.
 	for cur in [Sets.p1_device, Sets.p2_device]:
 		var known := false
 		for d in devices:
@@ -1557,12 +1351,7 @@ func _build_controls_tab() -> void:
 			I18n.t("set.pad.none", {}, "Геймпад не найден. Подключите его и откройте настройки заново."),
 			9, Cfg.UI_MUTED))
 	else:
-		# Подсказка по кнопкам геймпада — раньше висела ещё и строкой под
-		# «Играть» на главном экране, убрал оттуда: тут, в настройках
-		# геймпада, ей самое место, а не на первом же экране игры.
 		_settings_body.add_child(_pad_hint_strip())
-		# Ползунок ходит 0..1, а мёртвая зона выше половины хода бессмысленна:
-		# стик перестал бы отзываться вовсе. Поэтому шкала сжата вдвое.
 		_settings_body.add_child(UiKit.slider_row(
 			I18n.t("set.pad.deadzone", {}, "Мёртвая зона стиков"),
 			Sets.pad_deadzone / MAX_DEADZONE,
@@ -1598,8 +1387,6 @@ func _build_sound_tab() -> void:
 		func(v: float):
 			Sets.sfx_volume = v
 			Sets.apply_audio()
-			# Пример звука сразу после отпускания — иначе громкость
-			# приходится подбирать вслепую.
 			Sfx.play("pickup")
 			Sets.save()))
 	_settings_body.add_child(UiKit.slider_row(
@@ -1618,10 +1405,6 @@ func close_settings() -> void:
 var is_settings_open: bool:
 	get: return _settings != null and _settings.visible
 
-# ============================================================ сетевая игра
-## Экран собирается заново при каждом изменении лобби: состояние соединения
-## меняется редко, а держать ссылки на полтора десятка узлов ради этого
-## дороже, чем пересобрать десяток строк.
 func open_net() -> void:
 	if not Net.lobby_changed.is_connected(_refresh_net):
 		Net.lobby_changed.connect(_refresh_net)
@@ -1642,13 +1425,6 @@ func _on_net_error(text: String) -> void:
 	_net_error = text
 	_refresh_net()
 
-## Хост и клиент видят одни и те же секунды — рассылает их Net. Ноль это
-## именно тот момент, когда партия обязана начаться, и запускает её только
-## хост: у клиента она начнётся сама, когда придёт _rpc_match_start.
-##
-## Проверка на ноль не зависит от того, открыт ли ещё экран лобби: если
-## игрок вернулся в меню, не нажимая «Отключиться», отсчёт всё равно должен
-## доиграть до конца, а не зависнуть в фоне навсегда.
 func _on_countdown_changed(seconds_left: int) -> void:
 	_refresh_net()
 	if seconds_left == 0 and Net.role == "host":
@@ -1673,7 +1449,6 @@ func _refresh_net() -> void:
 func _build_net_offline() -> void:
 	var steam_ok := NetTransport.SteamTransport.new().available()
 
-	# Имя игрока — общее для обоих путей подключения.
 	var name_row := UiKit.hbox(8)
 	name_row.add_child(UiKit.label(I18n.t("net.name", {}, "Имя"), 12, Cfg.UI_TEXT))
 	var name_edit := LineEdit.new()
@@ -1683,7 +1458,6 @@ func _build_net_offline() -> void:
 	name_row.add_child(name_edit)
 	_net_body.add_child(name_row)
 
-	# Входящее приглашение — показываем первым, оно самое срочное.
 	if not Net.pending_invite.is_empty():
 		var who := String(Net.pending_invite.get("name", ""))
 		_net_body.add_child(UiKit.label(
@@ -1702,10 +1476,6 @@ func _build_net_offline() -> void:
 			I18n.t("net.room.creating", {}, "Создаём…") if Net.lobby_pending == "host"
 				else I18n.t("net.room.searching", {}, "Подключаемся…"), 11, Cfg.UI_MUTED))
 
-	# Прямого IP больше нет: он в принципе не рассчитан работать «из коробки»
-	# у обычного игрока за NAT/файрволом — ровно то, из-за чего он и не
-	# подключался. Steam P2P (релей Valve) для того и нужен, чтобы решать
-	# эту же задачу самостоятельно. Без Steam сетевая игра сейчас недоступна.
 	if not steam_ok:
 		_net_body.add_child(UiKit.label(
 			I18n.t("net.err.noSteam", {}, "Нужен клиент Steam — сетевая игра недоступна"),
@@ -1720,7 +1490,6 @@ func _build_net_offline() -> void:
 		_:
 			_build_net_choice()
 
-## Верхний уровень: ровно два выбора, как просил пользователь.
 func _build_net_choice() -> void:
 	var create_btn := UiKit.primary(I18n.t("net.create", {}, "Создать"), 15)
 	create_btn.pressed.connect(func():
@@ -1739,7 +1508,6 @@ func _build_net_choice() -> void:
 		_refresh_net())
 	_net_body.add_child(join_btn)
 
-## Экран «Создать»: название комнаты + подтверждение.
 func _build_net_create() -> void:
 	var back_btn := UiKit.small(I18n.t("net.back", {}, "Назад"))
 	back_btn.pressed.connect(func():
@@ -1765,13 +1533,6 @@ func _build_net_create() -> void:
 		_refresh_net())
 	_net_body.add_child(host_btn)
 
-## Экран «Присоединиться»: поиск по имени игрока/комнаты + список лобби.
-## Steam-фильтры (addRequestLobbyListStringFilter) — только точное
-## совпадение, так что подстрочный поиск делаем здесь, на клиенте, над
-## уже полученным полным списком (Net.lobby_browser_results). Список лежит
-## в собственном контейнере, а не в _net_body напрямую: пересборка на
-## каждую нажатую клавишу не должна уничтожать саму строку поиска —
-## иначе LineEdit терял бы фокус после первого же символа.
 func _build_net_join() -> void:
 	var back_btn := UiKit.small(I18n.t("net.back", {}, "Назад"))
 	back_btn.pressed.connect(func():
@@ -1834,12 +1595,6 @@ func _build_net_join() -> void:
 	render_list.call()
 
 func _build_net_lobby() -> void:
-	# role == "client" ставится, как только ENet локально создал сокет — это
-	# ещё не значит, что рукопожатие с хостом реально прошло (оно асинхронное,
-	# может занять несколько секунд или сорваться таймаутом). Пока свой танк
-	# не появился в общем лобби (Net.lobby пуст), честно показываем «идёт
-	# подключение», а не «подключились» — иначе разрыв связи выглядит как
-	# бесконечное молчаливое зависание.
 	var connecting := Net.role == "client" and Net.lobby.is_empty()
 	var role_text := I18n.t("net.role.host", {}, "Вы хост")
 	if connecting:
@@ -1848,10 +1603,6 @@ func _build_net_lobby() -> void:
 		role_text = I18n.t("net.role.client", {}, "Вы подключены")
 	_net_body.add_child(UiKit.section(role_text, Cfg.UI_ACCENT))
 
-	# Как позвать второго. WaitingRoomPanel: хостинг через Steam всегда
-	# поднимает публичное лобби (Net.host_lobby()) — название комнаты видно
-	# в списке и в поиске, «Пригласить друга» — дополнительный способ в
-	# обход поиска, плюс SteamID для ручной передачи.
 	if Net.role == "host" and Net.lobby.size() < Net.MAX_LOBBY:
 		if Net._steam_lobby_id != 0:
 			_net_body.add_child(UiKit.label(
@@ -1893,18 +1644,12 @@ func _build_net_lobby() -> void:
 		chip.color = pal["body"]
 		chip.custom_minimum_size = Vector2(18, 14)
 		row.add_child(chip)
-		# Готовность показываем только для гостей: у хоста своя кнопка старта.
 		if int(peer_id) != 1:
 			row.add_child(UiKit.label(
 				"✓" if bool(info.get("ready", false)) else "…", 12,
 				Cfg.UI_ACCENT if bool(info.get("ready", false)) else Cfg.UI_MUTED))
 		_net_body.add_child(row)
 
-	# Идёт отсчёт — вместо кнопок старта список игроков дополняет большая
-	# цифра. Число, а не фраза с числом: «5 секунд»/«2 секунды» требует
-	# согласования по-русски, а голая цифра понятна без него на любом языке.
-	# «Отключиться» ниже остаётся доступной и здесь — передумать можно
-	# в любой момент, а не только пока отсчёт не начался.
 	if Net.countdown_left >= 0:
 		_net_body.add_child(UiKit.label(
 			I18n.t("net.countdown.title", {}, "Матч начинается…"), 12, Cfg.UI_MUTED))

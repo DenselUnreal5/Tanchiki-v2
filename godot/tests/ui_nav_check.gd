@@ -1,15 +1,3 @@
-# ============================================================================
-# ui_nav_check.gd — навигация по интерфейсу геймпадом/клавиатурой.
-#
-# Проверяет то, чего не видно в headless и на снимках: что при открытии
-# каждого экрана фокус куда-то встаёт (без этого крестовина мертва), что
-# «назад» (ui_cancel) закрывает верхний оверлей, что кнопка A нажимает
-# карточку перка, и что режим навигации переключается с мыши на геймпад
-# и обратно (рамка фокуса появляется и исчезает).
-#
-# Нужен настоящий Viewport — фокус и push_input в headless не работают:
-#   godot --path godot --resolution 1280x720 res://tests/ui_nav_check.tscn
-# ============================================================================
 extends Node
 
 var game: Node
@@ -22,12 +10,10 @@ func _ready() -> void:
 
 	var ui = game.ui
 
-	# ---- главное меню: фокус на «ИГРАТЬ» -------------------------------
 	ui.show_menu()
 	await _frames(6)
 	_check(_focus() == ui._menu_start_btn, "в меню фокус на кнопке ИГРАТЬ")
 
-	# ---- каждый экран оставляет фокус внутри себя --------------------
 	for pair in [["_settings", "open_settings", "close_settings"],
 			["_stats", "open_stats", "close_stats"],
 			["_daily", "open_daily", "close_daily"],
@@ -38,12 +24,10 @@ func _ready() -> void:
 		var f = _focus()
 		_check(f != null and root.is_ancestor_of(f),
 			"%s: фокус внутри экрана" % pair[1])
-		# ui_cancel закрывает верхний оверлей
 		_send_action("ui_cancel")
 		await _frames(8)
 		_check(not root.visible, "%s: ui_cancel закрыл экран" % pair[1])
 
-	# ---- хаб глушит фокус кнопок меню за собой ----------------------
 	ui.open_gallery()
 	await _frames(8)
 	_check(_focus() != null and ui._hub.is_ancestor_of(_focus()),
@@ -55,7 +39,6 @@ func _ready() -> void:
 	_check(ui._menu_start_btn.focus_mode == Control.FOCUS_ALL,
 		"после закрытия хаба фокус кнопок меню вернулся")
 
-	# ---- choice_row: крестовина влево-вправо между вариантами -------
 	ui.open_settings()
 	await _frames(8)
 	var flow := _first_flow(ui._settings_body)
@@ -68,7 +51,6 @@ func _ready() -> void:
 	ui.close_settings()
 	await _frames(6)
 
-	# ---- выбор перка: A нажимает карточку --------------------------
 	game.ui.settings["mode"] = "ffa"
 	game.ui.settings["game_type"] = "single"
 	game.ui.settings["level"] = 1
@@ -78,8 +60,6 @@ func _ready() -> void:
 		var pf = _focus()
 		_check(pf != null and ui._perk.is_ancestor_of(pf), "фокус на карточке перка")
 		var before: int = game.perk_player.perk_ids.size() if game.perk_player != null else 0
-		# ui_accept на кнопке разбирается в её _gui_input, а туда синтетический
-		# InputEventAction не доходит — шлём настоящую клавишу.
 		await _tap_key(KEY_ENTER)
 		await _frames(6)
 		var after: int = game.perk_player.perk_ids.size() if game.perk_player != null else 0
@@ -91,7 +71,6 @@ func _ready() -> void:
 		game._on_perk_chosen(game.perk_player, "")
 		await _frames(2)
 
-	# ---- режим навигации: мышь ↔ геймпад --------------------------
 	_send(_pad_button(0))
 	await _frames(4)
 	_check(Sets.pad_ui, "кнопка геймпада включает режим навигации")
@@ -139,8 +118,6 @@ func _send_action(action: StringName) -> void:
 	e.pressed = true
 	get_viewport().push_input(e)
 
-## Настоящее нажатие клавиши: down, кадр, up. Кнопки срабатывают на
-## отпускании (ACTION_MODE_BUTTON_RELEASE), поэтому нужны оба события.
 func _tap_key(keycode: int) -> void:
 	var down := InputEventKey.new()
 	down.keycode = keycode

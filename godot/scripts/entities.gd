@@ -1,21 +1,8 @@
-# ============================================================================
-# entities.gd — снаряды, мины, аптечки, флаги и частицы.
-#
-# Частицы живут в пуле с жёстким лимитом: каждый взрыв создаёт 30–50 частиц,
-# и в замесе на 22 бота без лимита массив раздувается до десятков тысяч.
-#
-# Все классы — внутренние, обращение через Ent.Bullet, Ent.Mine и т.д.
-# Ссылки на Tank/World намеренно нетипизированы: иначе получается циклическая
-# зависимость между скриптами.
-# ============================================================================
 class_name Ent
 extends RefCounted
 
 const MAX_PARTICLES := 1200
 
-# ---------------------------------------------------------------------------
-# Частицы
-# ---------------------------------------------------------------------------
 class ParticleSystem extends RefCounted:
 	var max_count: int
 	var px := PackedFloat32Array()
@@ -43,9 +30,6 @@ class ParticleSystem extends RefCounted:
 	func clear() -> void:
 		count = 0
 
-	## Добавляет частицу. При переполнении пула затирает самую старую.
-	## vx_bias/vy_bias сдвигают случайную скорость в нужную сторону: огонь и
-	## дым должны подниматься вверх, а не разлетаться во все стороны.
 	func spawn(x: float, y: float, col: Color, sz: float, lf: float, rng: Rng,
 			vx_bias: float = 0.0, vy_bias: float = 0.0) -> void:
 		var i := 0
@@ -53,7 +37,6 @@ class ParticleSystem extends RefCounted:
 			i = count
 			count += 1
 		else:
-			# Ищем самую «дожившую» частицу и переиспользуем её слот.
 			var worst := 0
 			var worst_life := INF
 			var k := 0
@@ -72,7 +55,6 @@ class ParticleSystem extends RefCounted:
 		max_life[i] = lf
 		color[i] = col
 
-	## Взрыв: пачка частиц из палитры.
 	func burst(x: float, y: float, colors: Array, amount: int, size_min: float,
 			size_max: float, life_min: float, life_max: float, rng: Rng) -> void:
 		for i in amount:
@@ -88,7 +70,6 @@ class ParticleSystem extends RefCounted:
 			var lf := life[i] - 1.0
 			if lf <= 0.0:
 				continue
-			# Компактизация на месте: живые частицы сдвигаются в начало.
 			px[w] = px[i] + vx[i]
 			py[w] = py[i] + vy[i]
 			vx[w] = vx[i] * 0.95
@@ -100,15 +81,12 @@ class ParticleSystem extends RefCounted:
 			w += 1
 		count = w
 
-# ---------------------------------------------------------------------------
-# Пуля
-# ---------------------------------------------------------------------------
 class Bullet extends RefCounted:
 	var x: float
 	var y: float
 	var vx: float
 	var vy: float
-	var owner            # Tank
+	var owner
 	var team: String
 	var alive := true
 	var life := Cfg.BULLET_LIFE
@@ -117,20 +95,14 @@ class Bullet extends RefCounted:
 	var explosive := false
 	var keep_bricks := false
 	var from_player := false
-	## Миномётный снаряд: летит по дуге и не задевает стены.
 	var lobbed := false
-	## Пуля из cannons.gd: "" | "freeze" | "acid" — см. _hit_tanks().
 	var cannon_kind := ""
-	## «Небесный удар»: этот выстрел заряжен, при попадании по танку
-	## вдобавок к обычному урону бьёт молния в точке попадания.
 	var sky_strike := false
 
 	func _init(x_: float, y_: float, angle: float, owner_, dmg_scale_: float = 1.0) -> void:
 		x = x_
 		y = y_
 		owner = owner_
-		# Пуля без владельца — марионетка сетевого клиента: она только
-		# рисуется, попадания за неё считает хост.
 		if owner_ == null:
 			var sp := Cfg.BULLET_SPEED
 			vx = cos(angle) * sp
@@ -140,8 +112,6 @@ class Bullet extends RefCounted:
 		vx = cos(angle) * speed
 		vy = sin(angle) * speed
 		team = owner_.team
-		# Модификаторы владельца фиксируются в момент выстрела: если игрок
-		# сменит перк, уже летящая пуля не должна менять свойства на лету.
 		dmg_scale = dmg_scale_ * float(owner_.mods["dmgMult"])
 		pierce = 1 if owner_.flags.has("piercing") else 0
 		explosive = owner_.flags.has("explosive")
@@ -154,8 +124,6 @@ class Bullet extends RefCounted:
 		x += vx
 		y += vy
 
-		# Миномётный снаряд перелетает стены, взрывается о танк, а при
-		# истечении жизни «приземляется» со взрывом.
 		if lobbed:
 			life -= 1
 			if life <= 0:
@@ -194,21 +162,14 @@ class Bullet extends RefCounted:
 			return true
 
 		if tile == Cfg.T_BRICK:
-			# «Толстая броня»: свои пули не ломают постройки — плата за −20% урона.
 			if keep_bricks:
 				alive = false
 				world.hit_building(row, col, 0.0, "bullet", x, y, owner)
 				return true
-			# Урон пули по зданию — тот же, что по танку: прочность материала
-			# читается в попаданиях.
 			var dmg := (Cfg.BULLET_DMG_MIN + Cfg.BULLET_DMG_MAX) * 0.5 * dmg_scale
 			world.hit_building(row, col, dmg, "bullet", x, y, owner)
-			# «Лесоруб»: доска снаряд не держит. Постоянная версия «Кумулятива»,
-			# но только по дереву — и потому не ломающая ценность способности.
 			if owner != null and owner.flags.has("woodPierce") 					and String(Materials.at(row, col)["id"]) == "wood":
 				return false
-			# «Кумулятив»: снаряд не вязнет в стене, а идёт дальше. Ради
-			# этого он и берётся — пробить ряд построек одним выстрелом.
 			if owner != null and owner.ability_active("breaker"):
 				return false
 			if pierce > 0:
@@ -220,10 +181,8 @@ class Bullet extends RefCounted:
 		if tile == Cfg.T_TREE:
 			map.set_tile(row, col, Cfg.T_EMPTY)
 			world.particles.burst(x, y, [Cfg.tree, Cfg.tree_dark], 8, 2, 4, 10, 20, world.rng)
-			# Дерево пулю не останавливает.
 		return false
 
-	## Выводит пробивную пулю за пределы стены.
 	func _pierce_through(world) -> bool:
 		var map: GameMap = world.map
 		var length := sqrt(vx * vx + vy * vy)
@@ -231,7 +190,6 @@ class Bullet extends RefCounted:
 			length = 1.0
 		var step_x := (vx / length) * 4.0
 		var step_y := (vy / length) * 4.0
-		# Максимум — две толщины тайла: сквозь более толстую кладку не пробиваем.
 		var max_steps := int(ceil(float(Cfg.TILE * 2) / 4.0))
 		for i in max_steps:
 			x += step_x
@@ -245,14 +203,9 @@ class Bullet extends RefCounted:
 		alive = false
 		return false
 
-	## Больше самого большого возможного tank.hit_r (у босса — около 18.5 px) —
-	## это только черновой отбор кандидатов, точную проверку по настоящему
-	## hit_r каждого танка цикл всё равно делает сам.
 	const HIT_QUERY_RADIUS := 40.0
 
 	func _hit_tanks(world) -> bool:
-		# Радиус берётся у самого танка: силуэт и хитбокс должны совпадать,
-		# иначе крупный корпус врал бы игроку.
 		for tank in world.tank_grid.query(x, y, HIT_QUERY_RADIUS):
 			if tank == owner or not tank.alive:
 				continue
@@ -266,8 +219,6 @@ class Bullet extends RefCounted:
 
 			if cannon_kind == "freeze":
 				if tank.apply_freeze(world, owner, Cfg.ICE_FREEZE_TICKS):
-					# Билд «Ледяной охотник»: сам выстрел добивает замороженную
-					# цель без тарана (кроме боссов) — см. World.maybe_freeze_shot_kill.
 					world.maybe_freeze_shot_kill(tank, owner)
 				alive = false
 				world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE], 8, 2, 4, 10, 20, world.rng)
@@ -285,8 +236,6 @@ class Bullet extends RefCounted:
 			if explosive:
 				_explode(world, tank, amount)
 
-			# «Небесный удар»: вдобавок к обычному урону — молния в точке
-			# попадания. Не замена урону пули, а надбавка поверх него.
 			if sky_strike:
 				world.strike_lightning(x, y, owner)
 
@@ -307,7 +256,6 @@ class Bullet extends RefCounted:
 			if dx * dx + dy * dy > r2:
 				continue
 			world.deal_damage(other, base_damage * Cfg.EXPLOSIVE_SPLASH, owner, "bullet")
-		# Снос кирпича в радиусе одного тайла.
 		var map: GameMap = world.map
 		var row := map.row_at(y)
 		var col := map.col_at(x)
@@ -315,7 +263,6 @@ class Bullet extends RefCounted:
 			for dc in range(-1, 2):
 				if map.get_tile(row + dr, col + dc) != Cfg.T_BRICK:
 					continue
-				# В эпицентре урон полный, по краям — вдвое меньше.
 				var falloff := 1.0 if (dr == 0 and dc == 0) else 0.5
 				world.hit_building(row + dr, col + dc, Cfg.BLAST_TILE_DAMAGE * falloff, "blast",
 					(col + dc) * Cfg.TILE + Cfg.TILE * 0.5,
@@ -323,17 +270,13 @@ class Bullet extends RefCounted:
 		world.particles.burst(x, y, Cfg.explosion, 12, 2, 4, 10, 18, world.rng)
 		world.add_shake(8.0, x, y)
 
-# ---------------------------------------------------------------------------
-# Мина
-# ---------------------------------------------------------------------------
 class Mine extends RefCounted:
 	var x: float
 	var y: float
-	var owner            # Tank или null — «нейтральная» мина с карты «Царя горы»
+	var owner
 	var team: String
 	var timer: int
 	var alive := true
-	## Пока хозяин не отъехал, мина не срабатывает на него самого.
 	var armed: bool
 
 	func _init(x_: float, y_: float, owner_, life: int) -> void:
@@ -380,8 +323,6 @@ class Mine extends RefCounted:
 			if dx * dx + dy * dy > splash_r2:
 				continue
 			world.deal_damage(tank, Cfg.MINE_SPLASH_DMG, owner, "mine")
-		# Мина вскрывает и постройки рядом — иначе заминировать проход
-		# в стене было невозможно.
 		var map: GameMap = world.map
 		var row := map.row_at(y)
 		var col := map.col_at(x)
@@ -398,16 +339,11 @@ class Mine extends RefCounted:
 		Sfx.play("explosion", x, y)
 		alive = false
 
-# ---------------------------------------------------------------------------
-# Ракета авиаудара («Оборона»)
-# ---------------------------------------------------------------------------
-## Самонаводящаяся ракета супер-способности. Слетает с неба и пикирует
-## на назначенную цель, игнорируя стены.
 class StrikeRocket extends RefCounted:
 	var x: float
 	var y: float
-	var target       # Tank
-	var owner        # Tank атакующего
+	var target
+	var owner
 	var alive := true
 	var speed := 16.0
 	var vx := 0.0
@@ -446,13 +382,7 @@ class StrikeRocket extends RefCounted:
 		if trail_timer % 2 == 0:
 			world.particles.spawn(x - vx * 2.0, y - vy * 2.0, Color("#ffcc44"), 2.5, 12, world.rng)
 
-# ---------------------------------------------------------------------------
-# Обломок разрушенной постройки
-# ---------------------------------------------------------------------------
 
-## Кусок здания: летит от места разрушения, крутится, тормозит и ложится
-## на землю. Форма и поведение задаются материалом — щепка длинная и вертлявая,
-## бетонная плита тяжёлая и почти не крутится.
 class Debris extends RefCounted:
 	var x: float
 	var y: float
@@ -481,7 +411,6 @@ class Debris extends RefCounted:
 		var hr: Vector2 = mat["piece_h"]
 		w = wr.x + rng.nextf() * (wr.y - wr.x)
 		h = hr.x + rng.nextf() * (hr.y - hr.x)
-		# Цвет из палитры материала, чтобы обломки читались как его куски.
 		var shade := rng.nextf()
 		color = mat["dark"] if shade < 0.4 else (mat["base"] if shade < 0.8 else mat["light"])
 		var lr: Vector2 = mat["life"]
@@ -496,30 +425,19 @@ class Debris extends RefCounted:
 		x += vx
 		y += vy
 		angle += spin
-		# Трение: обломок проезжает по земле и останавливается.
 		vx *= 0.90
 		vy *= 0.90
 		spin *= 0.92
 
-	## Прозрачность: последняя четверть жизни уходит в ноль.
 	var fade: float:
 		get: return clampf(life / maxf(1.0, max_life * 0.25), 0.0, 1.0)
 
-# ---------------------------------------------------------------------------
-# Горящий остов
-# ---------------------------------------------------------------------------
 
-## Остаётся на месте уничтоженного танка: несколько секунд горит и дымит,
-## потом гаснет и исчезает. Чистая декорация — ни столкновений, ни урона,
-## поэтому в расчётах боя не участвует.
 class Wreck extends RefCounted:
 	var x: float
 	var y: float
-	## Угол корпуса в момент гибели: остов лежит так, как стоял танк.
 	var angle: float
-	## Ключ палитры подбитого танка — обгоревший корпус сохраняет оттенок.
 	var color_key: String
-	## Башню сносит взрывом: она лежит рядом под своим углом.
 	var turret_offset: Vector2
 	var turret_angle: float
 	var scale: float
@@ -540,7 +458,6 @@ class Wreck extends RefCounted:
 		life = Cfg.WRECK_LIFE
 		timer = life
 
-	## Доля оставшейся жизни: 1 — только что подбит, 0 — вот-вот исчезнет.
 	var fade: float:
 		get: return clampf(float(timer) / maxf(1.0, float(Cfg.WRECK_FADE)), 0.0, 1.0)
 
@@ -549,7 +466,7 @@ class Wreck extends RefCounted:
 		if timer <= 0:
 			alive = false
 			return
-		var t := float(timer) / float(life)   # огонь стихает к концу
+		var t := float(timer) / float(life)
 		var rng: Rng = world.rng
 		if world.tick % 4 == 0 and rng.nextf() < 0.35 + t * 0.5:
 			var c: Color = Cfg.explosion[int(rng.nextf() * 2.0) % 2]
@@ -565,9 +482,6 @@ class Wreck extends RefCounted:
 				Color(0.24, 0.23, 0.22), 3.0 + rng.nextf() * 3.0 * scale,
 				26.0 + rng.nextf() * 20.0, rng, -0.2, -0.9)
 
-# ---------------------------------------------------------------------------
-# Аптечка
-# ---------------------------------------------------------------------------
 class Pickup extends RefCounted:
 	var x: float
 	var y: float
@@ -586,10 +500,6 @@ class Pickup extends RefCounted:
 		active = false
 		respawn_timer = Cfg.PICKUP_RESPAWN
 
-# ---------------------------------------------------------------------------
-# Выпавший перк («Царь горы»)
-# ---------------------------------------------------------------------------
-## Время, которое выпавший перк лежит на земле до исчезновения, тиков.
 const PERK_DROP_LIFE := 60 * 60
 
 class PerkPickup extends RefCounted:
@@ -612,10 +522,6 @@ class PerkPickup extends RefCounted:
 			if life <= 0:
 				active = false
 
-# ---------------------------------------------------------------------------
-# Power-up оружия
-# ---------------------------------------------------------------------------
-## Время, которое оружие лежит на карте до исчезновения, тиков.
 const WEAPON_PICKUP_LIFE := 60 * 25
 
 class WeaponPickup extends RefCounted:
@@ -638,20 +544,14 @@ class WeaponPickup extends RefCounted:
 			if life <= 0:
 				active = false
 
-# ---------------------------------------------------------------------------
-# Флаг (CTF)
-# ---------------------------------------------------------------------------
 class Flag extends RefCounted:
 	var home_x: float
 	var home_y: float
 	var x: float
 	var y: float
 	var team: String
-	## Состояние хранится явно: флаг, брошенный ровно на своей базе, иначе
-	## одновременно считался бы и «дома», и «брошенным с таймером возврата».
-	var state := "home"  # home | carried | dropped
-	var carrier = null   # Tank
-	## Тиков до автоматического возврата брошенного флага.
+	var state := "home"
+	var carrier = null
 	var return_timer := 0
 
 	func _init(x_: float, y_: float, team_: String) -> void:
@@ -679,7 +579,6 @@ class Flag extends RefCounted:
 		state = "home"
 		return_timer = 0
 
-	## Бросает флаг. Упавший на свою базу считается сразу возвращённым.
 	func drop(x_: float, y_: float, timeout: int) -> void:
 		carrier = null
 		if Vector2(x_ - home_x, y_ - home_y).length() < 32.0:

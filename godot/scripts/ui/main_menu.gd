@@ -1,46 +1,15 @@
-# ============================================================================
-# main_menu.gd — содержимое экрана главного меню (scenes/ui/main_menu.tscn).
-#
-# Структура (панели, контейнеры, отступы) — в самой сцене; этот скрипт
-# наполняет её динамическим содержимым: переводит подписи, красит виджеты
-# по активной теме (Cfg.UI_*), строит 8 плиток навигации и 7 групп настроек
-# боя, крутит подсказку внизу панели. То же самое раньше собирал код в
-# ui_root.gd:_build_menu() — тут тот же результат, просто на узлах сцены,
-# а не на созданных с нуля Control.new().
-#
-# UiRoot остаётся «диспетчером экранов»: он решает, когда меню показывать/
-# прятать, и передаёт клики дальше в open_garage()/open_settings()/... —
-# сама MainMenu ничего не знает про остальной интерфейс, только сообщает о
-# намерении сигналами (start_pressed, nav_pressed).
-#
-# @tool: сцена рисует себя и в редакторе Godot — иначе открыть main_menu.tscn
-# для правки означало бы смотреть на голые незакрашенные узлы без текста.
-# Всё, что тут читается (I18n/Prof/Cfg/UiKit/Ranks/Perks/Fonts), уже и так
-# поднимается редактором при загрузке проекта (автозагрузки грузятся сразу,
-# не только при запуске игры) — на настоящую партию это никак не влияет,
-# ничего не пишет ни в Prof, ни в Sets, только читает.
-# ============================================================================
 @tool
 class_name MainMenu
 extends Control
 
 signal start_pressed
-## id: "garage" | "gallery" | "achievements" | "daily" | "stats" | "net" |
-## "settings" | "quit" — те же 8 назначений, что были у кнопок футера.
 signal nav_pressed(id: String)
 
-## Ширины панелей: слева действия, справа настройки боя. Шире прежних
-# 400/500 — HUD-полоска профиля и плитки-иконки в два столбца занимают
-# больше места, чем прежний плоский список текстовых кнопок.
 const LEFT_PANEL_W := 460.0
 const SETTINGS_PANEL_W := 640.0
 
-## Ссылка на тот же словарь, что и UiRoot.settings (Dictionary — ссылочный
-## тип), выставляется UiRoot сразу после instantiate(), до add_child().
 var settings: Dictionary = {}
 
-## Крутящаяся подсказка (см. MenuTips) — то же состояние, что раньше жило
-## прямо в UiRoot.
 var _tip_order: Array = []
 var _tip_idx := 0
 
@@ -64,11 +33,6 @@ var _tip_idx := 0
 @onready var _settings_scroll: ScrollContainer = %SettingsScroll
 @onready var _settings_body: VBoxContainer = %SettingsBody
 
-## I18n — автозагрузка, а её скрипт не @tool: в редакторе Godot подставляет
-## вместо неё заглушку-placeholder, у которой нет настоящего t() — зовёт её
-## только вне редактора, иначе просто отдаёт русский fallback как есть (тот
-## же текст, что видел бы игрок без перевода). Все I18n.t(key, {}, fallback)
-## в этом файле — без параметров подстановки, поэтому обходятся без {}.
 func _tr(key: String, fallback: String) -> String:
 	return fallback if Engine.is_editor_hint() else I18n.t(key, {}, fallback)
 
@@ -76,13 +40,10 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# В редакторе UiRoot не выставляет settings перед add_child() (там его
-	# просто нет) — без дефолтов группы настроек ниже читали бы отсутствующие
-	# ключи из пустого словаря.
 	if Engine.is_editor_hint() and settings.is_empty():
 		settings = {
 			"game_type": "single", "mode": "ffa", "difficulty": "medium",
-			"level": 1, "weather": "auto", "daytime": "auto", "location": "auto",
+			"weather": "auto", "daytime": "auto", "location": "auto",
 		}
 	_bg._settings = settings
 
@@ -104,7 +65,6 @@ func _ready() -> void:
 		_wire_click_sfx(self)
 	layout.call_deferred()
 
-# ---------------------------------------------------------------- оформление
 func _style_chrome() -> void:
 	_left_panel.custom_minimum_size = Vector2(LEFT_PANEL_W, 0)
 	_left_panel.border_color = Color.TRANSPARENT
@@ -122,11 +82,6 @@ func _style_chrome() -> void:
 
 	_settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_settings_scroll.follow_focus = true
-	# ScrollContainer не растягивает содержимое сам по себе даже при
-	# выключенном горизонтальном скролле — без явного EXPAND тело сжимается
-	# по ширине своего содержимого (по самой широкой кнопке), а не по ширине
-	# панели, и HFlowContainer в каждой строке остаётся без места для переноса
-	# в несколько кнопок на строку — именно это и превращало ряды в колонку.
 	_settings_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_settings_body.add_theme_constant_override("separation", 12)
 	_nav_grid.columns = 2
@@ -189,9 +144,6 @@ func _build_version_pill() -> void:
 	_version_label.add_theme_font_size_override("font_size", 9)
 	_version_label.add_theme_color_override("font_color", Color(Cfg.UI_MUTED, 0.7))
 
-## Донор стилбоксов/шрифта — переносит уже готовую разметку кнопки,
-## собранной через UiKit.secondary()/primary(), на существующий узел сцены
-## (сам донор в дерево не добавляется, сразу освобождается).
 func _style_button(target: Button, donor: Button) -> void:
 	for prop in ["normal", "hover", "pressed", "disabled"]:
 		var sb := donor.get_theme_stylebox(prop)
@@ -207,12 +159,8 @@ func refresh_mode_summary() -> void:
 	var caret := "▴" if _settings_panel.visible else "▾"
 	var mode_label := _option_label("mode", settings.get("mode", "ffa"))
 	var type_label := _option_label("game_type", settings.get("game_type", "single"))
-	var level = settings.get("level", 1)
-	var level_label := "?" if level == -1 else "%s%d" % [_tr("menu.lvl", "Ур."), level]
-	_mode_btn.text = "%s · %s · %s  %s" % [mode_label, type_label, level_label, caret]
+	_mode_btn.text = "%s · %s  %s" % [mode_label, type_label, caret]
 
-## Подпись варианта по ключу настройки — тот же набор пар id/перевод, что и
-## в _build_settings_groups(), только развёрнутый для одиночного поиска.
 func _option_label(key: String, value) -> String:
 	var opts: Array = _settings_options().get(key, [])
 	for opt in opts:
@@ -223,10 +171,6 @@ func _option_label(key: String, value) -> String:
 func _build_nav_grid() -> void:
 	for c in _nav_grid.get_children():
 		c.queue_free()
-	# Отдельные ключи от "menu.garage"/"menu.achievements"/"menu.daily"/
-	# "menu.net"/"menu.settings" — те уже заняты (пауза, вкладки хаба) и несут
-	# эмодзи, запечённое прямо в переведённую строку; здесь иконка и подпись —
-	# два разных поля плитки, дублировать эмодзи незачем.
 	var dest := [
 		["garage", "🔧", _tr("menu.tile.garage", "Гараж")],
 		["gallery", "✨", _tr("menu.gallery", "Галерея перков")],
@@ -297,7 +241,6 @@ func _advance_tip() -> void:
 	tw.tween_callback(func(): _show_tip(idx))
 	tw.tween_property(_tip_label, "modulate:a", 1.0, 0.35)
 
-# ---------------------------------------------------------- настройки боя
 func _settings_options() -> Dictionary:
 	return {
 		"game_type": [
@@ -314,9 +257,6 @@ func _settings_options() -> Dictionary:
 			["easy", _tr("diff.easy", "Легко")],
 			["medium", _tr("diff.medium", "Средне")],
 			["hard", _tr("diff.hard", "Сложно")],
-		],
-		"level": [
-			[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"], [-1, "?"],
 		],
 		"location": [
 			["auto", _tr("loc.auto", "Жребий")],
@@ -346,15 +286,15 @@ func _settings_options() -> Dictionary:
 
 const _GROUP_LABELS := {
 	"game_type": "menu.gametype", "mode": "menu.mode", "difficulty": "menu.diff",
-	"level": "menu.level", "location": "menu.location", "weather": "menu.weather",
+	"location": "menu.location", "weather": "menu.weather",
 	"daytime": "menu.daytime",
 }
 const _GROUP_FALLBACKS := {
 	"game_type": "Тип игры", "mode": "Режим", "difficulty": "Сложность",
-	"level": "Уровень", "location": "Локация", "weather": "Погода",
+	"location": "Локация", "weather": "Погода",
 	"daytime": "Время суток",
 }
-const _GROUP_ORDER := ["game_type", "mode", "difficulty", "level", "location", "weather", "daytime"]
+const _GROUP_ORDER := ["game_type", "mode", "difficulty", "location", "weather", "daytime"]
 
 func _build_settings_groups() -> void:
 	for c in _settings_body.get_children():
@@ -365,11 +305,6 @@ func _build_settings_groups() -> void:
 			_tr(String(_GROUP_LABELS[key]), String(_GROUP_FALLBACKS[key])), key, opts[key]))
 	_wire_settings_nav.call_deferred()
 
-## Группа кнопок-переключателей с одним активным значением. Подпись —
-## фиксированной ширины слева (не отдельной строкой сверху), кнопки — в
-## HFlowContainer справа на всю оставшуюся ширину: раньше подпись-строка
-## сверху съедала место и превращала ряд вариантов в подобие столбца при
-## переносе, теперь ряд читается горизонтально.
 func _make_group(label_text: String, key: String, options: Array) -> HBoxContainer:
 	var row := UiKit.hbox(10)
 	var l := UiKit.label(label_text.to_upper(), 10, Cfg.UI_MUTED)
@@ -397,10 +332,6 @@ func _make_group(label_text: String, key: String, options: Array) -> HBoxContain
 		flow.add_child(btn)
 	return row
 
-## Связывает переключатели панели настроек боя для навигации крестовиной:
-## внутри группы — по горизонтали с переносом, между группами — по
-## вертикали. Автопоиск соседа промахивается через HFlowContainer, поэтому
-## вручную (тот же приём, что и у сетки навигации выше).
 func _wire_settings_nav() -> void:
 	var groups := []
 	for child in _settings_body.get_children():
@@ -422,21 +353,13 @@ func _wire_settings_nav() -> void:
 		groups.append(child)
 	UiKit.chain_vertical(groups)
 
-# ---------------------------------------------------------------- раскладка
-## Потолок высоты списка групп панели настроек — вписывается в экран, а не
-## тянет панель ниже нижнего края без какого-либо способа туда добраться.
 func _settings_budget(top: float, screen_h: float) -> float:
 	return maxf(screen_h - top - 32.0, 200.0)
 
-## Вертикальное центрирование панели с учётом заголовка и краёв экрана.
 func _panel_y(screen: Vector2, height: float, top: float) -> float:
 	var centered := screen.y * 0.5 - height * 0.5 + 26.0
 	return clampf(centered, top, maxf(top, screen.y - height - 16.0))
 
-## Раскладка главного меню: слева панель действий, справа — раскрывающиеся
-## настройки боя. Левая панель по высоте считается от содержимого и целиком
-## помещается в окно; список групп в правой панели может быть выше экрана —
-## сверх потолка высоты его прокручивает _settings_scroll.
 func layout() -> void:
 	if _left_panel == null:
 		return
@@ -460,11 +383,7 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		layout()
 
-# ---------------------------------------------------------------- профиль
 func refresh_profile() -> void:
-	# Prof — автозагрузка без @tool: в редакторе вместо неё placeholder без
-	# настоящих методов (xp_to_next_level() и т.п. упали бы). Показываем
-	# статичную заглушку — реальные цифры видны только в запущенной игре.
 	if Engine.is_editor_hint():
 		_chip_rank.text = "🎖 Рядовой"
 		_chip_level.text = "Ур. 1  ·  0/100 XP"
@@ -480,11 +399,6 @@ func refresh_profile() -> void:
 	_chip_perks.text = "%s %d/%d" % [
 		_tr("menu.perks", "перков"), Prof.unlocked.size(), Perks.all().size()]
 
-# ---------------------------------------------------------------- прочее
-## Звук клика на всех кнопках меню — один проход по дереву при первой
-## сборке (сцена больше не пересобирается при обычных кликах, только при
-## смене языка/темы — тогда UiRoot._refresh_screens() создаёт новый
-## экземпляр MainMenu, и проход просто повторяется на нём).
 func _wire_click_sfx(node: Node) -> void:
 	if node is BaseButton:
 		(node as BaseButton).pressed.connect(Sfx.play_ui)

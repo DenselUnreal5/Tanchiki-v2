@@ -1,9 +1,3 @@
-# ============================================================================
-# cli_check.gd — разбор аргументов командной строки (Cli.parse), без сети.
-#
-# Запуск:
-#   godot --headless --path godot tests/cli_check.tscn
-# ============================================================================
 extends Node
 
 var failures := 0
@@ -17,7 +11,6 @@ func _ready() -> void:
 	print("=== ПРОВЕРКА CLI ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
 
-## Без флагов — обычный запуск: ни сервера, ни автоподключения.
 func _check_defaults() -> void:
 	var out := Cli.parse(PackedStringArray([]))
 	_check(not bool(out["server"]), "без флагов: server=false")
@@ -41,7 +34,6 @@ func _check_server_flags() -> void:
 	_check(String(out["daytime"]) == "night", "--daytime=night разобран")
 	_check(String(out["location"]) == "jungle", "--location=jungle разобран")
 
-## Опечатка в значении не должна ломать разбор — только сбрасывать на дефолт.
 func _check_bad_values_fall_back() -> void:
 	var out := Cli.parse(PackedStringArray([
 		"--mode=zzz", "--difficulty=impossible", "--weather=meteor",

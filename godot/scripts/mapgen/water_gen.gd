@@ -1,22 +1,8 @@
-# ============================================================================
-# water_gen.gd — река, берега и мосты.
-#
-# Четвёртый этап конвейера, и он идёт последним из «природных»: река режет
-# уже готовый город. Набережная получается там, где вода съела часть
-# квартала, — так же, как в настоящем городе, выросшем вокруг реки.
-# ============================================================================
 class_name WaterGen
 extends RefCounted
 
-## Больше четырёх переправ на карту не бывает: мост — узкое место, за
-## которое дерутся, а не одна из дюжины равнозначных дорог.
 const MAX_BRIDGES := 4
 
-## Прокладывает реку и мосты. h_streets — горизонтальные улицы из плана:
-## по ним и ставятся переправы, чтобы мост продолжал улицу, а не обрывался
-## посреди квартала.
-## @param width множитель ширины русла: 0 — реки нет вовсе (пустошь),
-##        больше единицы — река шире городской (джунгли)
 static func carve(map: GameMap, rng: Rng, cols: int, rows: int,
 		h_streets: Array, width: float = 1.0) -> void:
 	if width <= 0.0:
@@ -27,7 +13,6 @@ static func carve(map: GameMap, rng: Rng, cols: int, rows: int,
 	var phase := rng.nextf() * TAU
 	var half := maxi(1, int(round(float(2 + int(rng.nextf() * 2.0)) * width)))
 
-	# Границы русла по строкам — по ним потом кладутся мосты.
 	var left := PackedInt32Array()
 	var right := PackedInt32Array()
 	left.resize(rows)
@@ -45,8 +30,6 @@ static func carve(map: GameMap, rng: Rng, cols: int, rows: int,
 
 	shore(map, 1, rows - 2, int(base - amp) - half - 2, int(base + amp) + half + 2)
 
-	# Переправы выбираются не подряд и не случайно, а равномерно по всей
-	# длине реки: иначе три моста рядом оставляли бы полкарты без переправы.
 	var usable := []
 	for st in h_streets:
 		var pos: int = int(st["pos"])
@@ -61,11 +44,6 @@ static func carve(map: GameMap, rng: Rng, cols: int, rows: int,
 			idx = int(round(float(i) * float(usable.size() - 1) / float(want - 1)))
 		_bridge(map, usable[idx], left, right, cols)
 
-## Обводит воду песком.
-##
-## Асфальт песком не засыпается. Это не косметика: замер связности показал,
-## что берег съедал соседние дорожные тайлы, и улица обрывалась — в главную
-## сеть попадало 15–45% асфальта вместо почти всего.
 static func shore(map: GameMap, r0: int, r1: int, c0: int, c1: int) -> void:
 	for r in range(maxi(1, r0), mini(map.rows - 2, r1) + 1):
 		for c in range(maxi(1, c0), mini(map.cols - 2, c1) + 1):
@@ -83,7 +61,6 @@ static func shore(map: GameMap, r0: int, r1: int, c0: int, c1: int) -> void:
 			if near:
 				map.set_tile(r, c, Cfg.T_SAND)
 
-## Кладёт мост на одну улицу: настил над водой плюс въезды на оба берега.
 static func _bridge(map: GameMap, street: Dictionary, left: PackedInt32Array,
 		right: PackedInt32Array, cols: int) -> void:
 	var pos: int = int(street["pos"])
@@ -92,8 +69,6 @@ static func _bridge(map: GameMap, street: Dictionary, left: PackedInt32Array,
 		var r: int = pos + dr
 		if r <= 0 or r >= map.rows - 1:
 			continue
-		# Въезды заходят на два тайла берега: мост должен смыкаться
-		# с улицей, а не обрываться в песок.
 		var c0: int = maxi(1, left[r] - 2)
 		var c1: int = mini(cols - 2, right[r] + 2)
 		for c in range(c0, c1 + 1):

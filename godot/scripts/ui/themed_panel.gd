@@ -1,24 +1,9 @@
-# ============================================================================
-# themed_panel.gd — панель-контейнер, которая рисует себя по активной теме
-# (Sets.ui_theme): рваная бумага (нуар), клёпаный металл (военное досье),
-# скошенное стекло со свечением (sci-fi). Заменяет UiKit.panel() везде, где
-# нужен фон под текущую тему — дочерние узлы добавляются как обычно, отступы
-# держит MarginContainer.
-#
-# @tool: рисует себя и в редакторе Godot (живой предпросмотр main_menu.tscn) —
-# читает только Sets.ui_theme/Cfg.UI_*, безопасно вне настоящей партии.
-# ============================================================================
 @tool
 class_name ThemedPanel
 extends MarginContainer
 
-## Разный seed на разных панелях — иначе рваный край нуара у всех окон
-## получался бы одинаковым «зубцом». Стабилен между перерисовками одной
-## и той же панели (важно: не randi() внутри _draw()).
 var seed_value: int = 0
-## Color.TRANSPARENT — использовать Cfg.UI_BORDER текущей темы.
 var border_color: Color = Color.TRANSPARENT
-## Военное досье: полоса-штамп по верхнему краю (используется в шапках).
 var stripe_top: bool = false
 
 var _jag: PackedVector2Array = PackedVector2Array()
@@ -31,9 +16,6 @@ func _ready() -> void:
 	resized.connect(_rebuild)
 	_rebuild()
 
-## Sets — автозагрузка, а её скрипт не @tool: в редакторе Godot подставляет
-## вместо неё заглушку-placeholder без настоящих полей (см. main_menu.gd —
-## та же оговорка). Тема по умолчанию — military, ровно как у Cfg.apply_theme.
 func _ui_theme() -> String:
 	return "military" if Engine.is_editor_hint() else Sets.ui_theme
 
@@ -53,17 +35,6 @@ func _draw() -> void:
 		"scifi": _draw_scifi()
 		_: _draw_military()
 
-# ---------------------------------------------------------------- нуар
-## Рваный контур рисуется только контуром (draw_polyline), не заливкой
-## многоугольника: полилинии рисуют соединённые отрезки как есть, им
-## всё равно, пересекает ли ломаная сама себя. Заливка — обычный прямой
-## прямоугольник (draw_rect), ему тоже всё равно. Раньше заливка шла тем
-## же самопересекающимся контуром через draw_colored_polygon(), а Godot
-## триангулирует только простые (без самопересечений) многоугольники —
-## при случайном зубце с нужным сочетанием (seed, size) контур регулярно
-## получался непростым, и триангуляция падала с "Invalid polygon data"
-## каждый кадр, пока панель была на экране. Так эффект того же вида
-## («рваный край») достигается без риска сломанной отрисовки.
 func _jagged_outline(sz: Vector2, jag: float, segs: int) -> PackedVector2Array:
 	var w := sz.x
 	var h := sz.y
@@ -89,7 +60,6 @@ func _draw_noir() -> void:
 	if _jag.size() >= 3:
 		draw_polyline(_jag, _border(), 1.6, true)
 
-# ---------------------------------------------------------------- военное досье
 func _draw_military() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(Cfg.UI_PANEL, Cfg.UI_PANEL_ALPHA))
 	draw_rect(Rect2(Vector2(1.5, 1.5), size - Vector2(3, 3)), _border(), false, 3.0)
@@ -108,7 +78,6 @@ func _draw_military() -> void:
 					Color(Cfg.UI_WARN, 0.5))
 			y += stripe_w
 
-# ---------------------------------------------------------------- sci-fi
 func _draw_scifi() -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(Cfg.UI_PANEL, Cfg.UI_PANEL_ALPHA)

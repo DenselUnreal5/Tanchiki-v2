@@ -1,10 +1,3 @@
-# ============================================================================
-# minimap.gd — миникарта одного игрока.
-#
-# Статичная часть карты кэшируется в текстуру и перерисовывается только когда
-# карта действительно изменилась (map.version). Врагов видно лишь по прямой
-# видимости, а перк «Тень» убирает танк с чужой миникарты.
-# ============================================================================
 class_name Minimap
 extends Control
 
@@ -38,17 +31,14 @@ func _draw() -> void:
 	var sx := w / world.map.width
 	var sy := h / world.map.height
 
-	# Аптечки.
 	for p in world.pickups:
 		if p.active:
 			draw_rect(Rect2(p.x * sx - 1, p.y * sy - 1, 2, 2), Color.WHITE)
 
-	# Флаги.
 	for flag in world.flags:
 		var c: Color = Cfg.flag_player if flag.team == "player" else Cfg.flag_enemy
 		draw_rect(Rect2(flag.x * sx - 2, flag.y * sy - 2, 4, 4), c)
 
-	# База «Обороны».
 	if world.base != null:
 		draw_rect(Rect2(world.base["x"] * sx - 3, world.base["y"] * sy - 3, 6, 6), Color("#7abf6a"))
 
@@ -60,9 +50,6 @@ func _draw() -> void:
 		var is_viewer: bool = tank == viewer
 		var hostile := world.are_hostile(viewer, tank) if viewer != null else true
 
-		# «Тень» скрывает танк с чужой миникарты. «Острый слух» вскрывает
-		# замаскированного врага вблизи (см. world_view.gd::_is_stealth_hidden
-		# — та же формула для экрана).
 		if not is_viewer and tank.shadow_timer > 0 and hostile:
 			var revealed := false
 			if viewer != null and float(viewer.mods.get("hearingMult", 1.0)) > 1.0:
@@ -71,7 +58,6 @@ func _draw() -> void:
 			if not revealed:
 				continue
 
-		# Врагов видно только по прямой видимости.
 		if hostile and viewer != null:
 			if not world.map.has_line_of_sight(viewer.x, viewer.y, tank.x, tank.y):
 				continue
@@ -83,7 +69,6 @@ func _draw() -> void:
 
 	_draw_shot_pings(sx, sy, viewer)
 
-	# Рамка области просмотра.
 	var vp := player.viewport
 	draw_rect(Rect2(
 		(player.camera.x - vp.size.x * 0.5) * sx,
@@ -91,11 +76,6 @@ func _draw() -> void:
 		vp.size.x * sx, vp.size.y * sy),
 		Color(0.47, 0.86, 0.47, 0.7), false, 1.0)
 
-## Отметки услышанных выстрелов — перк «Острый слух».
-##
-## Без перка отметок нет вовсе: иначе миникарта показывала бы всех стреляющих
-## всем и обесценила бы и прямую видимость, и «Тень». Точка гаснет за 2.5 с,
-## поэтому она говорит «там только что стреляли», а не «там стоит враг».
 func _draw_shot_pings(sx: float, sy: float, viewer) -> void:
 	if viewer == null or not viewer.alive:
 		return
@@ -124,8 +104,6 @@ func _render_cache() -> void:
 	var map := world.map
 	if _image == null or _image.get_width() != map.cols or _image.get_height() != map.rows:
 		_image = Image.create(map.cols, map.rows, false, Image.FORMAT_RGBA8)
-	# Земля на миникарте берётся у локации и притемняется: миникарта должна
-	# читаться как та же карта, только мельче.
 	var loc := Locations.get_location(String(world.level.get("location", Locations.CITY)))
 	_image.fill(Color(loc["ground"]).darkened(0.35))
 	for r in map.rows:

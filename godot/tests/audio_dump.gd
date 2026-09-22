@@ -1,11 +1,3 @@
-# ============================================================================
-# audio_dump.gd — выгрузка синтезированного звука в WAV.
-#
-# Слушать звук из кода нельзя, поэтому проверка такая: собрать все буферы,
-# записать их на диск и заодно напечатать пик каждого. Пик близко к 1.0 —
-# звук на пределе, около нуля — тишина, и то и другое означает ошибку
-# в синтезе.
-# ============================================================================
 extends Node
 
 func _ready() -> void:
@@ -14,15 +6,10 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	print("папка: ", ProjectSettings.globalize_path(dir))
 
-	# Ждём фоновую сборку обеих тем.
 	var guard := 0
 	while (Mus._menu == null or Mus._combat == null) and guard < 1800:
 		guard += 1
 		await get_tree().process_frame
-	# Тема может быть и синтезированной (AudioStreamWAV), и собранной из
-	# файлов (AudioStreamMP3 либо плейлист). Жёсткий тип здесь ронял тест
-	# с «Trying to assign value of type AudioStreamMP3»: музыка стала
-	# файловой, а выгрузка про это не знала.
 	for pair in [["menu", Mus._menu], ["combat", Mus._combat]]:
 		var loop: AudioStream = pair[1]
 		if loop == null:
@@ -38,9 +25,6 @@ func _ready() -> void:
 			float(samples) / float(Synth.RATE), wav.data.size() / 1024])
 		wav.save_to_wav(dir + "/music_%s.wav" % pair[0])
 
-	# Звуки собираются в фоновом потоке. Ждать их обязательно: раньше тест
-	# успевал случайно — музыка синтезировалась дольше и держала паузу.
-	# Как только музыка стала файловой, тест начал падать на первом же звуке.
 	guard = 0
 	while not Sfx._streams.has("shoot") and guard < 1800:
 		guard += 1

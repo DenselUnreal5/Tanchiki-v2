@@ -1,13 +1,3 @@
-# ============================================================================
-# menu_shot.gd — снимок меню на выбранном языке.
-#
-# Полнота словаря (i18n_check) доказывает, что ключи есть, но не то, что
-# игрок увидит английский текст: строку могли собрать мимо переводчика.
-# Здесь снимается то, что реально нарисовано.
-#
-# Запуск (с окном, не headless):
-#   godot --path godot tests/menu_shot.tscn
-# ============================================================================
 extends Node
 
 const OUT := "user://menu_shot/"
@@ -20,7 +10,6 @@ func _ready() -> void:
 	for i in 8:
 		await get_tree().process_frame
 
-	# Само меню, без окон поверх: на нём видно версию сборки.
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(OUT + "menu_plain.png")
 	print("снято: menu_plain.png")

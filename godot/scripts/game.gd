@@ -1,10 +1,3 @@
-# ============================================================================
-# game.gd — связывает всё вместе: цикл, состояния, события.
-#
-# Один явный конечный автомат состояний: МЕНЮ → ИГРА → (ПАУЗА | ВЫБОР ПЕРКА)
-# → ИТОГИ. Логика мира идёт фиксированным шагом 60 Гц независимо от частоты
-# кадров, отрисовка — каждый кадр.
-# ============================================================================
 extends Node
 
 const S_MENU := "menu"
@@ -18,60 +11,33 @@ var state := S_MENU
 var world: World = null
 var players: Array = []
 
-## Накопитель времени для фиксированного шага.
 var accumulator := 0.0
-## Сетевые соперники: играют в том же мире, но экран на этой машине не делят.
 var remote_players: Array = []
 var _snap_tick := 0
 var _sum_tick := 0
-## Буфер команд своего танка для клиентского предсказания: {"tick","cmd"},
-## tick — в пространстве world.tick. Сверяется и подрезается в
-## _reconcile_local_tank() при приходе каждого нового снапшота.
 var _predict_buf: Array = []
 var _last_reconciled_tick := -1
-## Сколько раз карта клиента разошлась с хостовой за партию. Ноль — норма;
-## всё остальное видно в тестах и в отладке.
 var net_desyncs := 0
-## Сколько сверок отпечатка вообще состоялось. Без этого счётчика ноль
-## расхождений неотличим от «сверка ни разу не сработала».
 var net_sums := 0
-## Последняя пара отпечатков: свой и хостовый. По ней видно не только
-## «разошлось или нет», но и на каком именно состоянии сверяли.
 var net_last_mine := 0
 var net_last_theirs := 0
-## Сеть молчит дольше порога: HUD показывает это игроку.
 var net_stale := false
-## Игрок, для которого сейчас открыт выбор перка.
 var perk_player = null
 
-## Своя случайность для интерфейса — отдельно от мировой.
-##
-## Раньше тройка перков тасовалась генератором мира. Список доступных перков
-## короче на один, когда перк уже взят, а тасовка вытягивает по одному числу
-## на элемент — значит после первого же выбора вся партия шла по другой ветке
-## случайности. Замер перков поймал это в лоб: перк, который на симуляцию
-## влиять не может вовсе, «давал» +1.3 убийства в минуту.
 var ui_rng := Rng.new(int(Time.get_ticks_usec()) & 0xFFFFFFFF)
-## Суммарный урон за партию, для челленджа «Вампир».
 var match_damage := 0.0
 
-## Всплывающие числа урона: {x, y, text, color, life}.
 var floaters: Array = []
 
 var _root: Control
 var _views_root: Control
-var _views: Array = []     # [{container, viewport, view}]
+var _views: Array = []
 var hud: Hud
 var ui: UiRoot
 
 func _ready() -> void:
-	# Догоняем Steam тем, что игрок успел открыть без него: профиль — источник
-	# правды, и достижения, полученные офлайн, обязаны появиться в Steam
-	# задним числом. Отложено на кадр: автозагрузки должны завершить _ready.
 	_sync_steam.call_deferred()
 
-	# Интерфейс рассчитан так, чтобы целиком помещаться без прокрутки;
-	# меньше этого размера верстка начала бы налезать сама на себя.
 	get_window().min_size = Vector2i(1024, 640)
 
 	_root = Control.new()
@@ -95,9 +61,6 @@ func _ready() -> void:
 	_bind_profile_events()
 	_bind_net()
 
-	# --server / --connect=host:port — запуск сразу в сетевой режим, минуя
-	# меню (для сервера) или с автоподключением (для клиента). Обычный запуск
-	# без этих флагов не меняется ни на шаг.
 	var cli := Cli.parse()
 	if bool(cli["server"]):
 		_boot_dedicated_server(cli)
@@ -106,10 +69,6 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_on_resize)
 	_on_resize()
 
-	# Сплэш с логотипом — только на настоящем запуске. Все тестовые сцены
-	# добавляют Game дочерним узлом под свой собственный корень, и тогда
-	# current_scene остаётся тестовой сценой, а не этим узлом: условие ниже
-	# ложно само по себе, без отдельного флага «мы в тесте».
 	if get_tree().current_scene == self:
 		var splash := Splash.new()
 		_root.add_child(splash)
@@ -117,22 +76,11 @@ func _ready() -> void:
 		splash.queue_free()
 
 	ui.show_menu()
-	# Тема меню включится сама, как только соберётся в фоне.
 	Mus.play_menu()
-	# --connect=host:port — сразу подключиться, не ходя руками в «Другие
-	# способы». Экран сети открываем поверх меню тем же приёмом, каким уже
-	# встречаем входящие приглашения Steam (см. _bind_net → lobby_entered).
-	# Открыть экран нужно ДО join_game(): именно open_net() подписывается на
-	# Net.net_error, а join_game() может отказать синхронно (битый адрес) —
-	# в обратном порядке эта ошибка улетела бы в пустоту, никем не услышанная.
 	if String(cli["connect_host"]) != "":
 		ui.open_net()
 		Net.join_game(String(cli["connect_host"]), int(cli["connect_port"]))
 
-## Выделенный сервер: без окна и без своего игрока. Поднимает ENet-хост,
-## настраивает партию по флагам командной строки и запускает её сам, как
-## только наберётся нужное число гостей — «Начать партию» здесь некому
-## нажать (см. Net.dedicated / Net._rpc_hello).
 func _boot_dedicated_server(cli: Dictionary) -> void:
 	var port := int(cli["port"])
 	var target := int(cli["players"])
@@ -149,8 +97,6 @@ func _boot_dedicated_server(cli: Dictionary) -> void:
 	if String(cli["location"]) != "":
 		ui.settings["location"] = String(cli["location"])
 
-	# Имя сервера — чтобы у подключившихся в списке лобби была не безликая
-	# «Игрок», а понятная строка на месте пустого слота хоста.
 	Net.my_name = I18n.t("net.dedicated.name", {}, "Выделенный сервер")
 
 	if not Net.host_dedicated(port, target):
@@ -158,10 +104,6 @@ func _boot_dedicated_server(cli: Dictionary) -> void:
 		get_tree().quit(1)
 		return
 
-	# Партию запускает сам отсчёт Net, а не клик по «Начать партию» —
-	# смотреть на экран некому. Тот же приём, что ui_root.gd применяет для
-	# интерактивного хоста в _on_countdown_changed, только напрямую, без
-	# зависимости от того, открыт ли где-то экран сети.
 	Net.countdown_changed.connect(func(seconds_left: int):
 		if seconds_left == 0 and Net.role == "host":
 			start_match())
@@ -169,7 +111,6 @@ func _boot_dedicated_server(cli: Dictionary) -> void:
 	print("[server] слушаю порт %d, жду %d игроков (режим %s, сложность %s, уровень %s)"
 		% [port, target, ui.settings["mode"], ui.settings["difficulty"], ui.settings["level"]])
 
-## Свёрнутое окно не должно означать проигранную партию.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and state == S_PLAYING:
 		pause()
@@ -189,7 +130,6 @@ func _bind_ui() -> void:
 		Sfx.play("pickup")
 		ui.refresh_profile())
 
-# ------------------------------------------------------------------ профиль
 func _bind_profile_events() -> void:
 	Prof.levelup.connect(func(levels: Array):
 		var lvl: int = levels[levels.size() - 1]
@@ -223,9 +163,6 @@ func _bind_profile_events() -> void:
 		Sfx.play("unlock")
 		ui.refresh_profile())
 
-	# Звания — не бонус к танку, а видимая метка того, что происходило после
-	# 20 уровня, когда все перки уже открыты (Perks.UNLOCK_TABLE) и расти
-	# формально уже некуда.
 	Prof.rank_up.connect(func(ids: Array, reward: int):
 		var names := []
 		for id in ids:
@@ -244,13 +181,11 @@ func _reset_progress() -> void:
 	ui.refresh_profile()
 	ui.show_menu()
 
-# ------------------------------------------------------------------ размеры
 func _on_resize() -> void:
 	_layout_viewports()
 	if not players.is_empty():
 		hud.layout(players, world)
 
-## Раскладка областей просмотра: один экран или вертикальный сплит.
 func _layout_viewports() -> void:
 	var size := get_viewport().get_visible_rect().size
 	if players.size() <= 1:
@@ -296,13 +231,10 @@ func _rebuild_views() -> void:
 		view.world = world
 		view.player = player
 		view.floaters = floaters
-		# Затенение у стен считается один раз на карту и переиспользуется.
 		if Sets.fx_quality > PostFx.OFF:
 			view.ao = AoLayer.new()
 		vp.add_child(view)
 
-		# Свечение источников — отдельным узлом поверх мира: режим смешивания
-		# задаётся материалом всего узла, внутри одного _draw() его не сменить.
 		var glow: GlowLayer = null
 		if Sets.fx_quality > PostFx.OFF:
 			glow = GlowLayer.new()
@@ -311,23 +243,15 @@ func _rebuild_views() -> void:
 			glow.quality = Sets.fx_quality
 			vp.add_child(glow)
 
-		# Цветокоррекция вешается на контейнер: она обрабатывает готовую
-		# картинку мира и не задевает HUD и меню, которые рисуются поверх.
 		container.material = PostFx.make_material(Sets.fx_quality)
 
 		_views.append({"container": container, "viewport": vp, "view": view, "glow": glow})
 	_layout_viewports()
 
-# ------------------------------------------------------------------ партия
-## @param net_opts настройки сетевой партии от хоста: seed карты и состав.
-##        Пустой словарь — обычная локальная игра.
 func start_match(net_opts: Dictionary = {}) -> void:
-	# Предыдущая партия могла остаться в памяти из-за циклических ссылок.
 	if world != null:
 		world.dispose()
 		world = null
-	# world.tick новой партии считается заново от нуля — старый буфер
-	# предсказания был бы про уже не существующие тики.
 	_predict_buf = []
 	_last_reconciled_tick = -1
 
@@ -336,8 +260,6 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	var is_client := Net.role == "client"
 	var seed_override := int(net_opts.get("net_seed", -1))
 	if is_client:
-		# Клиент играет тем режимом, который объявил хост, а не тем,
-		# что выбрано в его собственном меню.
 		s["mode"] = String(net_opts.get("mode", s["mode"]))
 		s["difficulty"] = String(net_opts.get("difficulty", s["difficulty"]))
 		s["level"] = int(net_opts.get("level", s["level"]))
@@ -345,25 +267,10 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		s["daytime"] = String(net_opts.get("daytime", "auto"))
 		s["location"] = String(net_opts.get("location", "auto"))
 
-	# players — только местные игроки: по ним делится экран. Сетевые
-	# соперники живут в remote_players и в мир попадают наравне, но своего
-	# окна на этом компьютере не имеют.
 	remote_players = []
-	# Выделенный сервер — не игрок: у него нет ни экрана, ни своего танка,
-	# players так и остаётся пустым, а всех людей несут remote_players ниже.
 	var is_dedicated_host := Net.role == "host" and Net.dedicated
 	players = []
 	if not is_dedicated_host:
-		# «Горячий стул» с обоими устройствами «Как обычно» — определяем
-		# схемы по факту подключённых геймпадов, а не жёстко мышь+стрелки:
-		# один джойстик достаётся первому игроку (второй как и раньше с
-		# клавиатуры — поделить один джойстик на двоих физически нельзя,
-		# оба слушали бы один и тот же device); два и больше — по одному
-		# каждому. Явный ручной выбор хотя бы у одного из игроков в
-		# Настройках отключает автоопределение целиком — уважаем его.
-		# Геймпад, выбранный в Настройках, мог быть отключён. Тогда схема
-		# слушала бы несуществующее устройство, и танк не реагировал бы ни на
-		# что — откатываемся на «Авто», чтобы работали клавиатура и мышь.
 		var p1_dev := _connected_or_auto(Sets.p1_device)
 		var p2_dev := _connected_or_auto(Sets.p2_device)
 		if hotseat and p1_dev == Sets.DEV_AUTO and p2_dev == Sets.DEV_AUTO:
@@ -374,10 +281,6 @@ func start_match(net_opts: Dictionary = {}) -> void:
 				p2_dev = "pad%d" % int(pads[1]["id"])
 		players = [PlayerState.new(0, I18n.t("player1", {}, "Игрок 1"),
 			Prof.equipped_color1, _scheme_for(p1_dev, 0, hotseat))]
-		# Живое переключение геймпад/клавиатура прямо в бою — только одиночная
-		# игра с устройством «Как обычно»: в «горячем стуле» устройства
-		# закреплены за игроками на старте матча (выше), смешивать на лету
-		# нельзя, иначе оба танка начнут слушать один и тот же джойстик.
 		if not hotseat and p1_dev == Sets.DEV_AUTO:
 			players[0].enable_auto_device_switch(players[0].scheme, Ctl.GamepadScheme.new(0))
 		if hotseat and not Net.is_online:
@@ -387,8 +290,6 @@ func start_match(net_opts: Dictionary = {}) -> void:
 			players[0].peer_id = multiplayer.get_unique_id()
 			players[0].name = String(Net.my_name)
 	if Net.role == "host":
-		# Каждому подключённому — свой игрок с сетевой схемой управления:
-		# его ввод приходит пакетами, а не с этой клавиатуры.
 		for peer_id in Net.lobby.keys():
 			if int(peer_id) == multiplayer.get_unique_id():
 				continue
@@ -411,9 +312,6 @@ func start_match(net_opts: Dictionary = {}) -> void:
 
 	_layout_viewports()
 
-	# Локация разыгрывается ЗДЕСЬ и уже готовой уходит и в генератор, и в сеть.
-	# Тянуть жребий внутри генератора нельзя: карта уровня детерминирована,
-	# и «случайная» локация выпадала бы на нём всегда одна и та же.
 	var loc_setting := String(s.get("location", "auto"))
 	var match_location := loc_setting
 	if is_client:
@@ -423,9 +321,6 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	var level := LevelGen.generate(int(s["level"]), String(s["mode"]), seed_override,
 		match_location)
 	Net.reset_tank_ids()
-	# Партия официально активна для Net ещё до World.new(): спавн игроков и
-	# начальных ботов идёт внутри конструктора мира, и их авторитетный
-	# host_tank_spawned() иначе молча не сработал бы (см. Net.begin_match()).
 	if Net.role == "host":
 		Net.begin_match()
 	world = World.new({
@@ -436,18 +331,12 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		"puppet": is_client,
 		"weather": String(s.get("weather", "auto")),
 		"daytime": String(s.get("daytime", "auto")),
-		# Тот же net_seed, что уже уходит в LevelGen.generate() выше — раньше
-		# тут читался несуществующий ключ "rng_seed", и World.rng у клиента
-		# никогда не совпадал с хостовым (сейчас неважно — рендер марионетки
-		# не завязан на world.rng, но это ловушка на будущее).
 		"rng_seed": seed_override,
 	})
 	if is_client:
-		# Состав приходит от хоста: свои танки клиент не порождает.
 		for info in net_opts.get("net_roster", []):
 			net_spawn_puppet(info)
 	elif Net.role == "host":
-		# Журнал изменений карты нужен только хосту и только в партии.
 		world.map.net_log_on = true
 		Net.host_start_match({
 			"mode": String(s["mode"]), "difficulty": String(s["difficulty"]),
@@ -486,7 +375,6 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	for p in players:
 		p.update_camera()
 
-	# Стартовый выбор перка — по одному на игрока.
 	state = S_PLAYING
 	Mus.play_combat(String(world.level.get("location", Locations.CITY)))
 	for p in players:
@@ -528,7 +416,6 @@ func resume() -> void:
 	state = S_PLAYING
 	accumulator = 0.0
 
-# ------------------------------------------------------------------ события мира
 func _bind_world_events(w: World) -> void:
 	w.feed.connect(func(text: String, color: Color):
 		hud.add_feed(text, color)
@@ -624,37 +511,26 @@ func _on_finish(result: Dictionary) -> void:
 	Mus.play_menu()
 	if bool(result["victory"]):
 		Prof.bump_stat("gamesWon", 1)
-	# «Оборона» по дизайну не выигрывается (result["victory"] тут всегда
-	# false) — достижение считает не победу, а лучшую достигнутую волну.
 	if world.mode == "defense":
 		Prof.bump_stat("defenseWaveReached", world.wave)
 	Prof.bump_daily("games", 1)
 	Prof.check_challenges()
 	Prof.save_profile()
-	# Итоги партии уходят в Steam: показатели — под достижения на стороне
-	# Valve, лучший счёт — в общую таблицу.
 	SteamStats.push_stats(Prof.stats)
 	var best := 0
 	for p in players:
 		best = maxi(best, p.score)
-	# «Оборона» бесконечна — там соревнуются не очками, а тем, сколько волн
-	# продержались; для остальных режимов счёт как и был, лучший из игроков.
 	var board_score := world.wave if world.mode == "defense" else best
 	SteamStats.push_score(board_score, world.mode)
 	hud.hide_hud()
 	ui.refresh_profile()
 	ui.show_game_over(result, world, players.size() > 1)
 
-## Разовая синхронизация со Steam при запуске.
-##
-## Отдаёт уже открытые достижения и накопленную статистику. Steam повторную
-## выдачу игнорирует, поэтому вызов безопасен при каждом запуске.
 func _sync_steam() -> void:
 	if not SteamStats.ready():
 		return
 	var sent := SteamStats.push_all(Prof.achievements.keys())
 	SteamStats.push_stats(Prof.stats)
-	# Ответ на поиск таблицы приходит колбэком — подписываемся один раз.
 	var steam: Object = Engine.get_singleton("Steam")
 	if steam.has_signal("leaderboard_find_result") 			and not steam.is_connected("leaderboard_find_result", _on_leaderboard_found):
 		steam.connect("leaderboard_find_result", _on_leaderboard_found)
@@ -663,7 +539,6 @@ func _sync_steam() -> void:
 func _on_leaderboard_found(_handle, found: int) -> void:
 	SteamStats.on_leaderboard_found(found != 0)
 
-## Устройство из настроек, если оно есть; отключённый геймпад → «Авто».
 func _connected_or_auto(device: String) -> String:
 	if not device.begins_with("pad"):
 		return device
@@ -674,11 +549,6 @@ func _connected_or_auto(device: String) -> String:
 	push_warning("Геймпад %d из настроек не подключён — управление «Авто»" % (id + 1))
 	return Sets.DEV_AUTO
 
-## Схема управления по настройке игрока.
-##
-## «auto» сохраняет прежнее поведение: первому — мышь с клавиатурой, второму
-## клавиатура. Геймпад закрепляется за игроком по НОМЕРУ устройства, иначе
-## в «горячем стуле» оба танка слушали бы один и тот же джойстик.
 func _scheme_for(device: String, index: int, hotseat: bool):
 	if device.begins_with("pad"):
 		return Ctl.GamepadScheme.new(int(device.substr(3)))
@@ -688,8 +558,6 @@ func _scheme_for(device: String, index: int, hotseat: bool):
 		return Ctl.MouseAimScheme.new(not hotseat)
 	return Ctl.MouseAimScheme.new(not hotseat) if index == 0 		else Ctl.KeyboardAimScheme.new()
 
-# ------------------------------------------------------------------ перки
-## Показывает выбор перка следующему игроку в очереди, если он есть.
 func _process_perk_queue() -> void:
 	if state == S_GAMEOVER or state == S_MENU:
 		return
@@ -723,20 +591,13 @@ func _on_perk_chosen(player, perk_id: String) -> void:
 		hud.add_feed(I18n.t("feed.perkTook",
 			{"name": player.name, "icon": perk["icon"], "perk": I18n.dn(perk, "name", "perk")},
 			"%s взял %s %s" % [player.name, perk["icon"], perk["name"]]), Cfg.UI_GOLD)
-	# Клиент выбирает у себя, а танк живёт у хоста — отправляем выбор туда.
 	if Net.role == "client":
 		Net.send_perk(perk_id)
 	player.pending_level_ups = maxi(0, player.pending_level_ups - 1)
 	_process_perk_queue()
 
-# ------------------------------------------------------------------ ввод
 func _unhandled_input(event: InputEvent) -> void:
-	# Действия, а не голые клавиши: те же кнопки работают и с геймпада
-	# (B — назад, Start — пауза, Back — табло). Действия ввода заводит
-	# settings.gd:_ensure_input_actions.
 	if event.is_action_pressed("ui_cancel"):
-		# Esc/B закрывают верхний открытый оверлей. Если закрывать нечего —
-		# проваливаемся ниже, чтобы Esc всё ещё ставил паузу.
 		if ui.handle_cancel():
 			get_viewport().set_input_as_handled()
 			return
@@ -753,21 +614,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.toggle_scoreboard(world)
 		get_viewport().set_input_as_handled()
 
-# ------------------------------------------------------------------ цикл
 func _process(delta: float) -> void:
 	if state == S_MENU:
 		return
 	if world == null:
 		return
 
-	# Курсор мыши в координатах окна — схемы управления переводят его
-	# в мировые координаты через личную область просмотра игрока.
 	var mouse := get_viewport().get_mouse_position()
 	for p in players:
-		# Схемы читают эти поля перед каждым кадром. Проверяем наличие поля,
-		# а не тип схемы: у мышиной есть mouse, у геймпадной — world (для
-		# автоприцела), и присваивать несуществующее поле — ошибка времени
-		# выполнения.
 		if "mouse" in p.scheme:
 			p.scheme.mouse = mouse
 		if "world" in p.scheme:
@@ -783,7 +637,6 @@ func _process(delta: float) -> void:
 			_update_floaters()
 			accumulator -= Cfg.TICK_SEC
 			steps += 1
-			# Прерываем догон, если партия завершилась или открылся выбор перка.
 			if world.finished_flag:
 				break
 			var pending := false
@@ -793,8 +646,6 @@ func _process(delta: float) -> void:
 					break
 			if pending:
 				break
-		# Если накопилось слишком много — сбрасываем остаток, чтобы игра
-		# не «догоняла» рывками после сворачивания окна.
 		if accumulator > Cfg.TICK_SEC * Cfg.MAX_STEPS_PER_FRAME:
 			accumulator = 0.0
 
@@ -812,21 +663,16 @@ func _process(delta: float) -> void:
 		hud.update_hud(world)
 	_update_post_fx()
 
-# ============================================================== сетевая игра
 func _bind_net() -> void:
 	Net.bind_game(self)
 	Net.match_starting.connect(func(settings: Dictionary): start_match(settings))
 	Net.disconnected.connect(func():
 		if state != S_MENU:
 			to_menu())
-	# Приняли приглашение Steam или запустились по «Join Game» — показываем
-	# экран сети, чтобы игрок видел лобби, а не пустое меню.
 	Net.lobby_entered.connect(func():
 		if state == S_MENU:
 			ui.open_net())
 
-## Кадр клиента: своя симуляция не считается вовсе. Идут только частицы,
-## погода и обломки, а положение всего живого приходит от хоста.
 func _client_frame(delta: float) -> void:
 	accumulator += minf(0.25, delta)
 	var steps := 0
@@ -852,15 +698,9 @@ func _client_frame(delta: float) -> void:
 	for p in players:
 		p.update_camera()
 
-## Сколько молчит сеть, прежде чем предупредить игрока и прежде чем
-## признать партию потерянной. Первый порог — четыре пропущенных снапшота
-## подряд, второй — заведомо не джиттер, а обрыв.
 const NET_WARN_MSEC := 700
 const NET_DEAD_MSEC := 8000
 
-## Клиент не считает мир сам, поэтому молчащая сеть выглядит как застывшая
-## картинка без единой ошибки в консоли. Это худший вид поломки: игра цела,
-## но не играет. Здесь она называет вещи своими именами.
 func _check_net_alive() -> void:
 	if Net.role != "client":
 		return
@@ -873,20 +713,14 @@ func _check_net_alive() -> void:
 		Net.leave(false)
 		to_menu()
 
-## Хвост кадра хоста: разослать изменения карты и снапшот.
 func _host_frame() -> void:
 	if Net.role != "host" or world == null:
 		return
 	Net.host_map_delta(world.map.take_net_log())
-	# Уровень сетевому игроку начисляет мир у хоста, а выбирает перк он сам:
-	# зовём его экран, ответ придёт обратно как выбор.
 	for rp in remote_players:
 		while rp.pending_level_ups > 0:
 			rp.pending_level_ups -= 1
 			Net.host_event_to(int(rp.peer_id), "perk", {})
-	# Раз в пять секунд — отпечаток карты. Это дёшево и ловит потерю
-	# надёжного пакета, после которой у клиента осталась бы стена там,
-	# где её снесли ещё в прошлой атаке.
 	if world.tick - _sum_tick >= 300:
 		_sum_tick = world.tick
 		Net.host_event("mapsum", {"h": world.map.checksum()})
@@ -896,7 +730,6 @@ func _host_frame() -> void:
 	_snap_tick = world.tick
 	Net.host_broadcast(world.tick, world.tanks, world.bullets, _net_extra())
 
-## Мелочь режима, без которой HUD клиента врёт: счёт, флаги, аптечки, база.
 func _net_extra() -> Dictionary:
 	var flags := []
 	for f in world.flags:
@@ -915,11 +748,6 @@ func _net_extra() -> Dictionary:
 		out["base"] = [world.base["hp"], world.base["max_hp"]]
 	return out
 
-## Сверка клиентского предсказания своего танка с последним авторитетным
-## снапшотом хоста: снап позиции на присланный тик, затем повтор команд,
-## накопленных после этого тика, поверх скорректированной позиции. См.
-## Tank.predict_move(). Работает в пространстве world.tick (не current_tick
-## — см. Net.latest_snapshot_tank).
 func _reconcile_local_tank() -> void:
 	if players.is_empty():
 		return
@@ -953,8 +781,6 @@ func _reconcile_local_tank() -> void:
 		tank.predict_move(world, entry["cmd"])
 	_predict_buf = replay
 
-## Раскладывает присланное состояние по объектам мира. Танки уже созданы
-## заранее по составу, поэтому здесь только координаты и здоровье.
 func _apply_net_state() -> void:
 	var st := Net.render_state()
 	if st.is_empty() or world == null:
@@ -977,8 +803,6 @@ func _apply_net_state() -> void:
 		t.shield_hp = float(info["shield"])
 		var flags := int(info["flags"])
 		t.alive = (flags & 1) != 0
-		# Таймеры не тикают у клиента, поэтому держим их взведёнными,
-		# пока хост сообщает, что эффект активен: отрисовке нужен сам факт.
 		t.turbo_timer = 2 if (flags & 2) != 0 else 0
 		t.spawn_protect = 2 if (flags & 4) != 0 else 0
 		t.shadow_timer = 2 if (flags & 16) != 0 else 0
@@ -986,8 +810,6 @@ func _apply_net_state() -> void:
 		live.append(t)
 	world.tanks = live
 
-	# Пули пересобираются каждый кадр: их номера по сети не гоняются,
-	# а связывать их между пакетами ради экономии — сложность без выигрыша.
 	world.bullets.clear()
 	for b in st["bullets"]:
 		var pb = Ent.Bullet.new(float(b["x"]), float(b["y"]), 0.0, null)
@@ -1004,10 +826,6 @@ func _apply_net_extra(extra: Dictionary) -> void:
 	world.flags.clear()
 	for f in extra.get("flags", []):
 		var fl = Ent.Flag.new(float(f[0]), float(f[1]), "player" if int(f[2]) == 0 else "enemy")
-		# at_home/carried — вычисляемые свойства без сеттера (только get:),
-		# присваивать им напрямую нельзя. Сеть везёт только один бит
-		# "дома/не дома" (game.gd:878), носителя не передаёт — поэтому у
-		# клиента любой "не дома" флаг рисуется как "брошенный".
 		fl.state = "home" if bool(f[3]) else "dropped"
 		world.flags.append(fl)
 	world.pickups.clear()
@@ -1023,7 +841,6 @@ func _apply_net_extra(extra: Dictionary) -> void:
 	if extra.has("base") and world.base != null:
 		world.base["hp"] = float(extra["base"][0])
 
-## Создаёт у клиента танк-марионетку по описанию от хоста.
 func net_spawn_puppet(info: Dictionary) -> void:
 	if world == null:
 		return
@@ -1039,8 +856,6 @@ func net_spawn_puppet(info: Dictionary) -> void:
 	})
 	tank.cosmetics = info.get("cosmetics", {})
 	tank.cannon_id = String(info.get("cannon_id", "standard"))
-	# Свой танк цепляется к местному игроку: иначе не будет ни камеры,
-	# ни HUD, ни прицеливания.
 	if int(info["owner_peer"]) == multiplayer.get_unique_id() and not players.is_empty():
 		tank.owner = players[0]
 		players[0].tank = tank
@@ -1064,8 +879,6 @@ func net_apply_event(kind: String, args: Dictionary) -> void:
 			var n := int(args.get("n", 0))
 			hud.banner(I18n.t("hud.waveBanner", {"n": n}, "ВОЛНА %d" % n), Cfg.UI_GOLD, 90, 40)
 		"mapsum":
-			# Расхождение чиним не «подкруткой», а запросом карты целиком:
-			# знать, какие именно тайлы разошлись, клиент не может.
 			if world == null:
 				return
 			net_sums += 1
@@ -1085,20 +898,12 @@ func net_apply_event(kind: String, args: Dictionary) -> void:
 			if state != S_GAMEOVER:
 				_on_finish(args)
 
-## Игрок отключился посреди партии. Без уборки его танк оставался
-## в мире с последней командой в руках: ехал в стену до конца партии,
-## занимал место в счёте и продолжал получать уровни.
 func net_peer_left(peer_id: int) -> void:
 	for i in range(remote_players.size() - 1, -1, -1):
 		var rp = remote_players[i]
 		if int(rp.peer_id) != peer_id:
 			continue
 		if rp.tank != null:
-			# Танк убирается из мира целиком, а не просто помечается мёртвым.
-			# Мёртвый корпус остаётся в списке, и его продолжает расталкивать
-			# физика: замер показал, что за две секунды он уезжал на 40 px
-			# сам по себе. Клиенты уберут его следом — снапшот его больше
-			# не содержит, а лишние танки клиент вычищает сам.
 			rp.tank.alive = false
 			rp.tank.owner = null
 			if world != null:
@@ -1110,7 +915,6 @@ func net_peer_left(peer_id: int) -> void:
 		remote_players.remove_at(i)
 	return
 
-## Перк, выбранный сетевым игроком: экран у него, танк — здесь.
 func net_apply_perk(peer_id: int, perk_id: String) -> void:
 	if perk_id == "":
 		return
@@ -1125,8 +929,6 @@ func net_apply_perk(peer_id: int, perk_id: String) -> void:
 				rp.tank.recompute()
 		return
 
-## Звук слышен «из камеры»: громкость, панорама и глухость далёких
-## выстрелов считаются от этих точек. В «горячем стуле» их две.
 func _update_listeners() -> void:
 	var pts := PackedVector2Array()
 	var half := 640.0
@@ -1134,13 +936,9 @@ func _update_listeners() -> void:
 		pts.append(Vector2(p.camera.x, p.camera.y))
 		half = float(p.viewport.size.x) * 0.5
 	Sfx.set_listeners(pts, half)
-	# «Острый слух» слышит дальше: дальность берётся у местного игрока,
-	# потому что слушает именно он.
 	var t0 = players[0].tank if not players.is_empty() else null
 	Sfx.hear_scale = float(t0.mods["hearingMult"]) if t0 != null else 1.0
 
-## Гул мотора у танков живых игроков (боты — нет, как и со звуком трака).
-## Вне боя массив пустой — Sfx глушит лупы сам.
 func _update_engines() -> void:
 	var rigs: Array = []
 	if state == S_PLAYING:
@@ -1151,7 +949,6 @@ func _update_engines() -> void:
 			rigs.append([t.x, t.y, sqrt(t.vx * t.vx + t.vy * t.vy)])
 	Sfx.update_engines(rigs)
 
-## Параметры постобработки ведёт погода: время суток, дождь, туман, молния.
 func _update_post_fx() -> void:
 	if Sets.fx_quality <= PostFx.OFF:
 		return

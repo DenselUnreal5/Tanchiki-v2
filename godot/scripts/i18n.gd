@@ -1,9 +1,3 @@
-# ============================================================================
-# i18n.gd — переводы интерфейса (русский / английский). Автозагрузка «I18n».
-#
-# Русский текст остаётся источником правды в данных (perks, upgrades и т.д.)
-# и передаётся как fallback в t()/dn(). Английские переводы лежат в словаре EN.
-# ============================================================================
 extends Node
 
 const SAVE_PATH := "user://lang.cfg"
@@ -12,9 +6,7 @@ signal language_changed
 
 var lang := "ru"
 
-## Английский словарь: ключ → строка. Русский берётся из fallback в коде.
 var EN := {
-	# ------------------------------------------------------------- меню
 	"menu.selectMode": "⚙️ Select Mode",
 	"menu.gametype": "Game Type",
 	"gametype.single": "1 Player",
@@ -43,10 +35,6 @@ var EN := {
 	"menu.achievements": "🏅 Achievements",
 	"menu.daily": "📅 Quests",
 	"menu.stats": "Statistics",
-	# Плитки главного меню — иконка и подпись отдельными полями (см.
-	# main_menu.gd:_build_nav_grid), без запечённого в текст эмодзи, в
-	# отличие от menu.garage/achievements/daily/net/settings выше (те заняты
-	# паузой и вкладками хаба).
 	"menu.tile.garage": "Garage",
 	"menu.tile.achievements": "Achievements",
 	"menu.tile.daily": "Quests",
@@ -101,13 +89,11 @@ var EN := {
 	"confirm.yes": "Reset",
 	"confirm.no": "Cancel",
 
-	# ------------------------------------------------------------- пауза
 	"pause.title": "PAUSE",
 	"pause.resume": "Resume",
 	"pause.gallery": "Perk Gallery",
 	"pause.menu": "Main Menu",
 
-	# ------------------------------------------------------------- выбор перка
 	"perk.title": "LEVEL UP",
 	"perk.level": "level",
 	"perk.active.badge": "ACTIVE - [{key}]",
@@ -125,7 +111,6 @@ var EN := {
 	"tod.dusk": "Dusk",
 	"tod.night": "Night",
 	"tod.midnight": "Midnight",
-	# ------------------------------------------------------- управление
 	"set.dev1": "Player 1",
 	"set.dev2": "Player 2",
 	"dev.auto": "Auto",
@@ -145,7 +130,6 @@ var EN := {
 	"nav.adjust": "adjust",
 	"hint.pad.ability": "perk ability",
 
-	# --------------------------------------------------------- локации
 	"menu.location": "Location",
 	"loc.auto": "Random",
 	"loc.city": "🏙 City",
@@ -155,7 +139,6 @@ var EN := {
 	"loc.exclusion": "☢ Zone",
 	"loc.shore": "🌊 Coast",
 
-	# ---------------------------------------------------- сетевая игра
 	"menu.net": "🌐 Online",
 	"net.title": "🌐 Online",
 	"net.sub": "The host simulates the whole match; everyone else sends input and receives state",
@@ -228,8 +211,9 @@ var EN := {
 	"perk.empty.all": "All available perks are already equipped.",
 	"perk.eq.label": "Equipped (click to unequip)",
 	"perk.skip": "Continue without choosing",
+	"perk.confirm": "Confirm: {name}",
+	"perk.confirm.placeholder": "Confirm pick",
 
-	# ------------------------------------------------------------- галерея
 	"gallery.title": "🎖 Perk Gallery",
 	"gallery.builds": "Builds",
 	"gallery.sub": "Profile level {lvl} · unlocked {n} of {total}",
@@ -243,7 +227,6 @@ var EN := {
 	"cat.challenge": "Challenges",
 	"cat.utility": "Utility",
 
-	# ------------------------------------------------------------- гараж
 	"garage.title": "🔧 Garage",
 	"garage.sub": "Coins: {money} 🪙 · Tank upgrades apply to both players in a match",
 	"garage.colors": "Tank color",
@@ -266,7 +249,6 @@ var EN := {
 	"upg.max": "MAX",
 	"upg.buy": "Upgrade · {price} 🪙",
 
-	# ------------------------------------------------------------- статистика
 	"stats.title": "📊 Statistics",
 	"stats.sub": "Profile level {lvl} · {xp} / {need} XP · perks {n}/{total} · coins {money} 🪙",
 	"stat.ramKills": "Ram kills",
@@ -292,17 +274,14 @@ var EN := {
 	"stat.globalLevel": "Highest level reached",
 	"stat.defenseWaveReached": "Best wave in Defense",
 
-	# ------------------------------------------------------------- достижения
 	"achievements.title": "🏅 Achievements",
 	"achievements.sub": "Unlocked {n} of {total} · total reward {reward} 🪙",
 
-	# ------------------------------------------------------------- задания
 	"daily.title": "📅 Daily Quests",
 	"daily.sub": "Rewards reset at midnight · completed {done} of {total}",
 	"daily.claimed": "Claimed ✓",
 	"daily.claim": "Claim · {reward} 🪙",
 
-	# ------------------------------------------------------------- итоги
 	"go.victory": "VICTORY!",
 	"go.defeat": "DEFEAT",
 	"go.won": "{name} WINS",
@@ -327,7 +306,6 @@ var EN := {
 	"go.replay": "Play Again",
 	"go.menu": "To Menu",
 
-	# --------------------------------------------------------- свои клавиши
 	"set.keys.p1": "Keys — Player 1",
 	"set.keys.p2": "Keys — Player 2",
 	"set.keys.reset": "Reset keys",
@@ -344,7 +322,6 @@ var EN := {
 	"key.turretLeft": "Turret left",
 	"key.turretRight": "Turret right",
 
-	# --------------------------------------------------- подсказки меню
 	"tip.theme": "Change the UI theme in Settings → Interface: noir, military dossier or sci-fi",
 	"tip.weather_fx": "Weather effects and their intensity are in Settings → Graphics",
 	"tip.match_weather": "In \"Select Mode\" you can lock a specific weather, time of day and location instead of \"auto\"",
@@ -359,7 +336,6 @@ var EN := {
 	"tip.lang": "The interface language switches in Settings → General",
 	"tip.mines": "Lay mines and detonate them once an enemy gets close",
 
-	# ------------------------------------------------------------- HUD
 	"hud.shield": " +{n} shield",
 	"hud.score": "Score {n}",
 	"hud.base": "🏰 {hp} HP",
@@ -383,7 +359,6 @@ var EN := {
 	"time.dusk": "dusk",
 	"time.evening": "evening",
 
-	# ------------------------------------------------------------- табло
 	"sb.defense": "Defense — wave {cur} of {total}",
 	"sb.defense.endless": "Defense — wave {cur} (endless)",
 	"sb.koth": "King of the Hill — last one standing wins",
@@ -392,7 +367,6 @@ var EN := {
 	"sb.hint": "Tab — hide",
 	"sb.perks": "Perks",
 
-	# ------------------------------------------------------------- фиды и события
 	"feed.dailyDone": "Quest complete: +{n} 🪙",
 	"feed.profileLevel": "Profile level {n}!",
 	"feed.challengeDone": "Challenge complete",
@@ -421,7 +395,6 @@ var EN := {
 	"feed.perkTook": "{name} took {icon} {perk}",
 	"feed.stormSummoned": "{name} completed the Storm build — the storm won't let up for the rest of the match",
 
-	# ------------------------------------------------------------- мир
 	"reason.defenseBase": "The base was destroyed on wave {n} — the defense fell",
 	"reason.defenseWon": "All {n} waves repelled — the defense held",
 	"reason.allDead": "All players destroyed",
@@ -452,7 +425,6 @@ var EN := {
 	"feed.bossEnrage": "{name} goes berserk!",
 	"feed.bossEnrage2": "{name} is on its last legs — watch out!",
 
-	# ------------------------------------------------------------- данные: перки
 	"perk.double_shot.name": "Double Shot",
 	"perk.double_shot.desc": "A twin barrel fires for two.\nEffect: every shot is a volley of two parallel bullets",
 	"perk.fan_shot.name": "Fan Shot",
@@ -517,11 +489,6 @@ var EN := {
 	"perk.vampire.desc": "Damage dealt feeds straight back into your health.\nEffect: 15% of damage dealt comes back to you as HP",
 	"perk.vampire.challenge": "Deal 5000 damage in one match",
 
-	# ------------------------------------------------------ данные: перки второй волны
-	# Раньше у всех перков этой волны был только .desc — англоязычный
-	# интерфейс показывал русское название рядом с английским описанием
-	# (I18n.dn() откатывается на RU-поле словаря, если EN-ключ .name не
-	# найден). Восполняем недостающие .name разом.
 	"perk.siege.name": "Siege Rounds",
 	"perk.siege.desc": "Shells honed for walls, not armor.\nEffect: damage to structures increased ×2.2",
 	"perk.nitro.name": "Nitro",
@@ -589,7 +556,6 @@ var EN := {
 	"perk.repair.name": "Field Repair",
 	"perk.repair.desc": "The crew patches the armor mid-battle.\nEffect: the field kit instantly restores a third of your max HP",
 
-	# ------------------------------------------------------------- данные: тематические билды
 	"build.lightning.name": "Storm build",
 	"build.lightning.bonus": "The sky won't let go till the fight is over — the storm never breaks, and Lightning Lord strikes three times as often: the chance climbs from 25% to 75%",
 	"build.stealth_hunter.name": "Ambush build",
@@ -605,7 +571,6 @@ var EN := {
 	"ability.acid_bomb.name": "Acid Bomb",
 	"ability.acid_bomb.desc": "A blast around the hull — every enemy in range gets 3 stacks of poison",
 
-	# ------------------------------------------------------------- данные: перки ботов
 	"botperk.bot_rapid.name": "Rapid Fire",
 	"botperk.bot_speed.name": "Legs",
 	"botperk.bot_tough.name": "Thick Armor",
@@ -622,7 +587,6 @@ var EN := {
 	"botperk.bot_boss_twin.name": "Twin Cannons",
 	"botperk.bot_boss_barrage.name": "Barrage",
 
-	# ------------------------------------------------------------- данные: улучшения
 	"upg.dmg.name": "Powerful Barrel",
 	"upg.dmg.desc": "Own bullet damage",
 	"upg.fire_rate.name": "Auto Accelerator",
@@ -642,7 +606,6 @@ var EN := {
 	"upg.regen.name": "Repair Module",
 	"upg.regen.desc": "HP per minute",
 
-	# ------------------------------------------------------------- данные: достижения
 	"ach.first_blood.name": "First Blood",
 	"ach.first_blood.desc": "First kill",
 	"ach.kill_10.name": "Veteran",
@@ -708,7 +671,6 @@ var EN := {
 	"ach.defense_wave_10.name": "Steadfast Line",
 	"ach.defense_wave_10.desc": "Hold out for 10 waves in Defense",
 
-	# ------------------------------------------------------------- данные: задания
 	"daily.kill_15.name": "Hunt",
 	"daily.kill_15.desc": "Kill 15 enemies",
 	"daily.win_2.name": "Triumph",
@@ -726,7 +688,6 @@ var EN := {
 	"daily.streak_5.name": "Fortune",
 	"daily.streak_5.desc": "Streak of 5 kills without damage",
 
-	# ------------------------------------------------------------- данные: косметика
 	"cos.hull.none.name": "Plain",
 	"cos.hull.stripes.name": "Camouflage",
 	"cos.hull.star.name": "Star",
@@ -742,12 +703,10 @@ var EN := {
 	"cos.turret.red.name": "Scarlet Turret",
 	"cos.turret.night.name": "Night Turret",
 
-	# ------------------------------------------------------------- данные: оружие
 	"weapon.gatling.name": "Machine Gun",
 	"weapon.rockets.name": "Rockets",
 	"weapon.shotgun.name": "Shotgun",
 
-	# ------------------------------------------------------------- данные: типы врагов
 	"enemy.grunt.name": "Grunt",
 	"enemy.scout.name": "Scout",
 	"enemy.heavy.name": "Brute",
@@ -757,7 +716,6 @@ var EN := {
 
 	"bot.fallback": "Bot-{n}",
 
-	# ------------------------------------------------------------- данные: звания
 	"rank.recruit.name": "Recruit",
 	"rank.private.name": "Private",
 	"rank.corporal.name": "Corporal",
@@ -773,7 +731,6 @@ var EN := {
 	"rank.immortal.name": "Immortal",
 }
 
-## Имена ботов для английской локали.
 var EN_BOT_NAMES := [
 	"Ginger", "Gray", "Black", "White", "Tiger", "Hawk", "Wolf", "Bear",
 	"Scorpion", "Panther", "Falcon", "Cobra", "Jackal", "Phantom", "Raider",
@@ -785,7 +742,6 @@ func _ready() -> void:
 	if cfg.load(SAVE_PATH) == OK:
 		lang = String(cfg.get_value("i18n", "lang", "ru"))
 
-## Переключает язык и сохраняет выбор.
 func set_lang(next: String) -> void:
 	lang = "en" if next == "en" else "ru"
 	var cfg := ConfigFile.new()
@@ -796,8 +752,6 @@ func set_lang(next: String) -> void:
 func toggle_lang() -> void:
 	set_lang("en" if lang == "ru" else "ru")
 
-## Переводит строку интерфейса. fallback — русский текст (источник правды).
-## Плейсхолдеры вида {name} подставляются из vars.
 func t(key: String, vars: Dictionary = {}, fallback: String = "") -> String:
 	var s: String = fallback if fallback != "" else key
 	if lang == "en" and EN.has(key):
@@ -806,8 +760,6 @@ func t(key: String, vars: Dictionary = {}, fallback: String = "") -> String:
 		s = s.replace("{" + String(k) + "}", str(vars[k]))
 	return s
 
-## Переводит поле name/desc игровых данных.
-## ns — префикс словаря ('perk' | 'upg' | 'ach' | 'daily' | 'cos.<type>' | ...).
 func dn(obj: Dictionary, field: String, ns: String) -> String:
 	if obj.is_empty():
 		return ""
@@ -817,9 +769,6 @@ func dn(obj: Dictionary, field: String, ns: String) -> String:
 	var key := "%s.%s.%s" % [ns, String(obj.get("id", "")), field]
 	return String(EN.get(key, ru))
 
-## Русская форма существительного при числе: 1 флаг, 2 флага, 5 флагов.
-## Нужна, потому что лимиты режимов настраиваются, и «3 флагов» вылезало
-## прямо в итоговом экране.
 func plural(n: int, one: String, few: String, many: String) -> String:
 	if lang == "en":
 		return one if absi(n) == 1 else many
@@ -833,6 +782,5 @@ func plural(n: int, one: String, few: String, many: String) -> String:
 			return few
 	return many
 
-## Имена ботов для текущего языка (пустой массив — использовать русские).
 func bot_names() -> Array:
 	return EN_BOT_NAMES if lang == "en" else []

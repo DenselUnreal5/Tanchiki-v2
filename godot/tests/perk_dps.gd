@@ -1,25 +1,7 @@
-# ============================================================================
-# perk_dps.gd — замер огневых перков без участия «мозга».
-#
-# Боевой замер (perk_bench) гоняет партию, где за игрока играет бот. Для
-# перков, меняющих реакцию мира на игрока, это честно. Для огневых — нет:
-# у мозга зашиты дистанции удержания и дальность огня, он настроен на базовый
-# танк и не подстраивается под перк. Любой перк, меняющий темп стрельбы или
-# скорость снаряда, уводит танк от того, под что мозг настроен, и получает
-# штраф, которого в руках человека не будет.
-#
-# Здесь мозга нет вовсе: танк стоит и жмёт на спуск каждый тик, а активную
-# способность нажимает, как только она откатилась. Замеряется потолок —
-# устойчивый темп огня и урон в секунду с учётом перегрева ствола.
-#
-# Запуск:
-#   godot --headless --path godot tests/perk_dps.tscn
-# ============================================================================
 extends Node
 
 const SECONDS := 60
 
-## Перки, влияющие на ствол: нагрев, темп, снаряд.
 const IDS := [
 	"", "heat_sink", "thermal", "quick_vent", "light_shell", "heavy_shell",
 	"coolant", "overclock", "rapid_fire", "quick_reload",
@@ -53,7 +35,6 @@ func _run(perk_id: String) -> Dictionary:
 
 	var world: World = game.world
 	var player = game.players[0]
-	# Массив перков переиспользуется: танк держит на него ссылку с рождения.
 	player.perk_ids.clear()
 	if perk_id != "":
 		player.perk_ids.append(perk_id)
@@ -63,7 +44,6 @@ func _run(perk_id: String) -> Dictionary:
 
 	var ticks := SECONDS * 60
 	for i in ticks:
-		# Танк неуязвим и неподвижен: считается потолок темпа, а не выживание.
 		tank.hp = tank.max_hp
 		if tank.ability_id != "" and tank.ability_cd <= 0:
 			tank.use_ability(world)
@@ -71,8 +51,6 @@ func _run(perk_id: String) -> Dictionary:
 		world.step()
 
 	var rate := float(tank.shots_fired) / float(SECONDS)
-	# Средний снаряд: урон пули берётся из диапазона равномерно, множители
-	# перка и общий множитель игрока идут сверху.
 	var avg_hit := (Cfg.BULLET_DMG_MIN + Cfg.BULLET_DMG_MAX) * 0.5 \
 		* Cfg.PLAYER_DMG_MULT * float(tank.mods["dmgMult"])
 	return {

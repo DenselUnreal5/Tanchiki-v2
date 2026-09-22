@@ -1,22 +1,6 @@
-# ============================================================================
-# input_schemes.gd — схемы управления.
-#
-# Всё читается по ФИЗИЧЕСКОЙ клавише (is_physical_key_pressed), поэтому
-# раскладка (русская/английская) не имеет значения, а Numpad работает
-# независимо от NumLock.
-#
-# Наводка и выстрел у второго игрока разделены: можно прицелиться молча.
-# ============================================================================
 class_name Ctl
 extends RefCounted
 
-## Клавиши по умолчанию для переназначаемых действий (см. Sets.key_for/
-## Sets.set_key, вкладка «Управление» в настройках). Один физический
-## keycode на действие — там, где в схемах ниже раньше было несколько
-## клавиш-дублей одного действия, дефолт здесь — только одна из них
-## (обычно самая «настоящая», не-numpad), остальные варианты убраны.
-## Мышь (ЛКМ/ПКМ у игрока 1) и Num-дубли движения/башни игрока 2 —
-## отдельная, непереназначаемая механика, сюда не входят.
 const DEFAULT_KEYS := {
 	"p1_up": KEY_W, "p1_down": KEY_S, "p1_left": KEY_A, "p1_right": KEY_D,
 	"p1_fire": KEY_SPACE, "p1_mine": KEY_E, "p1_dash": KEY_SHIFT,
@@ -27,13 +11,11 @@ const DEFAULT_KEYS := {
 	"p2_dash": KEY_KP_ADD, "p2_ability": KEY_KP_SUBTRACT,
 }
 
-## Общая структура команды управления танком.
 static func empty_command() -> Dictionary:
 	return {"mx": 0.0, "my": 0.0, "ax": 0.0, "ay": 0.0,
 		"fire": false, "mine": false, "dash": false, "airstrike": false,
 		"ability": false}
 
-## Применяет команду к танку.
 static func apply_command(tank: Tank, world, cmd: Dictionary) -> void:
 	if tank == null or not tank.alive or cmd.is_empty():
 		return
@@ -50,22 +32,14 @@ static func apply_command(tank: Tank, world, cmd: Dictionary) -> void:
 	if bool(cmd.get("ability", false)):
 		tank.use_ability(world)
 
-## Отдача геймпада — общая точка входа, чтобы не разбрасывать проверку
-## тумблера настроек и типа схемы по местам, где случается «взрыв». У мыши/
-## клавиатуры вибрировать нечему (поля device нет) — просто не срабатывает.
 static func vibrate(player, weak_magnitude: float, strong_magnitude: float, duration: float) -> void:
 	if player == null or not Sets.pad_vibration:
 		return
 	if "device" in player.scheme:
 		Input.start_joy_vibration(int(player.scheme.device), weak_magnitude, strong_magnitude, duration)
 
-# ---------------------------------------------------------------------------
-# Управление мышью: WASD + прицел мышью. Основная схема первого игрока.
-# ---------------------------------------------------------------------------
 class MouseAimScheme extends RefCounted:
-	## Разрешить стрелки как дубль WASD (одиночная игра).
 	var allow_arrows := true
-	## Позиция курсора в координатах окна — обновляется игрой каждый кадр.
 	var mouse := Vector2.ZERO
 
 	func _init(allow_arrows_: bool = true) -> void:
@@ -110,14 +84,6 @@ class MouseAimScheme extends RefCounted:
 	func apply(tank: Tank, player, world) -> void:
 		Ctl.apply_command(tank, world, read_command(player))
 
-# ---------------------------------------------------------------------------
-# Сетевая схема: ввод не читается с клавиатуры, а берётся из последнего
-# пакета, пришедшего от этого игрока. Живёт только у хоста — именно он
-# применяет чужой ввод к чужим танкам.
-#
-# Пакет намеренно не сбрасывается после применения: при потере одного кадра
-# ввода танк продолжает ехать, куда ехал, а не дёргается в стоп-кадр.
-# ---------------------------------------------------------------------------
 class NetScheme extends RefCounted:
 	var peer_id := 0
 
@@ -133,19 +99,9 @@ class NetScheme extends RefCounted:
 			return
 		Ctl.apply_command(tank, world, cmd)
 
-# ---------------------------------------------------------------------------
-# Клавиатурная схема второго игрока («горячий стул»).
-#
-# Стрелки или Numpad 8/4/6/2 — движение. Башня по умолчанию доворачивается
-# в сторону движения, а если держать клавиши поворота (< >, Numpad 7/9),
-# она управляется вручную и сохраняет угол после отпускания.
-# ---------------------------------------------------------------------------
 class KeyboardAimScheme extends RefCounted:
-	var turret_slew := 0.07   # рад/тик при ручном повороте
-	var follow_slew := 0.05   # рад/тик при доворотe за корпусом
-	# ВРЕМЕННАЯ диагностика бага «у игрока 2 в горячем стуле нет
-	# управления» — статическое чтение кода не находит причину, нужен
-	# реальный лог с работающего запуска. Убрать после диагностики.
+	var turret_slew := 0.07
+	var follow_slew := 0.05
 	var _debug_printed_keys := false
 	var _debug_last_state := ""
 
@@ -185,9 +141,6 @@ class KeyboardAimScheme extends RefCounted:
 		var firing := Input.is_physical_key_pressed(Sets.key_for("p2_fire"))
 
 		if dx != 0.0 or dy != 0.0 or rot_left or rot_right or firing:
-			# vx/vy — уже ПОСЛЕ tank.thrust(dx, dy) выше: если dx/dy ненулевые,
-			# а скорость не меняется — дело не в чтении клавиш, а в физике/
-			# владельце танка дальше по цепочке.
 			var state := "dx=%.1f dy=%.1f rot_l=%s rot_r=%s fire=%s | vx=%.1f vy=%.1f" % [
 				dx, dy, rot_left, rot_right, firing, tank.vx, tank.vy]
 			if state != _debug_last_state:
@@ -201,9 +154,6 @@ class KeyboardAimScheme extends RefCounted:
 		elif rot_right and not rot_left:
 			tank.turret_angle += turret_slew
 		elif moving and not firing:
-			# Ручного поворота нет — башня плавно смотрит туда, куда едем.
-			# Но не пока стреляешь: иначе смена направления посреди очереди
-			# уводит ствол за корпусом, и попасть невозможно.
 			tank.turret_angle = Rng.rotate_toward(tank.turret_angle, tank.angle, follow_slew)
 
 		if firing:
@@ -215,63 +165,21 @@ class KeyboardAimScheme extends RefCounted:
 		if Input.is_physical_key_pressed(Sets.key_for("p2_ability")):
 			tank.use_ability(world)
 
-# ---------------------------------------------------------------------------
-# Геймпад. Левый стик — ход, правый — наводка, спусковые крючки — огонь.
-#
-# Наводка стиком отличается от наводки мышью принципиально: мышь задаёт ТОЧКУ,
-# а стик — НАПРАВЛЕНИЕ. Поэтому точка прицеливания строится впереди танка по
-# направлению стика, а когда стик отпущен, прежний угол сохраняется — иначе
-# башня прыгала бы в ноль каждый раз, когда игрок убирает большой палец.
-#
-# Мёртвая зона обязательна: стики почти всегда возвращают ненулевые значения
-# в покое, и без неё танк медленно ползёт сам по себе.
-# ---------------------------------------------------------------------------
 class GamepadScheme extends RefCounted:
-	## Номер устройства: 0 — первый подключённый геймпад.
 	var device := 0
-	## Последняя точка прицеливания в мире. Держится между кадрами.
 	var aim := Vector2.ZERO
 	var _aim_ready := false
-	## Резервный прицел «по движению» (пока правый стик не тронут) хоть раз
-	## да должен посчитаться — иначе на самом первом кадре, если стрелять
-	## раньше, чем тронуть стики, aim так и останется Vector2.ZERO (мировой
-	## центр, а не танк). Дальше, пока стреляешь, он просто не обновляется.
 	var _move_aim_set := false
-	## Жёсткий лок по R3 (см. ниже) — цель захвата и состояние кнопки на
-	## прошлом кадре (для отслеживания фронта нажатия).
 	var locked_target = null
 	var _r3_prev := false
-	## Мир партии. Ставится игрой каждый кадр (game.gd:_process) и нужен
-	## автоприцелу: список танков, проверка вражды и линия видимости.
 	var world = null
 
-	## На каком расстоянии перед танком ставится точка прицела. На попадание
-	## это не влияет — башня всё равно смотрит по направлению, — но слишком
-	## близкая точка делает наводку дёрганой.
 	const AIM_REACH := 260.0
 
-	# ---- автоприцел ---------------------------------------------------------
-	## Мягкое притяжение к ближайшей цели, и только пока игрок целится правым
-	## стиком (цель должна попасть в конус вокруг направления стика). Стик
-	## отпущен — притяжения нет вовсе. Полный захват не делаем: игрок сохраняет
-	## контроль и может увести прицел на другого врага.
-	##
-	## ASSIST_RANGE  — радиус поиска цели, px.
-	## ASSIST_CONE   — половина угла конуса от направления стика, градусы:
-	##                 цель вне конуса игнорируется, чтобы прицел не прыгал
-	##                 к тому, на кого игрок не смотрит.
-	## ASSIST_PULL   — доля пути от угла стика к точному углу на цель.
 	const ASSIST_RANGE := 320.0
 	const ASSIST_CONE := 35.0
 	const ASSIST_PULL := 0.6
 
-	# ---- жёсткий лок по R3 --------------------------------------------------
-	## Нажатие правого стика (клик, R3) — полный захват ближайшей цели в
-	## LOCK_RANGE, без конуса направления (в отличие от мягкого автоприцела
-	## выше — R3 разовая команда «ближайшего», а не привязка к тому, куда
-	## сейчас смотрит стик). Держится, пока цель жива и не дальше
-	## LOCK_BREAK_RANGE — это отдельное, более сильное действие игрока, не
-	## гейтится Sets.pad_aim_assist (тот тумблер только про мягкую доводку).
 	const LOCK_RANGE := 600.0
 	const LOCK_BREAK_RANGE := 800.0
 
@@ -293,8 +201,6 @@ class GamepadScheme extends RefCounted:
 			h.append("автоприцел: доводка к ближайшему врагу")
 		return h
 
-	## Ось с мёртвой зоной. Ниже порога — ровный ноль, выше — растяжка
-	## остатка на весь ход, чтобы у самого порога не было ступеньки.
 	func _axis(a: JoyAxis) -> float:
 		var v := Input.get_joy_axis(device, a)
 		var dz: float = Sets.pad_deadzone
@@ -308,23 +214,14 @@ class GamepadScheme extends RefCounted:
 		cmd["my"] = _axis(JOY_AXIS_LEFT_Y)
 
 		var tank = player.tank
-		# Крючок считается нажатым с середины хода: полное нажатие требовать
-		# незачем, а срабатывание от касания мешает целиться. Считаем его
-		# раньше точки прицела — она не должна пересчитываться из
-		# направления движения, пока идёт стрельба (см. ниже).
 		var rt := Input.get_joy_axis(device, JOY_AXIS_TRIGGER_RIGHT) > 0.5
 		var lt := Input.get_joy_axis(device, JOY_AXIS_TRIGGER_LEFT) > 0.5
 		var firing := rt or Input.is_joy_button_pressed(device, JOY_BUTTON_A)
 
-		# Клик правого стика (R3) — по фронту нажатия: is_joy_button_pressed
-		# отдаёт «держится сейчас», для «только что нажали» сверяем с прошлым
-		# кадром, как и Sets._input делает для режима навигации.
 		var r3 := Input.is_joy_button_pressed(device, JOY_BUTTON_RIGHT_STICK)
 		var r3_pressed := r3 and not _r3_prev
 		_r3_prev = r3
 		if tank != null and r3_pressed:
-			# Повторное нажатие тоже действует — можно перецепиться на другую
-			# ближайшую цель, если уже кто-то залочен.
 			var tgt = _find_lock_target(tank)
 			if tgt != null:
 				locked_target = tgt
@@ -337,10 +234,6 @@ class GamepadScheme extends RefCounted:
 		var ax := _axis(JOY_AXIS_RIGHT_X)
 		var ay := _axis(JOY_AXIS_RIGHT_Y)
 		if tank != null and locked_target != null:
-			# Жёсткий лок — точка прицела ставится прямо в цель, без подмешивания
-			# стика (в отличие от мягкого автоприцела ниже). _aim_ready = true,
-			# чтобы после снятия лока прицел остался там же, а не прыгнул на
-			# «целимся по движению».
 			aim = Vector2(locked_target.x, locked_target.y)
 			_aim_ready = true
 		elif tank != null:
@@ -350,11 +243,6 @@ class GamepadScheme extends RefCounted:
 				aim = _assist_aim(tank, sdir)
 				_aim_ready = true
 			elif not _aim_ready and (not firing or not _move_aim_set):
-				# Пока игрок не трогал правый стик, целимся туда, куда едем —
-				# но не пересчитываем прицел из движения посреди стрельбы
-				# (кроме самого первого раза, чтобы не целиться в мировой
-				# центр), иначе смена направления уводит точку прицела за
-				# корпусом.
 				var move := Vector2(float(cmd["mx"]), float(cmd["my"]))
 				var ahead := move.normalized() if move.length() > 0.2 else Vector2.RIGHT
 				aim = Vector2(tank.x, tank.y) + ahead * AIM_REACH
@@ -369,9 +257,6 @@ class GamepadScheme extends RefCounted:
 		cmd["airstrike"] = Input.is_joy_button_pressed(device, JOY_BUTTON_RIGHT_SHOULDER)
 		return cmd
 
-	## Точка прицела при заданном направлении стика. Без автоприцела (или без
-	## подходящей цели) — просто впереди танка по стику; с автоприцелом —
-	## подкрученная на ASSIST_PULL к точному углу на ближайшего врага.
 	func _assist_aim(tank, sdir: Vector2) -> Vector2:
 		var base := Vector2(tank.x, tank.y) + sdir * AIM_REACH
 		if not Sets.pad_aim_assist or world == null:
@@ -384,8 +269,6 @@ class GamepadScheme extends RefCounted:
 		var blended := cur + wrapf(want - cur, -PI, PI) * ASSIST_PULL
 		return Vector2(tank.x, tank.y) + Vector2.from_angle(blended) * AIM_REACH
 
-	## Ближайший видимый враг в радиусе и в конусе вокруг направления стика,
-	## или null. «Ближайший» — по прямой дистанции среди прошедших отбор.
 	func _nearest_target(tank, stick_dir: Vector2):
 		if world == null or not ("tanks" in world):
 			return null
@@ -409,10 +292,6 @@ class GamepadScheme extends RefCounted:
 			best = t
 		return best
 
-	## Ближайший видимый враг в радиусе LOCK_RANGE для жёсткого лока по R3 —
-	## в отличие от _nearest_target, без фильтра по конусу направления стика:
-	## R3 — разовая команда «ближайшего», не привязана к тому, куда сейчас
-	## показывает стик.
 	func _find_lock_target(tank):
 		if world == null or not ("tanks" in world):
 			return null
@@ -432,11 +311,6 @@ class GamepadScheme extends RefCounted:
 			best = t
 		return best
 
-	## Снимает жёсткий лок и просит следующий тик пересчитать прицел заново
-	## (см. read_command() — без этого прицел остаётся замороженным на месте
-	## погибшей цели). Вызывается и когда лок распадается сам (цель умерла /
-	## вышла за LOCK_BREAK_RANGE), и при смерти собственного танка — новая
-	## жизнь не должна наследовать прицел от прошлой (см. World._kill_tank()).
 	func release_lock() -> void:
 		locked_target = null
 		_aim_ready = false

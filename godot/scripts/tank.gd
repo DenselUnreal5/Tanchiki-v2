@@ -1,21 +1,9 @@
-# ============================================================================
-# tank.gd — танк: физика, стрельба, урон, перки.
-#
-# Всё состояние (щит, регенерация, перезарядки, таймеры перков) живёт в самом
-# танке либо у его владельца (PlayerState). Число живых игроков ничего
-# не ломает: второй игрок в «горячем стуле» полностью независим от первого.
-# ============================================================================
 class_name Tank
 extends RefCounted
 
-## Урон, который спавн-защита НЕ блокирует.
-## Источники, которым защита при возрождении не помеха. Гроза не разбирает,
-## кто только что появился на карте, — как и вода.
 const ENVIRONMENTAL := ["water", "lightning"]
 
-## Скорость поворота башни у ботов, рад/тик. У игрока башня следует за мышью 1:1.
 const BOT_TURRET_SLEW := 0.12
-## Скорость доворота корпуса, доля от разницы углов за тик.
 const BODY_TURN_RATE := 0.15
 
 static var _next_id := 1
@@ -30,48 +18,33 @@ var spawn_y: float
 
 var team: String
 var name: String
-var owner            # PlayerState или null у бота
+var owner
 var is_bot: bool
 var color_key: String
 
 var width := Cfg.TANK_W
 var height := Cfg.TANK_H
-## Силуэт корпуса (ключ TankArt.CHASSIS) и радиус попадания пули.
 var chassis_id := "standard"
-## Сетевой номер танка: по нему клиент узнаёт, какой присланный танк
-## какому его собственному соответствует. Ноль — офлайн-партия.
 var net_id := 0
-## Чей это танк в сетевой партии: peer_id владельца, 0 — бот.
 var owner_peer := 0
-## Габарит для рельефа. Он НЕ равен размеру корпуса: переулок в городе шириной
-## в один тайл (32 px), и босс с корпусом 34 px в него бы не пролез — а A*
-## всё равно построил бы через него маршрут и упёр бы босса в угол. Поэтому
-## крупные корпуса ездят по обычному габариту, но пули ловят по своему.
 var col_w := Cfg.TANK_W
 var col_h := Cfg.TANK_H
 var hit_r := Cfg.TANK_HIT_R
-## Вылет дульного среза от центра танка — оттуда рождаются снаряды.
 var muzzle_len := 18.0
 
-# Базовые характеристики — от них считаются итоговые с учётом перков.
 var base_max_hp: float
 var base_speed: float
 var base_fire_rate: int
 
-## Постоянные улучшения профиля (гараж). Пустой словарь у ботов.
 var upgrade_mods := {}
-## Косметика {hull, track, turret} — пустой словарь у ботов.
 var cosmetics := {}
-## Множитель урона танка (типы врагов). У игроков всегда 1.
 var dmg_scale := 1.0
-## Тип врага (из enemy_types.gd). Пустой словарь у игроков.
 var enemy_type := {}
 
 var angle: float
 var body_angle: float
 var turret_angle: float
 
-## Перки танка. У игрока это ссылка на массив владельца.
 var perk_ids: Array = []
 var mods := {}
 var flags := {}
@@ -83,98 +56,69 @@ var fire_rate: int
 
 var alive := true
 var fire_cooldown := 0
-## Нагрев ствола от 0 до 1 и признак срыва в перегрев. Механика только для
-## живых игроков: у ботов скорострельность и так задана сложностью.
 var heat := 0.0
 var overheated := false
-## Счётчики для замеров баланса: сколько раз выстрелил и сколько раз
-## упёрся в перегрев.
 var shots_fired := 0
 var overheats := 0
 var spawn_protect := Cfg.SPAWN_PROTECT
 var respawn_timer := 0
 
-# Состояние перков — у каждого танка своё.
 var shield_hp := 0.0
 var shield_cooldown := 0
 var regen_accum := 0.0
 var mine_cooldown := 0
 var turbo_timer := 0
 var shadow_timer := 0
-## Активная способность: id из abilities.gd (пустая строка — нет),
-## оставшийся кулдаун и оставшееся время действия, всё в тиках.
 var ability_id := ""
 var ability_cd := 0
 var ability_timer := 0
 var dash_range := 0.0
 var dash_cooldown := 0
-## Сколько тиков подряд рывок не даёт продвижения (упёрлись в стену).
 var dash_stall := 0
 
-## Состояние босса — на обычном танке всё это no-op (is_boss=false).
-## boss_phase растёт по порогу HP и не откатывается назад (см. _update_boss_phase).
 var is_boss := false
 var boss_phase := 1
 var enrage_speed_mult := 1.0
 var enrage_fire_rate_mult := 1.0
 var enrage_shield_ticks := 0
-## Множитель HP/урона от волны/числа игроков — задаётся при спавне
-## (world.gd:_boss_stat_mult) и переживает пересчёт по рампе (см. _update_ramp).
 var boss_stat_mult := 1.0
-## Замах перед телеграфируемой атакой босса: 0 — атаки нет, иначе тики
-## до срабатывания. kind — какую атаку разрешить в _resolve_telegraphed_attack.
 var telegraph_ticks := 0
 var telegraph_kind := ""
 
 var in_water := false
 var water_timer := 0
-## Тики в зыбучем песке — свой счётчик, потому что интервал у него свой.
 var quicksand_timer := 0
-## Множитель хода от покрытия и его данные — обновляются раз в тик.
 var surface_speed := 1.0
 var surface := {}
 var _tread_timer := 0
 
-## Временное оружие (power-up): id из weapons.gd или пустая строка.
 var weapon := ""
-## Оставшиеся тики действия оружия.
 var weapon_timer := 0
 
-## Экипированная в гараже пушка: id из cannons.gd. "standard" — обычный ствол.
 var cannon_id := "standard"
 
-## Заморозка «Ледяной пушкой»: пока тикает, управление отключено (update()).
 var freeze_ticks := 0
-## Стак «Кислотной пушки»: урон идёт периодическими тиками из update(),
-## а не единоразовым попаданием — см. apply_acid()/_hit_tanks().
 var acid_stacks := 0
 var acid_ticks_left := 0
 var acid_tick_timer := 0
 var acid_dmg_scale := 1.0
-var acid_attacker = null    # Tank — кому засчитывается урон тика
+var acid_attacker = null
 
-## «Небесный удар»: кулдаун заряда (тикает только в грозу) и готовность —
-## следующий shoot() потратит её на заряженную пулю (см. shoot()).
 var sky_strike_cooldown := 0
 var sky_strike_ready := false
 
-var flag = null       # Ent.Flag
-var brain = null      # BotBrain
+var flag = null
+var brain = null
 
-# Статистика за матч (для табло).
 var kills := 0
 var deaths := 0
 var damage_dealt := 0.0
 
-## Диагностика навигации: тиков в контакте со стеной, текущая и худшая
-## серия «стою на месте» (танк жив, но за тик не сдвинулся).
 var blocked_ticks := 0
 var stall_ticks := 0
 var worst_stall := 0
-## Запрашивал ли кто-то движение в этом тике (ставится в thrust).
 var wants_move := false
 
-## Кто последним нанёс урон — для корректного начисления фрага.
 var last_attacker = null
 var last_attacker_tick := -1000000
 
@@ -191,8 +135,6 @@ func _init(opts: Dictionary) -> void:
 	owner = opts.get("owner", null)
 	is_bot = owner == null
 	color_key = String(opts.get("color_key", "enemy"))
-	# Силуэт задаёт и вид, и габариты: у босса корпус крупнее, и пули он
-	# ловит соответственно.
 	chassis_id = String(opts.get("chassis", "standard"))
 	net_id = int(opts.get("net_id", 0))
 	owner_peer = int(opts.get("owner_peer", 0))
@@ -238,16 +180,12 @@ var carrying_flag: bool:
 var can_fire: bool:
 	get: return alive and fire_cooldown <= 0 and not overheated
 
-## Нагрев ствола: копится от выстрелов, стекает сам. Перегрев — не штраф
-## за частую стрельбу, а её потолок: очередь остаётся быстрой, но держать
-## её бесконечно нельзя.
 func _update_heat(world) -> void:
 	if owner == null:
 		return
 	if heat > 0.0:
 		heat = maxf(0.0, heat - Cfg.HEAT_COOL * float(mods["heatCoolMult"]))
 	if overheated:
-		# Пар из ствола, пока остывает.
 		if world.tick % 5 == 0:
 			var a := turret_angle
 			world.particles.spawn(
@@ -257,32 +195,15 @@ func _update_heat(world) -> void:
 		if heat <= Cfg.HEAT_RESUME + float(mods["heatResumeAdd"]):
 			overheated = false
 
-## Учёт выстрела: нагрев и срыв в перегрев.
 func _after_shot() -> void:
 	shots_fired += 1
 	if owner == null:
 		return
-	# «Разгон»: на время действия ствол не греется вовсе.
-	#
-	# Перк трижды переделывался по замеру. Сначала он давал вдвое быстрее
-	# перезарядку ценой вдвое быстрого нагрева — и был строго вреден: 1.15
-	# выстрела в секунду против 1.38 без него, −14 урона в секунду. Снятие
-	# двойной платы дало −4, полное снятие платы — всего +2. Причина не в
-	# числах, а в рычаге: при непрерывном огне узкое место — нагрев, а не
-	# перезарядка, и разгон давил не туда, дублируя «Форсаж».
-	#
-	# Поэтому плата убрана вместе с самим нагревом: четыре секунды ствол
-	# держит любой темп, а цена — откат и то, что активный перк всего один.
 	var heat_mult := 1.0
 	if weapon != "":
 		heat_mult = float(Weapons.get_weapon(weapon).get("heat_mult", 1.0))
 	elif cannon_id != "" and cannon_id != "standard":
-		# get_cannon() возвращает {} для неизвестного id (см. cannons.gd) —
-		# .get(...) с дефолтом безопасно откатывается на обычный нагрев.
 		heat_mult = float(Cannons.get_cannon(cannon_id).get("heat_mult", 1.0))
-		# «Охлаждённый ствол» снижает именно тройной штраф «Ледяной пушки»,
-		# а не нагрев вообще — на обычной пушке/оружии iceHeatMult ни на что
-		# не влияет (heat_mult тут всегда 1.0 не для ледяной пушки).
 		if cannon_id == "ice":
 			heat_mult *= float(mods["iceHeatMult"])
 	var gain: float = Cfg.HEAT_PER_SHOT * float(mods["heatPerShotMult"]) * heat_mult
@@ -294,16 +215,11 @@ func _after_shot() -> void:
 		overheats += 1
 		Sfx.play("steam", x, y)
 
-## Время до следующего выстрела.## Время до следующего выстрела. «Форсаж» режет его вдвое, поэтому считается
-## здесь, а не в каждом из трёх видов стрельбы.
 func reload_ticks() -> int:
 	if ability_active("overdrive") or ability_active("overclock"):
 		return maxi(3, int(round(float(fire_rate) * Cfg.OVERDRIVE_RELOAD_MULT)))
 	return fire_rate
 
-## Накладывает постоянные улучшения гаража на модификаторы.
-## regenPerMinute складывается (это «скорость», а не множитель),
-## остальное перемножается.
 func _apply_upgrade_mods(src: Dictionary) -> Dictionary:
 	var out := src.duplicate()
 	for key in upgrade_mods.keys():
@@ -316,9 +232,6 @@ func _apply_upgrade_mods(src: Dictionary) -> Dictionary:
 			out[key] = float(out.get(key, 1.0)) * value
 	return out
 
-## Пересчитывает характеристики из базовых значений и текущих перков.
-## Вызывается при любом изменении набора перков — именно это устраняет
-## «залипший» бонус HP при снятии перка.
 func recompute() -> void:
 	var hp_ratio := hp / max_hp if max_hp > 0.0 else 1.0
 	mods = Perks.compute_modifiers(perk_ids, is_bot)
@@ -327,19 +240,15 @@ func recompute() -> void:
 	if next_ability != ability_id:
 		ability_timer = 0
 		ability_id = next_ability
-	# Постоянные улучшения из гаража перемножаются с бонусами перков.
 	if not upgrade_mods.is_empty():
 		mods = _apply_upgrade_mods(mods)
 	max_hp = maxf(1.0, round(base_max_hp * float(mods["maxHPMult"])))
 	speed = base_speed * float(mods["speedMult"]) * enrage_speed_mult
 	fire_rate = maxi(4, int(round(float(base_fire_rate) * float(mods["fireRateMult"]) * enrage_fire_rate_mult)))
-	# Сохраняем долю здоровья: рост максимума лечит пропорционально,
-	# снижение не убивает мгновенно.
 	hp = clampf(round(max_hp * hp_ratio), 1.0, max_hp)
 	if not flags.has("shield"):
 		shield_hp = 0.0
 
-## Применяет ускорение по нормализованному направлению.
 func thrust(dx: float, dy: float) -> void:
 	if dx == 0.0 and dy == 0.0:
 		return
@@ -349,9 +258,6 @@ func thrust(dx: float, dy: float) -> void:
 	var mult := 1.0
 	if turbo_timer > 0:
 		mult *= 1.5
-	# Покрытие под гусеницами: по асфальту ход ровнее и быстрее, по песку
-	# танк буксует. Множитель к ускорению — это множитель к предельной
-	# скорости, потому что предел равен accel / (1 - FRICTION).
 	mult *= surface_speed
 	var accel := speed * Cfg.ACCEL_FACTOR * mult
 	vx += dx * accel
@@ -362,11 +268,9 @@ func thrust(dx: float, dy: float) -> void:
 func aim_at(tx: float, ty: float) -> void:
 	turret_angle = atan2(ty - y, tx - x)
 
-## Плавный доворот башни — используется ботами.
 func slew_turret_to(target: float) -> void:
 	turret_angle = Rng.rotate_toward(turret_angle, target, BOT_TURRET_SLEW)
 
-# ------------------------------------------------------------------ шаг
 func update(world) -> void:
 	if not alive:
 		return
@@ -402,7 +306,6 @@ func update(world) -> void:
 		enrage_shield_ticks -= 1
 	if freeze_ticks > 0:
 		freeze_ticks -= 1
-	# Яд тикает даже под заморозкой — она глушит только управление, не эффекты.
 	if acid_ticks_left > 0:
 		acid_ticks_left -= 1
 		if acid_ticks_left <= 0:
@@ -411,14 +314,9 @@ func update(world) -> void:
 			acid_tick_timer -= 1
 			if acid_tick_timer <= 0:
 				acid_tick_timer = Cfg.ACID_TICK_INTERVAL
-				# «Едкая кислота»: читаем мод у того, кто наложил яд, а не у
-				# жертвы — тик остаётся «атакой» attacker'а на всём протяжении.
 				var acid_mult: float = float(acid_attacker.mods["acidDmgMult"]) if acid_attacker != null else 1.0
 				var tick_dmg: float = Cfg.ACID_DMG_PER_STACK_TICK * float(acid_stacks) * acid_dmg_scale * acid_mult
 				world.deal_damage(self, tick_dmg, acid_attacker, "acid")
-				# «Едкое облако»: на максимуме стаков цель раз в тик забрызгивает
-				# ближайших врагов (относительно того, кто наложил яд) своим
-				# стаком — распространение работает и без прямого попадания.
 				if acid_stacks >= Cfg.ACID_STACK_MAX and acid_attacker != null \
 						and acid_attacker.alive and acid_attacker.flags.has("acidCloud"):
 					for other in world.tanks:
@@ -430,8 +328,6 @@ func update(world) -> void:
 							continue
 						other.apply_acid(world, acid_attacker, acid_dmg_scale)
 
-	# «Небесный удар»: заряд копится только в грозу, как и «Повелитель
-	# молний» — вне грозы просто ждёт на месте, не тратя впустую 12 секунд.
 	if flags.has("skyStrike") and world.weather != null and world.weather.condition == "storm":
 		if sky_strike_cooldown > 0:
 			sky_strike_cooldown -= 1
@@ -444,16 +340,12 @@ func update(world) -> void:
 	_update_shield(world)
 	_update_boss_phase(world)
 
-	# Управление: человек через владельца, бот через свой «мозг». Заморозка
-	# «Ледяной пушки» глушит оба пути одним условием — бот стреляет/движется
-	# только из brain.update(), напрямую минуя apply_command().
 	if freeze_ticks <= 0:
 		if owner != null:
 			owner.control(self, world)
 		elif brain != null:
 			brain.update(self, world)
 
-	# Рывок-таран: пока не проехали DASH_DISTANCE, скорость ×DASH_SPEED_MULT.
 	if dash_range > 0.0:
 		var boost := speed * Cfg.DASH_SPEED_MULT
 		vx = cos(angle) * boost
@@ -471,9 +363,6 @@ func update(world) -> void:
 		stall_ticks = 0
 
 	if dash_range > 0.0:
-		# Рывок гасится пройденным расстоянием. Если танк упёрся в стену,
-		# расстояние не набирается — без отдельной проверки он оставался бы
-		# в рывке вечно, а «мозг» в это время не рулит вообще.
 		dash_range -= moved
 		if moved < 0.15:
 			dash_stall += 1
@@ -493,13 +382,6 @@ func update(world) -> void:
 	body_angle = Rng.rotate_toward(body_angle, angle,
 		absf(angle - body_angle) * BODY_TURN_RATE + 0.02)
 
-## Клиентское предсказание движения СВОЕГО танка: подмножество update(),
-## касающееся только позиции/скорости/углов. Вызывается только клиентом,
-## только для локального танка игрока, вместо обычного update() (который
-## на клиенте для своего танка вообще не идёт — control() до него не
-## доходит, world.step_cosmetic() не вызывает update()). Бой (стрельба,
-## мина, рывок, авиаудар, способность) не предсказывается — это остаётся
-## исключительно host-authoritative через снапшот.
 func predict_move(world, cmd: Dictionary) -> void:
 	if not alive:
 		return
@@ -515,30 +397,22 @@ func predict_move(world, cmd: Dictionary) -> void:
 	body_angle = Rng.rotate_toward(body_angle, angle,
 		absf(angle - body_angle) * BODY_TURN_RATE + 0.02)
 
-## Читает покрытие под центром танка и оставляет след из-под гусениц.
 func _update_surface(world) -> void:
 	surface = Surfaces.of_tile(world.map.tile_at_pixel(x, y), world.road_kind)
 	surface_speed = float(surface["speed"])
-	# «Шипы»: любое покрытие держит как асфальт, пока способность активна.
 	if ability_active("grip"):
 		surface_speed = maxf(surface_speed, float(Surfaces.ASPHALT["speed"]))
 	elif surface_speed < 1.0:
-		# «Вездеход» отыгрывает штраф мягкого грунта, не давая при этом
-		# преимущества на асфальте: это перк проходимости, а не скорости.
 		surface_speed = lerpf(surface_speed, 1.0, clampf(float(mods["softGrip"]), 0.0, 1.0))
 	elif surface_speed > 1.0:
 		surface_speed *= float(mods["roadSpeedMult"])
 
-	# Погода поверх покрытия: по снегу танк разгоняется и держит дорогу
-	# заметно хуже, по мокрому асфальту — чуть хуже. «Шипы» это отменяют,
-	# на то они и шипы.
 	if world.weather != null and not ability_active("grip"):
 		surface_speed *= world.weather.traction
 
 	var spd := sqrt(vx * vx + vy * vy)
 	if spd < 0.45:
 		return
-	# Пыль и крошка летят из-под гусениц тем чаще, чем быстрее ход.
 	if world.tick % 6 == 0:
 		var back := angle + PI
 		world.particles.spawn(
@@ -546,7 +420,6 @@ func _update_surface(world) -> void:
 			y + sin(back) * 12.0 + (world.rng.nextf() - 0.5) * 8.0,
 			surface["dust"], 1.5 + world.rng.nextf() * 1.5, 8.0 + world.rng.nextf() * 10.0,
 			world.rng, cos(back) * 0.3, sin(back) * 0.3)
-	# Звук трака — только у живых игроков: сорок ботов превратили бы его в кашу.
 	if owner != null:
 		_tread_timer -= 1
 		if _tread_timer <= 0:
@@ -557,7 +430,6 @@ func _update_regen() -> void:
 	var per_minute := float(mods["regenPerMinute"])
 	if per_minute <= 0.0 or hp >= max_hp:
 		return
-	# Накопитель вместо счётчика тиков: корректно работает при дробной регенерации.
 	regen_accum += per_minute / float(Cfg.TICK_HZ * 60)
 	if regen_accum >= 1.0:
 		var heal := floorf(regen_accum)
@@ -572,10 +444,6 @@ func _update_shield(world) -> void:
 		shield_cooldown = Cfg.SHIELD_COOLDOWN
 		world.particles.burst(x, y, [Cfg.shield, Color("#88ddff")], 10, 2, 4, 12, 20, world.rng)
 
-## Фазы ярости босса: разовый переход при падении HP ниже порога (в отличие
-## от «берсерка» в world.gd:deal_damage, который проверяется на каждый удар,
-## тут нужен именно защёлкивающийся латч — вспышка и смена темпа должны
-## случиться один раз и остаться в силе, а не мигать туда-сюда у порога).
 func _update_boss_phase(world) -> void:
 	if not is_boss or max_hp <= 0.0:
 		return
@@ -595,7 +463,7 @@ func _update_boss_phase(world) -> void:
 		enrage_speed_mult = Cfg.BOSS_PHASE3_SPEED_MULT
 		enrage_fire_rate_mult = Cfg.BOSS_PHASE3_FIRE_RATE_MULT
 		enrage_shield_ticks = Cfg.BOSS_PHASE3_SHIELD_TICKS
-		ability_cd = 0  # на последнем издыхании способность готова бить сразу
+		ability_cd = 0
 		recompute()
 		world.feed.emit(I18n.t("feed.bossEnrage2", {"name": name},
 			"%s на последнем издыхании — берегитесь!" % name), Color("#ff3355"))
@@ -603,11 +471,6 @@ func _update_boss_phase(world) -> void:
 		world.add_shake(9.0, x, y)
 		Sfx.play("thunder", x, y)
 
-## Раздельное разрешение по осям — позволяет скользить вдоль стен.
-## crush_trees=false — для клиентского предсказания: деревья не блокируют
-## движение (is_solid_tile проверяет только стены/кирпич), поэтому вырубку
-## безопасно оставить хосту, чтобы не начислять статистику дважды и не
-## расходиться с ним по карте при неточном предсказании.
 func _move(world, crush_trees: bool = true) -> void:
 	var map: GameMap = world.map
 	var nx := x + vx
@@ -656,9 +519,6 @@ func _crush_trees(world) -> void:
 		world.on_trees_driven(self, count)
 
 func _check_water(world) -> void:
-	# Зыбучий песок разбирается первым: он не вода, «Амфибия» от него не
-	# спасает, и тонуть в нём не надо — надо застрять и получать по чуть-чуть,
-	# пока выбираешься.
 	if world.map.tile_at_pixel(x, y) == Cfg.T_QUICKSAND:
 		in_water = false
 		quicksand_timer += 1
@@ -714,18 +574,14 @@ func _try_ram(world) -> void:
 		if dx * dx + dy * dy > r2:
 			continue
 		var damage := floorf(spd * Cfg.RAM_DMG_PER_SPEED * float(mods["ramMult"]))
-		# Замороженный «Ледяной пушкой» враг гибнет от любого тарана
-		# гарантированно — в обход брони/щита/уклонения (execute_frozen_kill).
 		if other.freeze_ticks > 0:
 			world.execute_frozen_kill(other, self)
 		elif damage > 0.0:
-			# Начисление фрага и статистику тарана делает World по source == 'ram'.
 			world.deal_damage(other, damage, self, "ram")
 		var push_angle: float = atan2(dy, dx)
 		other.vx += cos(push_angle) * Cfg.RAM_PUSH
 		other.vy += sin(push_angle) * Cfg.RAM_PUSH
 
-# ------------------------------------------------------------------ выстрел
 func shoot(world) -> bool:
 	if not can_fire:
 		return false
@@ -736,14 +592,9 @@ func shoot(world) -> bool:
 	var muzzle_y := y + sin(turret_angle) * muzzle_len
 	var scale_v := dmg_scale
 
-	# Временное оружие переопределяет выстрел.
 	var wp := Weapons.get_weapon(weapon) if weapon != "" else {}
 	if not wp.is_empty():
 		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * float(wp["cooldown_mult"]))))
-		# _after_shot() здесь не нужен — уже вызван выше безусловно (строка
-		# 659). Повторный вызов удваивал нагрев ствола и shots_fired на
-		# каждый выстрел из подобранного оружия: «Пулемёт» перегревался
-		# втрое быстрее расчётного и ощущался как дебаф, а не баф.
 		var bullets := int(wp["bullets"])
 		for i in bullets:
 			var offset := 0.0
@@ -759,20 +610,11 @@ func shoot(world) -> bool:
 		world.notify_shot(self)
 		return true
 
-	# Пушка из гаража переопределяет выстрел так же, как временное оружие
-	# выше — «Веер»/«Двойной ствол» её не касаются (см. Cannons.LIST).
-	# get_cannon() возвращает {} для неизвестного id — например, если по
-	# сети пришёл чужой/неправильный cannon_id от клиента (net.gd не
-	# валидирует поле лобби). В этом случае просто стреляем обычно, а не
-	# падаем на прямом доступе к отсутствующим ключам.
 	var cn := Cannons.get_cannon(cannon_id) if cannon_id != "" and cannon_id != "standard" else {}
 	if not cn.is_empty():
 		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * float(cn["cooldown_mult"]))))
 		var b := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, float(cn["dmg_scale"]) * scale_v)
 		b.cannon_kind = String(cn["mode"])
-		# Лёд/кислота бьют только танки: пробитие/взрыв/сохранение кирпича
-		# для них не определены, поэтому явно отключены, даже если у
-		# стрелка есть «Пробивной»/«Взрывной»/«Толстая броня».
 		b.pierce = 0
 		b.explosive = false
 		b.keep_bricks = false
@@ -782,32 +624,14 @@ func shoot(world) -> bool:
 		world.notify_shot(self)
 		return true
 
-	# «Небесный удар»: заряд тратится только на обычный выстрел — как и
-	# «Веер»/«Двойной ствол» выше, эффект не переживает переопределение
-	# оружием/пушкой из гаража (обе ветки уже вернулись выше), иначе заряд
-	# просто сгорал бы впустую на выстрел, которому он не достанется.
-	# Метится только первая пуля залпа — «Веер»+«Двойной ствол» не должны
-	# бить молнией шесть раз за один заряд.
 	var sky_strike_shot: bool = flags.has("skyStrike") and sky_strike_ready
 	if sky_strike_shot:
 		sky_strike_ready = false
 		sky_strike_cooldown = Cfg.SKY_STRIKE_COOLDOWN
 
-	# «Веер» и «Двойной ствол» — независимые оси, а не альтернативы: веер
-	# задаёт число направлений, двойной ствол — число параллельных пуль на
-	# каждое направление. Вместе это веер, где в каждом луче летит по две
-	# пули, а не «побеждает» только один из перков.
 	var directions := [0.0]
 	if flags.has("fanShot"):
 		directions = [-0.15, 0.0, 0.15]
-	# С «Веером» урон на пулю снижен и без «Двойного ствола» (0.45× — так
-	# было всегда), иначе комбо удваивало бы урон веера поверх и так
-	# утроенного числа пуль. «Двойной ствол» бил полным уроном каждой из
-	# двух пуль — то есть давал x2 урона по одиночной цели бесплатно, ведь
-	# в отличие от расходящегося веера его пули летят параллельно и обе
-	# почти всегда попадают в одну и ту же цель. 0.6× за пулю держит его на
-	# уровне «Тяжёлого снаряда»/«Снайпера» (≈x1.2 по одной цели), а не
-	# выше всех перков огня разом.
 	var per_bullet_scale := scale_v
 	if flags.has("fanShot"):
 		per_bullet_scale *= 0.45
@@ -838,7 +662,6 @@ func shoot(world) -> bool:
 	world.notify_shot(self)
 	return true
 
-## Выстрел миномёта: снаряд летит по дуге над стенами.
 func shoot_lobbed(world) -> bool:
 	if not can_fire:
 		return false
@@ -856,9 +679,6 @@ func shoot_lobbed(world) -> bool:
 	Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
 	return true
 
-## Срабатывание отложенной атаки после замаха. Стреляет по текущему
-## turret_angle — башня продолжает довороты к цели весь замах, поэтому
-## залп бьёт туда, где цель окажется к концу телеграфа, а не где была.
 func _resolve_telegraphed_attack(world) -> void:
 	var kind := telegraph_kind
 	telegraph_kind = ""
@@ -875,7 +695,6 @@ func _resolve_telegraphed_attack(world) -> void:
 	world.add_shake(5.0, muzzle_x, muzzle_y)
 	Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
 
-## Ставит мину. Лимит мин отсчитывается для каждого танка отдельно.
 func place_mine(world) -> bool:
 	if not flags.has("mines") or mine_cooldown > 0:
 		return false
@@ -889,8 +708,6 @@ func place_mine(world) -> bool:
 	mine_cooldown = Cfg.MINE_COOLDOWN
 	return true
 
-## Рывок-таран: устремляет танк вперёд с повышенной скоростью на
-## DASH_DISTANCE. Кулдаун не даёт спамить.
 func dash() -> bool:
 	if not alive or dash_cooldown > 0 or dash_range > 0.0:
 		return false
@@ -902,16 +719,9 @@ func dash() -> bool:
 	vy = sin(angle) * boost
 	return true
 
-# ------------------------------------------------------------------ урон
-## Считает и применяет урон. Всё побочное (табло, статистика, тряска)
-## делает World — здесь только математика брони.
-## @return {applied, killed, evaded, reflected}
-# ------------------------------------------------------------ способности
-## Активна ли конкретная способность прямо сейчас.
 func ability_active(id: String) -> bool:
 	return ability_id == id and ability_timer > 0
 
-## Доля готовности: 1.0 — можно жать, 0.0 — только что нажали.
 var ability_ready: float:
 	get:
 		if ability_id == "":
@@ -922,8 +732,6 @@ var ability_ready: float:
 			return 1.0
 		return clampf(1.0 - float(ability_cd) / cd, 0.0, 1.0)
 
-## Нажатие способности. Клавишу можно держать зажатой: лишние нажатия
-## гасит кулдаун, поэтому отдельная обработка «только что нажал» не нужна.
 func use_ability(world) -> bool:
 	if not alive or ability_id == "" or ability_cd > 0:
 		return false
@@ -936,8 +744,6 @@ func use_ability(world) -> bool:
 
 	match ability_id:
 		"nitro":
-			# Переиспользуем готовое состояние ускорения: оно уже учтено
-			# и в физике, и в отрисовке следа.
 			turbo_timer = maxi(turbo_timer, int(ab["duration"]))
 			world.particles.burst(x, y, [Color("#ffee55"), Color("#ffffaa")],
 				14, 2, 5, 14, 26, world.rng)
@@ -950,8 +756,6 @@ func use_ability(world) -> bool:
 		"shockwave":
 			_shockwave(world)
 		"coolant":
-			# Мгновенный сброс: снять перегрев в нужный момент ценнее,
-			# чем пережидать его.
 			heat = 0.0
 			overheated = false
 			world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE],
@@ -963,16 +767,10 @@ func use_ability(world) -> bool:
 		"acid_bomb":
 			_acid_bomb(world)
 		"overclock", "grip", "breaker", "silencer", "smoke":
-			# Эффект этих способностей живёт в других местах: в нагреве,
-			# в покрытии, в пуле, в слышимости и в глазах ботов. Здесь
-			# только вспышка, чтобы нажатие было видно.
 			var ab_color: Color = ab.get("color", Color.WHITE)
 			world.particles.burst(x, y, [ab_color, Color.WHITE],
 				14, 2, 5, 12, 22, world.rng)
 		"boss_barrage":
-			# Кулдаун уже поставлен выше вместе со всеми способностями — здесь
-			# только замах. Урон наносится позже, в _resolve_telegraphed_attack,
-			# когда телеграф досчитает до нуля: игрок должен успеть среагировать.
 			telegraph_kind = "barrage"
 			telegraph_ticks = int(ab["duration"])
 			world.particles.burst(x, y, [Color("#ff3355"), Color.WHITE],
@@ -984,8 +782,6 @@ func use_ability(world) -> bool:
 		world.stat.emit("abilityUses", 1, "add")
 	return true
 
-## Ударная волна: кольцо урона вокруг танка. По постройкам бьёт как взрыв,
-## поэтому бетон держит её лучше дерева — материал решает, как и везде.
 func _shockwave(world) -> void:
 	var map = world.map
 	var row: int = map.row_at(y)
@@ -1012,8 +808,6 @@ func _shockwave(world) -> void:
 			continue
 		var k: float = 1.0 - d / Cfg.SHOCKWAVE_R
 		world.deal_damage(other, Cfg.SHOCKWAVE_DMG * k * dmg_scale, self, "blast")
-		# Отброс — половина смысла способности: волной выбивают из упора
-		# и разрывают дистанцию, а не только добивают.
 		other.vx += (dx / d) * Cfg.SHOCKWAVE_PUSH * k
 		other.vy += (dy / d) * Cfg.SHOCKWAVE_PUSH * k
 
@@ -1021,10 +815,6 @@ func _shockwave(world) -> void:
 		30, 3, 7, 26, 52, world.rng)
 	world.add_shake(9.0, x, y)
 
-## «Кислотная бомба» — активка билда «Кислотный охотник» (Perks.BUILDS,
-## active_ability_of()): тот же радиус, что у «Ударной волны», но вместо
-## урона и построек — стаки яда по танкам. Урон приходит позже обычными
-## тиками apply_acid()/update(), не здесь.
 func _acid_bomb(world) -> void:
 	for other in world.tanks:
 		if other == self or not other.alive or not world.are_hostile(self, other):
@@ -1075,24 +865,15 @@ func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 		result["killed"] = true
 	return result
 
-## Заморозка «Ледяной пушкой» — в обход deal_damage()/take_damage(): 0-урона
-## пуля туда бы не дошла (там гейт amount<=0). Уважает спавн-защиту и
-## уклонение, как обычное попадание, чтобы «Уклонение» не было бессильно
-## именно против этой пушки.
 func apply_freeze(world, attacker, ticks: int) -> bool:
 	if not alive or spawn_protect > 0:
 		return false
-	# Активный щит («Энергощит») закрывает от любого попадания, включая это —
-	# take_damage() поглощает урон щитом первым делом, здесь эквивалент.
 	if shield_hp > 0.0:
 		world.particles.burst(x, y, [Cfg.shield], 5, 2, 4, 12, 12, world.rng)
 		return false
 	if float(mods["evasionChance"]) > 0.0 and world.rng.nextf() < float(mods["evasionChance"]):
 		world.particles.burst(x, y, [Color("#00ffff"), Color("#aaffff")], 5, 2, 3, 10, 14, world.rng)
 		return false
-	# «Глубокая заморозка»: держит дольше. «Ледяной рывок»: успешное попадание
-	# заморозкой сразу даёт стрелку рывок скорости, как «Хищник» — общий
-	# ресурс с ним и с «Турбо» (turbo_timer), просто ещё один источник.
 	var duration_mult: float = float(attacker.mods["freezeDurationMult"]) if attacker != null else 1.0
 	freeze_ticks = int(round(float(ticks) * duration_mult))
 	if attacker != null and float(attacker.mods["freezeDashTicks"]) > 0.0:
@@ -1102,9 +883,6 @@ func apply_freeze(world, attacker, ticks: int) -> bool:
 	world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE], 10, 2, 4, 12, 20, world.rng)
 	return true
 
-## Стак «Кислотной пушки»: сам урон приходит периодическими тиками из
-## update() через deal_damage() — так вампиризм/отражение/берсерк и
-## статистика урона считают каждый тик как обычное попадание.
 func apply_acid(world, attacker, dmg_scale_value: float, stacks: int = 1) -> bool:
 	if not alive or spawn_protect > 0:
 		return false
@@ -1122,7 +900,6 @@ func apply_acid(world, attacker, dmg_scale_value: float, stacks: int = 1) -> boo
 	acid_attacker = attacker
 	return true
 
-## Вызывается World после смерти.
 func on_death(world, killer) -> void:
 	alive = false
 	deaths += 1
@@ -1140,10 +917,6 @@ func on_death(world, killer) -> void:
 	acid_ticks_left = 0
 	acid_tick_timer = 0
 	acid_attacker = null
-	# sky_strike_cooldown/_ready НЕ сбрасываются: это собственный ресурс
-	# игрока вроде ability_timer (см. respawn() ниже) — если бы смерть
-	# обнуляла кулдаун, специально умереть ради мгновенного нового заряда
-	# стало бы выгодной тактикой.
 
 	world.particles.burst(x, y, Cfg.explosion, 30, 3, 8, 20, 40, world.rng)
 	Sfx.play("explosion", x, y)
@@ -1184,8 +957,6 @@ func respawn(nx: float, ny: float) -> void:
 	in_water = false
 	turbo_timer = 0
 	shadow_timer = 0
-	# Кулдаун способности переживает смерть: иначе размен «умер — получил
-	# заряженную волну» стал бы выгодной тактикой.
 	ability_timer = 0
 	dash_range = 0.0
 	dash_cooldown = 0
@@ -1199,9 +970,6 @@ func respawn(nx: float, ny: float) -> void:
 	acid_attacker = null
 	last_attacker = null
 	flag = null
-	# Ярость босса — состояние ЭТОЙ жизни, не должна переживать смерть: иначе
-	# босс, однажды дошедший до фазы 2/3, остаётся навсегда быстрее и
-	# скорострельнее после каждого следующего возрождения.
 	boss_phase = 1
 	enrage_speed_mult = 1.0
 	enrage_fire_rate_mult = 1.0
@@ -1209,7 +977,6 @@ func respawn(nx: float, ny: float) -> void:
 	if brain != null:
 		brain.reset()
 
-## Мягкое расталкивание, чтобы танки не слипались в одну точку.
 func separate_from(other) -> void:
 	var dx: float = x - other.x
 	var dy: float = y - other.y
@@ -1220,11 +987,6 @@ func separate_from(other) -> void:
 	var nx: float
 	var ny: float
 	if d == 0.0:
-		# Точное совпадение координат (например, два бота на одном
-		# free_spot) — направление через dx/dy не определить (0/0), раньше
-		# это тихо пропускало расталкивание насовсем. Берём стабильный угол
-		# по id: не ноль и разный у любой пары танков, пока один из них не
-		# сдвинется сам и dx/dy не станут ненулевыми.
 		var a: float = float(id) * 2.399963229728653
 		nx = cos(a)
 		ny = sin(a)

@@ -1,12 +1,3 @@
-# ============================================================================
-# shot.gd — снимает экраны игры в user://shots/ для визуальной проверки.
-#
-# Запуск:
-#   godot --path godot --resolution 1280x720 res://tests/shot.tscn
-#
-# В отличие от smoke.tscn здесь ничего не симулируется вручную: игра просто
-# живёт своей жизнью несколько кадров, и кадр сохраняется в PNG.
-# ============================================================================
 extends Node
 
 var game: Node
@@ -20,13 +11,11 @@ func _ready() -> void:
 	await _frames(45)
 	await _save("menu")
 
-	# Меню с раскрытой панелью настроек.
 	game.ui._menu_settings_panel.visible = true
 	game.ui._refresh_mode_button()
 	await _frames(12)
 	await _save("menu_settings")
 
-	# Гараж и галерея перков.
 	game.ui.open_garage()
 	await _frames(12)
 	await _save("garage")
@@ -47,40 +36,27 @@ func _ready() -> void:
 	await _save("gallery")
 	game.ui.close_gallery()
 
-	# Постобработка: один и тот же бой без эффектов и с эффектами.
 	Sets.fx_quality = PostFx.OFF
 	await _match_shot("defense", "single", "fx_off")
 	Sets.fx_quality = PostFx.HIGH
 	await _match_shot("defense", "single", "fx_high")
 
-	# Горящие остовы: подрываем ближайшие к камере танки и снимаем кадр,
-	# пока обломки ещё горят.
 	await _wreck_shot()
 
-	# Прочность построек: рядом с камерой оставляем здания в разной стадии
-	# разрушения и разносим несколько до обломков.
 	await _damage_shot()
 
-	# Витрина корпусов и камуфляжей: их не увидеть в обычном бою рядом.
 	await _lineup_shot("chassis")
 	await _lineup_shot("camo")
 
-	# Активные способности: индикатор в HUD и карточка выбора перка.
 	await _ability_shot()
 
-	# Гроза с разрядами в землю: удар вызывается принудительно, ждать
-	# его в кадре бессмысленно.
 	await _storm_shot()
 
-	# Новые погодные условия: их не поймать в обычной партии — цикл дня
-	# длится десять минут, а условие меняется раз в полминуты.
 	for wx in [["night", "clear"], ["day", "fog"], ["day", "snow"]]:
 		await _weather_shot(String(wx[0]), String(wx[1]))
 
-	# Река и мосты: камеру ставим на переправу, иначе её можно не увидеть.
 	await _bridge_shot()
 
-	# Бой: обычный экран и разделённый.
 	await _match_shot("ffa", "single", "ingame_ffa")
 	await _match_shot("ctf", "single", "ingame_ctf")
 	await _match_shot("ffa", "hotseat", "ingame_hotseat")
@@ -94,15 +70,12 @@ func _match_shot(mode: String, game_type: String, name: String) -> void:
 	game.ui.settings["game_type"] = game_type
 	game.ui.settings["level"] = 1
 	game.start_match()
-	# Стартовый выбор перка закрываем — нужен вид самого боя.
 	var guard := 0
 	while game.state == "perk" and guard < 20:
 		guard += 1
 		game._on_perk_chosen(game.perk_player, "")
 	await _frames(90)
 	await _save(name)
-	# Стоимость кадра: важнее всего на слабых видеокартах, ради них
-	# и сделан переключатель качества.
 	var t0 := Time.get_ticks_usec()
 	await _frames(60)
 	print("    кадр: %.2f мс (эффекты %d)"
@@ -110,7 +83,6 @@ func _match_shot(mode: String, game_type: String, name: String) -> void:
 	game.to_menu()
 	await _frames(5)
 
-## Снимок грозы: разряд бьёт рядом с игроком, на земле остаётся след.
 func _storm_shot() -> void:
 	game.ui.settings["mode"] = "ffa"
 	game.ui.settings["game_type"] = "single"
@@ -125,7 +97,6 @@ func _storm_shot() -> void:
 	await _frames(60)
 
 	var t: Tank = game.players[0].tank
-	# Три следа вокруг игрока и один свежий разряд в кадре.
 	game.world.strike_lightning(t.x + 90.0, t.y + 40.0)
 	game.world.strike_lightning(t.x - 120.0, t.y - 30.0)
 	await _frames(30)
@@ -138,7 +109,6 @@ func _storm_shot() -> void:
 	game.to_menu()
 	await _frames(5)
 
-## Снимок партии с закреплённой погодой и временем суток.
 func _weather_shot(daytime: String, weather: String) -> void:
 	game.ui.settings["mode"] = "ffa"
 	game.ui.settings["game_type"] = "single"
@@ -150,7 +120,6 @@ func _weather_shot(daytime: String, weather: String) -> void:
 	while game.state == "perk" and guard < 20:
 		guard += 1
 		game._on_perk_chosen(game.perk_player, "")
-	# Интенсивность условия набирается плавно — даём ей дойти до предела.
 	await _frames(150)
 	await _save("weather_%s_%s" % [daytime, weather])
 	game.ui.settings["daytime"] = "auto"
@@ -158,11 +127,6 @@ func _weather_shot(daytime: String, weather: String) -> void:
 	game.to_menu()
 	await _frames(5)
 
-## Витрина: все силуэты корпусов или все камуфляжи в один ряд.
-##
-## В бою рядом их не поставить — типы врагов выпадают вразнобой, а камуфляж
-## у игрока всегда один. Поэтому танки создаются вручную и расставляются
-## на расчищенной площадке перед камерой.
 func _lineup_shot(kind: String) -> void:
 	game.ui.settings["mode"] = "ffa"
 	game.ui.settings["game_type"] = "single"
@@ -177,7 +141,6 @@ func _lineup_shot(kind: String) -> void:
 	var world = game.world
 	var p = game.players[0]
 	var map = world.map
-	# Ставим витрину в середине карты и расчищаем под неё асфальт.
 	var cx: float = map.width * 0.5
 	var cy: float = map.height * 0.5
 	var r0: int = map.row_at(cy) - 4
@@ -186,7 +149,6 @@ func _lineup_shot(kind: String) -> void:
 		for c in range(c0, c0 + 18):
 			map.set_tile(r, c, Cfg.T_ROAD)
 
-	# Остальные танки убираем, чтобы не лезли в кадр.
 	world.tanks = [p.tank]
 	world.bullets.clear()
 	p.tank.x = cx
@@ -221,8 +183,6 @@ func _lineup_shot(kind: String) -> void:
 			})
 			t.cosmetics = {"camo": String(items[i]), "hull": "none",
 				"track": "none", "turret": "none"}
-		# Танки смотрят вправо: так виден ствол целиком, а полоска HP
-		# над корпусом его не перекрывает.
 		t.body_angle = 0.0
 		t.angle = 0.0
 		t.turret_angle = 0.0
@@ -236,8 +196,6 @@ func _lineup_shot(kind: String) -> void:
 	game.to_menu()
 	await _frames(5)
 
-## Снимки активной способности: индикатор в HUD во время действия и экран
-## выбора перка с активными карточками.
 func _ability_shot() -> void:
 	game.ui.settings["mode"] = "ffa"
 	game.ui.settings["game_type"] = "single"
@@ -256,9 +214,6 @@ func _ability_shot() -> void:
 	await _frames(6)
 	await _save("ability_hud")
 
-	# Ищем расклад, где в тройке есть активный перк: подменять игроку весь
-	# набор нельзя — строка «экипировано» раздувается и ломает вёрстку,
-	# то есть снимок показал бы не экран игры, а артефакт теста.
 	var found := false
 	for attempt in 80:
 		game.ui.show_perk_select(p, 0, Rng.new(attempt))
@@ -279,7 +234,6 @@ func _ability_shot() -> void:
 	game.to_menu()
 	await _frames(5)
 
-## Снимок переправы: игрок телепортируется на ближайший к центру мост.
 func _bridge_shot() -> void:
 	game.ui.settings["mode"] = "ffa"
 	game.ui.settings["game_type"] = "single"
@@ -320,7 +274,6 @@ func _bridge_shot() -> void:
 	game.to_menu()
 	await _frames(5)
 
-## Снимок с повреждёнными и разрушенными постройками.
 func _damage_shot() -> void:
 	game.ui.settings["mode"] = "ffa"
 	game.ui.settings["game_type"] = "single"
@@ -338,8 +291,6 @@ func _damage_shot() -> void:
 	var cr: int = map.row_at(cam.y)
 	var cc: int = map.col_at(cam.x)
 
-	# Собираем постройки вокруг камеры и портим их по нарастающей:
-	# часть остаётся с трещинами, часть разносим в обломки.
 	var found := []
 	for dr in range(-9, 10):
 		for dc in range(-16, 17):
@@ -358,7 +309,6 @@ func _damage_shot() -> void:
 	game.to_menu()
 	await _frames(5)
 
-## Снимок с догорающими остовами.
 func _wreck_shot() -> void:
 	game.ui.settings["mode"] = "ffa"
 	game.ui.settings["game_type"] = "single"
@@ -370,8 +320,6 @@ func _wreck_shot() -> void:
 		game._on_perk_chosen(game.perk_player, "")
 	await _frames(30)
 
-	# Ближайшие боты переставляются вплотную к камере и подрываются:
-	# иначе остовы оказываются за кадром и снимок бесполезен.
 	var world = game.world
 	var cam = game.players[0].camera
 	var near := []
@@ -397,8 +345,6 @@ func _frames(n: int) -> void:
 		await get_tree().process_frame
 
 func _save(name: String) -> void:
-	# Ждём обычных кадров и берём последний отрисованный: продолжать корутину
-	# внутри frame_post_draw нельзя — следующий await из неё уже не проснётся.
 	await _frames(3)
 	var img := get_viewport().get_texture().get_image()
 	img.save_png("user://shots/%s.png" % name)

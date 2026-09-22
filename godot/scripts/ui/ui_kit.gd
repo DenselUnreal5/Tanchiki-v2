@@ -1,19 +1,7 @@
-# ============================================================================
-# ui_kit.gd — оформление интерфейса.
-#
-# Повторяет style.css веб-версии: тёмная схема, зелёный акцент, скруглённые
-# «пилюли»-кнопки, панели с полупрозрачным фоном и золотые акценты.
-#
-# @tool: только static func, своих static var с литералами-конструкторами
-# нет — судя по main_menu.tscn работало и без этого, но ставим для
-# единообразия с Cfg/PerkIcons/Upgrades/... (см. config.gd), раз та же
-# болячка бьёт непредсказуемо по разным классам с похожей структурой.
-# ============================================================================
 @tool
 class_name UiKit
 extends RefCounted
 
-# ---------------------------------------------------------------- стили
 static func flat(bg: Color, radius: float = 8.0, border: float = 0.0,
 		border_color: Color = Color.TRANSPARENT) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
@@ -28,9 +16,6 @@ static func flat(bg: Color, radius: float = 8.0, border: float = 0.0,
 	s.content_margin_bottom = 6
 	return s
 
-## Кольцо фокуса для навигации геймпадом. Прозрачная заливка, акцентная
-## рамка чуть снаружи кнопки. Ставится темой на UiRoot только в режиме
-## навигации (ui_root.gd:_apply_nav_mode), в мышином режиме — StyleBoxEmpty.
 static func focus_ring() -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color.TRANSPARENT
@@ -52,7 +37,6 @@ static func card_style(border_color: Color = Cfg.UI_BORDER) -> StyleBoxFlat:
 	s.content_margin_bottom = 10
 	return s
 
-# ---------------------------------------------------------------- надписи
 static func label(text: String, font_size: int = 12, color: Color = Cfg.UI_TEXT,
 		bold: bool = false) -> Label:
 	var l := Label.new()
@@ -63,9 +47,6 @@ static func label(text: String, font_size: int = 12, color: Color = Cfg.UI_TEXT,
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	return l
 
-## Подпись с иконкой-эмодзи впереди. Правило размера одно и без исключений:
-## иконка всегда того же кегля, что и текст рядом — отдельной шкалы размеров
-## для иконок нет и не нужно, только это наследование.
 static func icon_label(icon: String, text: String, font_size: int = 12,
 		color: Color = Cfg.UI_TEXT, bold: bool = false) -> Label:
 	return label("%s %s" % [icon, text], font_size, color, bold)
@@ -84,7 +65,6 @@ static func rich(text: String, font_size: int = 12, color: Color = Cfg.UI_TEXT) 
 	return r
 
 static func title(text: String, font_size: int = 26, color: Color = Cfg.UI_TEXT) -> Label:
-	# Разрядка букв как letter-spacing в CSS: вставляем тонкие пробелы.
 	var spaced := ""
 	for i in text.length():
 		spaced += text[i]
@@ -99,15 +79,11 @@ static func subtitle(text: String) -> Label:
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return l
 
-# ---------------------------------------------------------------- кнопки
 static func _style_button(b: Button, normal: StyleBox, hover: StyleBox,
 		pressed: StyleBox, font_size: int, color: Color) -> void:
 	b.add_theme_stylebox_override("normal", normal)
 	b.add_theme_stylebox_override("hover", hover)
 	b.add_theme_stylebox_override("pressed", pressed)
-	# Рамку фокуса НЕ переопределяем здесь: ею управляет тема на UiRoot —
-	# видимое кольцо в режиме навигации геймпадом, пусто в мышином режиме
-	# (ui_root.gd:_apply_nav_mode).
 	b.add_theme_stylebox_override("disabled", normal)
 	b.add_theme_font_override("font", Fonts.regular)
 	b.add_theme_font_size_override("font_size", font_size)
@@ -116,17 +92,6 @@ static func _style_button(b: Button, normal: StyleBox, hover: StyleBox,
 	b.add_theme_color_override("font_pressed_color", Color("#eaffea"))
 	b.add_theme_color_override("font_disabled_color", Color(color.r, color.g, color.b, 0.35))
 
-## Форма кнопок по теме — обычные Button/StyleBoxFlat, не свой _draw() (как
-## у ThemedPanel/SkillNode), поэтому разница между темами — в геометрии
-## (радиус, толщина рамки), а не в произвольной форме. Раньше все три темы
-## получали одну и ту же перекрашенную «пилюлю» — снаружи это читалось как
-## «сменили только палитру», хотя дерево умений и панели были другими.
-## Нуар — мягкая пилюля (рваная бумага, мягкие формы), военное досье —
-## почти прямой срез с толстой рамкой (штампованный металл), sci-fi —
-## небольшое скругление, тоньше и светлее.
-## Sets — автозагрузка, её скрипт не @tool: в редакторе Godot (main_menu.tscn
-## теперь рисует себя и там) подставляет вместо неё заглушку-placeholder без
-## настоящих полей — тема по умолчанию тогда military, как у Cfg.apply_theme.
 static func _ui_theme() -> String:
 	return "military" if Engine.is_editor_hint() else Sets.ui_theme
 
@@ -139,7 +104,6 @@ static func _chrome_radius() -> float:
 static func _chrome_border_w() -> float:
 	return 2.0 if _ui_theme() == "military" else 1.0
 
-## Главная зелёная кнопка (btn-primary / #btn-start).
 static func primary(text: String, font_size: int = 16) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -154,7 +118,6 @@ static func primary(text: String, font_size: int = 16) -> Button:
 	b.add_theme_font_override("font", Fonts.bold)
 	return b
 
-## Второстепенная кнопка (btn-secondary) — навигация/хром.
 static func secondary(text: String, font_size: int = 12) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -166,7 +129,6 @@ static func secondary(text: String, font_size: int = 12) -> Button:
 	_style_button(b, normal, hover, pressed, font_size, Color("#c7cbb8"))
 	return b
 
-## Опасное действие (btn-secondary.danger).
 static func danger(text: String, font_size: int = 12) -> Button:
 	var b := secondary(text, font_size)
 	b.add_theme_stylebox_override("hover", flat(Color(0.16, 0.09, 0.09, 0.9), _chrome_radius(), _chrome_border_w(), Cfg.UI_DANGER))
@@ -174,7 +136,6 @@ static func danger(text: String, font_size: int = 12) -> Button:
 	b.add_theme_color_override("font_hover_color", Color("#ffcccc"))
 	return b
 
-## Переключатель в группе (.toggle).
 static func toggle(text: String, font_size: int = 12) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -191,7 +152,6 @@ static func toggle(text: String, font_size: int = 12) -> Button:
 	b.add_theme_color_override("font_hover_pressed_color", Color("#eaffea"))
 	return b
 
-## Маленькая кнопка покупки (.btn-small).
 static func small(text: String) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -206,12 +166,6 @@ static func small(text: String) -> Button:
 	_style_button(b, normal, hover, pressed, 10, Cfg.UI_GOLD)
 	return b
 
-# ---------------------------------------------------------------- контейнеры
-## Панель с фоном текущей темы (рваная бумага / клёпаный металл / скошенное
-## стекло, см. themed_panel.gd) — основной строительный блок почти всех
-## экранов вне HUD. border_color по умолчанию — Color.TRANSPARENT, что
-## значит «рамка текущей темы» (Cfg.UI_BORDER); передавать другой цвет
-## нужно только для семантических рамок (победа/поражение/награда).
 static func panel(border_color: Color = Color.TRANSPARENT, stripe_top: bool = false) -> ThemedPanel:
 	var p := ThemedPanel.new()
 	p.border_color = border_color
@@ -234,7 +188,6 @@ static func section(text: String, color: Color) -> Label:
 	l.add_theme_constant_override("line_spacing", 6)
 	return l
 
-## Полоска прогресса (.gc-bar / .bar).
 static func progress_bar(value: float, width: float, height: float,
 		fill: Color, bg: Color = Color("#222222")) -> Control:
 	var wrap := Control.new()
@@ -243,10 +196,6 @@ static func progress_bar(value: float, width: float, height: float,
 	back.color = bg
 	back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	wrap.add_child(back)
-	# Анкерами, а не пиксельным size: контейнер (wrap) нередко растягивается
-	# шире переданного width (например VBoxContainer с EXPAND_FILL в карточке
-	# задания) — back это отражает через PRESET_FULL_RECT, а фиксированный
-	# по ширине front тогда не дотягивался бы до края даже при value = 1.0.
 	var front := ColorRect.new()
 	front.color = fill
 	front.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -255,9 +204,6 @@ static func progress_bar(value: float, width: float, height: float,
 	wrap.add_child(front)
 	return wrap
 
-# ---------------------------------------------------------------- строки настроек
-## Строка с ползунком: подпись слева, значение справа.
-## on_change получает значение 0..1.
 static func slider_row(label_text: String, value: float, on_change: Callable,
 		suffix: String = "%") -> Control:
 	var row := hbox(12)
@@ -291,7 +237,6 @@ static func slider_row(label_text: String, value: float, on_change: Callable,
 	row.set_meta("focus_row", slider)
 	return row
 
-## Строка-выключатель: подпись и кнопка «Вкл/Выкл».
 static func switch_row(label_text: String, value: bool, on_change: Callable) -> Control:
 	var row := hbox(12)
 	row.custom_minimum_size = Vector2(0, 30)
@@ -311,7 +256,6 @@ static func switch_row(label_text: String, value: bool, on_change: Callable) -> 
 	row.set_meta("focus_row", btn)
 	return row
 
-## Строка-переключатель из нескольких вариантов.
 static func choice_row(label_text: String, options: Array, index: int,
 		on_change: Callable) -> Control:
 	var row := hbox(12)
@@ -340,11 +284,6 @@ static func choice_row(label_text: String, options: Array, index: int,
 	row.set_meta("focus_flow", flow)
 	return row
 
-## Строка переназначения клавиши: подпись и кнопка-приёмник (см.
-## keybind_button.gd). Клик по кнопке переводит её в режим ожидания
-## следующей физической клавиши; Esc отменяет без изменений. on_change
-## получает новый физический keycode — конфликты с другими действиями
-## решает вызывающий код (см. ui_root.gd:_assign_key), не сам виджет.
 static func keybind_row(label_text: String, keycode: int, on_change: Callable) -> Control:
 	var row := hbox(12)
 	row.custom_minimum_size = Vector2(0, 30)
@@ -369,7 +308,6 @@ static func keybind_row(label_text: String, keycode: int, on_change: Callable) -
 	row.set_meta("focus_row", btn)
 	return row
 
-## Полупрозрачная затемняющая подложка оверлея (.overlay.dim).
 static func dimmer() -> ColorRect:
 	var c := ColorRect.new()
 	c.color = Color(0, 0, 0, 0.82)
@@ -377,11 +315,6 @@ static func dimmer() -> ColorRect:
 	c.mouse_filter = Control.MOUSE_FILTER_STOP
 	return c
 
-# ---------------------------------------------------------------- вкладки и статус
-## Полоска вкладок сверху экрана: активная — жирным и цветом акцента,
-## остальные — приглушённым текстом. Без фона/пилюль — читается как заголовки
-## разделов, а не как отдельные кнопки (так у всех трёх тем сразу, только
-## меняется акцентный цвет). items — массив {"key": String, "label": String}.
 static func plain_tabs(items: Array, active_key: String, on_change: Callable) -> HBoxContainer:
 	var row := hbox(28)
 	for item in items:
@@ -390,13 +323,8 @@ static func plain_tabs(items: Array, active_key: String, on_change: Callable) ->
 		var btn := Button.new()
 		btn.text = String(item["label"]).to_upper()
 		btn.flat = true
-		# Раньше FOCUS_NONE — вкладки были недостижимы фокусом вовсе, геймпад/
-		# клавиатура не могли на них попасть и переключить вкладку.
 		btn.focus_mode = Control.FOCUS_ALL
 		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		# Чтобы после переключения вкладки можно было найти именно эту кнопку
-		# и вернуть на неё фокус (см. ui_root.gd:_find_tab_button) — не по
-		# тексту подписи, тот зависит от языка.
 		btn.set_meta("tab_key", key)
 		var empty := StyleBoxEmpty.new()
 		_style_button(btn, empty, empty, empty, 13, Cfg.UI_ACCENT if on else Cfg.UI_MUTED)
@@ -405,11 +333,6 @@ static func plain_tabs(items: Array, active_key: String, on_change: Callable) ->
 		row.add_child(btn)
 	return row
 
-## Состояние узла дерева умений — не кнопка покупки, а честная сводка
-## состояния: прогресс здесь всегда только по уровню профиля/задаче,
-## купить перк за деньги нельзя (в отличие от прототипа-референса).
-## Военное досье рисует её полоской-жетоном (UI_TAG), остальные темы — как
-## обычную приглушённую/акцентную кнопку-статус.
 static func unlock_button(text: String, state: String) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -425,8 +348,6 @@ static func unlock_button(text: String, state: String) -> Button:
 	b.add_theme_font_override("font", Fonts.bold)
 	return b
 
-## Первый видимый фокусируемый Control в поддереве — используется chain_vertical
-## как запасной вариант, когда у строки нет meta("focus_row").
 static func first_focusable(node: Node) -> Control:
 	if node is Control and node.visible and node.focus_mode != Control.FOCUS_NONE:
 		return node
@@ -436,9 +357,6 @@ static func first_focusable(node: Node) -> Control:
 			return f
 	return null
 
-## Линкует ряд кнопок по горизонтали (left/right + next/prev), с переносом.
-## Автопоиск соседа Godot промахивается через GridContainer/HFlowContainer —
-## этим и пользуются все вызывающие места.
 static func chain_horizontal(btns: Array, wrap: bool = true) -> void:
 	var n := btns.size()
 	for i in n:
@@ -454,8 +372,6 @@ static func chain_horizontal(btns: Array, wrap: bool = true) -> void:
 			b.focus_neighbor_right = btns[r].get_path()
 			b.focus_next = btns[r].get_path()
 
-## Линкует ряды по вертикали (top/bottom). rows — Control'ы; для каждого
-## берётся его meta("focus_row") либо первый фокусируемый потомок.
 static func chain_vertical(rows: Array) -> void:
 	var entries := []
 	for row in rows:
@@ -473,10 +389,6 @@ static func chain_vertical(rows: Array) -> void:
 		if i + 1 < entries.size():
 			a.focus_neighbor_bottom = entries[i + 1].get_path()
 
-## Полоска прогресса с тонкой рамкой — общий стиль баров HUD (HP/нагрев/
-## опыт/кулдаун). Ничего «тематического» тяжелее рамки — полоски видны
-## постоянно во время боя и должны оставаться простыми и читаемыми при
-## любой активной теме.
 static func rounded_bar(width: float, height: float, fill: Color,
 		border_color: Color = Color.TRANSPARENT) -> Dictionary:
 	var wrap := Control.new()

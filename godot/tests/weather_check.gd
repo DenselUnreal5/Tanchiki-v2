@@ -1,11 +1,3 @@
-# ============================================================================
-# weather_check.gd — проверка, что погода влияет на игру, а не только на вид.
-#
-# Погоду легко нарисовать и забыть подключить: снег сыплется, а танк едет
-# как по асфальту. Здесь каждое условие ставится принудительно, и сверяются
-# те два числа, ради которых погода вообще существует в правилах —
-# дальность зрения ботов и сцепление с грунтом.
-# ============================================================================
 extends Node
 
 var game: Node
@@ -17,7 +9,6 @@ func _ready() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	# ---- условия ---------------------------------------------------------
 	print("условие      зрение ботов   сцепление")
 	var base_sight := 0.0
 	for id in ["clear", "rain", "fog", "snow", "storm"]:
@@ -35,7 +26,6 @@ func _ready() -> void:
 	_start("snow", "day")
 	_check(game.world.weather.traction < 0.85, "по снегу сцепление хуже")
 
-	# ---- время суток -----------------------------------------------------
 	print("время        свет   зрение ботов")
 	for tod in ["day", "dusk", "night", "midnight"]:
 		_start("clear", tod)
@@ -49,14 +39,12 @@ func _ready() -> void:
 	_check(night_sight < day_sight, "ночью боты видят меньше, чем днём (%.0f -> %.0f)"
 		% [day_sight, night_sight])
 
-	# Время должно стоять: выбранная ночь не превращается в рассвет.
 	var w2 = game.world.weather
 	var light_before: float = w2.light
 	for i in 600:
 		w2.update()
 	_check(absf(w2.light - light_before) < 0.001, "выбранное время суток не уплывает")
 
-	# ---- сцепление доходит до танка --------------------------------------
 	_start("clear", "day")
 	var tank: Tank = game.players[0].tank
 	tank._update_surface(game.world)
@@ -67,11 +55,7 @@ func _ready() -> void:
 	var slippery := tank.surface_speed
 	_check(slippery < dry, "снег доходит до хода танка: %.2f -> %.2f" % [dry, slippery])
 
-	# ---- гроза: разряд бьёт ровно на 90 ----------------------------------
 	_start("storm", "night")
-	# Бьём бота: у игрока броня из гаража режет любой входящий урон, и на
-	# нём «ровно 90» не проверить. Первая версия теста этого не учла и
-	# показала 61 — цифра верная, но проверяла она не то.
 	var victim: Tank = null
 	for t in game.world.tanks:
 		if t.owner == null and t.perk_ids.is_empty():
@@ -80,8 +64,6 @@ func _ready() -> void:
 	if victim == null:
 		_check(false, "бот для проверки молнии не нашёлся")
 		return
-	# Запас поднимаем выше урона: у бота его 80, и удар просто убивал —
-	# разница по здоровью упиралась в ноль и ничего не доказывала.
 	victim.max_hp = 300.0
 	victim.hp = victim.max_hp
 	victim.spawn_protect = 0
@@ -93,14 +75,10 @@ func _ready() -> void:
 	_check(game.world.scorches.size() > 0, "на земле остался след от удара")
 	_check(game.world.bolts.size() > 0, "разряд появился в кадре")
 
-	# Мимо — значит мимо: за радиусом поражения урона быть не должно.
 	var hp2 := victim.hp
 	game.world.strike_lightning(victim.x + Cfg.LIGHTNING_RADIUS * 3.0, victim.y)
 	_check(absf(victim.hp - hp2) < 0.001, "удар в стороне не задевает танк")
 
-	# ---- гроза глушит выстрел ------------------------------------------
-	# Бот слышит чужой выстрел ближе в непогоду: та же дальность идёт и в
-	# отметку на миникарте, поэтому проверяем именно её.
 	print("условие      слышимость выстрела")
 	game.ui.settings["location"] = "auto"
 	_start("clear", "day")
@@ -113,10 +91,6 @@ func _ready() -> void:
 		"в ясную погоду выстрел слышно на полную дальность (%.0f)" % Cfg.BOT_HEAR_RANGE)
 	_check(storm_reach < clear_reach * 0.75, "гроза глушит выстрел: слышно заметно ближе")
 
-	# ---- гроза валит деревья ------------------------------------------
-	# Джунгли: карта, где деревьев вдоволь. Счётчик w._trees_felled считает
-	# именно повал ветром — деревья мнут ещё и танки, по общему числу на
-	# карте одно от другого не отделить.
 	game.ui.settings["location"] = "jungle"
 	_start("storm", "day")
 	var w3 = game.world
@@ -128,8 +102,6 @@ func _ready() -> void:
 	print("джунгли, гроза: деревьев на карте %d, повалено ветром %d" % [trees0, w3._trees_felled])
 	_check(w3._trees_felled > 0, "за грозу ветер повалил хотя бы одно дерево")
 
-	# И обратное: без грозы счётчик повала не растёт (защита от кода,
-	# который «валит» всегда, а не только в непогоду).
 	_start("clear", "day")
 	var w4 = game.world
 	for i in Cfg.STORM_FELL_EVERY * 3:
@@ -139,9 +111,6 @@ func _ready() -> void:
 	_check(w4._trees_felled == 0, "в ясную погоду ветер деревья не валит (счётчик %d)"
 		% w4._trees_felled)
 
-	# ---- потолок и воспроизводимость --------------------------------
-	# Изолированно: только _update_treefall, без хода танков (они тоже мнут
-	# деревья и своей случайностью забили бы проверку).
 	_start("storm", "day")
 	var sum_a := _fell_only(game.world)
 	var capped := game.world._trees_felled
@@ -156,7 +125,6 @@ func _ready() -> void:
 	print("=== ПРОВЕРКА ПОГОДЫ ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
 
-## Дальность, с которой слышен выстрел бота без перков в текущей погоде.
 func _shot_reach() -> float:
 	var shooter: Tank = null
 	for t in game.world.tanks:
@@ -181,9 +149,6 @@ func _count_trees(map: GameMap) -> int:
 				n += 1
 	return n
 
-## Прогоняет только повал деревьев на свежих счётчиках и возвращает отпечаток
-## карты. Ход танков не трогается — иначе разброс их случайности перекрыл бы
-## то, что проверяется.
 func _fell_only(w) -> int:
 	w._trees_felled = 0
 	w._tree_tiles = PackedInt32Array()

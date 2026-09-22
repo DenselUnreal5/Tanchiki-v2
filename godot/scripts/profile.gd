@@ -1,11 +1,3 @@
-# ============================================================================
-# profile.gd — постоянный прогресс между партиями (user://profile.json).
-# Автозагрузка «Prof».
-#
-# Профиль один на машину: в «горячем стуле» оба живых игрока пополняют его
-# опыт и статистику челленджей. Внутрипартийные уровни и перки при этом
-# у каждого игрока свои — они живут в PlayerState, а не здесь.
-# ============================================================================
 extends Node
 
 const SAVE_PATH := "user://profile.json"
@@ -17,7 +9,6 @@ signal achievement(ids: Array, reward: int)
 signal daily_claimed(id: String, reward: int)
 signal rank_up(ids: Array, reward: int)
 
-## Список отслеживаемых статистик.
 const STAT_KEYS := [
 	"ramKills",
 	"bricksDestroyed",
@@ -28,25 +19,23 @@ const STAT_KEYS := [
 	"gamesPlayed",
 	"timesDied",
 	"totalKills",
-	"rapidKills",     # лучший результат: убийств за 10 сек
-	"cleanStreak",    # лучшая серия убийств без урона
-	"damageInGame",   # лучший урон за одну партию
-	"longKills",      # убийства с дистанции ≥ 400 px (≈ 50 м в подписи игроку)
-	"lowHpKills",     # убийства при HP ≤ 40%
-	"sniperKills",    # убийства с дистанции ≥ 800 px (≈ 100 м в подписи игроку)
-	"bridgeKills",    # убийства, сделанные стоя на мосту
-	"concreteDestroyed",  # снесённые бетонные и железные постройки
-	"abilityUses",    # срабатывания активной способности
-	"bossKills",      # убийства боссов
-	"moneyEarned",    # монет заработано за всё время (не текущий баланс)
-	"globalLevel",    # лучший достигнутый глобальный уровень
-	"defenseWaveReached",  # лучшая волна, до которой продержались в «Обороне»
+	"rapidKills",
+	"cleanStreak",
+	"damageInGame",
+	"longKills",
+	"lowHpKills",
+	"sniperKills",
+	"bridgeKills",
+	"concreteDestroyed",
+	"abilityUses",
+	"bossKills",
+	"moneyEarned",
+	"globalLevel",
+	"defenseWaveReached",
 ]
 
-## Статистики-рекорды: обновляются по максимуму, а не суммированием.
 const MAX_STATS := ["rapidKills", "cleanStreak", "damageInGame", "globalLevel", "defenseWaveReached"]
 
-## Названия статистик для экрана «Статистика».
 const STAT_LABELS := {
 	"ramKills": "Убийства тараном",
 	"bricksDestroyed": "Разрушено кирпичей",
@@ -74,21 +63,17 @@ const STAT_LABELS := {
 
 var global_level := 1
 var global_xp := 0
-var unlocked := {}          # Set<String> открытых перков
+var unlocked := {}
 var stats := {}
 var money := 0
-var upgrades := {}          # id -> уровень
-var achievements := {}      # Set<String>
-var ranks_claimed := {}     # Set<String> — какие звания уже выплачены
+var upgrades := {}
+var achievements := {}
+var ranks_claimed := {}
 var daily := {"date": "", "progress": {}, "claimed": []}
-var cosmetic_owned := {}    # Set<"тип:id">
+var cosmetic_owned := {}
 var cosmetics := {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
-var cannon_owned := {}      # Set<id пушки>
+var cannon_owned := {}
 var equipped_cannon := "standard"
-## Цвет танка игрока 1/2 — общий на профиль, «Горячий стул» делит его на
-## обоих так же, как и улучшения. Разблокировка по Cfg.PLAYER_SKINS[].level
-## считается на лету от global_level — отдельного списка открытых цветов,
-## в отличие от перков, вести не нужно (уровень и так персистентен).
 var equipped_color1 := "p1"
 var equipped_color2 := "p2"
 
@@ -108,7 +93,6 @@ func _empty_upgrades() -> void:
 	for u in Upgrades.LIST:
 		upgrades[u["id"]] = 0
 
-# -------------------------------------------------------------- хранилище
 func load_profile() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
@@ -120,7 +104,6 @@ func load_profile() -> void:
 				_apply(data)
 			else:
 				push_warning("[profile] сохранение повреждено, начинаем заново")
-	# Догоняем открытия, положенные по текущему уровню.
 	_sync_level_unlocks()
 
 func _apply(data: Dictionary) -> void:
@@ -235,11 +218,9 @@ func reset() -> void:
 	_sync_level_unlocks()
 	save_profile()
 
-# -------------------------------------------------------------- опыт
 func xp_to_next_level() -> int:
 	return Cfg.xp_for_global_level(global_level)
 
-## Начисляет глобальный опыт и рассылает события об уровнях и открытиях.
 func add_xp(amount: int) -> void:
 	if amount <= 0:
 		return
@@ -264,8 +245,6 @@ func add_xp(amount: int) -> void:
 		if not newly.is_empty():
 			unlock.emit(newly, "level")
 
-# -------------------------------------------------------------- статистика
-## Изменяет статистику и сразу проверяет челленджи и достижения.
 func bump_stat(key: String, delta: int = 1) -> void:
 	if not stats.has(key):
 		return
@@ -276,7 +255,6 @@ func bump_stat(key: String, delta: int = 1) -> void:
 	check_challenges()
 	check_achievements()
 
-## Проверяет все достижения и открывает выполненные, начисляя монеты.
 func check_achievements() -> Array:
 	var newly := []
 	for a in Achievements.LIST:
@@ -292,17 +270,11 @@ func check_achievements() -> Array:
 			total += int(Achievements.get_achievement(id).get("reward", 0))
 		money += total
 		save_profile()
-		# Отражаем наружу: в профиле Steam достижение должно появиться тогда
-		# же, когда в игре. Прогресс при этом остаётся своим — profile.json.
 		for id in newly:
 			SteamStats.unlock(String(id))
 		achievement.emit(newly, total)
 	return newly
 
-## Проверяет звания по текущему уровню и выплачивает разово за новые.
-## Вызывается и при наборе уровня, и при загрузке — старый профиль,
-## успевший дорасти до высокого уровня ещё до появления званий, получит
-## пропущенные при первой же загрузке, а не будет ждать следующего уровня.
 func check_ranks() -> Array:
 	var newly := []
 	for r in Ranks.LIST:
@@ -321,7 +293,6 @@ func check_ranks() -> Array:
 		rank_up.emit(newly, total)
 	return newly
 
-## Проверяет все челленджи и открывает выполненные.
 func check_challenges() -> Array:
 	var newly := []
 	for perk in Perks.all():
@@ -336,14 +307,12 @@ func check_challenges() -> Array:
 		unlock.emit(newly, "challenge")
 	return newly
 
-# -------------------------------------------------------------- ежедневные задания
 func _refresh_daily_if_stale() -> void:
 	var today := Daily.today_key()
 	if String(daily.get("date", "")) == today:
 		return
 	daily = {"date": today, "progress": {}, "claimed": []}
 
-## Прогресс задания: {current, need, claimed, reward, name, icon, desc}.
 func daily_progress(id: String) -> Dictionary:
 	_refresh_daily_if_stale()
 	var q := Daily.get_quest(id)
@@ -360,7 +329,6 @@ func daily_progress(id: String) -> Dictionary:
 		"desc": q["desc"],
 	}
 
-## Начисляет прогресс по счётчику всем заданиям дня.
 func bump_daily(counter: String, amount: int = 1) -> void:
 	if amount <= 0:
 		return
@@ -369,7 +337,6 @@ func bump_daily(counter: String, amount: int = 1) -> void:
 	progress[counter] = int(progress.get(counter, 0)) + amount
 	save_profile()
 
-## Прогресс по рекордному принципу (например, лучшая серия убийств).
 func bump_daily_max(counter: String, value: int) -> void:
 	if value <= 0:
 		return
@@ -379,7 +346,6 @@ func bump_daily_max(counter: String, value: int) -> void:
 		progress[counter] = value
 		save_profile()
 
-## Забирает награду за выполненное задание.
 func claim_daily(id: String) -> Dictionary:
 	_refresh_daily_if_stale()
 	var q := Daily.get_quest(id)
@@ -397,11 +363,9 @@ func claim_daily(id: String) -> Dictionary:
 	daily_claimed.emit(id, int(q["reward"]))
 	return {"ok": true, "reward": int(q["reward"])}
 
-# -------------------------------------------------------------- косметика
 func _cos_key(type: String, id: String) -> String:
 	return "%s:%s" % [type, id]
 
-## Доступна ли косметика (куплена или «none»).
 func is_cosmetic_owned(type: String, id: String) -> bool:
 	if Cosmetics.get_cosmetic(type, id).is_empty():
 		return false
@@ -429,12 +393,9 @@ func equip_cosmetic(type: String, id: String) -> Dictionary:
 	save_profile()
 	return {"ok": true}
 
-## Экипированный набор для применения к танкам игроков.
 func equipped_cosmetics() -> Dictionary:
 	return cosmetics.duplicate()
 
-# ------------------------------------------------------------------- пушки
-## Доступна ли пушка (куплена или "standard" — она всегда бесплатна).
 func is_cannon_owned(id: String) -> bool:
 	if Cannons.get_cannon(id).is_empty():
 		return false
@@ -460,16 +421,12 @@ func equip_cannon(id: String) -> Dictionary:
 	save_profile()
 	return {"ok": true}
 
-# ------------------------------------------------------------- цвет танка
-## Открыт ли цвет на текущем global_level (Cfg.PLAYER_SKINS[].level).
 func is_color_unlocked(key: String) -> bool:
 	for skin in Cfg.PLAYER_SKINS:
 		if String(skin["key"]) == key:
 			return global_level >= int(skin.get("level", 1))
 	return false
 
-## slot: 0 — игрок 1, 1 — игрок 2. «Горячий стул» делит один и тот же
-## профиль на обоих — какой цвет открыт, не зависит от слота.
 func set_equipped_color(slot: int, key: String) -> bool:
 	if not is_color_unlocked(key):
 		return false
@@ -480,7 +437,6 @@ func set_equipped_color(slot: int, key: String) -> bool:
 	save_profile()
 	return true
 
-# -------------------------------------------------------------- валюта и улучшения
 func add_money(amount: int) -> int:
 	if amount <= 0:
 		return money
@@ -498,7 +454,6 @@ func spend_money(amount: int) -> bool:
 func upgrade_level(id: String) -> int:
 	return int(upgrades.get(id, 0))
 
-## Цена следующего уровня улучшения или -1, если оно максимально.
 func upgrade_next_cost(id: String) -> int:
 	var up := Upgrades.get_upgrade(id)
 	if up.is_empty():
@@ -522,8 +477,6 @@ func buy_upgrade(id: String) -> Dictionary:
 	save_profile()
 	return {"ok": true, "level": level + 1, "cost": cost}
 
-## Собирает модификаторы от всех купленных улучшений — их перемножает
-## Tank.recompute() с модификаторами перков.
 func upgrade_mods() -> Dictionary:
 	var m := {
 		"maxHPMult": 1.0,
@@ -548,11 +501,9 @@ func upgrade_mods() -> Dictionary:
 			m[key] = float(m[key]) * value
 	return m
 
-# -------------------------------------------------------------- перки
 func is_unlocked(id: String) -> bool:
 	return unlocked.has(id)
 
-## Перки, доступные для выбора при повышении уровня в партии.
 func available_perk_ids() -> Array:
 	var out := []
 	for p in Perks.all():
@@ -560,7 +511,6 @@ func available_perk_ids() -> Array:
 			out.append(p["id"])
 	return out
 
-## Прогресс по челленджу перка: {current, need, desc} либо пустой словарь.
 func challenge_progress(perk_id: String) -> Dictionary:
 	var perk := Perks.get_perk(perk_id)
 	if perk.is_empty() or not perk.has("challenge"):
@@ -572,15 +522,11 @@ func challenge_progress(perk_id: String) -> Dictionary:
 		"desc": String(ch["desc"]),
 	}
 
-## Открывает всё, что положено по текущему уровню.
 func _sync_level_unlocks() -> void:
 	for lvl in Perks.UNLOCK_TABLE.keys():
 		if global_level >= int(lvl):
 			for id in Perks.UNLOCK_TABLE[lvl]:
 				unlocked[id] = true
-	# Задним числом зачитываем уровень в статистику — иначе профиль,
-	# успевший дорасти до высокого уровня ещё до появления этого stat-а,
-	# получит достижение о звании только на следующем level-up.
 	bump_stat("globalLevel", global_level)
 	check_challenges()
 	check_ranks()

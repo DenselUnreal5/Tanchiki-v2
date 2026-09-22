@@ -1,25 +1,6 @@
-# ============================================================================
-# map_plan.gd — ПЛАН города. Ни одного тайла не красит.
-#
-# Генератор разделён на два этапа: сначала строится план — где проходят
-# магистрали и улицы, где кварталы, какого района каждый квартал, где
-# кольцевые развязки, — и только потом план красится в тайлы.
-#
-# Разделение не ради красоты. Раньше всё считалось и красилось вперемешку
-# в одной функции на шестьсот строк, и любой вопрос вида «почему этот
-# квартал промышленный» требовал читать её целиком. План — это данные,
-# которые можно распечатать, посчитать и проверить тестом, не рисуя карту.
-#
-# Опорой служат референсы городских планов: там видно, что настоящий город
-# это не равномерная решётка, а иерархия — две-три широкие магистрали,
-# сетка обычных улиц между ними, кольцо на главном перекрёстке и районы,
-# каждый со своим характером застройки.
-# ============================================================================
 class_name MapPlan
 extends RefCounted
 
-## Ранг улицы. Магистраль вдвое шире улицы и служит ориентиром: по ней
-## видно, где ты находишься, не глядя на миникарту.
 const RANK_ARTERIAL := 0
 const RANK_STREET := 1
 
@@ -27,35 +8,26 @@ const ARTERIAL_W := 4
 const STREET_W_NARROW := 2
 const STREET_W_WIDE := 3
 
-## Минимальное расстояние между магистралями, тайлов. Меньше — и они
-## перестают читаться как главные.
 const ARTERIAL_GAP := 26
+const MIN_WAVE_SEGMENT := 5
 
-## Районы. weight — доля при жеребьёвке опорных точек.
 const DISTRICTS := {
-	"downtown":    {"id": "downtown", "weight": 3},
-	"residential": {"id": "residential", "weight": 4},
-	"industrial":  {"id": "industrial", "weight": 2},
-	"park":        {"id": "park", "weight": 2},
+	"downtown":     {"id": "downtown", "weight": 3},
+	"residential":  {"id": "residential", "weight": 4},
+	"industrial":   {"id": "industrial", "weight": 2},
+	"park":         {"id": "park", "weight": 2},
+	"adobe_village": {"id": "adobe_village", "weight": 0},
 }
 
-## Строит план города.
-##
-## @return {v, h, blocks, circles, seeds}
-##   v, h    — улицы по осям: {pos, w, rank}
-##   blocks  — кварталы: {r0, r1, c0, c1, district}
-##   circles — кольцевые развязки: {r, c, radius}
-##   seeds   — опорные точки районов: {r, c, type}
-## @param loc правила локации (locations.gd): густота сетки, состав районов,
-##        бывают ли магистрали и кольца
 static func build(rng: Rng, cols: int, rows: int, loc: Dictionary) -> Dictionary:
 	var bmin: int = int(loc.get("block_min", 9))
 	var bmax: int = int(loc.get("block_max", 14))
 	var arterials: bool = bool(loc.get("arterials", true))
-	# Поперечные кварталы короче продольных: карта шире, чем выше, и при
-	# одинаковом шаге сетка выходила бы вытянутой.
 	var v := _axis(rng, cols, bmin, bmax, arterials, loc)
 	var h := _axis(rng, rows, maxi(4, bmin - 2), maxi(6, bmax - 3), arterials, loc)
+	if bool(loc.get("wave_streets", false)):
+		_apply_wave(rng, v, _crossing_marks(h, rows), loc)
+		_apply_wave(rng, h, _crossing_marks(v, cols), loc)
 	var seeds := _district_seeds(rng, cols, rows, loc.get("districts", {}))
 	var blocks := _blocks(v, h, cols, rows, seeds)
 	var circles := _circles(rng, v, h) if bool(loc.get("circles", true)) else []
@@ -63,16 +35,54 @@ static func build(rng: Rng, cols: int, rows: int, loc: Dictionary) -> Dictionary
 	return {"v": v, "h": h, "blocks": blocks, "circles": circles,
 		"seeds": seeds, "links": links}
 
-# ------------------------------------------------------------------ улицы
-## Раскладывает улицы вдоль одной оси и назначает им ранг.
-##
-## Сначала ставятся магистрали — по одной-две на ось, вдали друг от друга.
-## Потом между ними обычные улицы, и те, что подошли к магистрали вплотную,
-## отбрасываются: две дороги впритык читаются как одна широкая и сбивают
-## ощущение иерархии.
-##
-## В джунглях магистралей не бывает вовсе: там только узкие тропы, и широкая
-## четырёхполосная дорога посреди леса читалась бы как ошибка генерации.
+## Позиции пересечений с перпендикулярной осью плюс границы карты — волна
+## на каждой улице обязана быть ровно нулевой в этих точках, иначе
+## перекрёстки/круги ломаются (см. wave_offset/_apply_wave).
+static func _crossing_marks(other_axis: Array, size: int) -> Array:
+	var marks := [1]
+	for st in other_axis:
+		marks.append(int(st["pos"]) + int(st["w"]) / 2)
+	marks.append(size - 2)
+	marks.sort()
+	return marks
+
+## Независимая полу-синусоида на каждом отрезке между соседними марками —
+## sin(0)=sin(PI)=0, поэтому смещение всегда ровно нулевое на границах
+## отрезка (на каждом перекрёстке и у стены карты). Амплитуда считается от
+## длины конкретного отрезка, а не абсолютной константой, чтобы волна
+## никогда не дотягивалась до соседней улицы.
+static func _apply_wave(rng: Rng, streets: Array, marks: Array, loc: Dictionary) -> void:
+	var amp_street: float = float(loc.get("street_wave_amp_max", 2.0))
+	var amp_arterial: float = float(loc.get("arterial_wave_amp_max", 1.0))
+	var wave_chance: float = float(loc.get("wave_chance", 0.6))
+	for st in streets:
+		var segs := []
+		for i in range(marks.size() - 1):
+			var t0: int = int(marks[i])
+			var t1: int = int(marks[i + 1])
+			var len_t := t1 - t0
+			if len_t < MIN_WAVE_SEGMENT or rng.nextf() >= wave_chance:
+				continue
+			var amp_max: float = amp_arterial if int(st["rank"]) == RANK_ARTERIAL else amp_street
+			var amp := clampi(int(float(len_t) * 0.22), 1, int(amp_max))
+			var dir := 1 if rng.nextf() < 0.5 else -1
+			segs.append({"t0": t0, "t1": t1, "amp": amp, "dir": dir})
+		st["wave"] = segs
+
+## Смещение волнистой улицы в точке t (0, если вне волнового сегмента или
+## волна не включена для локации). Чистая функция — используется и при
+## покраске (RoadNet), и при подгонке перемычек (_links) под тот же изгиб.
+static func wave_offset(st: Dictionary, t: int) -> int:
+	var segs: Array = st.get("wave", [])
+	for seg in segs:
+		var t0: int = int(seg["t0"])
+		var t1: int = int(seg["t1"])
+		if t < t0 or t > t1:
+			continue
+		var phase := PI * float(t - t0) / float(t1 - t0)
+		return int(round(sin(phase) * float(seg["amp"]) * float(seg["dir"])))
+	return 0
+
 static func _axis(rng: Rng, size: int, block_min: int, block_max: int,
 		with_arterials: bool = true, loc: Dictionary = {}) -> Array:
 	var out := []
@@ -80,7 +90,6 @@ static func _axis(rng: Rng, size: int, block_min: int, block_max: int,
 	var w_narrow: int = int(loc.get("street_w", STREET_W_NARROW))
 	var w_wide: int = int(loc.get("street_w_wide", STREET_W_WIDE))
 
-	# Магистрали: одна почти всегда, вторая — если карта достаточно длинная.
 	var arterials := []
 	if with_arterials:
 		var first := int(size * (0.28 + rng.nextf() * 0.16))
@@ -93,7 +102,6 @@ static func _axis(rng: Rng, size: int, block_min: int, block_max: int,
 		if pos > 2 and pos + art_w < size - 2:
 			out.append({"pos": pos, "w": art_w, "rank": RANK_ARTERIAL})
 
-	# Обычные улицы поверх той же оси.
 	var p := 3 + int(rng.nextf() * 3.0)
 	while p < size - 5:
 		var w := w_wide if rng.nextf() < 0.22 else w_narrow
@@ -109,7 +117,6 @@ static func _axis(rng: Rng, size: int, block_min: int, block_max: int,
 	out.sort_custom(func(a, b): return int(a["pos"]) < int(b["pos"]))
 	return out
 
-## Промежутки между улицами — это и есть кварталы.
 static func gaps(streets: Array, size: int) -> Array:
 	var out := []
 	var prev := 1
@@ -122,11 +129,6 @@ static func gaps(streets: Array, size: int) -> Array:
 		out.append([prev, size - 2])
 	return out
 
-# ----------------------------------------------------------------- районы
-## Опорные точки районов. Квартал получает тип ближайшей точки — это даёт
-## связные зоны вместо чересполосицы, где склад стоит между парком и жильём.
-##
-## Веса приходят из локации: в пустоши почти всё промзона, в джунглях — парк.
 static func _district_seeds(rng: Rng, cols: int, rows: int,
 		weights: Dictionary = {}) -> Array:
 	var count := 4 if cols < 80 else 6
@@ -154,9 +156,6 @@ static func _district_seeds(rng: Rng, cols: int, rows: int,
 			"c": int(rng.nextf() * float(cols)),
 			"type": pick,
 		})
-	# Центр карты всегда самый плотный из доступных локации районов: там
-	# сходятся все режимы, и застройка в середине даёт бой в упор, а не
-	# перестрелку через пустырь. В джунглях «плотное» — это парк с деревьями.
 	var core := "downtown"
 	if int(mix.get("downtown", 0)) <= 0:
 		core = "park" if int(mix.get("park", 0)) > 0 else "residential"
@@ -177,7 +176,6 @@ static func _blocks(v: Array, h: Array, cols: int, rows: int, seeds: Array) -> A
 			})
 	return out
 
-## Ближайшая опорная точка и есть район этой клетки.
 static func district_at(seeds: Array, r: int, c: int) -> String:
 	var best := "residential"
 	var best_d := 1 << 30
@@ -190,10 +188,6 @@ static func district_at(seeds: Array, r: int, c: int) -> String:
 			best = String(s["type"])
 	return best
 
-# ------------------------------------------------------------- развязки
-## Кольцевая развязка ставится на пересечении магистралей — это главный
-## ориентир карты. Если магистраль одна на ось, кольцо всё равно уместно:
-## на референсах кольца стоят именно там, где сходятся крупные дороги.
 static func _circles(rng: Rng, v: Array, h: Array) -> Array:
 	var va := []
 	var ha := []
@@ -207,8 +201,6 @@ static func _circles(rng: Rng, v: Array, h: Array) -> Array:
 		return []
 
 	var out := []
-	# Не больше одного кольца на карту: два одинаковых ориентира — это уже
-	# ни одного.
 	var vi: Dictionary = va[int(rng.nextf() * float(va.size())) % va.size()]
 	var hi: Dictionary = ha[int(rng.nextf() * float(ha.size())) % ha.size()]
 	out.append({
@@ -218,14 +210,6 @@ static func _circles(rng: Rng, v: Array, h: Array) -> Array:
 	})
 	return out
 
-# --------------------------------------------------------------- перемычки
-## Короткие связки между соседними параллельными улицами.
-##
-## Сетка из сплошных линий даёт только прямоугольные кварталы: между двумя
-## точками маршрут почти всегда один с точностью до порядка поворотов.
-## Перемычка режет квартал пополам, и это сразу две вещи: развилка —
-## Т-образный узел, из которого есть третий выход, — и лишняя петля в графе
-## дорог, то есть объезд, которого раньше не было.
 static func _links(rng: Rng, v: Array, h: Array, cols: int, rows: int,
 		loc: Dictionary) -> Array:
 	var out := []
@@ -234,9 +218,6 @@ static func _links(rng: Rng, v: Array, h: Array, cols: int, rows: int,
 		return out
 	var w: int = maxi(1, int(loc.get("street_w", STREET_W_NARROW)))
 
-	# Поперечные связки: жребий бросается на КАЖДЫЙ квартал, а не один раз
-	# на пару улиц. Одна перемычка на пару давала прибавку в пару процентов —
-	# на фоне сетки её просто не было видно.
 	var row_gaps := gaps(h, rows)
 	for i in range(v.size() - 1):
 		var a: Dictionary = v[i]
@@ -253,9 +234,10 @@ static func _links(rng: Rng, v: Array, h: Array, cols: int, rows: int,
 			if r1 - r0 < w + 2:
 				continue
 			var rr: int = r0 + 1 + int(rng.nextf() * float(r1 - r0 - w))
-			out.append({"r0": rr, "r1": rr + w - 1, "c0": c0, "c1": c1})
+			var wc0: int = c0 + wave_offset(a, rr)
+			var wc1: int = c1 + wave_offset(b, rr)
+			out.append({"r0": rr, "r1": rr + w - 1, "c0": wc0, "c1": wc1})
 
-	# Продольные связки — так же, по каждому кварталу.
 	var col_gaps := gaps(v, cols)
 	for i in range(h.size() - 1):
 		var a: Dictionary = h[i]
@@ -272,6 +254,8 @@ static func _links(rng: Rng, v: Array, h: Array, cols: int, rows: int,
 			if c1 - c0 < w + 2:
 				continue
 			var cc: int = c0 + 1 + int(rng.nextf() * float(c1 - c0 - w))
-			out.append({"r0": r0, "r1": r1, "c0": cc, "c1": cc + w - 1})
+			var wr0: int = r0 + wave_offset(a, cc)
+			var wr1: int = r1 + wave_offset(b, cc)
+			out.append({"r0": wr0, "r1": wr1, "c0": cc, "c1": cc + w - 1})
 
 	return out

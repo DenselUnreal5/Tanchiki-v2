@@ -1,24 +1,12 @@
-# ============================================================================
-# game_map.gd — тайловая карта.
-#
-# Карта хранится в PackedByteArray, генерация детерминирована от seed.
-# Отдельный проход ensure_connectivity() гарантирует связность: иначе
-# генератор может запереть область стенами, и бот с A* встанет на месте.
-# ============================================================================
 class_name GameMap
 extends RefCounted
 
 var cols: int
 var rows: int
 var tiles: PackedByteArray
-## Накопленный урон постройки, 0..255. Отдельным массивом, чтобы не трогать
-## формат тайлов: тип тайла говорит «что стоит», damage — «насколько разбито».
 var damage: PackedByteArray
-## Растёт при любом изменении тайла — по нему рендер понимает,
-## что кэш миникарты пора перерисовать.
 var version := 0
 
-## Счётчики для профилировки (используются дымовым тестом).
 static var stat_rect_calls := 0
 static var stat_los_calls := 0
 
@@ -30,16 +18,9 @@ func _init(cols_: int = Cfg.COLS, rows_: int = Cfg.ROWS) -> void:
 	damage = PackedByteArray()
 	damage.resize(cols * rows)
 
-## Тайлы, сквозь которые не проехать.
 static func is_solid_tile(tile: int) -> bool:
-	return tile == Cfg.T_WALL or tile == Cfg.T_BRICK
+	return tile == Cfg.T_WALL or tile == Cfg.T_BRICK or tile == Cfg.T_ADOBE
 
-## Тайлы, по которым бот согласен строить маршрут.
-##
-## Асфальт, мост и газон здесь обязаны быть. Их отсутствие обошлось дорого:
-## страховка связности считала всю дорожную сеть препятствием и прорубала
-## сквозь неё коридоры, стирая улицы и разрезая мосты, а боты не строили
-## по дорогам маршрутов вовсе — на городской карте, где асфальта четверть.
 static func is_drivable_tile(tile: int) -> bool:
 	return tile == Cfg.T_EMPTY or tile == Cfg.T_TREE or tile == Cfg.T_BASE_P \
 		or tile == Cfg.T_BASE_E or tile == Cfg.T_SAND \
@@ -57,7 +38,7 @@ func in_bounds(row: int, col: int) -> bool:
 
 func get_tile(row: int, col: int) -> int:
 	if not in_bounds(row, col):
-		return Cfg.T_WALL  # за краем — стена
+		return Cfg.T_WALL
 	return tiles[row * cols + col]
 
 func set_tile(row: int, col: int, value: int) -> void:
@@ -67,14 +48,8 @@ func set_tile(row: int, col: int, value: int) -> void:
 	if tiles[i] == value:
 		return
 	tiles[i] = value
-	# Новый тайл — целый: иначе на месте разрушенного здания следующее
-	# сразу стояло бы с трещинами.
 	damage[i] = 0
 	version += 1
-	# Журнал ведётся здесь, а не у вызывающих: тайлы меняют и снаряды,
-	# и гусеницы по деревьям, и потоп в «Царе горы». Замер показал, что
-	# при записи по местам вызова карта клиента расходилась с хостом —
-	# ровно на те изменения, которые проходили мимо.
 	_log_tile(row, col)
 
 func fill(value: int) -> void:
@@ -94,8 +69,6 @@ func tile_at_pixel(x: float, y: float) -> int:
 func is_water_at(x: float, y: float) -> bool:
 	return tile_at_pixel(x, y) == Cfg.T_WATER
 
-## Проверяет прямоугольник (центр x,y) на столкновение со стенами.
-## Отступ в 2 px по каждой стороне — чтобы танк не цеплялся за углы.
 func is_blocked_rect(x: float, y: float, w: float, h: float) -> bool:
 	stat_rect_calls += 1
 	var hw := w * 0.5 - 2.0
@@ -112,19 +85,12 @@ func is_blocked_rect(x: float, y: float, w: float, h: float) -> bool:
 				return true
 	return false
 
-## Доля разрушенности постройки, 0..1 — по ней рисуются трещины.
 func damage_ratio(row: int, col: int) -> float:
 	if not in_bounds(row, col):
 		return 0.0
-	var mat := Materials.at(row, col)
+	var mat := Materials.at(row, col, tiles[row * cols + col])
 	return clampf(float(damage[row * cols + col]) / float(mat["hp"]), 0.0, 1.0)
 
-## Наносит урон постройке. Возвращает true, если она разрушена.
-## Урон не увеличивает version: перерисовывать кэши (миникарту, затенение)
-## нужно только когда тайл действительно исчез.
-## Журнал изменений тайлов для сети. Включается только у хоста и только
-## на время партии: генерация уровня пишет в карту тысячи раз, и логировать
-## её было бы бессмысленно — клиент собирает ту же карту сам по seed.
 var net_log_on := false
 var net_log: Array = []
 
@@ -134,19 +100,12 @@ func _log_tile(row: int, col: int) -> void:
 	var i := row * cols + col
 	net_log.append([i, tiles[i], damage[i]])
 
-## Отпечаток карты. Хост шлёт его клиентам, те сверяют со своим: надёжный
-## пакет с изменениями может не дойти при переподключении, и тогда у клиента
-## останется стена там, где её давно снесли. Дешевле раз в пять секунд
-## сверить одно число, чем гонять карту целиком.
 func checksum() -> int:
 	var h := 5381
 	for i in tiles.size():
 		h = ((h * 33) ^ tiles[i]) & 0x7FFFFFFF
 	return h
 
-## Полный слепок карты — на случай, если отпечатки разошлись.
-## Тайлов одиннадцать видов, урон не больше 255, поэтому байта хватает
-## на каждое поле: 16 КБ вместо 64 КБ при передаче целыми числами.
 func snapshot_bytes() -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(tiles.size() * 2)
@@ -163,7 +122,6 @@ func apply_snapshot_bytes(data: PackedByteArray) -> void:
 		damage[i] = data[i * 2 + 1]
 	version += 1
 
-## Забирает накопленные изменения и очищает журнал.
 func take_net_log() -> Array:
 	if net_log.is_empty():
 		return []
@@ -177,14 +135,12 @@ func apply_damage(row: int, col: int, amount: float, source: String) -> bool:
 	var i := row * cols + col
 	if not is_solid_tile(tiles[i]) or tiles[i] == Cfg.T_WALL:
 		return false
-	var mat := Materials.at(row, col)
+	var mat := Materials.at(row, col, tiles[i])
 	var dealt := amount * Materials.resist(mat, source)
 	var total: float = float(damage[i]) + dealt
 	if total >= float(mat["hp"]):
-		# set_tile сам запишет изменение в журнал.
 		set_tile(row, col, Cfg.T_EMPTY)
 		return true
-	# 255 хватает: самая прочная постройка — 160 единиц.
 	damage[i] = int(minf(255.0, total))
 	_log_tile(row, col)
 	return false
@@ -192,9 +148,6 @@ func apply_damage(row: int, col: int, amount: float, source: String) -> bool:
 func is_drivable(row: int, col: int) -> bool:
 	return in_bounds(row, col) and is_drivable_tile(tiles[row * cols + col])
 
-## Проверяет, что прямое движение из точки в точку не пересекает
-## непроезжаемые тайлы И не «срезает» угол стены (supercover-DDA).
-## Танк прямоугольный, в угол не влезает, поэтому маршрут должен этого избегать.
 func has_drivable_segment(x1: float, y1: float, x2: float, y2: float) -> bool:
 	var x0 := x1 / Cfg.TILE
 	var y0 := y1 / Cfg.TILE
@@ -222,7 +175,6 @@ func has_drivable_segment(x1: float, y1: float, x2: float, y2: float) -> bool:
 			return false
 		if cx == ex and cy == ey:
 			return true
-		# Пересечение двух границ одновременно — линия идёт через вершину сетки.
 		if absf(t_max_x - t_max_y) < 1e-9:
 			t_max_x += t_delta_x
 			t_max_y += t_delta_y
@@ -240,8 +192,6 @@ func has_drivable_segment(x1: float, y1: float, x2: float, y2: float) -> bool:
 			return true
 	return true
 
-## Есть ли прямая видимость между двумя точками (DDA по сетке).
-## Стены и кирпич перекрывают обзор, деревья и вода — нет.
 func has_line_of_sight(x1: float, y1: float, x2: float, y2: float) -> bool:
 	stat_los_calls += 1
 	var col := int(floor(x1 / Cfg.TILE))
@@ -278,10 +228,6 @@ func has_line_of_sight(x1: float, y1: float, x2: float, y2: float) -> bool:
 			return true
 	return true
 
-## Ищет свободную точку в прямоугольной зоне (в тайлах).
-## Зона с флагом edge ограничивает поиск периметром прямоугольника —
-## в «Обороне» враги выходят с краёв карты.
-## Возвращает Vector2 в пикселях либо Vector2.INF, если не нашлось.
 func find_free_spot(rng: Rng, area: Dictionary, w: float, h: float,
 		tries: int = 80, avoid_water: bool = true) -> Vector2:
 	var r0 := int(ceil(float(area["r0"])))
@@ -294,7 +240,6 @@ func find_free_spot(rng: Rng, area: Dictionary, w: float, h: float,
 		var c := 0.0
 		var r := 0.0
 		if edge:
-			# Периметр: случайная из четырёх сторон.
 			var side := int(rng.nextf() * 4.0)
 			if side == 0:
 				r = r0
@@ -319,7 +264,6 @@ func find_free_spot(rng: Rng, area: Dictionary, w: float, h: float,
 			continue
 		return Vector2(x, y)
 
-	# Аварийный обход: линейный поиск по зоне.
 	for r in range(r0, r1 + 1):
 		for c in range(c0, c1 + 1):
 			if edge and r != r0 and r != r1 and c != c0 and c != c1:
@@ -333,7 +277,6 @@ func find_free_spot(rng: Rng, area: Dictionary, w: float, h: float,
 			return Vector2(x, y)
 	return Vector2.INF
 
-## Разметка связных проезжаемых областей. Возвращает массив массивов индексов.
 func label_regions() -> Array:
 	var labels := PackedInt32Array()
 	labels.resize(cols * rows)
@@ -373,8 +316,6 @@ func label_regions() -> Array:
 			regions.append(cells)
 	return regions
 
-## Гарантирует, что вся проезжаемая площадь связна: прорубает коридоры
-## от каждой изолированной области к самой большой.
 func ensure_connectivity() -> int:
 	var regions := label_regions()
 	if regions.size() <= 1:
@@ -391,7 +332,6 @@ func ensure_connectivity() -> int:
 		if i == biggest:
 			continue
 		var cells: PackedInt32Array = regions[i]
-		# Берём центр области и ближайшую к нему клетку главной области.
 		var from: int = cells[cells.size() / 2]
 		var fr := from / cols
 		var fc := from % cols
@@ -405,7 +345,6 @@ func ensure_connectivity() -> int:
 		carved += _carve_corridor(fr, fc, best / cols, best % cols)
 	return carved
 
-## Прорубает Г-образный коридор, не трогая внешнюю рамку карты.
 func _carve_corridor(r0: int, c0: int, r1: int, c1: int) -> int:
 	var carved := 0
 	var step_c := 1 if c1 > c0 else -1
@@ -427,10 +366,6 @@ func _carve_put(r: int, c: int) -> int:
 	var i := r * cols + c
 	if is_drivable_tile(tiles[i]):
 		return 0
-	# Воду коридор не трогает. Раньше он клал через неё мост, и замер
-	# показал по 13–18 переправ на карту вместо четырёх разрешённых:
-	# страховка связности прорубала реку везде, где ей было удобно.
-	# Берега соединяют мосты генератора, и только они.
 	if tiles[i] == Cfg.T_WATER:
 		return 0
 	tiles[i] = Cfg.T_EMPTY
