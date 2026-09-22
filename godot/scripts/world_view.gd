@@ -116,11 +116,63 @@ func _text_center(text: String, pos: Vector2, size: int, color: Color, bold: boo
 	draw_string(font, Vector2(pos.x - w * 0.5, pos.y + size * 0.35), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
+const WEATHER_FOG_MAX := 14
+const WEATHER_RAIN_MAX := 130
+const WEATHER_SNOW_MAX := 110
+
+var _weather_hash_ready := false
+var _fog_hx: PackedFloat32Array
+var _fog_hy: PackedFloat32Array
+var _fog_hr: PackedFloat32Array
+var _rain_hx: PackedFloat32Array
+var _rain_hspeed: PackedFloat32Array
+var _rain_hphase: PackedFloat32Array
+var _rain_hlen: PackedFloat32Array
+var _snow_hspeed: PackedFloat32Array
+var _snow_hx: PackedFloat32Array
+var _snow_hphase: PackedFloat32Array
+var _snow_hr: PackedFloat32Array
+
+## Rng.hash01(i, salt) не зависит от тика/интенсивности погоды — только от
+## индекса частицы, а раньше пересчитывался заново для каждой частицы
+## каждый кадр. Считаем один раз и переиспользуем; анимированная часть
+## (движение/фаза) по-прежнему зависит от world.tick и считается как была.
+func _ensure_weather_hash() -> void:
+	if _weather_hash_ready:
+		return
+	_weather_hash_ready = true
+	_fog_hx.resize(WEATHER_FOG_MAX)
+	_fog_hy.resize(WEATHER_FOG_MAX)
+	_fog_hr.resize(WEATHER_FOG_MAX)
+	for i in WEATHER_FOG_MAX:
+		_fog_hx[i] = Rng.hash01(i, 7)
+		_fog_hy[i] = Rng.hash01(i, 13)
+		_fog_hr[i] = Rng.hash01(i, 29)
+	_rain_hx.resize(WEATHER_RAIN_MAX)
+	_rain_hspeed.resize(WEATHER_RAIN_MAX)
+	_rain_hphase.resize(WEATHER_RAIN_MAX)
+	_rain_hlen.resize(WEATHER_RAIN_MAX)
+	for i in WEATHER_RAIN_MAX:
+		_rain_hx[i] = Rng.hash01(i, 31)
+		_rain_hspeed[i] = Rng.hash01(i, 41)
+		_rain_hphase[i] = Rng.hash01(i, 43)
+		_rain_hlen[i] = Rng.hash01(i, 47)
+	_snow_hspeed.resize(WEATHER_SNOW_MAX)
+	_snow_hx.resize(WEATHER_SNOW_MAX)
+	_snow_hphase.resize(WEATHER_SNOW_MAX)
+	_snow_hr.resize(WEATHER_SNOW_MAX)
+	for i in WEATHER_SNOW_MAX:
+		_snow_hspeed[i] = Rng.hash01(i, 53)
+		_snow_hx[i] = Rng.hash01(i, 59)
+		_snow_hphase[i] = Rng.hash01(i, 61)
+		_snow_hr[i] = Rng.hash01(i, 67)
+
 func _draw_weather(size: Vector2) -> void:
 	var w := world.weather
 	if w == null:
 		return
 	var k := Sets.weather_scale()
+	_ensure_weather_hash()
 
 	var dark := (1.0 - w.light) * 0.55 if Sets.day_night else 0.0
 	if dark > 0.01:
@@ -133,9 +185,9 @@ func _draw_weather(size: Vector2) -> void:
 	if w.fog * k > 0.02:
 		var count := int(round(w.fog * k * 14.0))
 		for i in count:
-			var cx := Rng.hash01(i, 7) * size.x + sin(world.tick * 0.003 + i * 2.1) * 40.0
-			var cy := Rng.hash01(i, 13) * size.y + cos(world.tick * 0.002 + i * 1.7) * 30.0
-			var r := 90.0 + Rng.hash01(i, 29) * 130.0
+			var cx := _fog_hx[i] * size.x + sin(world.tick * 0.003 + i * 2.1) * 40.0
+			var cy := _fog_hy[i] * size.y + cos(world.tick * 0.002 + i * 1.7) * 30.0
+			var r := 90.0 + _fog_hr[i] * 130.0
 			var fog_a := (0.02 + w.fog * 0.075) * k
 			if not _loc_ready:
 				_read_location()
@@ -148,10 +200,10 @@ func _draw_weather(size: Vector2) -> void:
 		var count := int(round(w.rain * k * 130.0))
 		var col := Color(0.59, 0.71, 0.92, (0.15 + w.rain * 0.3) * k)
 		for i in count:
-			var x := Rng.hash01(i, 31) * size.x
-			var speed := 6.0 + Rng.hash01(i, 41) * 6.0
-			var y := Rng.fract(Rng.hash01(i, 43) + world.tick * 0.012 * speed) * (size.y + 40.0) - 20.0
-			var length := 8.0 + Rng.hash01(i, 47) * 10.0
+			var x := _rain_hx[i] * size.x
+			var speed := 6.0 + _rain_hspeed[i] * 6.0
+			var y := Rng.fract(_rain_hphase[i] + world.tick * 0.012 * speed) * (size.y + 40.0) - 20.0
+			var length := 8.0 + _rain_hlen[i] * 10.0
 			draw_line(Vector2(x, y), Vector2(x - length * 0.4, y + length), col, 1.0)
 
 	if w.snow * k > 0.03:
@@ -159,10 +211,10 @@ func _draw_weather(size: Vector2) -> void:
 			Color(0.88, 0.92, 0.97, w.snow * k * 0.10))
 		var flakes := int(round(w.snow * k * 110.0))
 		for i in flakes:
-			var speed := 1.2 + Rng.hash01(i, 53) * 1.6
-			var sx := Rng.hash01(i, 59) * size.x 				+ sin(world.tick * 0.008 + float(i)) * 26.0
-			var sy := Rng.fract(Rng.hash01(i, 61) + world.tick * 0.0022 * speed) 				* (size.y + 30.0) - 15.0
-			var r := 1.2 + Rng.hash01(i, 67) * 1.8
+			var speed := 1.2 + _snow_hspeed[i] * 1.6
+			var sx := _snow_hx[i] * size.x 				+ sin(world.tick * 0.008 + float(i)) * 26.0
+			var sy := Rng.fract(_snow_hphase[i] + world.tick * 0.0022 * speed) 				* (size.y + 30.0) - 15.0
+			var r := 1.2 + _snow_hr[i] * 1.8
 			draw_circle(Vector2(sx, sy), r,
 				Color(1.0, 1.0, 1.0, (0.35 + w.snow * 0.4) * k))
 
@@ -233,10 +285,15 @@ func _draw_tiles() -> void:
 		_read_location()
 	var g0: Color = _loc_ground.lerp(Cfg.snow_ground, snow_k)
 	var g1: Color = _loc_ground_alt.lerp(Cfg.snow_ground, snow_k)
+	var city_ground := _loc_id == Locations.CITY
 	for r in range(r0, r1 + 1):
 		for c in range(c0, c1 + 1):
-			_rect(c * Cfg.TILE, r * Cfg.TILE, Cfg.TILE, Cfg.TILE,
-				g0 if (r + c) % 2 == 0 else g1)
+			var gx := float(c * Cfg.TILE)
+			var gy := float(r * Cfg.TILE)
+			if city_ground:
+				draw_texture_rect(TerrainTextures.grass(), Rect2(gx, gy, Cfg.TILE, Cfg.TILE), false)
+			else:
+				_rect(gx, gy, Cfg.TILE, Cfg.TILE, g0 if (r + c) % 2 == 0 else g1)
 
 	_draw_lamp_posts()
 
@@ -980,7 +1037,7 @@ func _draw_grass_tile(x: float, y: float, r: int, c: int) -> void:
 		_read_location()
 	if _loc_id == Locations.CITY:
 		draw_texture_rect(TerrainTextures.grass(), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
-		if Rng.hash01(r * 74351 + c * 5911, 9001) < 0.10:
+		if _grass_surrounded(r, c) and Rng.hash01(r * 74351 + c * 5911, 9001) < 0.15:
 			_draw_bush(x, y, r, c)
 		return
 	var k := _snow_k()
@@ -995,10 +1052,24 @@ func _draw_grass_tile(x: float, y: float, r: int, c: int) -> void:
 		_rect(px, py, 2, 4, blade)
 	_round_block_corners(x, y, r, c)
 
+func _grass_surrounded(r: int, c: int) -> bool:
+	var map := world.map
+	for dr in range(-2, 3):
+		for dc in range(-2, 3):
+			var rr := r + dr
+			var cc := c + dc
+			if rr < 0 or cc < 0 or rr >= map.rows or cc >= map.cols:
+				continue
+			var t := map.get_tile(rr, cc)
+			if t == Cfg.T_ROAD or t == Cfg.T_BRIDGE or t == Cfg.T_BRICK \
+					or t == Cfg.T_WALL or t == Cfg.T_ADOBE:
+				return false
+	return true
+
 func _draw_bush(x: float, y: float, r: int, c: int) -> void:
 	var bs := 20.0
 	var jx := float((r * 13 + c * 7) % 9) - 4.0
-	var by := Cfg.TILE - bs - 2.0 + float((r * 5 + c * 11) % 5)
+	var by := Cfg.TILE - bs - 4.0 + float((r * 5 + c * 11) % 5)
 	draw_texture_rect(TerrainTextures.bush(),
 		Rect2(x + (Cfg.TILE - bs) * 0.5 + jx, y + by, bs, bs), false)
 
@@ -1521,21 +1592,28 @@ func _draw_ellipse(center: Vector2, rx: float, ry: float, color: Color) -> void:
 		pts.append(center + Vector2(cos(a) * rx, sin(a) * ry))
 	draw_colored_polygon(pts, color)
 
-func _draw_camo(tank: Tank, hw: float, hh: float, palette: Dictionary) -> void:
-	var id := String(tank.cosmetics.get("camo", "none"))
-	if id == "" or id == "none":
-		return
-	var camo := Cosmetics.get_cosmetic("camo", id)
-	if camo.is_empty() or not camo.has("a"):
-		return
-	var base: Color = palette["body"]
-	var a: Color = Color(camo["a"]).lerp(base, 0.16)
-	var b: Color = Color(camo["b"]).lerp(base, 0.16)
+## Геометрия камуфляжа (позиции клеток/полигонов/кругов и то, каким из
+## двух слотов цвета они красятся) зависит только от camo_id — hw/hh
+## одинаковы у всех танков (Tank.width/height всегда Cfg.TANK_W/TANK_H,
+## шасси на них не влияет), а сами цвета a/b у каждого танка свои (тинт
+## под цвет команды) и пересчитываются каждый раз заново, дёшево. Раньше
+## вся эта геометрия (и ~70+ вызовов Rng.hash01 для digital/winter/urban)
+## пересчитывалась заново для каждого видимого танка каждый кадр.
+var _camo_geo_cache: Dictionary = {}
+
+func _camo_geometry(id: String, hw: float, hh: float) -> Array:
+	if _camo_geo_cache.has(id):
+		return _camo_geo_cache[id]
+	var geo := _build_camo_geometry(id, hw, hh)
+	_camo_geo_cache[id] = geo
+	return geo
+
+func _build_camo_geometry(id: String, hw: float, hh: float) -> Array:
+	var out := []
 	var x0 := -hw + 2.0
 	var x1 := hw - 2.0
 	var y0 := -hh + 2.0
 	var y1 := hh - 2.0
-
 	match id:
 		"digital", "winter", "urban":
 			var cell := 3.0 if id == "digital" else (4.5 if id == "winter" else 5.5)
@@ -1547,9 +1625,11 @@ func _draw_camo(tank: Tank, hw: float, hh: float, palette: Dictionary) -> void:
 				while x < x1:
 					var q := Rng.hash01(row * 73856093 + col * 19349663, 4242)
 					if q < 0.42:
-						_rect(x, y, minf(cell, x1 - x), minf(cell, y1 - y), a)
+						out.append({"t": 0, "x": x, "y": y,
+							"w": minf(cell, x1 - x), "h": minf(cell, y1 - y), "slot": 0})
 					elif q < 0.74:
-						_rect(x, y, minf(cell, x1 - x), minf(cell, y1 - y), b)
+						out.append({"t": 0, "x": x, "y": y,
+							"w": minf(cell, x1 - x), "h": minf(cell, y1 - y), "slot": 1})
 					col += 1
 					x += cell
 				row += 1
@@ -1559,31 +1639,56 @@ func _draw_camo(tank: Tank, hw: float, hh: float, palette: Dictionary) -> void:
 			var y2 := y0
 			while y2 < y1:
 				var wob := (Rng.hash01(k, 77) - 0.5) * 5.0
-				draw_colored_polygon(PackedVector2Array([
-					Vector2(x0, y2), Vector2(x1, y2 + wob),
-					Vector2(x1, y2 + wob + 3.2), Vector2(x0, y2 + 3.2),
-				]), b if k % 2 == 0 else a)
+				out.append({"t": 1, "slot": 1 if k % 2 == 0 else 0,
+					"pts": PackedVector2Array([
+						Vector2(x0, y2), Vector2(x1, y2 + wob),
+						Vector2(x1, y2 + wob + 3.2), Vector2(x0, y2 + 3.2),
+					])})
 				k += 1
 				y2 += 5.0
 		"splinter":
 			for i in 3:
 				var yy := y0 + (y1 - y0) * (float(i) + 0.15) / 3.0
 				var h2 := (y1 - y0) / 3.4
-				draw_colored_polygon(PackedVector2Array([
-					Vector2(x0, yy), Vector2(x0 + hw * 0.9, yy + h2 * 0.35),
-					Vector2(x0 + hw * 0.5, yy + h2), Vector2(x0, yy + h2 * 0.75),
-				]), a if i % 2 == 0 else b)
-				draw_colored_polygon(PackedVector2Array([
-					Vector2(x1, yy + h2 * 0.5), Vector2(x1 - hw * 0.85, yy + h2 * 0.15),
-					Vector2(x1 - hw * 0.45, yy + h2 * 0.95), Vector2(x1, yy + h2 * 1.1),
-				]), b if i % 2 == 0 else a)
+				out.append({"t": 1, "slot": 0 if i % 2 == 0 else 1,
+					"pts": PackedVector2Array([
+						Vector2(x0, yy), Vector2(x0 + hw * 0.9, yy + h2 * 0.35),
+						Vector2(x0 + hw * 0.5, yy + h2), Vector2(x0, yy + h2 * 0.75),
+					])})
+				out.append({"t": 1, "slot": 1 if i % 2 == 0 else 0,
+					"pts": PackedVector2Array([
+						Vector2(x1, yy + h2 * 0.5), Vector2(x1 - hw * 0.85, yy + h2 * 0.15),
+						Vector2(x1 - hw * 0.45, yy + h2 * 0.95), Vector2(x1, yy + h2 * 1.1),
+					])})
 		"desert":
 			for i in 13:
 				var px := x0 + (x1 - x0) * Rng.hash01(i, 11)
 				var py := y0 + (y1 - y0) * Rng.hash01(i, 23)
 				var r := 2.4 + Rng.hash01(i, 31) * 3.0
-				draw_circle(Vector2(clampf(px, x0 + r, x1 - r), clampf(py, y0 + r, y1 - r)),
-					r, a if i % 2 == 0 else b)
+				out.append({"t": 2,
+					"x": clampf(px, x0 + r, x1 - r), "y": clampf(py, y0 + r, y1 - r),
+					"r": r, "slot": 0 if i % 2 == 0 else 1})
+	return out
+
+func _draw_camo(tank: Tank, hw: float, hh: float, palette: Dictionary) -> void:
+	var id := String(tank.cosmetics.get("camo", "none"))
+	if id == "" or id == "none":
+		return
+	var camo := Cosmetics.get_cosmetic("camo", id)
+	if camo.is_empty() or not camo.has("a"):
+		return
+	var base: Color = palette["body"]
+	var slots := [Color(camo["a"]).lerp(base, 0.16), Color(camo["b"]).lerp(base, 0.16)]
+
+	for shape in _camo_geometry(id, hw, hh):
+		var col: Color = slots[int(shape["slot"])]
+		match int(shape["t"]):
+			0:
+				_rect(shape["x"], shape["y"], shape["w"], shape["h"], col)
+			1:
+				draw_colored_polygon(shape["pts"], col)
+			2:
+				draw_circle(Vector2(shape["x"], shape["y"]), shape["r"], col)
 
 func _draw_hull_pattern(tank: Tank, hw: float, hh: float) -> void:
 	var id := String(tank.cosmetics.get("hull", "none"))

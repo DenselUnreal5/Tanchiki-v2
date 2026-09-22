@@ -1,6 +1,6 @@
 78098b89c88a74ebe8c20117b8754620
-::res://::1789996250
-export_presets.cfg::TextFile::-1::1789996243::0::1::::<><><>0<>0<><>::
+::res://::1790089174
+export_presets.cfg::TextFile::-1::1790089174::0::1::::<><><>0<>0<><>::
 icon.ico::OtherFile::-1::1788275069::0::1::::<><><>0<>0<><>::
 icon.svg::CompressedTexture2D::2727636235757500454::1787928656::1787931073::1::::<><><>0<>0<>14605896b800f51fdeab039d8fde2a9b<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 package.json::JSON::-1::1789691088::0::1::::<><><>0<>0<><>::
@@ -110,7 +110,7 @@ updates.gd::GDScript::4450020931874397632::1788264736::0::1::::<>MarginContainer
 ::res://addons/godotsteam/linuxarm64/::1788264736
 ::res://addons/godotsteam/osx/::1788264735
 ::res://addons/godotsteam/win32/::1788264735
-::res://addons/godotsteam/win64/::1790080447
+::res://addons/godotsteam/win64/::1790089220
 ::res://addons/godot_ai/::1788264782
 client_configurator.gd::GDScript::1846084051969471465::1788264781::0::1::::McpClientConfigurator<>RefCounted<><>0<>1<><>::
 connection.gd::GDScript::3256190740644037847::1788264778::0::1::::McpConnection<>Node<><>0<>1<><>::
@@ -370,7 +370,7 @@ speed.png::CompressedTexture2D::7915750047543160077::1789888665::1789888772::1::
 gatling.png::CompressedTexture2D::6311059947227318418::1789888665::1789888772::1::::<><><>0<>0<>6dd2e2f9b40979f6fd4c61de15412136<>res://.godot/imported/gatling.png-75382b36f8752a07a7e4e9e9b0a8bcf3.ctex::
 rockets.png::CompressedTexture2D::2213413695077989515::1789888665::1789888772::1::::<><><>0<>0<>dd76fbe9e723b98ad96c7a770df9963a<>res://.godot/imported/rockets.png-7269dc63ed67024d541764a5f6ff86bd.ctex::
 shotgun.png::CompressedTexture2D::4286455927281510393::1789888665::1789888772::1::::<><><>0<>0<>faf6068a109b2ad6ee89d08e8044bffe<>res://.godot/imported/shotgun.png-999d62e903f2a6a1cff53b0b22db63ed.ctex::
-::res://build/::1789892315
+::res://build/::1790086332
 steam_appid.txt::TextFile::-1::1789219174::0::1::::<><><>0<>0<><>::
 Как запустить.txt::TextFile::-1::1788078767::0::1::::<><><>0<>0<><>::
 ::res://build/linux/::1789218364
@@ -398,7 +398,7 @@ cannon_card.tscn::PackedScene::-1::1789733397::0::1::::<><><>0<>0<><>::res://scr
 cosmetic_card.tscn::PackedScene::-1::1789727174::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/cosmetic_card.gd<>res://scripts/ui/perk_icon_view.gd
 gallery_detail.tscn::PackedScene::-1::1789898750::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/gallery_detail.gd<>res://scripts/ui/perk_icon_view.gd
 upgrade_card.tscn::PackedScene::-1::1789733544::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/upgrade_card.gd<>res://scripts/ui/perk_icon_view.gd<>res://scripts/ui/focus_ring_panel.gd
-::res://scripts/::1790080154
+::res://scripts/::1790087983
 abilities.gd::GDScript::358552042098184283::1790063334::0::1::::Abilities<>RefCounted<><>0<>0<><>::
 achievements.gd::GDScript::9215880570170937460::1790063334::0::1::::Achievements<>RefCounted<><>0<>1<><>::
 audio.gd::GDScript::1963427527760383837::1790063334::0::1::::<>Node<><>0<>0<><>::
@@ -439,7 +439,7 @@ utils.gd::GDScript::7436398411069476782::1790063334::0::1::::Rng<>RefCounted<><>
 weapons.gd::GDScript::141350927022214648::1790063334::0::1::::Weapons<>RefCounted<><>0<>0<><>::
 weather.gd::GDScript::6899618592559140047::1790063334::0::1::::WeatherSystem<>RefCounted<><>0<>0<><>::
 world.gd::GDScript::2854068884894288357::1790080119::0::1::::World<>RefCounted<><>0<>0<><>::
-world_view.gd::GDScript::8347266231888317091::1790080087::0::1::::WorldView<>Node2D<><>0<>0<><>::
+world_view.gd::GDScript::8347266231888317091::1790087983::0::1::::WorldView<>Node2D<><>0<>0<><>::
 ::res://scripts/fx/::1790079975
 ao_layer.gd::GDScript::7209396354025576534::1790063334::0::1::::AoLayer<>RefCounted<><>0<>0<><>::
 glow_layer.gd::GDScript::5756036760933120443::1790079975::0::1::::GlowLayer<>Node2D<><>0<>0<><>::
@@ -488,9 +488,7 @@ post_fx.gdshader::Shader::4553687491999387694::1789735194::0::1::::<><><>0<>0<><
 ::res://src/::1789715376
 ::res://suno/::1789715518
 battle v1.mp3::AudioStreamMP3::4753728558382026501::1789691094::1789715518::1::::<><><>0<>0<>62df19327ebf7721e375e6bc375b692f<>res://.godot/imported/battle v1.mp3-f835384ad3f8653f50abd50585950e2f.mp3str::
-::res://tests/::1790080439
-_tile_cache_visual_check.gd::GDScript::2663968809643242925::1790080433::0::1::::<>Node<><>0<>0<><>::
-_tile_cache_visual_check.tscn::PackedScene::-1::1790080439::0::1::::<><><>0<>0<><>::res://tests/_tile_cache_visual_check.gd
+::res://tests/::1790088052
 art_sheet.gd::GDScript::7569179757509836739::1790063334::0::1::::<>Node<><>0<>0<><>::
 art_sheet.tscn::PackedScene::-1::1788178926::0::1::::<><><>0<>0<><>::res://tests/art_sheet.gd
 audio_dump.gd::GDScript::8989594936174849139::1790063334::0::1::::<>Node<><>0<>0<><>::
