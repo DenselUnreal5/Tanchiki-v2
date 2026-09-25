@@ -406,6 +406,14 @@ export class World {
     return tank;
   }
 
+  #spawnFfaBoss() {
+    this.bossAlive = false;
+    const team = `boss_${this.tanks.length + 1}`;
+    const tank = this.#spawnBot(team, 'enemy', 'boss');
+    this.bossAlive = true;
+    return tank;
+  }
+
   /** Каждый тик «Оборона»: урон базе и контроль волн. */
   #updateDefense() {
     if (this.finished || !this.base) return;
@@ -792,6 +800,16 @@ export class World {
       });
     }
 
+    if (this.mode === 'ffa') {
+      const milestone = Math.floor(player.kills / 5) * 5;
+      const lastMilestone = this._lastFfaBossKills?.get(player.index) || 0;
+      if (milestone > lastMilestone && milestone > 0) {
+        if (!this._lastFfaBossKills) this._lastFfaBossKills = new Map();
+        this._lastFfaBossKills.set(player.index, milestone);
+        this.#spawnFfaBoss();
+      }
+    }
+
     // Челлендж «убей 5 врагов за 10 секунд».
     player.killTicks.push(this.tick);
     const cutoff = this.tick - 10 * TICK_HZ;
@@ -1045,6 +1063,8 @@ export class World {
       if (tank.alive) continue;
       // «Оборона»: враги волн не возрождаются, люди — да.
       if (this.mode === 'defense' && tank.isBot) continue;
+      // В FFA погибшие боссы не возрождаются
+      if (this.mode === 'ffa' && tank.enemyType?.boss) continue;
       if (--tank.respawnTimer > 0) continue;
       const spot = this.#freeSpot(tank.team);
       tank.respawn(spot.x, spot.y);

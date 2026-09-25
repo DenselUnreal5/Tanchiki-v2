@@ -274,6 +274,11 @@ func _gallery_node(perk: Dictionary) -> Control:
 	node.selected = id == _gallery_selected_id
 	if not perk.has("challenge"):
 		node.need_level = Perks.unlock_level_of(id)
+	var builds := Perks.builds_with_perk(id)
+	if not builds.is_empty():
+		var b: Dictionary = builds[0]
+		node.synergy_color = b.get("color", Color.TRANSPARENT)
+		node.synergy_build_name = String(b.get("name", ""))
 	_gallery_nodes[id] = node
 	node.picked.connect(func(picked_id: String): _select_gallery_perk(picked_id))
 	return node
@@ -317,15 +322,16 @@ func _build_builds_overview() -> Control:
 	section.add_child(flow)
 
 	for b in Perks.BUILDS:
+		var build_col: Color = b.get("color", Cfg.UI_ACCENT)
 		var card := PanelContainer.new()
-		card.add_theme_stylebox_override("panel", UiKit.card_style())
+		card.add_theme_stylebox_override("panel", UiKit.card_style(Color(build_col, 0.7)))
 		card.custom_minimum_size = Vector2(220, 0)
 		flow.add_child(card)
 
 		var box := UiKit.vbox(4)
 		card.add_child(box)
 
-		box.add_child(UiKit.label(I18n.dn(b, "name", "build").to_upper(), 11, Cfg.UI_ACCENT, true))
+		box.add_child(UiKit.label(I18n.dn(b, "name", "build").to_upper(), 11, build_col, true))
 
 		var names_bbcode := []
 		for pid in (b["perks"] as Array):
@@ -352,17 +358,23 @@ func _build_gallery_detail(perk: Dictionary, parent: Node) -> Control:
 	var name_text := I18n.dn(perk, "name", "perk")
 	var desc_text := I18n.dn(perk, "desc", "perk")
 	var build_text := _build_synergy_text(id)
+
+	var builds := Perks.builds_with_perk(id)
+	var syn_col := Color.TRANSPARENT
+	if not builds.is_empty():
+		syn_col = builds[0].get("color", Color.TRANSPARENT)
+
 	if unlocked:
-		panel.set_perk(id, name_text, desc_text, true, {}, _tr("gallery.open", "ОТКРЫТ"), "", is_active, build_text)
+		panel.set_perk(id, name_text, desc_text, true, {}, _tr("gallery.open", "ОТКРЫТ"), "", is_active, build_text, syn_col)
 	elif perk.has("challenge"):
 		var pr := Prof.challenge_progress(id)
 		var task := I18n.t("perk." + id + ".challenge", {}, String(pr["desc"]))
-		panel.set_perk(id, name_text, desc_text, false, pr, "", task, is_active, build_text)
+		panel.set_perk(id, name_text, desc_text, false, pr, "", task, is_active, build_text, syn_col)
 	else:
 		var lvl := Perks.unlock_level_of(id)
 		panel.set_perk(id, name_text, desc_text, false, {},
 			_tr("gallery.unlockAt", "Откроется на уровне профиля %d" % lvl, {"lvl": lvl}),
-			"", is_active, build_text)
+			"", is_active, build_text, syn_col)
 	return panel
 
 func _fill_garage_tab() -> void:

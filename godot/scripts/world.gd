@@ -89,6 +89,7 @@ var _storm_rng: Rng
 var _tree_tiles: PackedInt32Array = PackedInt32Array()
 var _tree_cache_tick := -100000
 var _trees_felled := 0
+var _last_ffa_boss_kills: Dictionary = {}
 
 func _init(opts: Dictionary) -> void:
 	map = opts["map"]
@@ -656,6 +657,13 @@ func _spawn_boss() -> Tank:
 	boss_alive = true
 	return tank
 
+func _spawn_ffa_boss() -> Tank:
+	boss_alive = false
+	var team_name := "boss_%d" % (tanks.size() + 1)
+	var tank := _spawn_bot(team_name, "enemy", "boss")
+	boss_alive = true
+	return tank
+
 func _boss_stat_mult() -> Dictionary:
 	var extra_players := maxf(0.0, float(players.size() - 1))
 	var wave_depth := 0.0
@@ -1125,6 +1133,13 @@ func _credit_player_kill(player, victim, source: String) -> void:
 		feed.emit(I18n.t("feed.bossKilled", {"name": player.name, "n": boss_reward},
 			"%s уничтожил БОССА! +%d 🪙" % [player.name, boss_reward]), Color("#e74c3c"))
 
+	if mode == "ffa":
+		var milestone: int = int(player.kills / 5) * 5
+		var last_milestone: int = int(_last_ffa_boss_kills.get(player.index, 0))
+		if milestone > last_milestone and milestone > 0:
+			_last_ffa_boss_kills[player.index] = milestone
+			_spawn_ffa_boss()
+
 	player.kill_ticks.append(tick)
 	var cutoff := tick - 10 * Cfg.TICK_HZ
 	while not player.kill_ticks.is_empty() and int(player.kill_ticks[0]) < cutoff:
@@ -1420,6 +1435,8 @@ func _update_respawns() -> void:
 		if tank.alive:
 			continue
 		if mode == "defense" and tank.is_bot:
+			continue
+		if mode == "ffa" and tank.is_boss:
 			continue
 		tank.respawn_timer -= 1
 		if tank.respawn_timer > 0:

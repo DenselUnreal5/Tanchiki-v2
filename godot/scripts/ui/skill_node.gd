@@ -15,6 +15,11 @@ var selected := false:
 		selected = v
 		queue_redraw()
 var need_level := 0
+var synergy_color := Color.TRANSPARENT:
+	set(v):
+		synergy_color = v
+		queue_redraw()
+var synergy_build_name := ""
 
 @export var outer_size: Vector2 = Vector2(60, 60):
 	set(v):
@@ -84,6 +89,8 @@ func _draw_focus_ring() -> void:
 func _border_color() -> Color:
 	if selected:
 		return Cfg.UI_TEXT
+	if synergy_color != Color.TRANSPARENT:
+		return synergy_color if not locked else Color(synergy_color, 0.45)
 	return Cfg.UI_ACCENT if not locked else Cfg.UI_BORDER
 
 func _closed(pts: PackedVector2Array) -> PackedVector2Array:
@@ -101,15 +108,35 @@ func _scaled(pts: PackedVector2Array, k: float) -> PackedVector2Array:
 		out.append(c + (p - c) * k)
 	return out
 
+func _draw_synergy_gem(pos: Vector2) -> void:
+	var col := synergy_color if not locked else Color(synergy_color, 0.6)
+	var pts := PackedVector2Array([
+		pos + Vector2(0, -3.5),
+		pos + Vector2(3.5, 0),
+		pos + Vector2(0, 3.5),
+		pos + Vector2(-3.5, 0)
+	])
+	draw_colored_polygon(pts, col)
+	draw_polyline(_closed(pts), Color.WHITE if not locked else Color(1, 1, 1, 0.5), 1.0, true)
+
 func _draw_diamond() -> void:
 	var w := size.x
 	var h := size.y
 	var pts := PackedVector2Array([Vector2(w * 0.5, 2), Vector2(w - 2, h * 0.5), Vector2(w * 0.5, h - 2), Vector2(2, h * 0.5)])
 	var border := _border_color()
-	draw_colored_polygon(pts, Color(Cfg.UI_CARD, 0.75))
-	draw_polyline(_closed(pts), border, 2.5, true)
+	var bg_col := Color(Cfg.UI_CARD, 0.75)
+	if synergy_color != Color.TRANSPARENT:
+		bg_col = bg_col.lerp(synergy_color, 0.12 if not locked else 0.05)
+	draw_colored_polygon(pts, bg_col)
+	var line_w := 3.0 if synergy_color != Color.TRANSPARENT else 2.5
+	draw_polyline(_closed(pts), border, line_w, true)
+	if synergy_color != Color.TRANSPARENT:
+		var halo_a := 0.6 if (selected or _hovered) else (0.4 if not locked else 0.2)
+		draw_polyline(_closed(_scaled(pts, 1.15)), Color(synergy_color, halo_a), 1.5, true)
 	if selected:
 		draw_polyline(_closed(_scaled(pts, 1.22)), Color(border, 0.5), 1.5, true)
+	if synergy_color != Color.TRANSPARENT:
+		_draw_synergy_gem(Vector2(w * 0.5, 7))
 
 func _draw_octagon() -> void:
 	var w := size.x
@@ -121,22 +148,45 @@ func _draw_octagon() -> void:
 		Vector2(w - cut_x, h - 2), Vector2(cut_x, h - 2), Vector2(2, h - cut_y), Vector2(2, cut_y),
 	])
 	var border := _border_color()
-	draw_colored_polygon(pts, Color(Cfg.UI_CARD, 0.82))
-	draw_polyline(_closed(pts), border, 2.5, true)
+	var bg_col := Color(Cfg.UI_CARD, 0.82)
+	if synergy_color != Color.TRANSPARENT:
+		bg_col = bg_col.lerp(synergy_color, 0.12 if not locked else 0.05)
+	draw_colored_polygon(pts, bg_col)
+	var line_w := 3.0 if synergy_color != Color.TRANSPARENT else 2.5
+	draw_polyline(_closed(pts), border, line_w, true)
+	if synergy_color != Color.TRANSPARENT:
+		var halo_a := 0.6 if (selected or _hovered) else (0.4 if not locked else 0.2)
+		draw_polyline(_closed(_scaled(pts, 1.14)), Color(synergy_color, halo_a), 1.5, true)
 	if selected:
-		draw_polyline(_closed(_scaled(pts, 1.16)), Color(border, 0.6), 1.5, true)
+		draw_polyline(_closed(_scaled(pts, 1.20)), Color(border, 0.6), 1.5, true)
+	if synergy_color != Color.TRANSPARENT:
+		_draw_synergy_gem(Vector2(cut_x * 0.75, cut_y * 0.75))
 
 func _draw_tile() -> void:
 	var border := _border_color()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(Cfg.UI_CARD, 0.8)
+	var bg_col := Color(Cfg.UI_CARD, 0.8)
+	if synergy_color != Color.TRANSPARENT:
+		bg_col = bg_col.lerp(synergy_color, 0.12 if not locked else 0.05)
+	sb.bg_color = bg_col
 	sb.set_corner_radius_all(8)
-	sb.set_border_width_all(2)
+	sb.set_border_width_all(3 if synergy_color != Color.TRANSPARENT else 2)
 	sb.border_color = border
-	if not locked:
+	if synergy_color != Color.TRANSPARENT:
+		sb.shadow_color = Color(synergy_color, 0.4 if not locked else 0.2)
+		sb.shadow_size = 6
+	elif not locked:
 		sb.shadow_color = Color(Cfg.UI_ACCENT, 0.35)
 		sb.shadow_size = 4
 	draw_style_box(sb, Rect2(Vector2.ZERO, size))
+	if synergy_color != Color.TRANSPARENT:
+		var halo := StyleBoxFlat.new()
+		halo.bg_color = Color.TRANSPARENT
+		halo.set_corner_radius_all(10)
+		halo.set_border_width_all(1)
+		var halo_a := 0.6 if (selected or _hovered) else (0.35 if not locked else 0.18)
+		halo.border_color = Color(synergy_color, halo_a)
+		draw_style_box(halo, Rect2(-Vector2(3, 3), size + Vector2(6, 6)))
 	if selected:
 		var glow := StyleBoxFlat.new()
 		glow.bg_color = Color.TRANSPARENT
@@ -146,13 +196,19 @@ func _draw_tile() -> void:
 		glow.shadow_color = Color(border, 0.5)
 		glow.shadow_size = 8
 		draw_style_box(glow, Rect2(-Vector2(3, 3), size + Vector2(6, 6)))
+	if synergy_color != Color.TRANSPARENT:
+		_draw_synergy_gem(Vector2(6, 6))
 
 func _draw_badge() -> void:
 	var c := Vector2(size.x - 5, size.y - 5)
-	draw_circle(c, 8.0, Cfg.UI_TAG)
+	var badge_col := synergy_color if synergy_color != Color.TRANSPARENT else Cfg.UI_TAG
+	if locked and synergy_color != Color.TRANSPARENT:
+		badge_col = Color(synergy_color, 0.85)
+	draw_circle(c, 8.0, badge_col)
 	draw_arc(c, 8.0, 0.0, TAU, 16, Cfg.UI_BG, 1.2, true)
 	var txt := str(need_level)
 	var f := Fonts.bold
 	var fs := 9
 	var w := f.get_string_size(txt, HORIZONTAL_ALIGNMENT_CENTER, -1, fs).x
-	draw_string(f, c + Vector2(-w * 0.5, fs * 0.35), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Cfg.UI_TAG_INK)
+	var ink_col := Color.BLACK if (synergy_color != Color.TRANSPARENT and badge_col.get_luminance() > 0.4) else (Cfg.UI_TAG_INK if synergy_color == Color.TRANSPARENT else Color.WHITE)
+	draw_string(f, c + Vector2(-w * 0.5, fs * 0.35), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink_col)

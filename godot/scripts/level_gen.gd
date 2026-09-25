@@ -79,8 +79,11 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	if arch == "river" and river_weight < 0.8:
 		river_weight = 1.0
 
-	if (mode == "ffa" or mode == "koth") and river_weight > 0.0:
-		WaterGen.carve(map, rng, cols, rows, plan["h"], river_weight)
+	if (mode == "ffa" or mode == "koth" or arch == "river") and river_weight > 0.0:
+		if loc_id == "city":
+			WaterGen.carve_city_canals(map, rng, cols, rows, plan["h"])
+		else:
+			WaterGen.carve(map, rng, cols, rows, plan["h"], river_weight)
 
 	Locations.overgrow(map, rng, loc)
 	Locations.carve_oases(map, rng, loc)

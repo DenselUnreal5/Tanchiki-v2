@@ -17,7 +17,7 @@ func _ready() -> void:
 					mark += "   ЛОКАЦИЯ НЕ ТА"
 					failures += 1
 				if int(r["bridges"]) > LevelGen.MAX_BRIDGES:
-					mark += "   ПЕРЕПРАВ БОЛЬШЕ ЧЕТЫРЁХ"
+					mark += "   СЛИШКОМ МНОГО ПЕРЕПРАВ"
 					failures += 1
 				if r["total"] > 200 and float(r["share"]) < 0.70:
 					mark += "   СЕТКА РВАНАЯ"

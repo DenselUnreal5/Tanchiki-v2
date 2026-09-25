@@ -60,13 +60,17 @@ func _ready() -> void:
 
 func set_perk(perk_id: String, name_text: String, desc_text: String, unlocked: bool,
 		challenge: Dictionary, unlock_label_text: String, task_label_text: String = "",
-		is_active: bool = false, build_text: String = "") -> void:
+		is_active: bool = false, build_text: String = "", synergy_color: Color = Color.TRANSPARENT) -> void:
 	_icon.perk_id = perk_id
 	_icon.icon_color = Cfg.UI_TEXT if unlocked else Cfg.UI_MUTED
 	_name_label.text = name_text
 	_desc_label.text = desc_text
 	_build_label.text = build_text
 	_build_label.visible = build_text != ""
+	if synergy_color != Color.TRANSPARENT:
+		_build_label.add_theme_color_override("font_color", synergy_color)
+	else:
+		_build_label.add_theme_color_override("font_color", Cfg.UI_ACCENT)
 
 	for c in _footer.get_children():
 		c.queue_free()
@@ -87,5 +91,8 @@ func set_perk(perk_id: String, name_text: String, desc_text: String, unlocked: b
 	else:
 		_footer.add_child(UiKit.unlock_button(unlock_label_text, "locked"))
 
-	border_color = Cfg.UI_WARN if is_active else Color.TRANSPARENT
+	if synergy_color != Color.TRANSPARENT:
+		border_color = Color(synergy_color, 0.8)
+	else:
+		border_color = Cfg.UI_WARN if is_active else Color.TRANSPARENT
 	queue_redraw()

@@ -626,10 +626,14 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 
 func _perk_card(player, id: String) -> Control:
 	var perk := Perks.get_perk(id)
+	var builds := Perks.builds_with_perk(id)
+	var has_build := not builds.is_empty()
+	var build_col: Color = builds[0].get("color", Cfg.UI_BORDER) if has_build else Cfg.UI_BORDER
+
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(190, 200)
-	var normal := UiKit.flat(Color("#161616"), Cfg.RADIUS_MD, 2, Cfg.UI_BORDER)
-	var hover := UiKit.flat(Color("#1c1c1c"), Cfg.RADIUS_MD, 2, Cfg.UI_GOLD)
+	var normal := UiKit.flat(Color("#161616"), Cfg.RADIUS_MD, 3 if has_build else 2, build_col)
+	var hover := UiKit.flat(Color("#1c1c1c"), Cfg.RADIUS_MD, 3 if has_build else 2, build_col if has_build else Cfg.UI_GOLD)
 	var selected := UiKit.flat(Color("#1c1c1c"), Cfg.RADIUS_MD, 3, Cfg.UI_WARN)
 	btn.add_theme_stylebox_override("normal", normal)
 	btn.add_theme_stylebox_override("hover", hover)
@@ -647,7 +651,7 @@ func _perk_card(player, id: String) -> Control:
 	var icon := PerkIconView.new()
 	icon.custom_minimum_size = Vector2(36, 36)
 	icon.perk_id = id
-	icon.icon_color = Cfg.UI_TEXT
+	icon.icon_color = build_col if has_build else Cfg.UI_TEXT
 	icon_wrap.add_child(icon)
 
 	var name_label := UiKit.label(I18n.dn(perk, "name", "perk"), 12, Color.WHITE, true)
@@ -655,6 +659,12 @@ func _perk_card(player, id: String) -> Control:
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(name_label)
+
+	if has_build:
+		var syn_label := UiKit.label("⚡ " + I18n.dn(builds[0], "name", "build").to_upper(), 9, build_col, true)
+		syn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		syn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		box.add_child(syn_label)
 
 	if perk.has("active"):
 		var key := "Q" if player.index == 0 else "Num -"
