@@ -5,7 +5,12 @@ var world: World = null
 var player: PlayerState = null
 
 var _cache: ImageTexture = null
-var _cache_version := -1
+var _cache_epoch := -1
+var _seen_changes := 0
+var _ground := Color.BLACK
+## Цвета по типу тайла — собираются раз за перерисовку, чтобы не парсить
+## строку цвета на каждый пиксель.
+var _palette := {}
 var _image: Image = null
 
 func _ready() -> void:
@@ -20,9 +25,16 @@ func _draw() -> void:
 	var w := size.x
 	var h := size.y
 
-	if _cache_version != world.map.version:
+	# Полная перерисовка — только в начале матча и при замене карты
+	# целиком; дальше по журналу GameMap.changes перекрашиваются лишь
+	# изменившиеся пиксели (раньше каждое разрушение стоило ~10 мс).
+	var map := world.map
+	if _cache == null or _cache_epoch != map.changes_epoch:
 		_render_cache()
-		_cache_version = world.map.version
+		_cache_epoch = map.changes_epoch
+		_seen_changes = map.changes.size()
+	elif _seen_changes != map.changes.size():
+		_apply_changes()
 
 	draw_rect(Rect2(Vector2.ZERO, size), Color("#0a0a0a"))
 	if _cache != null:
@@ -105,42 +117,71 @@ func _render_cache() -> void:
 	if _image == null or _image.get_width() != map.cols or _image.get_height() != map.rows:
 		_image = Image.create(map.cols, map.rows, false, Image.FORMAT_RGBA8)
 	var loc := Locations.get_location(String(world.level.get("location", Locations.CITY)))
-	_image.fill(Color(loc["ground"]).darkened(0.35))
+	_ground = Color(loc["ground"]).darkened(0.35)
+	_palette.clear()
+	_image.fill(_ground)
 	for r in map.rows:
 		for c in map.cols:
 			var tile := map.get_tile(r, c)
 			if tile == Cfg.T_EMPTY:
 				continue
-			var col := Color.TRANSPARENT
-			match tile:
-				Cfg.T_WALL:
-					col = Color("#707070")
-				Cfg.T_BRICK:
-					col = Color("#8a8278")
-				Cfg.T_WATER:
-					col = Color("#2b3a8f")
-				Cfg.T_SAND:
-					col = Color("#c9b878")
-				Cfg.T_ROAD:
-					col = Color("#3a3b40")
-				Cfg.T_BRIDGE:
-					col = Color("#7a6a50")
-				Cfg.T_GRASS:
-					col = Color("#3d5c33")
-				Cfg.T_DUNE:
-					col = Color("#bfa967")
-				Cfg.T_QUICKSAND:
-					col = Color("#7d6a45")
-				Cfg.T_TREE:
-					col = Color("#245a33")
-				Cfg.T_BASE_P:
-					col = Cfg.base_p
-				Cfg.T_BASE_E:
-					col = Cfg.base_e
-				_:
-					continue
+			var col := _palette_color(tile)
+			if col.a <= 0.0:
+				continue
 			_image.set_pixel(c, r, col)
 	if _cache == null:
 		_cache = ImageTexture.create_from_image(_image)
 	else:
 		_cache.update(_image)
+
+func _apply_changes() -> void:
+	var map := world.map
+	var n := map.changes.size()
+	var touched := false
+	for k in range(_seen_changes, n):
+		var i: int = map.changes[k]
+		if i < 0:
+			continue
+		var col := _palette_color(map.tiles[i])
+		_image.set_pixel(i % map.cols, i / map.cols, col if col.a > 0.0 else _ground)
+		touched = true
+	_seen_changes = n
+	if touched:
+		_cache.update(_image)
+
+func _palette_color(tile: int) -> Color:
+	if not _palette.has(tile):
+		_palette[tile] = _tile_color(tile)
+	return _palette[tile]
+
+## Цвет клетки на миникарте; прозрачный — «рисовать землю».
+func _tile_color(tile: int) -> Color:
+	var col := Color.TRANSPARENT
+	match tile:
+		Cfg.T_WALL:
+			col = Color("#707070")
+		Cfg.T_BRICK:
+			col = Color("#8a8278")
+		Cfg.T_WATER:
+			col = Color("#2b3a8f")
+		Cfg.T_SAND:
+			col = Color("#c9b878")
+		Cfg.T_ROAD:
+			col = Color("#3a3b40")
+		Cfg.T_BRIDGE:
+			col = Color("#7a6a50")
+		Cfg.T_GRASS:
+			col = Color("#3d5c33")
+		Cfg.T_DUNE:
+			col = Color("#bfa967")
+		Cfg.T_QUICKSAND:
+			col = Color("#7d6a45")
+		Cfg.T_TREE:
+			col = Color("#245a33")
+		Cfg.T_BASE_P:
+			col = Cfg.base_p
+		Cfg.T_BASE_E:
+			col = Cfg.base_e
+		_:
+			return Color.TRANSPARENT
+	return col

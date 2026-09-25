@@ -5,7 +5,23 @@ var cols: int
 var rows: int
 var tiles: PackedByteArray
 var damage: PackedByteArray
+## 1 — по клетке можно ехать (is_drivable_tile). Держится в актуальном
+## состоянии всеми записями тайлов (set_tile, fill, снапшот, сетевые
+## дельты), чтобы A* и проверки проходимости не пересчитывали тип клетки
+## на каждом шаге. Тайлы напрямую в tiles[] не писать — только через них.
+var passable: PackedByteArray
 var version := 0
+
+## Журнал изменённых клеток для инкрементальных подписчиков (кэш тайлов,
+## миникарта, AO): индекс i >= 0 — сменился сам тайл, -(i + 1) — только
+## урон. Подписчик помнит, до какой позиции дочитал. Если карту заменили
+## целиком (fill, снапшот по сети) или журнал переполнился — растёт
+## changes_epoch, и подписчики перестраиваются полностью.
+## Читайте map.changes[k] напрямую, не сохраняя массив в переменную:
+## копия packed-массива заставила бы каждое добавление копировать журнал.
+const CHANGES_CAP := 65536
+var changes: PackedInt32Array = PackedInt32Array()
+var changes_epoch := 0
 
 static var stat_rect_calls := 0
 static var stat_los_calls := 0
@@ -17,6 +33,9 @@ func _init(cols_: int = Cfg.COLS, rows_: int = Cfg.ROWS) -> void:
 	tiles.resize(cols * rows)
 	damage = PackedByteArray()
 	damage.resize(cols * rows)
+	passable = PackedByteArray()
+	passable.resize(cols * rows)
+	passable.fill(1 if is_drivable_tile(0) else 0)
 
 static func is_solid_tile(tile: int) -> bool:
 	return tile == Cfg.T_WALL or tile == Cfg.T_BRICK or tile == Cfg.T_ADOBE
@@ -49,13 +68,39 @@ func set_tile(row: int, col: int, value: int) -> void:
 		return
 	tiles[i] = value
 	damage[i] = 0
+	passable[i] = 1 if is_drivable_tile(value) else 0
 	version += 1
+	_note_change(i, true)
 	_log_tile(row, col)
 
 func fill(value: int) -> void:
 	tiles.fill(value)
 	damage.fill(0)
+	passable.fill(1 if is_drivable_tile(value) else 0)
 	version += 1
+	_reset_changes()
+
+func _note_change(i: int, tile_changed: bool) -> void:
+	if changes.size() >= CHANGES_CAP:
+		_reset_changes()
+		return
+	changes.append(i if tile_changed else -(i + 1))
+
+func _reset_changes() -> void:
+	changes = PackedInt32Array()
+	changes_epoch += 1
+
+## Клетка пришла с хоста (дельта карты по сети).
+func apply_net_cell(i: int, tile: int, dmg: int) -> void:
+	if i < 0 or i >= tiles.size():
+		return
+	var tile_changed := tiles[i] != tile
+	if not tile_changed and damage[i] == dmg:
+		return
+	tiles[i] = tile
+	damage[i] = dmg
+	passable[i] = 1 if is_drivable_tile(tile) else 0
+	_note_change(i, tile_changed)
 
 func col_at(x: float) -> int:
 	return int(floor(x / Cfg.TILE))
@@ -120,7 +165,9 @@ func apply_snapshot_bytes(data: PackedByteArray) -> void:
 	for i in tiles.size():
 		tiles[i] = data[i * 2]
 		damage[i] = data[i * 2 + 1]
+		passable[i] = 1 if is_drivable_tile(tiles[i]) else 0
 	version += 1
+	_reset_changes()
 
 func take_net_log() -> Array:
 	if net_log.is_empty():
@@ -142,11 +189,13 @@ func apply_damage(row: int, col: int, amount: float, source: String) -> bool:
 		set_tile(row, col, Cfg.T_EMPTY)
 		return true
 	damage[i] = int(minf(255.0, total))
+	_note_change(i, false)
 	_log_tile(row, col)
 	return false
 
 func is_drivable(row: int, col: int) -> bool:
-	return in_bounds(row, col) and is_drivable_tile(tiles[row * cols + col])
+	return row >= 0 and row < rows and col >= 0 and col < cols \
+		and passable[row * cols + col] == 1
 
 func has_drivable_segment(x1: float, y1: float, x2: float, y2: float) -> bool:
 	var x0 := x1 / Cfg.TILE
@@ -369,5 +418,7 @@ func _carve_put(r: int, c: int) -> int:
 	if tiles[i] == Cfg.T_WATER:
 		return 0
 	tiles[i] = Cfg.T_EMPTY
+	passable[i] = 1 if is_drivable_tile(Cfg.T_EMPTY) else 0
 	version += 1
+	_note_change(i, true)
 	return 1

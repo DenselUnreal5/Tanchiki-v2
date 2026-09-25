@@ -8,20 +8,24 @@ var view_off := Vector2.ZERO
 var ao: AoLayer = null
 var _view := Rect2()
 
-var _tile_cache_viewport: SubViewport
-var _tile_cache_view: TileBakeView
-var _tile_cache_version := -1
+## Чанковый кэш статичных тайлов (см. TileCache). game.gd создаёт один на
+## матч и раздаёт всем видам; если его не дали — вид заводит свой.
+var tile_cache: TileCache = null
 var _tile_cache_ready := false
+## >= 0 — «замороженная» сила снега для запекания в кэш (её выставляет
+## TileCache, чтобы соседние чанки не расходились по оттенку); < 0 — живое
+## значение из погоды.
+var bake_snow := -1.0
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	# Заводим вьюпорт кэша тайлов заранее, а не в первом _draw: тогда
-	# запекание всей карты происходит в том же кадре, что и первый показ,
-	# и первый кадр не тратится на лишнюю прямую отрисовку видимых тайлов
-	# (_draw_tiles) параллельно с запеканием. Этот кадр всё равно закрыт
-	# экраном загрузки.
-	if world != null:
-		_update_tile_cache()
+	# Кэш тайлов заводим сразу, а не в первом _draw: видимые чанки
+	# запекаются уже в первом кадре (он закрыт экраном загрузки).
+	if world != null and tile_cache == null:
+		tile_cache = TileCache.new()
+		tile_cache.world = world
+		tile_cache.players = [player]
+		add_child(tile_cache)
 
 func _process(_delta: float) -> void:
 	queue_redraw()
@@ -29,7 +33,35 @@ func _process(_delta: float) -> void:
 ## Карта уже запечена в кэш-вьюпорт и рисуется из него (см. экран
 ## загрузки в game.gd — он ждёт этого, прежде чем исчезнуть).
 func is_cache_warm() -> bool:
-	return _tile_cache_ready
+	return tile_cache != null and tile_cache.visible_ready()
+
+## Отдаёт этому виду уже построенные ленивые кэши другого вида (параметры
+## локации, классы дорог и полосы, фонари), чтобы десятки чанков TileCache
+## не пересчитывали их каждый заново. Копируются все скриптовые поля с «_»,
+## кроме перечисленных — новый ленивый кэш подхватится сам. Packed-массивы
+## копируются по значению (copy-on-write), остальное — общей ссылкой, так
+## что кэши должны оставаться только для чтения после постройки.
+const _SHARE_SKIP := ["_view", "_tile_cache_ready"]
+
+func share_caches_from(other: WorldView) -> void:
+	var snap := other.shared_cache_snapshot()
+	for name in snap:
+		set(name, snap[name])
+
+## Значения ленивых кэшей этого вида (см. share_caches_from). Список полей
+## читается рефлексией один раз, дальше — готовый словарь.
+var _shared_snapshot: Dictionary = {}
+
+func shared_cache_snapshot() -> Dictionary:
+	if _shared_snapshot.is_empty():
+		for prop in get_property_list():
+			var name: String = prop["name"]
+			if not name.begins_with("_") or _SHARE_SKIP.has(name) or name == "_shared_snapshot":
+				continue
+			if int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE == 0:
+				continue
+			_shared_snapshot[name] = get(name)
+	return _shared_snapshot
 
 func _draw() -> void:
 	if world == null or player == null:
@@ -53,8 +85,7 @@ func _draw() -> void:
 	draw_set_transform(view_off)
 	_update_tile_cache()
 	if _tile_cache_ready:
-		draw_texture_rect(_tile_cache_viewport.get_texture(),
-			Rect2(0.0, 0.0, world.map.width, world.map.height), false)
+		tile_cache.draw_visible(self, _view)
 		_draw_animated_tiles()
 	else:
 		_draw_tiles()
@@ -234,31 +265,11 @@ func _draw_weather(size: Vector2) -> void:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.86, 0.92, 1.0, w.flash * k * 0.35))
 
 func _update_tile_cache() -> void:
-	if _tile_cache_viewport == null:
-		_tile_cache_viewport = SubViewport.new()
-		_tile_cache_viewport.size = Vector2i(
-			maxi(1, int(ceil(world.map.width))), maxi(1, int(ceil(world.map.height))))
-		_tile_cache_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-		_tile_cache_viewport.transparent_bg = false
-		add_child(_tile_cache_viewport)
-		_tile_cache_view = TileBakeView.new()
-		_tile_cache_view.world = world
-		_tile_cache_viewport.add_child(_tile_cache_view)
-		_tile_cache_version = world.map.version
-		return
-
-	_tile_cache_ready = true
-	# Полное перезапекание — только на реальное изменение карты (снесли
-	# постройку, наросли дюны и т.п.), а не по таймеру. Раньше
-	# принудительный ребейк по TILE_CACHE_ANIM_TICKS происходил ~10 раз/сек
-	# исключительно ради анимации воды/зыбучего песка — перерисовывая все
-	# ~8160 тайлов карты ради пары десятков видимых анимированных. Сама
-	# анимация теперь рисуется отдельным лёгким проходом поверх кэша
-	# (см. _draw_animated_tiles) только по видимым тайлам.
-	if world.map.version != _tile_cache_version:
-		_tile_cache_version = world.map.version
-		_tile_cache_view.queue_redraw()
-		_tile_cache_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	# Кэш сам следит за изменениями карты (журнал GameMap.changes) и
+	# перерисовывает только затронутые чанки — см. TileCache. Прямую
+	# отрисовку тайлов в первом кадре не делаем: он всё равно закрыт
+	# экраном загрузки, а стоила она ~40 мс.
+	_tile_cache_ready = tile_cache != null
 
 ## Тайлы с покадровой анимацией (вода/зыбучий песок) рисуются не через
 ## полный ребейк карты (см. _update_tile_cache), а этим лёгким проходом
@@ -289,10 +300,13 @@ func _draw_tiles() -> void:
 	var c1 := mini(map.cols - 1, int(ceil(_view.end.x / Cfg.TILE)))
 	var r0 := maxi(0, int(floor(_view.position.y / Cfg.TILE)))
 	var r1 := mini(map.rows - 1, int(ceil(_view.end.y / Cfg.TILE)))
+	_draw_ground_range(r0, r1, c0, c1)
+	_draw_lamp_posts()
+	_draw_tile_range(r0, r1, c0, c1)
 
-	var snow_k := 0.0
-	if world.weather != null:
-		snow_k = clampf(world.weather.snow * Sets.weather_scale(), 0.0, 1.0) * 0.55
+## Подложка (земля) прямоугольника тайлов — первый проход _draw_tiles.
+func _draw_ground_range(r0: int, r1: int, c0: int, c1: int) -> void:
+	var snow_k := _snow_k()
 	if not _loc_ready:
 		_read_location()
 	var g0: Color = _loc_ground.lerp(Cfg.snow_ground, snow_k)
@@ -307,8 +321,9 @@ func _draw_tiles() -> void:
 			else:
 				_rect(gx, gy, Cfg.TILE, Cfg.TILE, g0 if (r + c) % 2 == 0 else g1)
 
-	_draw_lamp_posts()
-
+## Сами тайлы прямоугольника — второй проход _draw_tiles.
+func _draw_tile_range(r0: int, r1: int, c0: int, c1: int) -> void:
+	var map := world.map
 	var water_phase := float(world.tick % 120) / 120.0
 
 	for r in range(r0, r1 + 1):
@@ -544,6 +559,8 @@ func _draw_ability_state(tank: Tank) -> void:
 				Color(col.r, col.g, col.b, pulse * 0.8), 2.0)
 
 func _snow_k() -> float:
+	if bake_snow >= 0.0:
+		return bake_snow
 	if world.weather == null:
 		return 0.0
 	return clampf(world.weather.snow * Sets.weather_scale(), 0.0, 1.0) * 0.55
@@ -621,8 +638,19 @@ func _draw_lamp_posts() -> void:
 	for p in _lamps:
 		if not _in_view(p.x, p.y, 16):
 			continue
-		_rect(p.x - 1.0, p.y - 2.0, 2.0, 9.0, Cfg.lamp_post)
-		_rect(p.x - 3.0, p.y - 5.0, 6.0, 3.0, Cfg.lamp_head)
+		_draw_lamp_post(p)
+
+## Фонари, чья клетка лежит внутри rect (для чанков кэша тайлов).
+func _draw_lamp_posts_in(rect: Rect2) -> void:
+	if not _lamps_ready:
+		_build_lamps()
+	for p in _lamps:
+		if rect.has_point(p):
+			_draw_lamp_post(p)
+
+func _draw_lamp_post(p: Vector2) -> void:
+	_rect(p.x - 1.0, p.y - 2.0, 2.0, 9.0, Cfg.lamp_post)
+	_rect(p.x - 3.0, p.y - 5.0, 6.0, 3.0, Cfg.lamp_head)
 
 func _is_paved(r: int, c: int) -> bool:
 	var t := world.map.get_tile(r, c)
@@ -651,9 +679,7 @@ func _read_location() -> void:
 	_loc_ready = true
 
 func _ground_at(x: float, y: float, r: int, c: int) -> Color:
-	var k := 0.0
-	if world.weather != null:
-		k = clampf(world.weather.snow * Sets.weather_scale(), 0.0, 1.0) * 0.55
+	var k := _snow_k()
 	var base: Color = _loc_ground if (r + c) % 2 == 0 else _loc_ground_alt
 	return base.lerp(Cfg.snow_ground, k)
 

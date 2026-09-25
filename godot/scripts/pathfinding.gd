@@ -3,6 +3,9 @@ extends RefCounted
 
 const SQRT2 := 1.4142135623730951
 const NODE_BUDGET := 4000
+# Соседи клетки в порядке старого двойного цикла dr/dc (-1..1, без 0,0).
+const _DR := [-1, -1, -1, 0, 0, 1, 1, 1]
+const _DC := [-1, 0, 1, -1, 1, -1, 0, 1]
 
 static var _cells := 0
 static var _g_score := PackedFloat64Array()
@@ -16,6 +19,21 @@ static var _generation := 0
 
 static var stat_calls := 0
 static var stat_expanded := 0
+
+## Бюджет A* на один тик симуляции (в раскрытых узлах). Если несколько
+## ботов решили перестроить путь в один и тот же тик, их поиски стакались
+## в один кадр по 30–50 мс. Теперь, когда бюджет тика исчерпан, остальные
+## боты едут по старому пути и перестраивают его в следующих тиках.
+## Первый поиск в тике разрешён всегда. Всё детерминировано по номеру тика.
+const TICK_NODE_BUDGET := 1200
+static var _budget_tick := -1
+static var _budget_used := 0
+
+static func has_budget(tick: int) -> bool:
+	if tick != _budget_tick:
+		_budget_tick = tick
+		_budget_used = 0
+	return _budget_used < TICK_NODE_BUDGET
 
 static func _ensure(size: int) -> void:
 	if _cells >= size:
@@ -39,46 +57,62 @@ static func _heap_swap(a: int, b: int) -> void:
 	_heap_keys[a] = _heap_keys[b]
 	_heap_keys[b] = tk
 
+# Кучу крутим без вызова _heap_swap на каждом шаге: в GDScript вызов
+# функции заметно дороже самих перестановок (результат тот же).
 static func _heap_push(item: int, key: float) -> void:
 	if _heap_size >= _heap_items.size():
 		return
 	var i := _heap_size
 	_heap_size += 1
-	_heap_items[i] = item
-	_heap_keys[i] = key
 	while i > 0:
 		var parent := (i - 1) >> 1
-		if _heap_keys[parent] <= _heap_keys[i]:
+		if _heap_keys[parent] <= key:
 			break
-		_heap_swap(i, parent)
+		_heap_items[i] = _heap_items[parent]
+		_heap_keys[i] = _heap_keys[parent]
 		i = parent
+	_heap_items[i] = item
+	_heap_keys[i] = key
 
 static func _heap_pop() -> int:
 	var top := _heap_items[0]
 	_heap_size -= 1
 	if _heap_size > 0:
-		_heap_items[0] = _heap_items[_heap_size]
-		_heap_keys[0] = _heap_keys[_heap_size]
+		var item := _heap_items[_heap_size]
+		var key := _heap_keys[_heap_size]
+		var n := _heap_size
 		var i := 0
 		while true:
 			var l := 2 * i + 1
-			var r := l + 1
-			var smallest := i
-			if l < _heap_size and _heap_keys[l] < _heap_keys[smallest]:
-				smallest = l
-			if r < _heap_size and _heap_keys[r] < _heap_keys[smallest]:
-				smallest = r
-			if smallest == i:
+			if l >= n:
 				break
-			_heap_swap(i, smallest)
-			i = smallest
+			var r := l + 1
+			var child := l
+			if r < n and _heap_keys[r] < _heap_keys[l]:
+				child = r
+			if _heap_keys[child] >= key:
+				break
+			_heap_items[i] = _heap_items[child]
+			_heap_keys[i] = _heap_keys[child]
+			i = child
+		_heap_items[i] = item
+		_heap_keys[i] = key
 	return top
 
 static func find_path(map: GameMap, start_x: float, start_y: float,
 		end_x: float, end_y: float) -> Array:
+	var expanded_before := stat_expanded
+	var result := _find_path(map, start_x, start_y, end_x, end_y)
+	_budget_used += stat_expanded - expanded_before
+	return result
+
+static func _find_path(map: GameMap, start_x: float, start_y: float,
+		end_x: float, end_y: float) -> Array:
 	stat_calls += 1
 	_ensure(map.cols * map.rows)
 	var cols := map.cols
+	var rows := map.rows
+	var walk := map.passable
 	var start_col := int(floor(start_x / Cfg.TILE))
 	var start_row := int(floor(start_y / Cfg.TILE))
 	var end_col := int(floor(end_x / Cfg.TILE))
@@ -133,30 +167,36 @@ static func find_path(map: GameMap, start_x: float, start_y: float,
 			best_h = h
 			best_node = current
 
-		for dr in range(-1, 2):
-			for dc in range(-1, 2):
-				if dr == 0 and dc == 0:
-					continue
-				var nr := cr + dr
-				var nc := cc + dc
-				if not map.is_drivable(nr, nc):
-					continue
-				if dr != 0 and dc != 0:
-					if not map.is_drivable(cr + dr, cc) or not map.is_drivable(cr, cc + dc):
-						continue
-				var next := nr * cols + nc
-				if _visit_gen[next] == gen and _closed[next] == 1:
-					continue
-				var step := SQRT2 if (dr != 0 and dc != 0) else 1.0
-				var tentative := _g_score[current] + step
-				var seen := _visit_gen[next] == gen
-				if seen and tentative >= _g_score[next]:
-					continue
-				_visit_gen[next] = gen
-				_closed[next] = 0
-				_g_score[next] = tentative
-				_came_from[next] = current
-				_heap_push(next, tentative + _heuristic(nr, nc, end_row, end_col))
+		# Тот же обход 8 соседей в том же порядке, что и раньше, но по
+		# готовой сетке проходимости map.passable и без вызовов функций на
+		# каждого соседа — A* был главным источником фризов симуляции.
+		var g_cur := _g_score[current]
+		for k in 8:
+			var dr: int = _DR[k]
+			var dc: int = _DC[k]
+			var nr := cr + dr
+			var nc := cc + dc
+			if nr < 0 or nr >= rows or nc < 0 or nc >= cols:
+				continue
+			var next := nr * cols + nc
+			if walk[next] == 0:
+				continue
+			var diag := dr != 0 and dc != 0
+			if diag and (walk[next - dc] == 0 or walk[current + dc] == 0):
+				continue
+			var seen := _visit_gen[next] == gen
+			if seen and _closed[next] == 1:
+				continue
+			var tentative := g_cur + (SQRT2 if diag else 1.0)
+			if seen and tentative >= _g_score[next]:
+				continue
+			_visit_gen[next] = gen
+			_closed[next] = 0
+			_g_score[next] = tentative
+			_came_from[next] = current
+			var hr := float(absi(nr - end_row))
+			var hc := float(absi(nc - end_col))
+			_heap_push(next, tentative + ((hr + hc) + (SQRT2 - 2.0) * minf(hr, hc)))
 
 	if best_node != start:
 		return _reconstruct(map, best_node, gen)

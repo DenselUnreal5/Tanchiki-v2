@@ -459,7 +459,9 @@ func _move_toward(tank: Tank, world, tx: float, ty: float) -> void:
 	if path_cooldown > 0:
 		path_cooldown -= 1
 
-	if need_path:
+	# Бюджет A* на тик исчерпан другими ботами — едем по старому пути,
+	# need_path останется в силе и перестроимся в одном из следующих тиков.
+	if need_path and Pathfinding.has_budget(world.tick):
 		path = Pathfinding.find_path(world.map, tank.x, tank.y, tx, ty)
 		path_idx = 0
 		path_timer = Cfg.BOT_PATH_REFRESH + int(rng.nextf() * 40.0)

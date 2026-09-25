@@ -33,6 +33,7 @@ var _root: Control
 var _loading: LoadingScreen = null
 var _views_root: Control
 var _views: Array = []
+var _tile_cache: TileCache = null
 var hud: Hud
 var ui: UiRoot
 
@@ -206,10 +207,24 @@ func _layout_viewports() -> void:
 		container.size = vp.size
 		(entry["viewport"] as SubViewport).size = Vector2i(maxi(1, int(vp.size.x)), maxi(1, int(vp.size.y)))
 
+func _free_tile_cache() -> void:
+	if _tile_cache != null:
+		_tile_cache.queue_free()
+		_tile_cache = null
+
 func _rebuild_views() -> void:
 	for entry in _views:
 		entry["container"].queue_free()
 	_views.clear()
+	_free_tile_cache()
+	# Один кэш тайлов на матч, общий для всех видов (в hot seat раньше
+	# каждый вид запекал карту сам — вдвое больше работы на каждом
+	# разрушении).
+	if not players.is_empty():
+		_tile_cache = TileCache.new()
+		_tile_cache.world = world
+		_tile_cache.players = players
+		_views_root.add_child(_tile_cache)
 	for player in players:
 		var container := SubViewportContainer.new()
 		container.stretch = false
@@ -231,6 +246,7 @@ func _rebuild_views() -> void:
 		var view := WorldView.new()
 		view.world = world
 		view.player = player
+		view.tile_cache = _tile_cache
 		view.floaters = floaters
 		if Sets.fx_quality > PostFx.OFF:
 			view.ao = AoLayer.new()
@@ -452,6 +468,7 @@ func to_menu() -> void:
 	for entry in _views:
 		entry["container"].queue_free()
 	_views.clear()
+	_free_tile_cache()
 	hud.hide_hud()
 	hud.clear_feed()
 	floaters.clear()
@@ -924,9 +941,7 @@ func net_apply_map_delta(delta: Array) -> void:
 		return
 	var map := world.map
 	for entry in delta:
-		var i := int(entry[0])
-		map.tiles[i] = int(entry[1])
-		map.damage[i] = int(entry[2])
+		map.apply_net_cell(int(entry[0]), int(entry[1]), int(entry[2]))
 	map.version += 1
 
 func net_apply_event(kind: String, args: Dictionary) -> void:
