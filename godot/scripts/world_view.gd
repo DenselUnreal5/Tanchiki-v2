@@ -15,9 +15,21 @@ var _tile_cache_ready := false
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	# Заводим вьюпорт кэша тайлов заранее, а не в первом _draw: тогда
+	# запекание всей карты происходит в том же кадре, что и первый показ,
+	# и первый кадр не тратится на лишнюю прямую отрисовку видимых тайлов
+	# (_draw_tiles) параллельно с запеканием. Этот кадр всё равно закрыт
+	# экраном загрузки.
+	if world != null:
+		_update_tile_cache()
 
 func _process(_delta: float) -> void:
 	queue_redraw()
+
+## Карта уже запечена в кэш-вьюпорт и рисуется из него (см. экран
+## загрузки в game.gd — он ждёт этого, прежде чем исчезнуть).
+func is_cache_warm() -> bool:
+	return _tile_cache_ready
 
 func _draw() -> void:
 	if world == null or player == null:
@@ -796,6 +808,10 @@ func _draw_dirt_road(x: float, y: float, r: int, c: int) -> void:
 
 var _road_class: PackedByteArray = PackedByteArray()
 var _road_class_ready := false
+var _v_lane_idx: PackedByteArray = PackedByteArray()
+var _v_lane_w: PackedByteArray = PackedByteArray()
+var _h_lane_idx: PackedByteArray = PackedByteArray()
+var _h_lane_w: PackedByteArray = PackedByteArray()
 
 func _road_class_at(r: int, c: int) -> int:
 	if not _road_class_ready:
@@ -810,6 +826,15 @@ func _build_road_class() -> void:
 	_road_class = PackedByteArray()
 	_road_class.resize(map.cols * map.rows)
 	_road_class_ready = true
+
+	_v_lane_idx = PackedByteArray()
+	_v_lane_w = PackedByteArray()
+	_h_lane_idx = PackedByteArray()
+	_h_lane_w = PackedByteArray()
+	_v_lane_idx.resize(map.cols * map.rows)
+	_v_lane_w.resize(map.cols * map.rows)
+	_h_lane_idx.resize(map.cols * map.rows)
+	_h_lane_w.resize(map.cols * map.rows)
 
 	var vr := PackedByteArray()
 	var hr := PackedByteArray()
@@ -850,6 +875,60 @@ func _build_road_class() -> void:
 				klass = RC_ARTERIAL if h == 2 else RC_STREET
 			_road_class[r * map.cols + c] = klass
 
+	for st in plan.get("v", []):
+		var vw: int = int(st["w"])
+		var vpos: int = int(st["pos"])
+		for r in range(1, map.rows - 1):
+			var voff := MapPlan.wave_offset(st, r)
+			for d in vw:
+				var c: int = vpos + voff + d
+				if c <= 0 or c >= map.cols - 1:
+					continue
+				if not _is_paved(r, c):
+					continue
+				var i := r * map.cols + c
+				_v_lane_idx[i] = d + 1
+				_v_lane_w[i] = vw
+
+	for st in plan.get("h", []):
+		var hw: int = int(st["w"])
+		var hpos: int = int(st["pos"])
+		for c in range(1, map.cols - 1):
+			var hoff := MapPlan.wave_offset(st, c)
+			for d in hw:
+				var r: int = hpos + hoff + d
+				if r <= 0 or r >= map.rows - 1:
+					continue
+				if not _is_paved(r, c):
+					continue
+				var i2 := r * map.cols + c
+				_h_lane_idx[i2] = d + 1
+				_h_lane_w[i2] = hw
+
+func _city_lane_info(r: int, c: int) -> Vector3i:
+	if not _road_class_ready:
+		_build_road_class()
+	var map := world.map
+	if r < 0 or c < 0 or r >= map.rows or c >= map.cols:
+		return Vector3i(-1, -1, -1)
+	var i := r * map.cols + c
+	var vb: int = _v_lane_idx[i]
+	var hb: int = _h_lane_idx[i]
+	if vb > 0 and hb == 0:
+		return Vector3i(0, vb - 1, _v_lane_w[i])
+	if hb > 0 and vb == 0:
+		return Vector3i(1, hb - 1, _h_lane_w[i])
+	return Vector3i(-1, -1, -1)
+
+func _city_wide_lane_sprite(axis: int, lane: int, w: int) -> int:
+	if axis == 1:
+		return 16
+	if w == 2:
+		return 16 if lane == 0 else 17
+	if lane == 0 or lane == w - 1:
+		return 16
+	return 17
+
 func _draw_parking_bay(x: float, y: float, r: int, c: int) -> void:
 	if (r * 5 + c * 3) % 6 != 0:
 		return
@@ -864,6 +943,9 @@ func _draw_parking_bay(x: float, y: float, r: int, c: int) -> void:
 			Color(0.85, 0.85, 0.85, 0.30))
 
 func _city_road_index(r: int, c: int, up: bool, down: bool, left: bool, right: bool) -> int:
+	var lane := _city_lane_info(r, c)
+	if lane.x >= 0 and lane.z >= 2:
+		return _city_wide_lane_sprite(lane.x, lane.y, lane.z)
 	if up and down and left and right:
 		return 7
 	if down and left and right and not up:

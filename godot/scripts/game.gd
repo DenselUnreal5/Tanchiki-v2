@@ -30,6 +30,7 @@ var match_damage := 0.0
 var floaters: Array = []
 
 var _root: Control
+var _loading: LoadingScreen = null
 var _views_root: Control
 var _views: Array = []
 var hud: Hud
@@ -116,8 +117,8 @@ func _notification(what: int) -> void:
 		pause()
 
 func _bind_ui() -> void:
-	ui.start_requested.connect(start_match)
-	ui.restart_requested.connect(start_match)
+	ui.start_requested.connect(request_match)
+	ui.restart_requested.connect(request_match)
 	ui.menu_requested.connect(to_menu)
 	ui.resume_requested.connect(resume)
 	ui.perk_chosen.connect(_on_perk_chosen)
@@ -247,6 +248,63 @@ func _rebuild_views() -> void:
 
 		_views.append({"container": container, "viewport": vp, "view": view, "glow": glow})
 	_layout_viewports()
+
+## Интерактивный старт партии (кнопки меню, «Ещё раз», старт по сети):
+## сначала показываем экран загрузки, и только когда он реально
+## отрисован — запускаем тяжёлый синхронный start_match(). Затем держим
+## экран, пока WorldView не запечёт карту в кэш (первый полный проход
+## _draw_tiles по всей карте) и не прогреются шейдеры пост-эффектов —
+## именно на эти первые кадры приходился фриз при запуске карты.
+## Тесты и выделенный сервер по-прежнему зовут start_match() напрямую.
+const LOADING_MIN_MSEC := 450
+const LOADING_MAX_WARM_FRAMES := 30
+
+func request_match(net_opts: Dictionary = {}) -> void:
+	if _loading != null:
+		return
+	if DisplayServer.get_name() == "headless":
+		start_match(net_opts)
+		return
+
+	var screen := LoadingScreen.new()
+	_loading = screen
+	_root.add_child(screen)
+	screen.set_mode(String(net_opts.get("mode", ui.settings.get("mode", "ffa"))))
+	var shown_at := Time.get_ticks_msec()
+
+	# Клиент стартует сразу: хост уже шлёт спавны танков и дельты карты,
+	# и пока world == null они бы терялись. Экран всё равно накроет
+	# тяжёлые первые кадры отрисовки.
+	if Net.role != "client":
+		await get_tree().process_frame
+		await get_tree().process_frame
+
+	start_match(net_opts)
+
+	if world != null:
+		screen.set_location(String(world.level.get("location", "")))
+	screen.set_stage(I18n.t("loading.gfx", {}, "Подготовка графики"), 0.8)
+
+	var frames := 0
+	while frames < LOADING_MAX_WARM_FRAMES and not _views_warm():
+		frames += 1
+		await get_tree().process_frame
+	# Ещё пара кадров: кэш уже блитится, шейдеры пост-эффектов собраны.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	while Time.get_ticks_msec() - shown_at < LOADING_MIN_MSEC:
+		await get_tree().process_frame
+
+	if is_instance_valid(screen):
+		screen.finish()
+	_loading = null
+
+func _views_warm() -> bool:
+	for entry in _views:
+		var view = entry["view"]
+		if is_instance_valid(view) and not view.is_cache_warm():
+			return false
+	return true
 
 func start_match(net_opts: Dictionary = {}) -> void:
 	if world != null:
@@ -665,7 +723,7 @@ func _process(delta: float) -> void:
 
 func _bind_net() -> void:
 	Net.bind_game(self)
-	Net.match_starting.connect(func(settings: Dictionary): start_match(settings))
+	Net.match_starting.connect(func(settings: Dictionary): request_match(settings))
 	Net.disconnected.connect(func():
 		if state != S_MENU:
 			to_menu())

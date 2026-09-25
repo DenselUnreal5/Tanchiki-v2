@@ -336,6 +336,11 @@ var EN := {
 	"tip.lang": "The interface language switches in Settings → General",
 	"tip.mines": "Lay mines and detonate them once an enemy gets close",
 
+	"loading.title": "Loading",
+	"loading.map": "Generating the map",
+	"loading.gfx": "Preparing graphics",
+	"loading.ready": "Ready",
+
 	"hud.shield": " +{n} shield",
 	"hud.score": "Score {n}",
 	"hud.base": "🏰 {hp} HP",

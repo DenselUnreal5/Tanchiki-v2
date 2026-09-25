@@ -110,7 +110,7 @@ updates.gd::GDScript::4450020931874397632::1788264736::0::1::::<>MarginContainer
 ::res://addons/godotsteam/linuxarm64/::1788264736
 ::res://addons/godotsteam/osx/::1788264735
 ::res://addons/godotsteam/win32/::1788264735
-::res://addons/godotsteam/win64/::1790319823
+::res://addons/godotsteam/win64/::1790321811
 ::res://addons/godot_ai/::1788264782
 client_configurator.gd::GDScript::1846084051969471465::1788264781::0::1::::McpClientConfigurator<>RefCounted<><>0<>1<><>::
 connection.gd::GDScript::3256190740644037847::1788264778::0::1::::McpConnection<>Node<><>0<>1<><>::
@@ -322,7 +322,7 @@ turbo.png::CompressedTexture2D::113461215213555310::1789888665::1789888772::1:::
 vampire.png::CompressedTexture2D::2170852522959177141::1789888665::1789888772::1::::<><><>0<>0<>5c9e4c5a8bb7f7bcc9543663613068eb<>res://.godot/imported/vampire.png-9149708270463d924fe5798b4eb76cf9.ctex::
 ::res://art/perks_src/::1788706975
 ::res://art/terrain/::1790079214
-::res://art/terrain/city/::1790079302
+::res://art/terrain/city/::1790321747
 bridge1.png::CompressedTexture2D::756573235396153358::1790079221::1790079301::1::::<><><>0<>0<>27b7bbd429de0f0fe6098c88b1380469<>res://.godot/imported/bridge1.png-2d078749855c62054fcbb1491bbf4d6b.ctex::
 bridge2.png::CompressedTexture2D::3140685097300946636::1790079221::1790079301::1::::<><><>0<>0<>bda5f8d13fe8024a6537697933956bee<>res://.godot/imported/bridge2.png-46a35b56a8c5036b588f48182242ff7e.ctex::
 bush1.png::CompressedTexture2D::3471678866183318442::1790079222::1790079301::1::::<><><>0<>0<>d875a7a171e9fb5586987859944bfb12<>res://.godot/imported/bush1.png-13c012632eb5dff0388191bc42eabf1a.ctex::
@@ -353,6 +353,8 @@ road12.png::CompressedTexture2D::4455543599402921591::1790079222::1790079300::1:
 road13.png::CompressedTexture2D::3589592193597316515::1790079222::1790079300::1::::<><><>0<>0<>a66623d22a7042d94a1945056c9f6ec2<>res://.godot/imported/road13.png-6e9972bb1b5866c8fd4fb51256605669.ctex::
 road14.png::CompressedTexture2D::8224632531540210848::1790079222::1790079300::1::::<><><>0<>0<>187db8d3fc2bd1e5656ec45c1b245c19<>res://.godot/imported/road14.png-e6aaf16e193963eaf25fbb20049e24af.ctex::
 road15.png::CompressedTexture2D::6388238520440663483::1790079222::1790079300::1::::<><><>0<>0<>5a7876ed282ea160c47708d90673abdd<>res://.godot/imported/road15.png-03852b5710722095bfb5a1b3f099525b.ctex::
+road16.png::CompressedTexture2D::4015071922874517989::1790321718::1790321746::1::::<><><>0<>0<>66d15e59d59de8e8f112a1f84a6aa019<>res://.godot/imported/road16.png-6df3c4965df1dd67593981de19693341.ctex::
+road17.png::CompressedTexture2D::7412914064012561292::1790321718::1790321746::1::::<><><>0<>0<>45aa56a1e4108c9f5e3862c1339e96bc<>res://.godot/imported/road17.png-a3c426f2648d16b3153d5be841881789.ctex::
 stonebuilding1.png::CompressedTexture2D::7083375966521571835::1790079222::1790079300::1::::<><><>0<>0<>1f684f9dee632a40ba5ed590a5623d10<>res://.godot/imported/stonebuilding1.png-1bada5265385d69809d13dba5aba77cf.ctex::
 tree1.png::CompressedTexture2D::3584846791639379649::1790079222::1790079300::1::::<><><>0<>0<>6ccbac0a3ee8e273b3ce7db6d0b82add<>res://.godot/imported/tree1.png-13d9ce5cb4bc622bfd55bf80aa01a5b3.ctex::
 woodenbuilding1.png::CompressedTexture2D::6933063161372287954::1790079222::1790079300::1::::<><><>0<>0<>88ee55ed34c9d18d71e4cded7762f5a0<>res://.godot/imported/woodenbuilding1.png-a90a8d462da8acfabbb73f88f43a38a2.ctex::
@@ -370,7 +372,7 @@ speed.png::CompressedTexture2D::7915750047543160077::1789888665::1789888772::1::
 gatling.png::CompressedTexture2D::6311059947227318418::1789888665::1789888772::1::::<><><>0<>0<>6dd2e2f9b40979f6fd4c61de15412136<>res://.godot/imported/gatling.png-75382b36f8752a07a7e4e9e9b0a8bcf3.ctex::
 rockets.png::CompressedTexture2D::2213413695077989515::1789888665::1789888772::1::::<><><>0<>0<>dd76fbe9e723b98ad96c7a770df9963a<>res://.godot/imported/rockets.png-7269dc63ed67024d541764a5f6ff86bd.ctex::
 shotgun.png::CompressedTexture2D::4286455927281510393::1789888665::1789888772::1::::<><><>0<>0<>faf6068a109b2ad6ee89d08e8044bffe<>res://.godot/imported/shotgun.png-999d62e903f2a6a1cff53b0b22db63ed.ctex::
-::res://build/::1790086332
+::res://build/::1790319858
 steam_appid.txt::TextFile::-1::1789219174::0::1::::<><><>0<>0<><>::
 Как запустить.txt::TextFile::-1::1788078767::0::1::::<><><>0<>0<><>::
 ::res://build/linux/::1789218364
@@ -398,7 +400,7 @@ cannon_card.tscn::PackedScene::-1::1789733397::0::1::::<><><>0<>0<><>::res://scr
 cosmetic_card.tscn::PackedScene::-1::1789727174::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/cosmetic_card.gd<>res://scripts/ui/perk_icon_view.gd
 gallery_detail.tscn::PackedScene::-1::1789898750::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/gallery_detail.gd<>res://scripts/ui/perk_icon_view.gd
 upgrade_card.tscn::PackedScene::-1::1789733544::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/upgrade_card.gd<>res://scripts/ui/perk_icon_view.gd<>res://scripts/ui/focus_ring_panel.gd
-::res://scripts/::1790087983
+::res://scripts/::1790321804
 abilities.gd::GDScript::358552042098184283::1790063334::0::1::::Abilities<>RefCounted<><>0<>0<><>::
 achievements.gd::GDScript::9215880570170937460::1790063334::0::1::::Achievements<>RefCounted<><>0<>1<><>::
 audio.gd::GDScript::1963427527760383837::1790063334::0::1::::<>Node<><>0<>0<><>::
@@ -439,7 +441,7 @@ utils.gd::GDScript::7436398411069476782::1790063334::0::1::::Rng<>RefCounted<><>
 weapons.gd::GDScript::141350927022214648::1790063334::0::1::::Weapons<>RefCounted<><>0<>0<><>::
 weather.gd::GDScript::6899618592559140047::1790063334::0::1::::WeatherSystem<>RefCounted<><>0<>0<><>::
 world.gd::GDScript::2854068884894288357::1790080119::0::1::::World<>RefCounted<><>0<>0<><>::
-world_view.gd::GDScript::8347266231888317091::1790087983::0::1::::WorldView<>Node2D<><>0<>0<><>::
+world_view.gd::GDScript::8347266231888317091::1790321804::0::1::::WorldView<>Node2D<><>0<>0<><>::
 ::res://scripts/fx/::1790079975
 ao_layer.gd::GDScript::7209396354025576534::1790063334::0::1::::AoLayer<>RefCounted<><>0<>0<><>::
 glow_layer.gd::GDScript::5756036760933120443::1790079975::0::1::::GlowLayer<>Node2D<><>0<>0<><>::
