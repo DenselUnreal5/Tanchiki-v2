@@ -973,7 +973,7 @@ func _city_road_index(r: int, c: int, up: bool, down: bool, left: bool, right: b
 	if lane.x >= 0 and lane.z >= 2:
 		return _city_wide_lane_sprite(lane.x, lane.y, lane.z)
 	if up and down and left and right:
-		return 7
+		return 16
 	if down and left and right and not up:
 		return 8
 	if up and down and right and not left:
@@ -1315,7 +1315,13 @@ func _draw_flags() -> void:
 	for flag in world.flags:
 		if not _in_view(flag.x, flag.y, 30):
 			continue
-		var color: Color = Cfg.flag_player if flag.team == "player" else Cfg.flag_enemy
+		var color: Color = Color("#ffd700")
+		if flag.carried and flag.carrier != null:
+			color = Cfg.flag_player if flag.carrier.team == "player" else Cfg.flag_enemy
+		elif flag.team == "player":
+			color = Cfg.flag_player
+		elif flag.team == "enemy":
+			color = Cfg.flag_enemy
 		var carried: bool = flag.carried
 		var lift := -18.0 if carried else sin(world.tick * 0.06) * 2.0
 
@@ -1843,7 +1849,7 @@ func _draw_offscreen_markers(size: Vector2) -> void:
 	var half_h := size.y * 0.5 - 40.0
 
 	for flag in world.flags:
-		var relevant: bool = flag.team != player.tank.team or not flag.at_home
+		var relevant: bool = flag.team != player.tank.team or not flag.at_home or flag.team == "neutral"
 		if not relevant:
 			continue
 		var dx: float = flag.x - cam.x
@@ -1853,7 +1859,13 @@ func _draw_offscreen_markers(size: Vector2) -> void:
 		var angle := atan2(dy, dx)
 		var radius := minf(half_w, half_h) * 0.95
 		var c := cam + Vector2(cos(angle), sin(angle)) * radius
-		var color: Color = Cfg.flag_player if flag.team == "player" else Cfg.flag_enemy
+		var color: Color = Color("#ffd700")
+		if flag.carried and flag.carrier != null:
+			color = Cfg.flag_player if flag.carrier.team == "player" else Cfg.flag_enemy
+		elif flag.team == "player":
+			color = Cfg.flag_player
+		elif flag.team == "enemy":
+			color = Cfg.flag_enemy
 		color.a = 0.8
 		draw_set_transform(view_off + c, angle)
 		draw_colored_polygon(PackedVector2Array([

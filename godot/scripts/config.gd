@@ -317,8 +317,8 @@ static func xp_for_global_level(lvl: int) -> int:
 	return 400 + lvl * 250
 
 const MODES := {
-	"ffa": {"id": "ffa", "name": "Каждый за себя", "frag_limit": 20},
-	"ctf": {"id": "ctf", "name": "Захват флага", "cap_limit": 3, "flags_per_team": 2, "team_size": 4},
+	"ffa": {"id": "ffa", "name": "Каждый за себя", "frag_limit": 40},
+	"ctf": {"id": "ctf", "name": "Захват флага", "cap_limit": 5, "flags_per_team": 1, "team_size": 4},
 	"koth": {
 		"id": "koth", "name": "Царь горы",
 		"enemies": 40,

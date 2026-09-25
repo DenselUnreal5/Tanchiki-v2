@@ -25,6 +25,8 @@ static func building(is_wood: bool) -> Texture2D:
 	return _load_cached("woodenbuilding1.png") if is_wood else _load_cached("stonebuilding1.png")
 
 static func road(index: int) -> Texture2D:
+	if index == 7:
+		return _load_cached("road16.png")
 	return _load_cached("road%d.png" % index)
 
 static func river(index: int) -> Texture2D:

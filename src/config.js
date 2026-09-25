@@ -177,8 +177,8 @@ export const xpForGlobalLevel = (lvl) => 400 + lvl * 250;
 
 // ---------------------------------------------------------------- режимы
 export const MODES = {
-  ffa: { id: 'ffa', name: 'Каждый за себя', fragLimit: 20 },
-  ctf: { id: 'ctf', name: 'Захват флага', capLimit: 5, flagsPerTeam: 3, teamSize: 4 },
+  ffa: { id: 'ffa', name: 'Каждый за себя', fragLimit: 40 },
+  ctf: { id: 'ctf', name: 'Захват флага', capLimit: 5, flagsPerTeam: 1, teamSize: 4 },
   koth: {
     id: 'koth',
     name: 'Царь горы',

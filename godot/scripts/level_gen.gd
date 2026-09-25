@@ -22,7 +22,7 @@ static func _defense_enemy_area(cols: int, rows: int) -> Dictionary:
 	return {"r0": 2, "r1": rows - 3, "c0": 2, "c1": cols - 3, "edge": true}
 
 static func generate(level_num: int, mode: String, seed_override: int = -1,
-		location: String = Locations.CITY) -> Dictionary:
+		location: String = Locations.CITY, archetype: String = "auto") -> Dictionary:
 	var seed_value := 0
 	if seed_override >= 0:
 		seed_value = seed_override
@@ -33,6 +33,11 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	var rng := Rng.new(seed_value)
 	var loc_id := Locations.resolve(location, rng)
 	var loc := Locations.get_location(loc_id)
+
+	var arch := archetype
+	if arch == "auto" or arch == "":
+		var arch_pool := ["avenues", "plaza", "river", "fortress", "labyrinths", "industrial"]
+		arch = arch_pool[int(rng.nextf() * arch_pool.size()) % arch_pool.size()]
 
 	var cols := Cfg.COLS
 	var rows := Cfg.ROWS
@@ -59,8 +64,23 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	RoadNet.restripe_streets(map, plan)
 	RoadNet.paint_links(map, plan)
 
-	if mode == "ffa" or mode == "koth":
-		WaterGen.carve(map, rng, cols, rows, plan["h"], float(loc["river"]))
+	# Применение архитектурного стиля карты
+	if arch == "plaza":
+		var cr := rows / 2
+		var cc := cols / 2
+		_fill_rect(map, cr - 4, cr + 4, cc - 4, cc + 4, Cfg.T_ROAD)
+		_fill_rect(map, cr - 1, cr + 1, cc - 1, cc + 1, Cfg.T_WALL)
+	elif arch == "fortress":
+		for corner in [[6, 6], [6, cols - 7], [rows - 7, 6], [rows - 7, cols - 7]]:
+			_fill_rect(map, corner[0] - 2, corner[0] + 2, corner[1] - 2, corner[1] + 2, Cfg.T_WALL)
+			map.set_tile(corner[0], corner[1], Cfg.T_EMPTY)
+
+	var river_weight: float = float(loc["river"])
+	if arch == "river" and river_weight < 0.8:
+		river_weight = 1.0
+
+	if (mode == "ffa" or mode == "koth") and river_weight > 0.0:
+		WaterGen.carve(map, rng, cols, rows, plan["h"], river_weight)
 
 	Locations.overgrow(map, rng, loc)
 	Locations.carve_oases(map, rng, loc)
@@ -100,6 +120,7 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		"areas": areas,
 		"plan": plan,
 		"location": loc_id,
+		"archetype": arch,
 	}
 
 static func _fill_rect(map: GameMap, r0: int, r1: int, c0: int, c1: int, tile: int) -> void:
@@ -119,28 +140,39 @@ static func _build_ctf(map: GameMap, rng: Rng, cols: int, rows: int,
 	var cc := cols / 2
 	var mid := rows / 2
 
-	_fill_rect(map, 1, 6, cc - 8, cc + 8, Cfg.T_ROAD)
-	_fill_rect(map, rows - 7, rows - 2, cc - 8, cc + 8, Cfg.T_ROAD)
+	# База врага на севере: асфальтированный плац с защитными укреплениями
+	_fill_rect(map, 1, 5, cc - 6, cc + 6, Cfg.T_ROAD)
 	map.set_tile(2, cc, Cfg.T_BASE_E)
-	map.set_tile(rows - 3, cc, Cfg.T_BASE_P)
 	homes["enemy"] = Vector2(cc * Cfg.TILE + Cfg.TILE * 0.5, 2 * Cfg.TILE + Cfg.TILE * 0.5)
+	map.set_tile(3, cc - 5, Cfg.T_WALL)
+	map.set_tile(3, cc + 5, Cfg.T_WALL)
+	map.set_tile(4, cc - 3, Cfg.T_BRICK)
+	map.set_tile(4, cc + 3, Cfg.T_BRICK)
+
+	# База игрока на юге
+	_fill_rect(map, rows - 6, rows - 2, cc - 6, cc + 6, Cfg.T_ROAD)
+	map.set_tile(rows - 3, cc, Cfg.T_BASE_P)
 	homes["player"] = Vector2(cc * Cfg.TILE + Cfg.TILE * 0.5, (rows - 3) * Cfg.TILE + Cfg.TILE * 0.5)
+	map.set_tile(rows - 4, cc - 5, Cfg.T_WALL)
+	map.set_tile(rows - 4, cc + 5, Cfg.T_WALL)
+	map.set_tile(rows - 5, cc - 3, Cfg.T_BRICK)
+	map.set_tile(rows - 5, cc + 3, Cfg.T_BRICK)
 
-	_fill_rect(map, 3, 3, 5, cols - 6, Cfg.T_ROAD)
-	_fill_rect(map, rows - 4, rows - 4, 5, cols - 6, Cfg.T_ROAD)
+	# Выезды с баз на дорожную сеть
+	_fill_rect(map, 5, 8, cc - 1, cc + 1, Cfg.T_ROAD)
+	_fill_rect(map, rows - 9, rows - 6, cc - 1, cc + 1, Cfg.T_ROAD)
 
-	_fill_rect(map, mid - 4, mid + 4, 4, cols - 5, Cfg.T_ROAD)
-
+	# Центральные тактические укрытия (без разрезания всей карты)
 	for side in [-1, 1]:
-		_cover_block(map, mid - 3, cc + side * 9 - 1, 3, 2)
-		_cover_block(map, mid + 1, cc + side * 15 - 1, 2, 3)
-	_cover_block(map, mid - 1, cc - 1, 3, 3)
+		_cover_block(map, mid - 2, cc + side * 8 - 1, 2, 2)
+		_cover_block(map, mid + 1, cc + side * 12 - 1, 2, 2)
 
-	var per_team: int = Cfg.MODES["ctf"]["flags_per_team"]
-	flag_spots["enemy"] = _pick_flag_spots(map, rng, per_team,
-		int(rows * 0.28), int(rows * 0.40))
-	flag_spots["player"] = _pick_flag_spots(map, rng, per_team,
-		int(rows * 0.60), int(rows * 0.72))
+	var spots := _pick_flag_spots(map, rng, 10,
+		int(rows * 0.22), int(rows * 0.78))
+	flag_spots["neutral"] = spots
+	flag_spots["spots"] = spots
+	flag_spots["enemy"] = spots.slice(0, maxi(1, spots.size() / 2))
+	flag_spots["player"] = spots.slice(maxi(0, spots.size() / 2), spots.size())
 
 static func _pick_flag_spots(map: GameMap, rng: Rng, count: int, row_from: int, row_to: int) -> Array:
 	var spots := []

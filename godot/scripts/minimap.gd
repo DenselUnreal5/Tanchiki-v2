@@ -48,7 +48,7 @@ func _draw() -> void:
 			draw_rect(Rect2(p.x * sx - 1, p.y * sy - 1, 2, 2), Color.WHITE)
 
 	for flag in world.flags:
-		var c: Color = Cfg.flag_player if flag.team == "player" else Cfg.flag_enemy
+		var c: Color = Cfg.flag_player if flag.team == "player" else (Cfg.flag_enemy if flag.team == "enemy" else Color("#ffd700"))
 		draw_rect(Rect2(flag.x * sx - 2, flag.y * sy - 2, 4, 4), c)
 
 	if world.base != null:

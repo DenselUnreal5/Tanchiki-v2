@@ -173,12 +173,14 @@ func _build_nav_grid() -> void:
 		c.queue_free()
 	var dest := [
 		["garage", "🔧", _tr("menu.tile.garage", "Гараж")],
-		["gallery", "✨", _tr("menu.gallery", "Галерея перков")],
+		["gallery", "✨", _tr("menu.gallery", "Галерея")],
 		["achievements", "🏅", _tr("menu.tile.achievements", "Достижения")],
 		["daily", "📅", _tr("menu.tile.daily", "Задания")],
 		["stats", "📊", _tr("menu.stats", "Статистика")],
 		["net", "🌐", _tr("menu.tile.net", "Сетевая игра")],
+		["map_editor", "🗺", _tr("menu.tile.map_editor", "Редактор карт")],
 		["settings", "⚙", _tr("menu.tile.settings", "Настройки")],
+		["quick_play", "🎲", _tr("menu.tile.quick", "Быстрый бой")],
 		["quit", "✖", _tr("menu.quit", "Выход")],
 	]
 	var tiles: Array = []

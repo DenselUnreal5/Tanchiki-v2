@@ -332,7 +332,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	var s := ui.settings
 	var hotseat: bool = String(s["game_type"]) == "hotseat"
 	var is_client := Net.role == "client"
-	var seed_override := int(net_opts.get("net_seed", -1))
+	var seed_override := int(net_opts.get("net_seed", s.get("seed", -1)))
 	if is_client:
 		s["mode"] = String(net_opts.get("mode", s["mode"]))
 		s["difficulty"] = String(net_opts.get("difficulty", s["difficulty"]))
@@ -393,7 +393,9 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	elif not Locations.LIST.has(loc_setting):
 		match_location = Locations.pick_random(ui_rng)
 	var level := LevelGen.generate(int(s["level"]), String(s["mode"]), seed_override,
-		match_location)
+		match_location, String(s.get("archetype", "auto")))
+	if not is_client and int(s.get("seed", -1)) != -1:
+		s["seed"] = -1
 	Net.reset_tank_ids()
 	if Net.role == "host":
 		Net.begin_match()

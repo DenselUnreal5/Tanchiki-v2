@@ -550,13 +550,61 @@ func _spawn_weapon_pickups() -> void:
 		if spot != Vector2.INF:
 			weapon_pickups.append(Ent.WeaponPickup.new(spot.x, spot.y, id, rng))
 
+var _last_flag_spot := Vector2.INF
+
 func _spawn_flags() -> void:
 	if mode != "ctf":
 		return
-	for s in level["flag_spots"]["enemy"]:
-		flags.append(Ent.Flag.new(s.x, s.y, "enemy"))
-	for s in level["flag_spots"]["player"]:
-		flags.append(Ent.Flag.new(s.x, s.y, "player"))
+	_spawn_next_ctf_flag()
+
+func _spawn_next_ctf_flag() -> void:
+	flags.clear()
+	var spot := _pick_next_flag_spot()
+	var flag := Ent.Flag.new(spot.x, spot.y, "neutral")
+	flags.append(flag)
+	feed.emit(I18n.t("feed.flagSpawned", {}, "⚑ На поле боя появился флаг!"), Color("#ffd700"))
+
+func _pick_next_flag_spot() -> Vector2:
+	var spots_list: Array = []
+	if level.has("flag_spots"):
+		var fs = level["flag_spots"]
+		if fs is Array and not fs.is_empty():
+			spots_list = fs
+		elif fs is Dictionary:
+			if fs.has("neutral") and not (fs["neutral"] as Array).is_empty():
+				spots_list = fs["neutral"]
+			elif fs.has("spots") and not (fs["spots"] as Array).is_empty():
+				spots_list = fs["spots"]
+			else:
+				spots_list = fs.get("player", []) + fs.get("enemy", [])
+
+	var p_home = home_for("player")
+	var e_home = home_for("enemy")
+	var candidates: Array = []
+	for s in spots_list:
+		var p: Vector2 = s if s is Vector2 else Vector2(float(s["x"]), float(s["y"]))
+		if _last_flag_spot != Vector2.INF and p.distance_to(_last_flag_spot) < 64.0:
+			continue
+		if p_home != null and p.distance_to(p_home) < 96.0:
+			continue
+		if e_home != null and p.distance_to(e_home) < 96.0:
+			continue
+		candidates.append(p)
+
+	if not candidates.is_empty():
+		var chosen: Vector2 = candidates[int(rng.nextf() * candidates.size()) % candidates.size()]
+		_last_flag_spot = chosen
+		return chosen
+
+	var area = level.get("areas", {}).get("any", null)
+	if area != null:
+		var spot := map.find_free_spot(rng, area, 24, 24)
+		if spot != Vector2.INF:
+			_last_flag_spot = spot
+			return spot
+	var def_spot := Vector2(float(map.cols * Cfg.TILE) * 0.5, float(map.rows * Cfg.TILE) * 0.5)
+	_last_flag_spot = def_spot
+	return def_spot
 
 func _setup_defense_base() -> void:
 	var home = level["homes"]["player"]
@@ -1325,7 +1373,7 @@ func _update_flags() -> void:
 		elif flag.state == "dropped":
 			flag.return_timer -= 1
 			if flag.return_timer <= 0:
-				flag.return_home()
+				_spawn_next_ctf_flag()
 				flag_event.emit("returned", flag, null)
 
 	for flag in flags:
@@ -1361,6 +1409,8 @@ func _update_flags() -> void:
 			{"name": carrier.name, "a": team_score["player"], "b": team_score["enemy"]},
 			"%s захватил флаг! %d:%d" % [carrier.name, team_score["player"], team_score["enemy"]]),
 			Color("#ffee55"))
+		if int(team_score[team]) < int(Cfg.MODES["ctf"]["cap_limit"]):
+			_spawn_next_ctf_flag()
 		break
 
 func _update_respawns() -> void:

@@ -22,8 +22,11 @@ var settings := {
 	"game_type": "single", "mode": "ffa", "difficulty": "medium",
 	"level": -1,
 	"weather": "auto", "daytime": "auto", "location": "auto",
+	"archetype": "auto", "seed": -1,
 }
 
+const MapEditorScript := preload("res://scripts/ui/map_editor.gd")
+var _map_editor: Control = null
 var main_menu: MainMenu
 var _menu: Control
 var _menu_settings: Control
@@ -200,7 +203,7 @@ func _set_menu_focusable(on: bool) -> void:
 		_cache_focus_off(_menu)
 
 func _any_menu_overlay_open() -> bool:
-	for ov in [_settings, _net, _stats, _daily, _hub]:
+	for ov in [_settings, _net, _stats, _daily, _hub, _map_editor]:
 		if ov != null and ov.visible:
 			return true
 	return false
@@ -227,6 +230,9 @@ func _cache_focus_off(node: Node) -> void:
 func handle_cancel() -> bool:
 	if _perk != null and _perk.visible:
 		perk_chosen.emit(_perk_player, "")
+		return true
+	if _map_editor != null and _map_editor.visible:
+		close_map_editor()
 		return true
 	if _settings != null and _settings.visible:
 		close_settings()
@@ -385,7 +391,9 @@ func _on_menu_nav(id: String) -> void:
 		"daily": open_daily()
 		"stats": open_stats()
 		"net": open_net()
+		"map_editor": open_map_editor()
 		"settings": open_settings()
+		"quick_play": _start_quick_play()
 		"quit": quit_requested.emit()
 
 func _layout_menu() -> void:
@@ -411,7 +419,7 @@ func refresh_profile() -> void:
 		main_menu.refresh_profile()
 
 func hide_all_overlays() -> void:
-	for c in [_menu, _pause, _perk, _gameover, _hub, _stats, _daily, _settings, _net]:
+	for c in [_menu, _pause, _perk, _gameover, _hub, _stats, _daily, _settings, _net, _map_editor]:
 		if c != null:
 			c.visible = false
 
@@ -742,6 +750,44 @@ func close_stats() -> void:
 
 var is_stats_open: bool:
 	get: return _stats != null and _stats.visible
+
+func open_map_editor() -> void:
+	hide_all_overlays()
+	if _map_editor == null:
+		_build_map_editor()
+	_map_editor.open_with_settings(settings)
+	_map_editor.visible = true
+
+func close_map_editor() -> void:
+	if _map_editor != null:
+		_map_editor.visible = false
+	show_menu()
+
+var is_map_editor_open: bool:
+	get: return _map_editor != null and _map_editor.visible
+
+func _build_map_editor() -> void:
+	_map_editor = MapEditorScript.new()
+	_map_editor.visible = false
+	add_child(_map_editor)
+	_map_editor.close_requested.connect(close_map_editor)
+	_map_editor.battle_requested.connect(_on_map_editor_battle)
+	_map_editor.visibility_changed.connect(_on_menu_overlay_visibility.bind(_map_editor))
+
+func _on_map_editor_battle(map_settings: Dictionary) -> void:
+	for k in map_settings:
+		settings[k] = map_settings[k]
+	close_map_editor()
+	start_requested.emit()
+
+func _start_quick_play() -> void:
+	settings["location"] = Locations.ORDER[randi() % Locations.ORDER.size()]
+	var modes := ["ffa", "ctf", "koth", "defense"]
+	settings["mode"] = modes[randi() % modes.size()]
+	settings["level"] = randi_range(1, 5)
+	settings["seed"] = randi() & 0x7FFFFFFF
+	settings["archetype"] = "auto"
+	start_requested.emit()
 
 func open_achievements() -> void:
 	_open_hub_tab("achievements")
