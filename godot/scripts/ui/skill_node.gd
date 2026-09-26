@@ -75,6 +75,7 @@ func _draw() -> void:
 	match _ui_theme():
 		"noir": _draw_diamond()
 		"scifi": _draw_tile()
+		"material": _draw_material()
 		_: _draw_octagon()
 	if locked and need_level > 0:
 		_draw_badge()
@@ -198,6 +199,37 @@ func _draw_tile() -> void:
 		draw_style_box(glow, Rect2(-Vector2(3, 3), size + Vector2(6, 6)))
 	if synergy_color != Color.TRANSPARENT:
 		_draw_synergy_gem(Vector2(6, 6))
+
+func _draw_material() -> void:
+	var w := size.x
+	var h := size.y
+	var border := _border_color()
+	var bg_col := Color(Cfg.UI_CARD, 0.90)
+	if synergy_color != Color.TRANSPARENT:
+		bg_col = bg_col.lerp(synergy_color, 0.15 if not locked else 0.06)
+
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg_col
+	sb.set_corner_radius_all(14)
+	sb.set_border_width_all(2 if (selected or _hovered) else 1)
+	sb.border_color = border
+	sb.shadow_color = Color(0, 0, 0, 0.25)
+	sb.shadow_size = 6
+	sb.shadow_offset = Vector2(0, 2)
+	draw_style_box(sb, Rect2(Vector2.ZERO, size))
+
+	if synergy_color != Color.TRANSPARENT:
+		var gem_col := synergy_color if not locked else Color(synergy_color, 0.6)
+		draw_circle(Vector2(w - 7, 7), 4.5, gem_col)
+		draw_arc(Vector2(w - 7, 7), 4.5, 0.0, TAU, 16, Color.WHITE if not locked else Color(1, 1, 1, 0.5), 1.0, true)
+
+	if selected:
+		var sel_sb := StyleBoxFlat.new()
+		sel_sb.bg_color = Color.TRANSPARENT
+		sel_sb.set_corner_radius_all(18)
+		sel_sb.set_border_width_all(2)
+		sel_sb.border_color = Cfg.UI_ACCENT
+		draw_style_box(sel_sb, Rect2(Vector2(-4, -4), size + Vector2(8, 8)))
 
 func _draw_badge() -> void:
 	var c := Vector2(size.x - 5, size.y - 5)

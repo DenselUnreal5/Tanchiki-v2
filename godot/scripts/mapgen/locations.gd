@@ -2,6 +2,7 @@ class_name Locations
 extends RefCounted
 
 const CITY := "city"
+const GRASSLAND := "grassland"
 const DUST := "dust"
 const JUNGLE := "jungle"
 const FROST := "frost"
@@ -9,7 +10,7 @@ const EXCLUSION := "exclusion"
 const SHORE := "shore"
 const VILLAGE := "village"
 
-const ORDER := [CITY, DUST, JUNGLE, FROST, EXCLUSION, SHORE, VILLAGE]
+const ORDER := [CITY, GRASSLAND, DUST, JUNGLE, FROST, EXCLUSION, SHORE, VILLAGE]
 
 static var LIST := {
 	"city": {
@@ -27,6 +28,22 @@ static var LIST := {
 		"fog_tint": Color(0.86, 0.89, 0.94),
 		"dune_chance": 0.0, "oases": 0,
 		"ground": Color("#3a3a2a"), "ground_alt": Color("#37372a"),
+	},
+	"grassland": {
+		"id": "grassland", "name": "Равнина", "icon": "🌾", "music": "combat",
+		"block_min": 10, "block_max": 16,
+		"arterials": true, "circles": true, "river": 1.2,
+		"wave_streets": true,
+		"districts": {"downtown": 2, "residential": 3, "industrial": 2, "park": 5},
+		"cover": "tree", "cover_chance": 0.25, "ruin_chance": 0.05,
+		"ground_tile": Cfg.T_GRASS, "yard_tile": Cfg.T_ROAD,
+		"road_kind": "asphalt",
+		"arterial_w": 3, "street_w": 2, "street_w_wide": 2,
+		"link_chance": 0.60,
+		"weather": ["clear", "rain", "fog", "storm"],
+		"fog_tint": Color(0.85, 0.92, 0.88),
+		"dune_chance": 0.0, "oases": 0,
+		"ground": Color("#354a2a"), "ground_alt": Color("#324527"),
 	},
 	"dust": {
 		"id": "dust", "name": "Пустошь", "icon": "🏜", "music": "dust",

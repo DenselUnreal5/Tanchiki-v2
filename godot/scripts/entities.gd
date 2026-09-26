@@ -98,6 +98,7 @@ class Bullet extends RefCounted:
 	var lobbed := false
 	var cannon_kind := ""
 	var sky_strike := false
+	var acid_burst := false
 
 	func _init(x_: float, y_: float, angle: float, owner_, dmg_scale_: float = 1.0) -> void:
 		x = x_
@@ -224,9 +225,14 @@ class Bullet extends RefCounted:
 				world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE], 8, 2, 4, 10, 20, world.rng)
 				return true
 			if cannon_kind == "acid":
-				tank.apply_acid(world, owner, dmg_scale)
+				var stacks := 5 if acid_burst else 1
+				tank.apply_acid(world, owner, dmg_scale, stacks)
 				alive = false
-				world.particles.burst(x, y, [Color("#9dff5c"), Color("#4a7a2a")], 8, 2, 4, 10, 20, world.rng)
+				if acid_burst:
+					world.particles.burst(x, y, [Color("#84cc16"), Color("#a3e635"), Color.WHITE], 16, 2, 5, 14, 28, world.rng)
+					world.spawn_shockwave(x, y, 60.0, "acid", Color("#84cc16"), 18)
+				else:
+					world.particles.burst(x, y, [Color("#9dff5c"), Color("#4a7a2a")], 8, 2, 4, 10, 20, world.rng)
 				return true
 
 			var amount: float = (Cfg.BULLET_DMG_MIN + world.rng.nextf() \
@@ -588,3 +594,21 @@ class Flag extends RefCounted:
 		y = y_
 		state = "dropped"
 		return_timer = timeout
+
+class AcidPool extends RefCounted:
+	var x: float
+	var y: float
+	var radius: float
+	var owner
+	var timer: int
+	var max_life: int
+	var alive := true
+
+	func _init(x_: float, y_: float, r_: float, owner_, life: int) -> void:
+		x = x_
+		y = y_
+		radius = r_
+		owner = owner_
+		timer = life
+		max_life = life
+

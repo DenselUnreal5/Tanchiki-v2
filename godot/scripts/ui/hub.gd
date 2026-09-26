@@ -105,8 +105,9 @@ func _grab(ctrl) -> void:
 
 func tab_items() -> Array:
 	return [
-		{"key": "gallery", "label": _tr("menu.gallery", "Галерея перков")},
 		{"key": "garage", "label": _tr("menu.garage", "🔧 Гараж")},
+		{"key": "cosmetics", "label": _tr("menu.cosmetics", "🎨 Косметика")},
+		{"key": "gallery", "label": _tr("menu.gallery", "✨ Галерея")},
 		{"key": "achievements", "label": _tr("menu.achievements", "🏅 Достижения")},
 	]
 
@@ -135,8 +136,9 @@ func _fill_tab(key: String) -> void:
 		_body.remove_child(c)
 		c.queue_free()
 	match key:
-		"gallery": _fill_gallery_tab()
 		"garage": _fill_garage_tab()
+		"cosmetics": _fill_cosmetics_tab()
+		"gallery": _fill_gallery_tab()
 		"achievements": _fill_achievements_tab()
 	_resize_scroll()
 
@@ -405,21 +407,93 @@ func _fill_garage_tab() -> void:
 	for c in Cannons.LIST:
 		_cannon_card(c, cannon_grid)
 
-	_body.add_child(UiKit.section(_tr("garage.colors", "Цвет танка"), Cfg.UI_MUTED))
-	_body.add_child(_garage_color_row(_tr("menu.color1", "Цвет танка 1"), 0, Prof.equipped_color1))
-	_body.add_child(_garage_color_row(_tr("menu.color2", "Цвет танка 2"), 1, Prof.equipped_color2))
+	var cos_jump := UiKit.secondary(_tr("garage.to_cosmetics", "🎨 Перейти к расцветке и скинам танка ➜"), 12)
+	cos_jump.custom_minimum_size = Vector2(0, 42)
+	cos_jump.pressed.connect(func(): switch_tab("cosmetics"))
+	_body.add_child(cos_jump)
 
-	_body.add_child(UiKit.section(_tr("garage.cosmetics", "Косметика"), Cfg.UI_MUTED))
-	var type_names := {"camo": "Камуфляж", "hull": "Рисунок", "track": "Гусеницы", "turret": "Башня"}
-	for type in Cosmetics.TYPES:
-		var t2 := UiKit.label(_tr("cos." + type, String(type_names[type])).to_upper(), 11, Cfg.UI_MUTED, true)
-		_body.add_child(t2)
+func _build_tank_preview_box() -> Control:
+	var container := PanelContainer.new()
+	container.custom_minimum_size = Vector2(0, 145)
+	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	container.add_theme_stylebox_override("panel", UiKit.card_style(Color(Cfg.UI_ACCENT, 0.4)))
+
+	var sub_vbox := UiKit.vbox(4)
+	container.add_child(sub_vbox)
+
+	var title_lbl := UiKit.label(_tr("cosmetics.preview", "АНГАР · ПРЕДПРОСМОТР ТАНКА").to_upper(), 10, Cfg.UI_ACCENT, true)
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub_vbox.add_child(title_lbl)
+
+	var center_box := CenterContainer.new()
+	center_box.custom_minimum_size = Vector2(0, 80)
+	sub_vbox.add_child(center_box)
+
+	var stub_player := PlayerState.new(0, "", Prof.equipped_color1, null)
+	var prev_tank := Tank.new({
+		"x": 0.0, "y": 0.0, "team": "player", "name": "",
+		"owner": stub_player, "color_key": Prof.equipped_color1,
+		"max_hp": 100.0, "speed": 100.0, "fire_rate": 30,
+	})
+	prev_tank.spawn_protect = 0
+	prev_tank.cosmetics = Prof.equipped_cosmetics()
+	prev_tank.cannon_id = Prof.equipped_cannon
+
+	var tank_view := MenuTankView.new()
+	tank_view.player = stub_player
+	tank_view.display_tank = prev_tank
+	tank_view.center_in_rect = true
+	tank_view.auto_turret = true
+	tank_view.custom_minimum_size = Vector2(130, 80)
+	center_box.add_child(tank_view)
+
+	var skin_info: Dictionary = Cosmetics.get_cosmetic("skin", String(Prof.cosmetics.get("skin", "none")))
+	var camo_info: Dictionary = Cosmetics.get_cosmetic("camo", String(Prof.cosmetics.get("camo", "none")))
+	var hull_info: Dictionary = Cosmetics.get_cosmetic("hull", String(Prof.cosmetics.get("hull", "none")))
+	var s_skin: String = I18n.dn(skin_info, "name", "cos.skin") if not skin_info.is_empty() else "Стандартный"
+	var s_camo: String = I18n.dn(camo_info, "name", "cos.camo") if not camo_info.is_empty() else "Без камуфляжа"
+	var s_hull: String = I18n.dn(hull_info, "name", "cos.hull") if not hull_info.is_empty() else "Без рисунка"
+
+	var desc_lbl := UiKit.label("Скин: %s  ·  Камуфляж: %s  ·  Рисунок: %s" % [s_skin, s_camo, s_hull], 9, Color(Cfg.UI_MUTED, 0.9))
+	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub_vbox.add_child(desc_lbl)
+
+	return container
+
+func _fill_cosmetics_tab() -> void:
+	_sub.text = "[center]" + _tr("cosmetics.sub",
+		"Монеты: [b]%d[/b] 🪙 · Персонализируйте внешний вид вашего танка" % Prof.money,
+		{"money": Prof.money}) + "[/center]"
+
+	_body.add_child(_build_tank_preview_box())
+
+	_body.add_child(UiKit.section(_tr("garage.colors", "Расцветка корпуса"), Cfg.UI_ACCENT))
+	_body.add_child(_garage_color_row(_tr("menu.color1", "Основной цвет (Игрок 1)"), 0, Prof.equipped_color1, "cosmetics"))
+	_body.add_child(_garage_color_row(_tr("menu.color2", "Второй цвет (Игрок 2)"), 1, Prof.equipped_color2, "cosmetics"))
+
+	_body.add_child(UiKit.section(_tr("cos.skin", "💎 Премиальные и Легендарные скины"), Color("#ffd700")))
+	var skin_grid := HFlowContainer.new()
+	skin_grid.add_theme_constant_override("h_separation", 10)
+	skin_grid.add_theme_constant_override("v_separation", 10)
+	_body.add_child(skin_grid)
+	for s in Cosmetics.SKINS:
+		_cosmetic_card(s, "skin", skin_grid, "cosmetics")
+
+	var type_names := {
+		"camo": "🎨 Боевой камуфляж",
+		"hull": "🛡️ Рисунки и декали на корпусе",
+		"track": "⚙️ Гусеницы",
+		"turret": "🎯 Башни"
+	}
+	for type in ["camo", "hull", "track", "turret"]:
+		var section_title := String(type_names.get(type, type))
+		_body.add_child(UiKit.section(_tr("cos." + type, section_title), Cfg.UI_MUTED))
 		var grid := HFlowContainer.new()
 		grid.add_theme_constant_override("h_separation", 10)
 		grid.add_theme_constant_override("v_separation", 10)
 		_body.add_child(grid)
 		for c in Cosmetics.by_type(type):
-			_cosmetic_card(c, type, grid)
+			_cosmetic_card(c, type, grid, "cosmetics")
 
 func _upgrade_card(up: Dictionary, parent: Node) -> Control:
 	var id := String(up["id"])
@@ -440,10 +514,10 @@ func _upgrade_card(up: Dictionary, parent: Node) -> Control:
 			switch_tab("garage", card_id))
 	return card
 
-func _cosmetic_card(c: Dictionary, type: String, parent: Node) -> Control:
+func _cosmetic_card(c: Dictionary, type: String, parent: Node, tab_key: String = "cosmetics") -> Control:
 	var id := String(c["id"])
 	var owned := Prof.is_cosmetic_owned(type, id)
-	var equipped := String(Prof.cosmetics[type]) == id
+	var equipped := String(Prof.cosmetics.get(type, "none")) == id
 	var can_buy := not owned and Prof.money >= int(c["price"])
 	var card_id := "cos_%s_%s" % [type, id]
 
@@ -459,15 +533,19 @@ func _cosmetic_card(c: Dictionary, type: String, parent: Node) -> Control:
 		action_text = _tr("cos.buy", "Купить · %d 🪙" % int(c["price"]), {"price": c["price"]})
 		action_disabled = not can_buy
 
+	var rarity: String = String(c.get("rarity", ""))
+	var desc_text: String = String(c.get("desc", ""))
+
 	var card: CosmeticCard = CosmeticCardScene.instantiate()
 	parent.add_child(card)
 	card.set_data("cos_%s_%s" % [type, id], c.get("color", c.get("a", Cfg.UI_TEXT)),
-		I18n.dn(c, "name", "cos." + type), state, action_text, action_disabled, equipped, can_buy, card_id)
+		I18n.dn(c, "name", "cos." + type), state, action_text, action_disabled, equipped, can_buy, card_id,
+		rarity, desc_text)
 	card.action_pressed.connect(func():
 		var ok: bool = Prof.equip_cosmetic(type, id)["ok"] if owned else Prof.buy_cosmetic(type, id)["ok"]
 		if ok:
 			garage_changed.emit()
-			switch_tab("garage", card_id))
+			switch_tab(tab_key, card_id))
 	return card
 
 func _cannon_card(c: Dictionary, parent: Node) -> Control:
@@ -500,7 +578,7 @@ func _cannon_card(c: Dictionary, parent: Node) -> Control:
 			switch_tab("garage", card_id))
 	return card
 
-func _garage_color_row(label_text: String, slot: int, equipped_key: String) -> Control:
+func _garage_color_row(label_text: String, slot: int, equipped_key: String, tab_key: String = "cosmetics") -> Control:
 	var box := UiKit.vbox(6)
 	box.add_child(UiKit.label(label_text.to_upper(), 10, Color(Cfg.UI_MUTED, 0.55)))
 	var flow := HFlowContainer.new()
@@ -534,7 +612,7 @@ func _garage_color_row(label_text: String, slot: int, equipped_key: String) -> C
 		btn.pressed.connect(func():
 			if Prof.set_equipped_color(slot, key):
 				garage_changed.emit()
-				switch_tab("garage", card_id))
+				switch_tab(tab_key, card_id))
 		flow.add_child(btn)
 	return box
 

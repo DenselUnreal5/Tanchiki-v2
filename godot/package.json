@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Тянчики — top-down танковый шутер на canvas. Чистых зависимостей нет, сборка не нужна.",
+  "description": "Iron Storm — top-down танковый шутер на canvas. Чистых зависимостей нет, сборка не нужна.",
   "engines": {
     "node": ">=20"
   },

@@ -71,7 +71,7 @@ var achievements := {}
 var ranks_claimed := {}
 var daily := {"date": "", "progress": {}, "claimed": []}
 var cosmetic_owned := {}
-var cosmetics := {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
+var cosmetics := {"skin": "none", "camo": "none", "hull": "none", "track": "none", "turret": "none"}
 var cannon_owned := {}
 var equipped_cannon := "standard"
 var equipped_color1 := "p1"
@@ -210,7 +210,7 @@ func reset() -> void:
 	ranks_claimed.clear()
 	daily = {"date": Daily.today_key(), "progress": {}, "claimed": []}
 	cosmetic_owned.clear()
-	cosmetics = {"camo": "none", "hull": "none", "track": "none", "turret": "none"}
+	cosmetics = {"skin": "none", "camo": "none", "hull": "none", "track": "none", "turret": "none"}
 	equipped_color1 = "p1"
 	equipped_color2 = "p2"
 	cannon_owned.clear()

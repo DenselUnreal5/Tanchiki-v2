@@ -91,7 +91,7 @@ func _style_chrome() -> void:
 func _build_title() -> void:
 	for c in _title_box.get_children():
 		c.queue_free()
-	var title := UiKit.title("ТЯНЧИКИ", 36, Cfg.UI_TEXT)
+	var title := UiKit.title("IRON STORM", 32, Cfg.UI_TEXT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_title_box.add_child(title)
 	var sub := UiKit.title("BATTLE TANKS", 12, Color(Cfg.UI_MUTED, 0.75))

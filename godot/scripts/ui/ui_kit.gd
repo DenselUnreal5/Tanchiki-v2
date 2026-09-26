@@ -22,19 +22,28 @@ static func focus_ring() -> StyleBoxFlat:
 	s.set_border_width_all(2)
 	s.border_color = Cfg.UI_ACCENT
 	s.set_corner_radius_all(int(_chrome_radius()))
-	s.set_expand_margin_all(2.0)
+	s.set_expand_margin_all(3.0 if _ui_theme() == "material" else 2.0)
 	return s
 
 static func card_style(border_color: Color = Cfg.UI_BORDER) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = Cfg.UI_CARD
-	s.set_corner_radius_all(int(Cfg.RADIUS_MD))
-	s.set_border_width_all(1)
-	s.border_color = border_color
-	s.content_margin_left = 10
-	s.content_margin_right = 10
-	s.content_margin_top = 10
-	s.content_margin_bottom = 10
+	if _ui_theme() == "material":
+		s.set_corner_radius_all(16)
+		s.set_border_width_all(1)
+		s.border_color = border_color
+		s.shadow_color = Color(0, 0, 0, 0.28)
+		s.shadow_size = 6
+		s.shadow_offset = Vector2(0, 3)
+	else:
+		s.set_corner_radius_all(int(Cfg.RADIUS_MD))
+		s.set_border_width_all(1)
+		s.border_color = border_color
+	var pad := 12 if _ui_theme() == "material" else 10
+	s.content_margin_left = pad
+	s.content_margin_right = pad
+	s.content_margin_top = pad
+	s.content_margin_bottom = pad
 	return s
 
 static func label(text: String, font_size: int = 12, color: Color = Cfg.UI_TEXT,
@@ -99,14 +108,34 @@ static func _chrome_radius() -> float:
 	match _ui_theme():
 		"military": return 3.0
 		"scifi": return 8.0
+		"material": return 20.0
 		_: return 999.0
 
 static func _chrome_border_w() -> float:
-	return 2.0 if _ui_theme() == "military" else 1.0
+	match _ui_theme():
+		"military": return 2.0
+		"scifi": return 1.0
+		"material": return 1.0
+		_: return 1.0
 
 static func primary(text: String, font_size: int = 16) -> Button:
 	var b := Button.new()
 	b.text = text
+	if _ui_theme() == "material":
+		var r := 999.0
+		var normal := flat(Cfg.UI_ACCENT, r, 0)
+		var hover := flat(Cfg.UI_ACCENT.lightened(0.12), r, 0)
+		var pressed := flat(Cfg.UI_ACCENT.darkened(0.12), r, 0)
+		for s in [normal, hover, pressed]:
+			s.content_margin_top = 12
+			s.content_margin_bottom = 12
+			s.content_margin_left = 24
+			s.content_margin_right = 24
+		_style_button(b, normal, hover, pressed, font_size, Color("#042f4c"))
+		b.add_theme_color_override("font_hover_color", Color("#022238"))
+		b.add_theme_color_override("font_pressed_color", Color("#011828"))
+		b.add_theme_font_override("font", Fonts.bold)
+		return b
 	var r := 4.0 if _ui_theme() == "military" else 12.0
 	var normal := flat(Color("#2f7329"), r, 1, Cfg.UI_ACCENT)
 	var hover := flat(Color("#3d8f36"), r, 1, Cfg.UI_ACCENT)
@@ -121,6 +150,14 @@ static func primary(text: String, font_size: int = 16) -> Button:
 static func secondary(text: String, font_size: int = 12) -> Button:
 	var b := Button.new()
 	b.text = text
+	if _ui_theme() == "material":
+		var normal := flat(Cfg.UI_CARD, 999.0, 1, Cfg.UI_BORDER)
+		var hover := flat(Cfg.UI_CARD.lightened(0.12), 999.0, 1, Cfg.UI_ACCENT)
+		var pressed := flat(Cfg.UI_ACCENT_DIM, 999.0, 1, Cfg.UI_ACCENT)
+		_style_button(b, normal, hover, pressed, font_size, Cfg.UI_TEXT)
+		b.add_theme_color_override("font_hover_color", Color.WHITE)
+		b.add_theme_color_override("font_pressed_color", Cfg.UI_ACCENT)
+		return b
 	var r := _chrome_radius()
 	var bw := _chrome_border_w()
 	var normal := flat(Color(0.086, 0.098, 0.09, 0.85), r, bw, Color(1, 1, 1, 0.16))
@@ -131,6 +168,13 @@ static func secondary(text: String, font_size: int = 12) -> Button:
 
 static func danger(text: String, font_size: int = 12) -> Button:
 	var b := secondary(text, font_size)
+	if _ui_theme() == "material":
+		b.add_theme_stylebox_override("normal", flat(Color(0.25, 0.08, 0.08, 0.7), 999.0, 1, Color(Cfg.UI_DANGER, 0.4)))
+		b.add_theme_stylebox_override("hover", flat(Color(0.35, 0.1, 0.1, 0.9), 999.0, 1, Cfg.UI_DANGER))
+		b.add_theme_stylebox_override("pressed", flat(Color(0.42, 0.12, 0.12, 0.95), 999.0, 1, Cfg.UI_DANGER))
+		b.add_theme_color_override("font_color", Cfg.UI_DANGER)
+		b.add_theme_color_override("font_hover_color", Color.WHITE)
+		return b
 	b.add_theme_stylebox_override("hover", flat(Color(0.16, 0.09, 0.09, 0.9), _chrome_radius(), _chrome_border_w(), Cfg.UI_DANGER))
 	b.add_theme_color_override("font_color", Color("#ffaaaa"))
 	b.add_theme_color_override("font_hover_color", Color("#ffcccc"))
@@ -140,6 +184,17 @@ static func toggle(text: String, font_size: int = 12) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.toggle_mode = true
+	if _ui_theme() == "material":
+		var normal := flat(Cfg.UI_CARD, 999.0, 1, Cfg.UI_BORDER)
+		var hover := flat(Cfg.UI_CARD.lightened(0.08), 999.0, 1, Cfg.UI_ACCENT)
+		var active := flat(Cfg.UI_ACCENT_DIM, 999.0, 0, Color.TRANSPARENT)
+		_style_button(b, normal, hover, active, font_size, Cfg.UI_MUTED)
+		b.add_theme_stylebox_override("pressed", active)
+		b.add_theme_stylebox_override("hover_pressed", active)
+		b.add_theme_color_override("font_hover_color", Cfg.UI_TEXT)
+		b.add_theme_color_override("font_pressed_color", Cfg.UI_ACCENT)
+		b.add_theme_color_override("font_hover_pressed_color", Color.WHITE)
+		return b
 	var r := _chrome_radius()
 	var bw := _chrome_border_w()
 	var normal := flat(Color(0.086, 0.102, 0.086, 0.7), r, bw, Color(1, 1, 1, 0.16))
@@ -155,12 +210,14 @@ static func toggle(text: String, font_size: int = 12) -> Button:
 static func small(text: String) -> Button:
 	var b := Button.new()
 	b.text = text
-	var normal := flat(Color("#1f1f1f"), 6, 1, Color("#3a3a3a"))
-	var hover := flat(Color("#282828"), 6, 1, Cfg.UI_GOLD)
-	var pressed := flat(Color("#151515"), 6, 1, Cfg.UI_GOLD)
+	var is_mat := _ui_theme() == "material"
+	var r := 999.0 if is_mat else 6.0
+	var normal := flat(Cfg.UI_CARD if is_mat else Color("#1f1f1f"), r, 1, Cfg.UI_BORDER if is_mat else Color("#3a3a3a"))
+	var hover := flat(Cfg.UI_CARD.lightened(0.1) if is_mat else Color("#282828"), r, 1, Cfg.UI_GOLD)
+	var pressed := flat(Cfg.UI_ACCENT_DIM if is_mat else Color("#151515"), r, 1, Cfg.UI_GOLD)
 	for s in [normal, hover, pressed]:
-		s.content_margin_left = 10
-		s.content_margin_right = 10
+		s.content_margin_left = 12 if is_mat else 10
+		s.content_margin_right = 12 if is_mat else 10
 		s.content_margin_top = 6
 		s.content_margin_bottom = 6
 	_style_button(b, normal, hover, pressed, 10, Cfg.UI_GOLD)
@@ -192,6 +249,18 @@ static func progress_bar(value: float, width: float, height: float,
 		fill: Color, bg: Color = Color("#222222")) -> Control:
 	var wrap := Control.new()
 	wrap.custom_minimum_size = Vector2(width, height)
+	if _ui_theme() == "material":
+		var back := Panel.new()
+		back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		back.add_theme_stylebox_override("panel", flat(bg, height * 0.5))
+		wrap.add_child(back)
+		var front := Panel.new()
+		front.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		front.anchor_right = clampf(value, 0.0, 1.0)
+		front.offset_right = 0.0
+		front.add_theme_stylebox_override("panel", flat(fill, height * 0.5))
+		wrap.add_child(front)
+		return wrap
 	var back := ColorRect.new()
 	back.color = bg
 	back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -220,9 +289,14 @@ static func slider_row(label_text: String, value: float, on_change: Callable,
 	slider.value = value
 	slider.custom_minimum_size = Vector2(200, 22)
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	slider.add_theme_stylebox_override("slider", flat(Color(0, 0, 0, 0.55), 4))
-	slider.add_theme_stylebox_override("grabber_area", flat(Cfg.UI_ACCENT_DIM, 4))
-	slider.add_theme_stylebox_override("grabber_area_highlight", flat(Cfg.UI_ACCENT, 4))
+	if _ui_theme() == "material":
+		slider.add_theme_stylebox_override("slider", flat(Cfg.UI_BORDER, 999.0))
+		slider.add_theme_stylebox_override("grabber_area", flat(Cfg.UI_ACCENT, 999.0))
+		slider.add_theme_stylebox_override("grabber_area_highlight", flat(Cfg.UI_ACCENT.lightened(0.15), 999.0))
+	else:
+		slider.add_theme_stylebox_override("slider", flat(Color(0, 0, 0, 0.55), 4))
+		slider.add_theme_stylebox_override("grabber_area", flat(Cfg.UI_ACCENT_DIM, 4))
+		slider.add_theme_stylebox_override("grabber_area_highlight", flat(Cfg.UI_ACCENT, 4))
 	row.add_child(slider)
 
 	var value_label := label("", 11, Cfg.UI_GOLD)
@@ -294,12 +368,13 @@ static func keybind_row(label_text: String, keycode: int, on_change: Callable) -
 
 	var btn := KeybindButton.new()
 	btn.custom_minimum_size = Vector2(110, 26)
+	var is_mat := _ui_theme() == "material"
 	var r := _chrome_radius()
 	var bw := _chrome_border_w()
-	var normal := flat(Color(0.086, 0.102, 0.086, 0.7), r, bw, Color(1, 1, 1, 0.16))
-	var hover := flat(Color(0.11, 0.14, 0.11, 0.8), r, bw, Color(Cfg.UI_ACCENT, 0.6))
-	var listening_style := flat(Color(Cfg.UI_ACCENT_DIM, 0.85), r, bw, Cfg.UI_ACCENT)
-	_style_button(btn, normal, hover, normal, 12, Color("#a8b09a"))
+	var normal := flat(Cfg.UI_CARD if is_mat else Color(0.086, 0.102, 0.086, 0.7), r, bw, Cfg.UI_BORDER if is_mat else Color(1, 1, 1, 0.16))
+	var hover := flat(Cfg.UI_CARD.lightened(0.1) if is_mat else Color(0.11, 0.14, 0.11, 0.8), r, bw, Cfg.UI_ACCENT if is_mat else Color(Cfg.UI_ACCENT, 0.6))
+	var listening_style := flat(Cfg.UI_ACCENT_DIM, r, bw, Cfg.UI_ACCENT)
+	_style_button(btn, normal, hover, normal, 12, Cfg.UI_TEXT if is_mat else Color("#a8b09a"))
 	btn.normal_style = normal
 	btn.listening_style = listening_style
 	btn.keycode = keycode
@@ -326,8 +401,16 @@ static func plain_tabs(items: Array, active_key: String, on_change: Callable) ->
 		btn.focus_mode = Control.FOCUS_ALL
 		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		btn.set_meta("tab_key", key)
-		var empty := StyleBoxEmpty.new()
-		_style_button(btn, empty, empty, empty, 13, Cfg.UI_ACCENT if on else Cfg.UI_MUTED)
+		if _ui_theme() == "material" and on:
+			var active_sb := StyleBoxFlat.new()
+			active_sb.bg_color = Color.TRANSPARENT
+			active_sb.border_color = Cfg.UI_ACCENT
+			active_sb.set_border_width(SIDE_BOTTOM, 3)
+			active_sb.content_margin_bottom = 6
+			_style_button(btn, active_sb, active_sb, active_sb, 13, Cfg.UI_ACCENT)
+		else:
+			var empty := StyleBoxEmpty.new()
+			_style_button(btn, empty, empty, empty, 13, Cfg.UI_ACCENT if on else Cfg.UI_MUTED)
 		btn.add_theme_font_override("font", Fonts.bold if on else Fonts.regular)
 		btn.pressed.connect(func(): on_change.call(key))
 		row.add_child(btn)
@@ -343,7 +426,8 @@ static func unlock_button(text: String, state: String) -> Button:
 	if state == "unlocked" or state == "equipped":
 		color = Cfg.UI_TAG_INK
 		bg = Cfg.UI_TAG
-	var style := flat(bg, Cfg.RADIUS_SM, 1, Cfg.UI_BORDER if state == "locked" else Color.TRANSPARENT)
+	var r := 999.0 if _ui_theme() == "material" else Cfg.RADIUS_SM
+	var style := flat(bg, r, 1, Cfg.UI_BORDER if state == "locked" else Color.TRANSPARENT)
 	_style_button(b, style, style, style, 12, color)
 	b.add_theme_font_override("font", Fonts.bold)
 	return b

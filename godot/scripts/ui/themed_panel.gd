@@ -33,6 +33,7 @@ func _draw() -> void:
 	match _ui_theme():
 		"noir": _draw_noir()
 		"scifi": _draw_scifi()
+		"material": _draw_material()
 		_: _draw_military()
 
 func _jagged_outline(sz: Vector2, jag: float, segs: int) -> PackedVector2Array:
@@ -91,3 +92,23 @@ func _draw_scifi() -> void:
 	for c in [Vector2(12, 12), Vector2(size.x - 12, 12), Vector2(12, size.y - 12), Vector2(size.x - 12, size.y - 12)]:
 		draw_circle(c, 3.5, Cfg.UI_ACCENT)
 		draw_circle(c, 1.6, Cfg.UI_BG)
+
+func _draw_material() -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(Cfg.UI_PANEL, Cfg.UI_PANEL_ALPHA)
+	sb.set_corner_radius_all(24)
+	sb.set_border_width_all(1)
+	sb.border_color = _border()
+	sb.shadow_color = Color(0, 0, 0, 0.42)
+	sb.shadow_size = 18
+	sb.shadow_offset = Vector2(0, 6)
+	draw_style_box(sb, Rect2(Vector2.ZERO, size))
+
+	if stripe_top:
+		var pill_w := clampf(size.x * 0.15, 36.0, 72.0)
+		var pill_h := 4.0
+		var pill_x := (size.x - pill_w) * 0.5
+		var pill_sb := StyleBoxFlat.new()
+		pill_sb.bg_color = Cfg.UI_ACCENT
+		pill_sb.set_corner_radius_all(2)
+		draw_style_box(pill_sb, Rect2(Vector2(pill_x, 8), Vector2(pill_w, pill_h)))

@@ -2,6 +2,7 @@ class_name World
 extends RefCounted
 
 signal feed(text: String, color: Color)
+signal synergy_unlocked(player, build_id: String, build_name: String, color: Color)
 signal wave_started(n: int)
 signal damage_number(x: float, y: float, text: String, color: Color)
 signal kill(victim, killer, source: String, suicide: bool)
@@ -42,6 +43,7 @@ var tank_grid := SpatialGrid.new()
 var bullet_grid := SpatialGrid.new()
 var bullets: Array = []
 var mines: Array = []
+var acid_pools: Array = []
 var perk_drops: Array = []
 var wrecks: Array = []
 var debris: Array = []
@@ -84,6 +86,7 @@ var used_names := {}
 var puppet := false
 var bolts: Array = []
 var scorches: Array = []
+var shockwaves: Array = []
 
 var _storm_rng: Rng
 var _tree_tiles: PackedInt32Array = PackedInt32Array()
@@ -161,6 +164,23 @@ func notify_shot(shooter) -> void:
 		if dx * dx + dy * dy > r2:
 			continue
 		t.brain.hear_shot(shooter.x, shooter.y, shooter)
+
+func spawn_shockwave(x: float, y: float, radius: float, kind: String = "shockwave", color: Color = Color("#ff55ff"), duration: int = 24) -> void:
+	shockwaves.append({
+		"x": x,
+		"y": y,
+		"radius": radius,
+		"kind": kind,
+		"color": color,
+		"life": duration,
+		"max_life": duration,
+	})
+
+func _update_shockwaves() -> void:
+	for i in range(shockwaves.size() - 1, -1, -1):
+		shockwaves[i]["life"] -= 1
+		if int(shockwaves[i]["life"]) <= 0:
+			shockwaves.remove_at(i)
 
 func _update_storm() -> void:
 	for i in range(bolts.size() - 1, -1, -1):
@@ -242,21 +262,73 @@ func _chain_lightning(x: float, y: float, attacker, already_hit: Dictionary) -> 
 			scorches.pop_front()
 		particles.burst(t.x, t.y, [Cfg.bolt_core, Cfg.bolt_glow], 10, 2, 5, 14, 26, rng)
 
+var _tank_completed_builds := {}
+
+func check_tank_synergies(tank) -> void:
+	if tank == null:
+		return
+	if not _tank_completed_builds.has(tank.id):
+		_tank_completed_builds[tank.id] = []
+	var known: Array = _tank_completed_builds[tank.id]
+
+	for build in Perks.BUILDS:
+		var b_id: String = String(build["id"])
+		if known.has(b_id):
+			continue
+		if Perks.is_build_complete(b_id, tank.perk_ids):
+			known.append(b_id)
+			_on_synergy_unlocked(tank, build)
+
+func check_player_synergies(player) -> void:
+	if player == null:
+		return
+	if player.tank != null:
+		check_tank_synergies(player.tank)
+	else:
+		for build in Perks.BUILDS:
+			var b_id: String = String(build["id"])
+			if Perks.is_build_complete(b_id, player.perk_ids):
+				if b_id == "lightning" and not storm_summoned and weather != null:
+					storm_summoned = true
+					weather.set_condition("storm")
+					weather.locked = true
+					weather.flash = 0.8
+					feed.emit(I18n.t("feed.stormSummoned", {"name": player.name},
+						"%s активировал синергию «Владыка бури» — над полем боя разразилась вечная гроза!" % player.name),
+						Color("#8899ff"))
+
+func _on_synergy_unlocked(tank, build: Dictionary) -> void:
+	var b_id: String = String(build["id"])
+	var b_name: String = String(build.get("name", "Синергия"))
+	var b_col: Color = build.get("color", Color("#f59e0b"))
+	var p_name: String = tank.name
+	if tank.owner != null and String(tank.owner.name) != "":
+		p_name = tank.owner.name
+
+	# 1. Feed notification
+	var feed_text := "⚡ %s активировал синергию «%s»!" % [p_name, b_name]
+	feed.emit(feed_text, b_col)
+
+	# 2. Visual & Audio celebration
+	spawn_shockwave(tank.x, tank.y, 120.0, "synergy", b_col, 24)
+	particles.burst(tank.x, tank.y, [b_col, Color.WHITE, Color("#ffe066")], 28, 3, 7, 20, 48, rng)
+	damage_number.emit(tank.x, tank.y - 38, "⚡ СИНЕРГИЯ: " + b_name.to_upper() + "!", b_col)
+	add_shake(5.0, tank.x, tank.y)
+	Sfx.play("unlock")
+
+	# 3. Build-specific initialization
+	if b_id == "lightning":
+		if weather != null and not storm_summoned:
+			storm_summoned = true
+			weather.set_condition("storm")
+			weather.locked = true
+			weather.flash = 0.85
+			Sfx.play("thunder", tank.x, tank.y)
+
+	synergy_unlocked.emit(tank.owner, b_id, b_name, b_col)
+
 func maybe_summon_storm(player) -> void:
-	if player == null or storm_summoned or weather == null:
-		return
-	var build := Perks.get_build("lightning")
-	if build.is_empty():
-		return
-	for pid in (build["perks"] as Array):
-		if not player.has_perk(String(pid)):
-			return
-	storm_summoned = true
-	weather.set_condition("storm")
-	weather.locked = true
-	feed.emit(I18n.t("feed.stormSummoned", {"name": player.name},
-		"%s собрал Грозовой билд — гроза теперь не утихнет до конца партии" % player.name),
-		Color("#8899ff"))
+	check_player_synergies(player)
 
 func _update_lightning_lord() -> void:
 	if weather == null or weather.condition != "storm":
@@ -346,6 +418,7 @@ func step_cosmetic() -> void:
 	Sfx.advance()
 	weather.update()
 	particles.update()
+	_update_shockwaves()
 	for piece in debris:
 		piece.update()
 	var live_debris := []
@@ -494,11 +567,13 @@ func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Ta
 	var boss_mult := {"hp": 1.0, "dmg": 1.0}
 	if bool(type["boss"]):
 		boss_mult = _boss_stat_mult()
+	var base_hp_val: float = float(type.get("base_hp", 0.0))
+	var calc_hp: float = (base_hp_val if base_hp_val > 0.0 else float(diff["enemy_hp"]) * float(type["hp_mult"])) * ramp * float(boss_mult["hp"])
 	var spot := _free_spot(team)
 	var tank := Tank.new({
 		"x": spot.x, "y": spot.y, "team": team,
 		"name": _unique_bot_name(type), "owner": null,
-		"max_hp": round(float(diff["enemy_hp"]) * float(type["hp_mult"]) * ramp * float(boss_mult["hp"])),
+		"max_hp": round(calc_hp),
 		"speed": float(diff["enemy_speed"]) * float(type["speed_mult"]),
 		"fire_rate": maxi(4, int(round(float(diff["enemy_fire_rate"]) * float(type["fire_rate_mult"])))),
 		"color_key": String(type["color_key"]) if color_key == "enemy" else color_key,
@@ -510,7 +585,16 @@ func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Ta
 	if bool(type["boss"]):
 		tank.is_boss = true
 		tank.boss_stat_mult = float(boss_mult["hp"])
-		tank.perk_ids = ["bot_boss_twin", "bot_boss_barrage"]
+		var boss_type_id: String = String(type.get("id", ""))
+		if boss_type_id == "boss_rammer":
+			tank.is_rammer_boss = true
+			tank.perk_ids = []
+		elif boss_type_id == "boss_chimera":
+			tank.is_chimera_boss = true
+			tank.chimera_cloak_timer = int(Cfg.CHIMERA_CLOAK_INTERVAL * 0.35)
+			tank.perk_ids = []
+		else:
+			tank.perk_ids = ["bot_boss_twin", "bot_boss_barrage"]
 		tank.recompute()
 		boss_alive = true
 	var acc_bonus := float(type["accuracy_bonus"])
@@ -653,14 +737,18 @@ func _setup_wave(n: int) -> void:
 
 func _spawn_boss() -> Tank:
 	boss_alive = false
-	var tank := _spawn_bot("enemy", "enemy", "boss")
+	var boss_pool := ["boss", "boss_rammer", "boss_chimera"]
+	var boss_id: String = boss_pool[int(rng.nextf() * boss_pool.size()) % boss_pool.size()]
+	var tank := _spawn_bot("enemy", "enemy", boss_id)
 	boss_alive = true
 	return tank
 
 func _spawn_ffa_boss() -> Tank:
 	boss_alive = false
 	var team_name := "boss_%d" % (tanks.size() + 1)
-	var tank := _spawn_bot(team_name, "enemy", "boss")
+	var boss_pool := ["boss", "boss_rammer", "boss_chimera"]
+	var boss_id: String = boss_pool[int(rng.nextf() * boss_pool.size()) % boss_pool.size()]
+	var tank := _spawn_bot(team_name, "enemy", boss_id)
 	boss_alive = true
 	return tank
 
@@ -844,6 +932,7 @@ func _update_perk_drops() -> void:
 				if tank.perk_ids.size() < Cfg.BOT_MAX_PERKS and not tank.perk_ids.has(drop.perk_id):
 					tank.perk_ids.append(drop.perk_id)
 					tank.recompute()
+					check_tank_synergies(tank)
 					feed.emit(I18n.t("feed.perkPicked",
 						{"name": tank.name, "icon": perk["icon"], "perk": I18n.dn(perk, "name", "perk")},
 						"%s подобрал перк %s %s" % [tank.name, perk["icon"], perk["name"]]), Color("#ffaa44"))
@@ -864,6 +953,7 @@ func step() -> void:
 	if mode == "koth":
 		_update_flood()
 	_update_storm()
+	_update_shockwaves()
 	_update_lightning_lord()
 	_update_treefall()
 
@@ -891,6 +981,7 @@ func step() -> void:
 		if m.alive:
 			live_mines.append(m)
 	mines = live_mines
+	_update_acid_pools()
 
 	for piece in debris:
 		piece.update()
@@ -971,26 +1062,44 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		and (attacker.ability_active("silencer") \
 			or target.last_attacker != attacker \
 			or tick - target.last_attacker_tick > Cfg.AMBUSH_UNAWARE_TICKS)
+	var is_stealth_crit := false
 	if is_ambush:
 		if attacker.flags.has("predator") and attacker.flags.has("forest") and attacker.flags.has("shadow"):
 			amount *= Cfg.STEALTH_HUNTER_CRIT_MULT
+			is_stealth_crit = true
 		elif float(attacker.mods["ambushDmgMult"]) > 1.0:
 			amount *= float(attacker.mods["ambushDmgMult"])
 
+	var is_sniper_crit := false
 	if source == "bullet" and attacker != null and attacker.alive \
 			and attacker.flags.has("sniper") and attacker.flags.has("evasion") and attacker.flags.has("keenEar"):
 		var dx_gs: float = attacker.x - target.x
 		var dy_gs: float = attacker.y - target.y
 		if dx_gs * dx_gs + dy_gs * dy_gs >= Cfg.GHOST_SNIPER_RANGE * Cfg.GHOST_SNIPER_RANGE:
 			amount *= Cfg.GHOST_SNIPER_CRIT_MULT
+			is_sniper_crit = true
 
+	var is_corroded_hit := false
 	if source != "acid" and target.acid_stacks > 0 and target.acid_attacker != null \
 			and target.acid_attacker.flags.has("corrodingArmor"):
 		amount *= Cfg.CORRODING_ARMOR_MULT
+		is_corroded_hit = true
 
 	var res: Dictionary = target.take_damage(self, amount, attacker, source)
 	if bool(res["evaded"]) or float(res["applied"]) <= 0.0:
 		return 0.0
+
+	if is_stealth_crit:
+		particles.burst(target.x, target.y, [Color("#10b981"), Color("#34d399"), Color.WHITE], 20, 3, 7, 18, 36, rng)
+		damage_number.emit(target.x, target.y - 34, "🌿 ЗАСАДА! ×2.5", Color("#10b981"))
+		add_shake(4.5, target.x, target.y)
+	if is_sniper_crit:
+		particles.burst(target.x, target.y, [Color("#a855f7"), Color("#c084fc"), Color.WHITE], 20, 3, 7, 20, 40, rng)
+		damage_number.emit(target.x, target.y - 34, "🎯 СНАЙПЕР! +60%", Color("#a855f7"))
+		add_shake(4.0, target.x, target.y)
+	if is_corroded_hit:
+		particles.burst(target.x, target.y, [Color("#84cc16"), Color("#a3e635")], 8, 2, 4, 10, 20, rng)
+		damage_number.emit(target.x, target.y - 34, "🦴 РАЗЪЕДАНИЕ +40%", Color("#84cc16"))
 
 	if is_ambush and float(attacker.mods["ambushDashTicks"]) > 0.0:
 		attacker.turbo_timer = maxi(attacker.turbo_timer, int(attacker.mods["ambushDashTicks"]))
@@ -1042,25 +1151,36 @@ func execute_frozen_kill(victim, attacker) -> void:
 		if attacker.owner != null:
 			attacker.owner.damage_dealt += amount
 			player_damage.emit(attacker.owner, amount)
-	damage_number.emit(victim.x, victim.y - 20, "-%d" % int(round(amount)),
-		Color("#ff4444") if victim.owner != null else Color("#ffee55"))
+
+	# Special Ice Shatter VFX & SFX!
+	spawn_shockwave(victim.x, victim.y, 90.0, "freeze", Color("#38bdf8"), 22)
+	particles.burst(victim.x, victim.y, [Color("#00f0ff"), Color("#aaeeff"), Color.WHITE, Color("#38bdf8")], 36, 4, 9, 28, 60, rng)
+	Sfx.play("crack", victim.x, victim.y)
+	add_shake(7.0, victim.x, victim.y)
+	if weather != null:
+		weather.flash = maxf(weather.flash, 0.4)
+
+	if is_boss:
+		damage_number.emit(victim.x, victim.y - 34, "❄️ ЛЕДЯНОЙ УДАР! -%d" % int(round(amount)), Color("#00f0ff"))
+	else:
+		damage_number.emit(victim.x, victim.y - 34, "❄️ РАСКОЛ ЛЬДА!", Color("#00f0ff"))
+
 	if victim.owner != null:
 		victim.owner.damage_flash = 12
 		victim.owner.shake = maxf(victim.owner.shake, 8.0)
 		Sfx.play("hit")
 	if victim.hp <= 0.0:
-		_kill_tank(victim, attacker, "ram")
+		_kill_tank(victim, attacker, "ice")
 
 func maybe_freeze_shot_kill(victim, attacker) -> void:
 	if victim == null or not victim.alive or attacker == null or not attacker.alive:
-		return
-	if not victim.enemy_type.is_empty() and bool(victim.enemy_type.get("boss", false)):
 		return
 	if not (attacker.flags.has("deepFreeze") and attacker.flags.has("frostDash") and attacker.flags.has("chilledBarrel")):
 		return
 	execute_frozen_kill(victim, attacker)
 
 func _juggernaut_shock(killer, ox: float, oy: float) -> void:
+	spawn_shockwave(ox, oy, Cfg.JUGGERNAUT_SHOCK_R, "ram", Color("#ef4444"), 24)
 	for other in tanks:
 		if other == killer or not other.alive or not are_hostile(killer, other):
 			continue
@@ -1073,10 +1193,182 @@ func _juggernaut_shock(killer, ox: float, oy: float) -> void:
 		deal_damage(other, Cfg.JUGGERNAUT_SHOCK_DMG * k, killer, "blast")
 		other.vx += (dx / d) * Cfg.JUGGERNAUT_SHOCK_PUSH * k
 		other.vy += (dy / d) * Cfg.JUGGERNAUT_SHOCK_PUSH * k
-	particles.burst(ox, oy, [Color("#ffaa33"), Color("#ff5533"), Color.WHITE], 16, 2, 5, 16, 30, rng)
-	add_shake(5.0, ox, oy)
+	particles.burst(ox, oy, [Color("#ffaa33"), Color("#ff5533"), Color.WHITE], 24, 3, 7, 20, 48, rng)
+	damage_number.emit(ox, oy - 32, "💥 СОКРУШИТЕЛЬНЫЙ ТАРАН!", Color("#ef4444"))
+	Sfx.play("explosion", ox, oy)
+	add_shake(8.0, ox, oy)
+
+func _rammer_death_explosion(victim) -> void:
+	var exp_r: float = Cfg.RAMMER_EXPLOSION_RADIUS
+	spawn_shockwave(victim.x, victim.y, exp_r, "ram", Color("#ff4400"), 50)
+	spawn_shockwave(victim.x, victim.y, exp_r * 0.6, "shockwave", Color("#ffaa00"), 36)
+	spawn_shockwave(victim.x, victim.y, 100.0, "blast", Color.WHITE, 24)
+
+	particles.burst(victim.x, victim.y, [Color("#ff3300"), Color("#ff7700"), Color("#ffee22"), Color.WHITE, Color("#222222")], 64, 4, 10, 24, 60, rng)
+	add_shake(26.0, victim.x, victim.y)
+	Sfx.play("explosion", victim.x, victim.y)
+	Sfx.play("thunder", victim.x, victim.y)
+
+	feed.emit(I18n.t("feed.rammerExplode", {"name": victim.name},
+		"💥 Реактор %s детонирует чудовищным взрывом (50м)!" % victim.name), Color("#ff4422"))
+
+	for other in tanks:
+		if other == victim or not other.alive or not are_hostile(victim, other):
+			continue
+		var dx: float = other.x - victim.x
+		var dy: float = other.y - victim.y
+		var dist := sqrt(dx * dx + dy * dy)
+		if dist > exp_r:
+			continue
+		var falloff := 1.0 - (dist / exp_r)
+		var dmg: float = Cfg.RAMMER_EXPLOSION_DMG * falloff
+		deal_damage(other, dmg, victim, "blast")
+		var push := 14.0 * falloff
+		if dist > 0.001:
+			other.vx += (dx / dist) * push
+			other.vy += (dy / dist) * push
+
+	var reach := int(ceilf(140.0 / float(Cfg.TILE)))
+	var v_row: int = map.row_at(victim.y)
+	var v_col: int = map.col_at(victim.x)
+	for dr in range(-reach, reach + 1):
+		for dc in range(-reach, reach + 1):
+			var r := v_row + dr
+			var c := v_col + dc
+			if map.get_tile(r, c) == Cfg.T_BRICK:
+				hit_building(r, c, 999.0, "blast", c * Cfg.TILE + 16, r * Cfg.TILE + 16, victim)
+			elif map.get_tile(r, c) == Cfg.T_TREE:
+				map.set_tile(r, c, Cfg.T_EMPTY)
+				particles.burst(c * Cfg.TILE + 16, r * Cfg.TILE + 16, [Cfg.tree, Cfg.tree_dark], 8, 2, 4, 12, 20, rng)
+
+	if mode == "defense" and base != null:
+		var d_base := Vector2(base["x"] - victim.x, base["y"] - victim.y).length()
+		if d_base <= exp_r:
+			var remaining_cap: float = maxf(0.0, Cfg.RAMMER_BASE_MAX_TOTAL_DMG - victim.rammer_base_damage_dealt)
+			if remaining_cap > 0.0:
+				var falloff := 1.0 - (d_base / exp_r)
+				var applied_death_base_dmg: float = minf(remaining_cap, 50.0 * falloff)
+				victim.rammer_base_damage_dealt += applied_death_base_dmg
+				base["hp"] = maxf(0.0, float(base["hp"]) - applied_death_base_dmg)
+				damage_number.emit(base["x"], base["y"] - 30, "-%d БАЗА!" % int(applied_death_base_dmg), Color("#ff4444"))
+
+func spawn_acid_pool(px: float, py: float, r: float, owner_tank, life: int = Cfg.CHIMERA_ACID_POOL_DURATION) -> void:
+	acid_pools.append(Ent.AcidPool.new(px, py, r, owner_tank, life))
+
+func _update_acid_pools() -> void:
+	if acid_pools.is_empty():
+		return
+	var live_pools := []
+	for pool in acid_pools:
+		pool.timer -= 1
+		if pool.timer <= 0:
+			continue
+		live_pools.append(pool)
+
+		var r2: float = pool.radius * pool.radius
+		for tank in tank_grid.query(pool.x, pool.y, pool.radius):
+			if not tank.alive or not are_hostile(pool.owner, tank):
+				continue
+			var dx: float = tank.x - pool.x
+			var dy: float = tank.y - pool.y
+			if dx * dx + dy * dy <= r2:
+				tank.surface_speed *= 0.65
+				deal_damage(tank, Cfg.CHIMERA_ACID_POOL_DPS, pool.owner, "acid")
+				tank.apply_acid(self, pool.owner, 0.4, 1)
+				if tick % 8 == 0:
+					particles.burst(tank.x, tank.y, [Color("#84cc16"), Color("#a3e635")], 2, 1, 2, 6, 12, rng)
+
+		if tick % 12 == 0 and rng.nextf() < 0.6:
+			var ang := rng.nextf() * TAU
+			var dist := rng.nextf() * pool.radius * 0.7
+			particles.burst(pool.x + cos(ang) * dist, pool.y + sin(ang) * dist,
+				[Color("#84cc16"), Color("#a3e635"), Color("#4d7c0f")], 2, 1, 3, 8, 16, rng)
+
+	acid_pools = live_pools
+
+func spawn_chimera_clone(parent_tank: Tank, side: float) -> Tank:
+	var diff := difficulty
+	var clone_hp := Cfg.CHIMERA_CLONE_HP * ramp * parent_tank.boss_stat_mult
+	var offset_dist := 44.0
+	var perp := parent_tank.body_angle + (PI * 0.5) * side
+	var spawn_pos := Vector2(parent_tank.x + cos(perp) * offset_dist, parent_tank.y + sin(perp) * offset_dist)
+	if map.is_blocked_rect(spawn_pos.x, spawn_pos.y, Cfg.TANK_W, Cfg.TANK_H):
+		spawn_pos = Vector2(parent_tank.x, parent_tank.y)
+
+	var clone := Tank.new({
+		"x": spawn_pos.x, "y": spawn_pos.y, "team": parent_tank.team,
+		"name": "«Фантом-Клон»", "owner": null,
+		"max_hp": round(clone_hp),
+		"speed": parent_tank.speed * 1.05,
+		"fire_rate": maxi(4, int(round(float(diff["enemy_fire_rate"]) * 1.1))),
+		"color_key": "boss_chimera",
+		"chassis": "boss_chimera",
+		"dmg_scale": parent_tank.dmg_scale * 0.6,
+	})
+	clone.net_id = Net.next_tank_id()
+	clone.is_chimera_clone = true
+	clone.chimera_clone_parent = parent_tank
+	clone.perk_ids = []
+	clone.recompute()
+
+	clone.brain = BotBrain.new({
+		"accuracy": 0.8,
+		"react_time": 15,
+		"role": "attacker",
+		"fire_range": 400.0,
+		"keep_min": 100.0,
+		"keep_max": 240.0,
+		"lobbed": false,
+		"survival": mode == "koth",
+		"rng": rng,
+	})
+
+	particles.burst(spawn_pos.x, spawn_pos.y, [Color("#84cc16"), Color("#00ffff"), Color("#ff00ff"), Color.WHITE], 24, 3, 6, 16, 28, rng)
+	tanks.append(clone)
+	if Net.role == "host":
+		Net.host_tank_spawned(tank_info(clone))
+	return clone
+
+func _chimera_death_acid(victim: Tank) -> void:
+	var exp_r := 180.0
+	spawn_shockwave(victim.x, victim.y, exp_r, "acid", Color("#84cc16"), 40)
+	spawn_shockwave(victim.x, victim.y, exp_r * 0.5, "blast", Color("#a3e635"), 26)
+
+	particles.burst(victim.x, victim.y, [Color("#84cc16"), Color("#a3e635"), Color("#4d7c0f"), Color.WHITE, Color("#182b18")], 56, 4, 9, 24, 55, rng)
+	add_shake(18.0, victim.x, victim.y)
+	Sfx.play("explosion", victim.x, victim.y)
+	Sfx.play("steam", victim.x, victim.y)
+
+	feed.emit(I18n.t("feed.chimeraExplode", {"name": victim.name},
+		"☣️ Едкое ядро %s разгерметизировано — потоп кислоты!" % victim.name), Color("#84cc16"))
+
+	for i in 6:
+		var a := float(i) / 6.0 * TAU + (rng.nextf() - 0.5) * 0.4
+		var d := 24.0 + rng.nextf() * 45.0
+		spawn_acid_pool(victim.x + cos(a) * d, victim.y + sin(a) * d, Cfg.CHIMERA_ACID_POOL_RADIUS, victim, Cfg.CHIMERA_ACID_POOL_DURATION)
+
+	for other in tanks:
+		if other == victim or not other.alive or not are_hostile(victim, other):
+			continue
+		var dx: float = other.x - victim.x
+		var dy: float = other.y - victim.y
+		var dist := sqrt(dx * dx + dy * dy)
+		if dist > exp_r:
+			continue
+		var falloff := 1.0 - (dist / exp_r)
+		var dmg: float = 80.0 * falloff
+		deal_damage(other, dmg, victim, "acid")
+		other.apply_acid(self, victim, 1.0, Cfg.ACID_STACK_MAX)
+
+	for t in tanks:
+		if t.alive and t.is_chimera_clone and t.chimera_clone_parent == victim:
+			deal_damage(t, 9999.0, null, "acid")
 
 func _kill_tank(victim, killer, source: String) -> void:
+	if victim.is_rammer_boss:
+		_rammer_death_explosion(victim)
+	if victim.is_chimera_boss:
+		_chimera_death_acid(victim)
 	if source == "ram" and killer != null and killer.alive \
 			and killer.flags.has("ram") and killer.flags.has("thickArmor") and killer.flags.has("kamikaze"):
 		_juggernaut_shock(killer, victim.x, victim.y)
@@ -1559,6 +1851,7 @@ func dispose() -> void:
 	tanks.clear()
 	bullets.clear()
 	mines.clear()
+	acid_pools.clear()
 	wrecks.clear()
 	debris.clear()
 	flags.clear()
@@ -1569,6 +1862,7 @@ func dispose() -> void:
 	flood_tiles.clear()
 	players = []
 	particles.clear()
+	shockwaves.clear()
 
 func scoreboard() -> Array:
 	var rows := []

@@ -87,18 +87,18 @@ func _build_ui() -> void:
 	center.add_child(main_col)
 
 	# --- 1. Автор / Продюсер ---
-	_author_box = UiKit.vbox(2)
+	_author_box = UiKit.vbox(3)
 	_author_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_author_box.modulate.a = 0.0
 	main_col.add_child(_author_box)
 
-	var pres_label := UiKit.label("П Р Е Д С Т А В Л Я Е Т", 10, Color("#64748b"), true)
-	pres_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_author_box.add_child(pres_label)
-
 	var name_label := UiKit.label("—  ДЕНИС ГОРЯЧЕВ  —", 13, Color("#cbd5e1"), true)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_author_box.add_child(name_label)
+
+	var pres_label := UiKit.label("П Р Е Д С Т А В Л Я Е Т", 10, Color("#64748b"), true)
+	pres_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_author_box.add_child(pres_label)
 
 	# --- 2. Эмблема Танка ---
 	_emblem_holder = Control.new()
@@ -116,12 +116,12 @@ func _build_ui() -> void:
 	_emblem_holder.add_child(_emblem)
 
 	# --- 3. Название игры ---
-	_title_box = UiKit.vbox(2)
+	_title_box = UiKit.vbox(3)
 	_title_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_title_box.modulate.a = 0.0
 	main_col.add_child(_title_box)
 
-	var title_lbl := UiKit.title("Т Я Н Ч И К И", 44, Color("#ffffff"))
+	var title_lbl := UiKit.title("IRON STORM", 44, Color("#ffffff"))
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_box.add_child(title_lbl)
 
@@ -397,7 +397,7 @@ func _draw_hud_corners(sz: Vector2) -> void:
 	draw_line(Vector2(m, m), Vector2(m, m + blen), b_col, 2.0)
 	if font != null:
 		draw_string(font, Vector2(m + 10, m + 22),
-			"[ PROTOCOL // ARMORED COMBAT v0.9.22 ]", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, t_col)
+			"[ PROTOCOL // IRON STORM v0.9.22 ]", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, t_col)
 
 	# Верх-право
 	draw_line(Vector2(sz.x - m, m), Vector2(sz.x - m - blen, m), b_col, 2.0)

@@ -100,6 +100,14 @@ static var TEAM_COLORS := {
 	"p4": {"body": Color("#7a3f8c"), "dark": Color("#542b63"), "trim": Color("#c79ad8")},
 	"p5": {"body": Color("#3f8c8c"), "dark": Color("#2b6262"), "trim": Color("#9ad8d8")},
 	"p6": {"body": Color("#8c8c3f"), "dark": Color("#62622b"), "trim": Color("#d8d89a")},
+	"p7": {"body": Color("#9e2a2b"), "dark": Color("#671616"), "trim": Color("#f28482")},
+	"p8": {"body": Color("#a89255"), "dark": Color("#736232"), "trim": Color("#e9d8a6")},
+	"p9": {"body": Color("#3d444d"), "dark": Color("#24292e"), "trim": Color("#94a3b8")},
+	"p10": {"body": Color("#cbd5e1"), "dark": Color("#64748b"), "trim": Color("#ffffff")},
+	"p11": {"body": Color("#d4af37"), "dark": Color("#8c7018"), "trim": Color("#fde047")},
+	"p12": {"body": Color("#10b981"), "dark": Color("#065f46"), "trim": Color("#6ee7b7")},
+	"p13": {"body": Color("#dc2626"), "dark": Color("#7f1d1d"), "trim": Color("#f87171")},
+	"p14": {"body": Color("#2563eb"), "dark": Color("#1e3a8a"), "trim": Color("#93c5fd")},
 	"enemy": {"body": Color("#8c3a3a"), "dark": Color("#642828"), "trim": Color("#e79a9a")},
 	"ally": {"body": Color("#3f6a8c"), "dark": Color("#2b4a64"), "trim": Color("#9ac4e0")},
 	"neutral": {"body": Color("#7a6a3a"), "dark": Color("#564a28"), "trim": Color("#d8c58f")},
@@ -108,15 +116,25 @@ static var TEAM_COLORS := {
 	"sniper": {"body": Color("#3a8c6a"), "dark": Color("#28644a"), "trim": Color("#9ad8b0")},
 	"mortar": {"body": Color("#8c5a2f"), "dark": Color("#643e20"), "trim": Color("#e0c08f")},
 	"boss": {"body": Color("#3a3a3a"), "dark": Color("#1a1a1a"), "trim": Color("#e74c3c")},
+	"boss_rammer": {"body": Color("#3d2e24"), "dark": Color("#1e140d"), "trim": Color("#f97316")},
+	"boss_chimera": {"body": Color("#182b18"), "dark": Color("#0b140b"), "trim": Color("#84cc16")},
 }
 
 const PLAYER_SKINS := [
 	{"key": "p1", "name": "Зелёный", "color": "#3f7d3f", "level": 1},
 	{"key": "p2", "name": "Синий", "color": "#2f6a9c", "level": 1},
+	{"key": "p7", "name": "Рубин", "color": "#9e2a2b", "level": 3},
 	{"key": "p3", "name": "Оранжевый", "color": "#9c5a2f", "level": 5},
+	{"key": "p8", "name": "Песок", "color": "#a89255", "level": 7},
 	{"key": "p4", "name": "Фиолетовый", "color": "#7a3f8c", "level": 10},
+	{"key": "p9", "name": "Графит", "color": "#3d444d", "level": 12},
+	{"key": "p10", "name": "Снег", "color": "#cbd5e1", "level": 16},
 	{"key": "p5", "name": "Бирюзовый", "color": "#3f8c8c", "level": 20},
+	{"key": "p11", "name": "Янтарь", "color": "#d4af37", "level": 25},
 	{"key": "p6", "name": "Оливковый", "color": "#8c8c3f", "level": 30},
+	{"key": "p12", "name": "Изумруд", "color": "#10b981", "level": 35},
+	{"key": "p13", "name": "Магма", "color": "#dc2626", "level": 40},
+	{"key": "p14", "name": "Ультрамарин", "color": "#2563eb", "level": 45},
 ]
 
 static var UI_BG := Color("#0d0f08")
@@ -158,6 +176,14 @@ static var THEMES := {
 		"text": Color("#eafffa"), "muted": Color("#82a8a4"),
 		"warn": Color("#eeb75c"), "danger": Color("#ea6a5e"), "gold": Color("#a2f0dc"),
 		"tag": Color("#1a4038"), "tag_ink": Color("#a2f0dc"),
+	},
+	"material": {
+		"bg": Color("#0f141c"), "panel": Color("#1a212c"), "panel_alpha": 0.98,
+		"card": Color("#232b38"), "border": Color("#404856"),
+		"accent": Color("#a8c7fa"), "accent_dim": Color("#1d476e"),
+		"text": Color("#e3e8f2"), "muted": Color("#8e98a8"),
+		"warn": Color("#f9ab00"), "danger": Color("#f28b82"), "gold": Color("#fdd663"),
+		"tag": Color("#293847"), "tag_ink": Color("#c2e7ff"),
 	},
 }
 
@@ -278,6 +304,25 @@ const BOSS_HP_PER_WAVE := 0.15
 const BOSS_DMG_PER_WAVE := 0.05
 const BOSS_HP_MULT_CAP := 4.0
 const BOSS_DMG_MULT_CAP := 2.0
+
+const RAMMER_BOSS_BASE_HP := 3000.0
+const RAMMER_TELEGRAPH_TICKS := 60
+const RAMMER_CHARGE_TICKS := 42
+const RAMMER_CHARGE_SPEED := 10.5
+const RAMMER_COOLDOWN_TICKS := 110
+const RAMMER_MINE_INTERVAL := 180
+const RAMMER_CHARGE_MINE_INTERVAL := 10
+const RAMMER_EXPLOSION_RADIUS := 400.0
+const RAMMER_EXPLOSION_DMG := 160.0
+const RAMMER_BASE_MAX_TOTAL_DMG := 50.0
+
+const CHIMERA_BOSS_BASE_HP := 2000.0
+const CHIMERA_CLOAK_INTERVAL := 500
+const CHIMERA_CLOAK_DURATION := 240
+const CHIMERA_ACID_POOL_DURATION := 360
+const CHIMERA_ACID_POOL_RADIUS := 28.0
+const CHIMERA_ACID_POOL_DPS := 0.28
+const CHIMERA_CLONE_HP := 220.0
 
 const EXPLOSIVE_R := 32.0
 const EXPLOSIVE_SPLASH := 0.5
@@ -410,7 +455,7 @@ const ACID_DMG_PER_STACK_TICK := 6.0
 const ACID_CLOUD_RADIUS := 80.0
 const CORRODING_ARMOR_MULT := 1.4
 const ACID_BOMB_STACKS := 3
-const ACID_BOMB_COOLDOWN := 900
+const ACID_BOMB_COOLDOWN := 600
 
 const RAMP_INTERVAL := 3600
 const RAMP_STEP := 0.08

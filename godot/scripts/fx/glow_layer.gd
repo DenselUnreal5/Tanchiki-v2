@@ -63,6 +63,18 @@ func _draw() -> void:
 		if d.active and view.in_view(d.x, d.y, 50.0):
 			_glow(Vector2(d.x, d.y), 34.0, Color("#ff88ff"), 0.35)
 
+	for sw in world.shockwaves:
+		var max_r: float = float(sw["radius"])
+		if not view.in_view(float(sw["x"]), float(sw["y"]), max_r + 30.0):
+			continue
+		var life: int = int(sw["life"])
+		var max_life: int = maxi(1, int(sw["max_life"]))
+		var t: float = 1.0 - float(life) / float(max_life)
+		var ease_r: float = 1.0 - pow(1.0 - t, 3.0)
+		var cur_r: float = maxf(4.0, max_r * ease_r)
+		var sw_col: Color = sw.get("color", Color.WHITE)
+		_glow(Vector2(float(sw["x"]), float(sw["y"])), cur_r * 0.7 + 10.0, sw_col, (1.0 - t) * 0.45)
+
 	for wreck in world.wrecks:
 		if not view.in_view(wreck.x, wreck.y, 70.0):
 			continue

@@ -50,9 +50,27 @@ const LIST := {
 		"chassis": "boss", "role": "attacker", "color_key": "boss",
 		"weight": 3, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
 	},
+	"boss_rammer": {
+		"id": "boss_rammer", "name": "Джаггернаут-Таран", "icon": "🦏",
+		"hp_mult": 30.0, "speed_mult": 0.85, "fire_rate_mult": 1.0, "dmg_scale": 1.25,
+		"accuracy_bonus": 0.0, "react_mult": 1.0,
+		"fire_range": 0.0, "keep_min": 0.0, "keep_max": 200.0,
+		"chassis": "boss_rammer", "role": "rammer", "color_key": "boss_rammer",
+		"weight": 3, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
+		"base_hp": Cfg.RAMMER_BOSS_BASE_HP,
+	},
+	"boss_chimera": {
+		"id": "boss_chimera", "name": "Фантом-Химера", "icon": "🧪",
+		"hp_mult": 20.0, "speed_mult": 1.25, "fire_rate_mult": 0.85, "dmg_scale": 1.35,
+		"accuracy_bonus": 0.15, "react_mult": 0.8,
+		"fire_range": 440.0, "keep_min": 140.0, "keep_max": 300.0,
+		"chassis": "boss_chimera", "role": "phantom", "color_key": "boss_chimera",
+		"weight": 3, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
+		"base_hp": Cfg.CHIMERA_BOSS_BASE_HP,
+	},
 }
 
-const ORDER := ["grunt", "scout", "heavy", "sniper", "mortar", "boss"]
+const ORDER := ["grunt", "scout", "heavy", "sniper", "mortar", "boss", "boss_rammer", "boss_chimera"]
 
 static func get_type(id: String) -> Dictionary:
 	return LIST.get(id, {})

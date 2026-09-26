@@ -1,33 +1,56 @@
 class_name TerrainTextures
 extends RefCounted
 
-const DIR := "res://art/terrain/city/"
 static var _cache := {}
 
-static func _load_cached(file: String) -> Texture2D:
-	if not _cache.has(file):
-		_cache[file] = load(DIR + file)
-	return _cache[file]
+static func has_textures(loc: String) -> bool:
+	return loc == "city" or loc == "grassland"
 
-static func grass() -> Texture2D:
-	return _load_cached("grass.png")
+static func _load_cached(loc: String, file: String) -> Texture2D:
+	var effective_loc := loc if has_textures(loc) else "city"
+	var key := effective_loc + "/" + file
+	if _cache.has(key):
+		return _cache[key]
 
-static func tree() -> Texture2D:
-	return _load_cached("tree1.png")
+	var path := "res://art/terrain/%s/%s" % [effective_loc, file]
+	if ResourceLoader.exists(path):
+		var res = load(path)
+		if res is Texture2D:
+			_cache[key] = res
+			return res
 
-static func bush() -> Texture2D:
-	return _load_cached("bush1.png")
+	var global_path := ProjectSettings.globalize_path(path)
+	if FileAccess.file_exists(global_path) or FileAccess.file_exists(path):
+		var img := Image.load_from_file(global_path)
+		if img != null and not img.is_empty():
+			var tex := ImageTexture.create_from_image(img)
+			_cache[key] = tex
+			return tex
 
-static func bridge(horizontal: bool) -> Texture2D:
-	return _load_cached("bridge1.png") if horizontal else _load_cached("bridge2.png")
+	# Fallback to city
+	if effective_loc != "city":
+		return _load_cached("city", file)
+	return null
 
-static func building(is_wood: bool) -> Texture2D:
-	return _load_cached("woodenbuilding1.png") if is_wood else _load_cached("stonebuilding1.png")
+static func grass(loc: String = "city") -> Texture2D:
+	return _load_cached(loc, "grass.png")
 
-static func road(index: int) -> Texture2D:
+static func tree(loc: String = "city") -> Texture2D:
+	return _load_cached(loc, "tree1.png")
+
+static func bush(loc: String = "city") -> Texture2D:
+	return _load_cached(loc, "bush1.png")
+
+static func bridge(horizontal: bool, loc: String = "city") -> Texture2D:
+	return _load_cached(loc, "bridge1.png" if horizontal else "bridge2.png")
+
+static func building(is_wood: bool, loc: String = "city") -> Texture2D:
+	return _load_cached(loc, "woodenbuilding1.png" if is_wood else "stonebuilding1.png")
+
+static func road(index: int, loc: String = "city") -> Texture2D:
 	if index == 7:
-		return _load_cached("road16.png")
-	return _load_cached("road%d.png" % index)
+		return _load_cached(loc, "road16.png")
+	return _load_cached(loc, "road%d.png" % index)
 
-static func river(index: int) -> Texture2D:
-	return _load_cached("river%d.png" % index)
+static func river(index: int, loc: String = "city") -> Texture2D:
+	return _load_cached(loc, "river%d.png" % index)

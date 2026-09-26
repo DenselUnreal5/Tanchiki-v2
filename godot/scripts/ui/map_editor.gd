@@ -204,14 +204,14 @@ func _build_ui() -> void:
 	# Main Margin Layout
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 20)
-	margin.add_theme_constant_override("margin_right", 20)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
 	add_child(margin)
 
 	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 18)
+	hbox.add_theme_constant_override("separation", 12)
 	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(hbox)
@@ -220,7 +220,7 @@ func _build_ui() -> void:
 	var left_col := VBoxContainer.new()
 	left_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	left_col.add_theme_constant_override("separation", 10)
+	left_col.add_theme_constant_override("separation", 8)
 	hbox.add_child(left_col)
 
 	_build_canvas_toolbar(left_col)
@@ -232,14 +232,16 @@ func _build_ui() -> void:
 
 func _build_canvas_toolbar(parent: Control) -> void:
 	var top_bar := HBoxContainer.new()
-	top_bar.add_theme_constant_override("separation", 12)
+	top_bar.add_theme_constant_override("separation", 8)
 	parent.add_child(top_bar)
 
-	var title_lbl := UiKit.title("ПРЕДПРОСМОТР КАРТЫ", 20, Cfg.UI_TEXT)
+	var title_lbl := UiKit.title("ПРЕДПРОСМОТР КАРТЫ", 18, Cfg.UI_TEXT)
 	top_bar.add_child(title_lbl)
 
-	_title_sub = UiKit.label("", 12, Cfg.UI_MUTED)
+	_title_sub = UiKit.label("", 11, Cfg.UI_MUTED)
 	_title_sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_title_sub.clip_text = true
+	_title_sub.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	top_bar.add_child(_title_sub)
 
 	# Zoom controls
@@ -258,6 +260,16 @@ func _build_canvas_toolbar(parent: Control) -> void:
 	btn_reset.pressed.connect(func(): if _canvas: _canvas.reset_view())
 	top_bar.add_child(btn_reset)
 
+	var btn_tex := UiKit.small(" 🎨 Текстуры ")
+	btn_tex.tooltip_text = "Переключить отображение текстур биома или схемы"
+	btn_tex.pressed.connect(func():
+		if _canvas:
+			_canvas.show_textures = not _canvas.show_textures
+			btn_tex.text = " 🎨 Текстуры " if _canvas.show_textures else " 📐 Схема "
+			_canvas.queue_redraw()
+	)
+	top_bar.add_child(btn_tex)
+
 func _build_canvas_area(parent: Control) -> void:
 	var canvas_frame := PanelContainer.new()
 	canvas_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -275,50 +287,67 @@ func _build_canvas_area(parent: Control) -> void:
 
 func _build_canvas_footer(parent: Control) -> void:
 	var bot_bar := HBoxContainer.new()
-	bot_bar.add_theme_constant_override("separation", 10)
+	bot_bar.add_theme_constant_override("separation", 8)
 	parent.add_child(bot_bar)
 
 	_info_label = UiKit.label("Клетка: - | Тайл: -", 11, Cfg.UI_TEXT, true)
 	_info_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_info_label.clip_text = true
+	_info_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	bot_bar.add_child(_info_label)
 
-	var hint := UiKit.label("🖱 Перетаскивание: панорама · Колёсико: зум · Пробел/R: генерация", 11, Cfg.UI_MUTED)
+	var hint := UiKit.label("🖱 Панорама: зажать ЛКМ · ⚙ Зум: колёсико · ⌨ Пробел: случайный сид", 11, Cfg.UI_MUTED)
+	hint.clip_text = true
+	hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	bot_bar.add_child(hint)
 
 func _build_control_panel(parent: Control) -> void:
 	var panel := ThemedPanel.new()
-	panel.custom_minimum_size = Vector2(430, 0)
+	panel.custom_minimum_size = Vector2(350, 0)
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.seed_value = randi()
+	# Override default ThemedPanel padding for a tighter, cleaner fit
+	panel.add_theme_constant_override("margin_left", 14)
+	panel.add_theme_constant_override("margin_right", 14)
+	panel.add_theme_constant_override("margin_top", 12)
+	panel.add_theme_constant_override("margin_bottom", 12)
 	parent.add_child(panel)
 
+	# Outer vertical layout holding: Fixed Header, Scrollable Options, Fixed Action Footer
+	var panel_vbox := VBoxContainer.new()
+	panel_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel_vbox.add_theme_constant_override("separation", 8)
+	panel.add_child(panel_vbox)
+
+	# --- Pinned Header ---
+	var hdr := UiKit.vbox(1)
+	var t := UiKit.title("РЕДАКТОР КАРТ", 18, Cfg.UI_TEXT)
+	hdr.add_child(t)
+	var sub := UiKit.label("Генератор разнообразных тактических карт", 10, Cfg.UI_MUTED)
+	hdr.add_child(sub)
+	panel_vbox.add_child(hdr)
+
+	panel_vbox.add_child(_make_divider())
+
+	# --- Scrollable Middle Content ---
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	panel.add_child(scroll)
+	panel_vbox.add_child(scroll)
 
 	var vcol := VBoxContainer.new()
 	vcol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vcol.add_theme_constant_override("separation", 14)
+	vcol.add_theme_constant_override("separation", 9)
 	scroll.add_child(vcol)
-
-	# Panel Header
-	var hdr := UiKit.vbox(2)
-	var t := UiKit.title("РЕДАКТОР КАРТ", 22, Cfg.UI_TEXT)
-	hdr.add_child(t)
-	var sub := UiKit.label("Генератор разнообразных тактических карт", 11, Cfg.UI_MUTED)
-	hdr.add_child(sub)
-	vcol.add_child(hdr)
-
-	vcol.add_child(_make_divider())
 
 	# Section 1: Biomes
 	vcol.add_child(UiKit.label("ЛОКАЦИЯ И БИОМ", 11, Cfg.UI_ACCENT, true))
 	var loc_grid := GridContainer.new()
 	loc_grid.columns = 2
-	loc_grid.add_theme_constant_override("h_separation", 6)
-	loc_grid.add_theme_constant_override("v_separation", 6)
+	loc_grid.add_theme_constant_override("h_separation", 5)
+	loc_grid.add_theme_constant_override("v_separation", 5)
 	vcol.add_child(loc_grid)
 
 	_loc_buttons.clear()
@@ -327,6 +356,7 @@ func _build_control_panel(parent: Control) -> void:
 		var loc_name: String = loc_info.get("name", loc_id)
 		var loc_icon: String = loc_info.get("icon", "📍")
 		var b := UiKit.toggle("%s %s" % [loc_icon, loc_name], 11)
+		b.clip_text = true
 		b.button_group = _loc_btn_group
 		b.button_pressed = (loc_id == current_location)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -342,13 +372,14 @@ func _build_control_panel(parent: Control) -> void:
 	vcol.add_child(UiKit.label("РЕЖИМ БОЯ", 11, Cfg.UI_ACCENT, true))
 	var mode_grid := GridContainer.new()
 	mode_grid.columns = 2
-	mode_grid.add_theme_constant_override("h_separation", 6)
-	mode_grid.add_theme_constant_override("v_separation", 6)
+	mode_grid.add_theme_constant_override("h_separation", 5)
+	mode_grid.add_theme_constant_override("v_separation", 5)
 	vcol.add_child(mode_grid)
 
 	_mode_buttons.clear()
 	for m in MODES:
 		var b := UiKit.toggle(m["name"], 11)
+		b.clip_text = true
 		b.tooltip_text = m["desc"]
 		b.button_group = _mode_btn_group
 		b.button_pressed = (m["id"] == current_mode)
@@ -367,13 +398,14 @@ func _build_control_panel(parent: Control) -> void:
 	vcol.add_child(UiKit.label("АРХИТЕКТУРА И СТИЛЬ КАРТЫ", 11, Cfg.UI_ACCENT, true))
 	var arch_grid := GridContainer.new()
 	arch_grid.columns = 2
-	arch_grid.add_theme_constant_override("h_separation", 6)
-	arch_grid.add_theme_constant_override("v_separation", 6)
+	arch_grid.add_theme_constant_override("h_separation", 5)
+	arch_grid.add_theme_constant_override("v_separation", 5)
 	vcol.add_child(arch_grid)
 
 	_arch_buttons.clear()
 	for a in ARCHETYPES:
 		var b := UiKit.toggle(a["name"], 11)
+		b.clip_text = true
 		b.tooltip_text = a["desc"]
 		b.button_group = _arch_btn_group
 		b.button_pressed = (a["id"] == current_archetype)
@@ -397,14 +429,14 @@ func _build_control_panel(parent: Control) -> void:
 	seed_col.add_child(UiKit.label("СИД (SEED)", 10, Cfg.UI_MUTED, true))
 
 	var seed_input_row := HBoxContainer.new()
-	seed_input_row.add_theme_constant_override("separation", 6)
+	seed_input_row.add_theme_constant_override("separation", 4)
 	seed_col.add_child(seed_input_row)
 
 	_seed_input = LineEdit.new()
 	_seed_input.text = str(current_seed)
 	_seed_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_seed_input.add_theme_font_override("font", Fonts.regular)
-	_seed_input.add_theme_font_size_override("font_size", 12)
+	_seed_input.add_theme_font_size_override("font_size", 11)
 	_seed_input.text_submitted.connect(func(text: String):
 		if text.is_valid_int():
 			current_seed = text.to_int()
@@ -423,13 +455,13 @@ func _build_control_panel(parent: Control) -> void:
 	var lvl_col := VBoxContainer.new()
 	lvl_col.add_child(UiKit.label("УРОВЕНЬ", 10, Cfg.UI_MUTED, true))
 	var lvl_row := HBoxContainer.new()
-	lvl_row.add_theme_constant_override("separation", 4)
+	lvl_row.add_theme_constant_override("separation", 3)
 	lvl_col.add_child(lvl_row)
 
 	_level_buttons.clear()
 	for l in range(1, 6):
 		var lb := UiKit.toggle(str(l), 11)
-		lb.custom_minimum_size = Vector2(28, 28)
+		lb.custom_minimum_size = Vector2(26, 26)
 		lb.button_group = _level_btn_group
 		lb.button_pressed = (l == current_level)
 		lb.pressed.connect(func():
@@ -449,8 +481,8 @@ func _build_control_panel(parent: Control) -> void:
 
 	var sgrid := GridContainer.new()
 	sgrid.columns = 2
-	sgrid.add_theme_constant_override("h_separation", 16)
-	sgrid.add_theme_constant_override("v_separation", 5)
+	sgrid.add_theme_constant_override("h_separation", 10)
+	sgrid.add_theme_constant_override("v_separation", 4)
 	stats_card.add_child(sgrid)
 
 	_stat_size = _add_stat_row(sgrid, "📐 Размеры:", "-")
@@ -460,32 +492,42 @@ func _build_control_panel(parent: Control) -> void:
 	_stat_roads = _add_stat_row(sgrid, "🛣 Дорог:", "-")
 	_stat_flags = _add_stat_row(sgrid, "🎯 Точек целей:", "-")
 
-	vcol.add_child(_make_divider())
+	# --- Pinned Footer Action Bar (Always Visible!) ---
+	var footer_box := UiKit.vbox(6)
+	panel_vbox.add_child(footer_box)
 
-	# Section 6: Action Buttons
-	_btn_gen = UiKit.secondary("🎲 Сгенерировать карту (Space / R)", 13)
-	_btn_gen.custom_minimum_size = Vector2(0, 38)
+	footer_box.add_child(_make_divider())
+
+	_btn_battle = UiKit.primary("⚔ В БОЙ НА ЭТОЙ КАРТЕ!", 14)
+	_btn_battle.custom_minimum_size = Vector2(0, 40)
+	_btn_battle.pressed.connect(_on_battle_pressed)
+	footer_box.add_child(_btn_battle)
+
+	var act_row := HBoxContainer.new()
+	act_row.add_theme_constant_override("separation", 6)
+	footer_box.add_child(act_row)
+
+	_btn_gen = UiKit.secondary("🎲 Случайно (Space)", 11)
+	_btn_gen.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_btn_gen.custom_minimum_size = Vector2(0, 32)
 	_btn_gen.pressed.connect(func():
 		randomize_seed()
 		generate_map())
-	vcol.add_child(_btn_gen)
+	act_row.add_child(_btn_gen)
 
-	_btn_battle = UiKit.primary("⚔ В БОЙ НА ЭТОЙ КАРТЕ!", 16)
-	_btn_battle.custom_minimum_size = Vector2(0, 48)
-	_btn_battle.pressed.connect(_on_battle_pressed)
-	vcol.add_child(_btn_battle)
-
-	_btn_close = UiKit.secondary("✖ В главное меню (Esc)", 12)
-	_btn_close.custom_minimum_size = Vector2(0, 34)
+	_btn_close = UiKit.secondary("✖ В меню (Esc)", 11)
+	_btn_close.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_btn_close.custom_minimum_size = Vector2(0, 32)
 	_btn_close.pressed.connect(func(): close_requested.emit())
-	vcol.add_child(_btn_close)
+	act_row.add_child(_btn_close)
 
 func _add_stat_row(parent: Control, title: String, def_val: String) -> Label:
-	var l_title := UiKit.label(title, 11, Cfg.UI_MUTED)
+	var l_title := UiKit.label(title, 10, Cfg.UI_MUTED)
 	parent.add_child(l_title)
-	var l_val := UiKit.label(def_val, 11, Color.WHITE, true)
+	var l_val := UiKit.label(def_val, 10, Color.WHITE, true)
 	l_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	l_val.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l_val.clip_text = true
 	parent.add_child(l_val)
 	return l_val
 
@@ -515,6 +557,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif (event.keycode == KEY_SPACE or event.keycode == KEY_R) and not (_seed_input != null and _seed_input.has_focus()):
 			randomize_seed()
 			generate_map()
+			get_viewport().set_input_as_handled()
+		elif (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER) and not (_seed_input != null and _seed_input.has_focus()):
+			_on_battle_pressed()
 			get_viewport().set_input_as_handled()
 
 func set_hover_info(r: int, c: int) -> void:
@@ -558,6 +603,7 @@ class _MapCanvas extends Control:
 	var _dragging: bool = false
 	var _drag_start: Vector2 = Vector2.ZERO
 	var _hover_cell: Vector2i = Vector2i(-1, -1)
+	var show_textures: bool = true
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
@@ -635,6 +681,7 @@ class _MapCanvas extends Control:
 			return
 
 		var loc_id: String = editor.current_location if editor != null else Locations.CITY
+		var use_textures: bool = show_textures and TerrainTextures.has_textures(loc_id)
 		var loc_info: Dictionary = Locations.get_location(loc_id)
 		var ground_col: Color = Color(loc_info.get("ground", "#3a3a2a"))
 		var ground_alt: Color = Color(loc_info.get("ground_alt", "#37372a"))
@@ -645,7 +692,8 @@ class _MapCanvas extends Control:
 
 		# Map Ground Background & Shadow
 		draw_rect(Rect2(pan_offset + Vector2(4, 6), Vector2(map_w, map_h)), Color(0, 0, 0, 0.45))
-		draw_rect(Rect2(pan_offset, Vector2(map_w, map_h)), ground_col)
+		if not use_textures:
+			draw_rect(Rect2(pan_offset, Vector2(map_w, map_h)), ground_col)
 
 		# Visible bounds check (frustum culling)
 		var r_min := maxi(0, int(floor((-pan_offset.y) / tile_sz)))
@@ -653,12 +701,16 @@ class _MapCanvas extends Control:
 		var c_min := maxi(0, int(floor((-pan_offset.x) / tile_sz)))
 		var c_max := mini(current_map.cols - 1, int(ceil((size.x - pan_offset.x) / tile_sz)))
 
-		# 1. Ground Checkerboard & Natural Variations
+		# 1. Ground Checkerboard & Natural Variations or Ground Textures
+		var grass_tex: Texture2D = TerrainTextures.grass(loc_id) if use_textures else null
 		for r in range(r_min, r_max + 1):
 			for c in range(c_min, c_max + 1):
-				if (r + c) % 2 == 1:
-					var p := pan_offset + Vector2(c, r) * tile_sz
-					draw_rect(Rect2(p, Vector2(tile_sz, tile_sz)), ground_alt)
+				var p := pan_offset + Vector2(c, r) * tile_sz
+				var rect := Rect2(p, Vector2(tile_sz, tile_sz))
+				if grass_tex != null:
+					draw_texture_rect(grass_tex, rect, false)
+				elif (r + c) % 2 == 1:
+					draw_rect(rect, ground_alt)
 
 		# 2. Tiles Layer
 		for r in range(r_min, r_max + 1):
@@ -669,23 +721,82 @@ class _MapCanvas extends Control:
 
 				match t:
 					Cfg.T_ROAD:
-						_draw_road(rect, loc_id)
+						if use_textures:
+							var up := _is_paved(r - 1, c)
+							var down := _is_paved(r + 1, c)
+							var left := _is_paved(r, c - 1)
+							var right := _is_paved(r, c + 1)
+							var idx := _road_index(r, c, up, down, left, right)
+							var rtex := TerrainTextures.road(idx, loc_id)
+							if rtex != null:
+								draw_texture_rect(rtex, rect, false)
+							else:
+								_draw_road(rect, loc_id)
+						else:
+							_draw_road(rect, loc_id)
 					Cfg.T_WATER:
-						_draw_water(rect)
+						if use_textures:
+							var up := _is_not_water(r - 1, c)
+							var down := _is_not_water(r + 1, c)
+							var left := _is_not_water(r, c - 1)
+							var right := _is_not_water(r, c + 1)
+							var idx := _river_index(up, down, left, right)
+							var wtex := TerrainTextures.river(idx, loc_id)
+							if wtex != null:
+								draw_texture_rect(wtex, rect, false)
+							else:
+								_draw_water(rect)
+						else:
+							_draw_water(rect)
 					Cfg.T_BRIDGE:
-						_draw_bridge(rect)
+						if use_textures:
+							var horiz := _is_paved(r, c - 1) or _is_paved(r, c + 1)
+							var btex := TerrainTextures.bridge(horiz, loc_id)
+							if btex != null:
+								draw_texture_rect(btex, rect, false)
+							else:
+								_draw_bridge(rect)
+						else:
+							_draw_bridge(rect)
 					Cfg.T_SAND, Cfg.T_DUNE:
 						draw_rect(rect, Color("#c9b878"))
 					Cfg.T_QUICKSAND:
 						draw_rect(rect, Color("#7d6a45"))
 					Cfg.T_GRASS:
-						draw_rect(rect, Color("#3d5c33"))
+						if use_textures:
+							if grass_tex != null:
+								draw_texture_rect(grass_tex, rect, false)
+							if (r * 74351 + c * 5911) % 7 == 0:
+								var bs := tile_sz * 0.65
+								var b_rect := Rect2(rect.position + Vector2((tile_sz - bs) * 0.5, (tile_sz - bs) * 0.5), Vector2(bs, bs))
+								var btex := TerrainTextures.bush(loc_id)
+								if btex != null:
+									draw_texture_rect(btex, b_rect, false)
+						else:
+							draw_rect(rect, Color("#3d5c33"))
 					Cfg.T_WALL:
 						_draw_wall(rect)
 					Cfg.T_BRICK, Cfg.T_ADOBE:
-						_draw_brick(rect)
+						if use_textures:
+							var variant := Materials.variant_at(r, c)
+							var bldg := TerrainTextures.building(variant == 3, loc_id)
+							if bldg != null:
+								draw_texture_rect(bldg, rect, false)
+							else:
+								_draw_brick(rect)
+						else:
+							_draw_brick(rect)
 					Cfg.T_TREE:
-						_draw_tree(rect)
+						if use_textures:
+							if grass_tex != null:
+								draw_texture_rect(grass_tex, rect, false)
+							var ttex := TerrainTextures.tree(loc_id)
+							if ttex != null:
+								draw_texture_rect(ttex, rect, false)
+							else:
+								_draw_tree(rect)
+						else:
+							_draw_tree(rect)
 					Cfg.T_BASE_P:
 						_draw_base(rect, Color("#3498db"), "P")
 					Cfg.T_BASE_E:
@@ -701,6 +812,74 @@ class _MapCanvas extends Control:
 		if _hover_cell != Vector2i(-1, -1) and current_map.in_bounds(_hover_cell.y, _hover_cell.x):
 			var hp := pan_offset + Vector2(_hover_cell.x, _hover_cell.y) * tile_sz
 			draw_rect(Rect2(hp, Vector2(tile_sz, tile_sz)), Color(1.0, 1.0, 1.0, 0.8), false, 2.0)
+
+	func _is_paved(r: int, c: int) -> bool:
+		if current_map == null or not current_map.in_bounds(r, c):
+			return false
+		var t := current_map.get_tile(r, c)
+		return t == Cfg.T_ROAD or t == Cfg.T_BRIDGE
+
+	func _is_not_water(r: int, c: int) -> bool:
+		if current_map == null or not current_map.in_bounds(r, c):
+			return false
+		return current_map.get_tile(r, c) != Cfg.T_WATER
+
+	func _road_index(r: int, c: int, up: bool, down: bool, left: bool, right: bool) -> int:
+		var n := (1 if up else 0) + (1 if down else 0) + (1 if left else 0) + (1 if right else 0)
+		if n >= 3:
+			if up and down and left and right:
+				return 7
+			if up and down and left:
+				return 10
+			if up and down and right:
+				return 11
+			if left and right and up:
+				return 8
+			if left and right and down:
+				return 9
+		if n == 2:
+			if left and right:
+				return 1
+			if up and down:
+				return 2
+			if up and left:
+				return 14
+			if up and right:
+				return 15
+			if down and left:
+				return 12
+			if down and right:
+				return 13
+		if up or down:
+			return 2
+		if left or right:
+			return 1
+		return 1
+
+	func _river_index(up: bool, down: bool, left: bool, right: bool) -> int:
+		if not up and not down and not left and not right:
+			return 3
+		if up and not down and not left and not right:
+			return 4
+		if down and not up and not left and not right:
+			return 7
+		if left and not up and not down and not right:
+			return 5
+		if right and not up and not down and not left:
+			return 6
+		if up and left and not down and not right:
+			return 8
+		if up and right and not down and not left:
+			return 9
+		if down and left and not up and not right:
+			return 10
+		if down and right and not up and not left:
+			return 11
+		if up and down and not left and not right:
+			return 1
+		if left and right and not up and not down:
+			return 2
+		return 3
 
 	func _draw_road(rect: Rect2, loc_id: String) -> void:
 		var road_color := Color("#2c2d30")

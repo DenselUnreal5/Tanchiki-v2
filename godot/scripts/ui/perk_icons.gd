@@ -639,6 +639,119 @@ static var ICONS := {
 		{"op": "rect", "c": Vector2(50,30), "size": Vector2(24,8), "rot": 0},
 		{"op": "arc", "c": Vector2(20,14), "r": 8, "a0": 30, "a1": 330, "w": 4},
 	],
+	"cos_skin_none": [
+		{"op": "rect", "c": Vector2(32,32), "size": Vector2(36,44), "rot": 0},
+	],
+	"cos_skin_cyberpunk": [
+		{"op": "rect", "c": Vector2(32,32), "size": Vector2(38,38), "rot": 0},
+		{"op": "poly", "pts": [Vector2(36,12), Vector2(24,32), Vector2(32,32), Vector2(28,52), Vector2(40,30), Vector2(32,30)]},
+	],
+	"cos_skin_magma": [
+		{"op": "poly", "pts": [Vector2(32,8), Vector2(52,54), Vector2(12,54)]},
+		{"op": "circle", "c": Vector2(32,36), "r": 8, "fill": true},
+	],
+	"cos_skin_steampunk": [
+		{"op": "circle", "c": Vector2(32,32), "r": 18, "fill": false, "w": 6},
+		{"op": "circle", "c": Vector2(32,32), "r": 8, "fill": true},
+	],
+	"cos_skin_void": [
+		{"op": "arc", "c": Vector2(32,32), "r": 20, "a0": 0, "a1": 360, "w": 4},
+		{"op": "poly", "pts": [Vector2(32,10), Vector2(36,28), Vector2(54,32), Vector2(36,36), Vector2(32,54), Vector2(28,36), Vector2(10,32), Vector2(28,28)]},
+	],
+	"cos_skin_dragon": [
+		{"op": "poly", "pts": [Vector2(32,8), Vector2(50,22), Vector2(44,52), Vector2(32,60), Vector2(20,52), Vector2(14,22)]},
+		{"op": "circle", "c": Vector2(32,32), "r": 6, "fill": true},
+	],
+	"cos_skin_toxic": [
+		{"op": "circle", "c": Vector2(32,32), "r": 6, "fill": true},
+		{"op": "arc", "c": Vector2(32,32), "r": 18, "a0": -30, "a1": 30, "w": 8},
+		{"op": "arc", "c": Vector2(32,32), "r": 18, "a0": 90, "a1": 150, "w": 8},
+		{"op": "arc", "c": Vector2(32,32), "r": 18, "a0": 210, "a1": 270, "w": 8},
+	],
+	"cos_skin_golden_emperor": [
+		{"op": "poly", "pts": [Vector2(14,48), Vector2(50,48), Vector2(52,24), Vector2(40,36), Vector2(32,18), Vector2(24,36), Vector2(12,24)]},
+		{"op": "circle", "c": Vector2(32,54), "r": 4, "fill": true},
+	],
+	"cos_skin_arctic_frost": [
+		{"op": "line", "a": Vector2(32,10), "b": Vector2(32,54), "w": 6},
+		{"op": "line", "a": Vector2(14,22), "b": Vector2(50,42), "w": 6},
+		{"op": "line", "a": Vector2(14,42), "b": Vector2(50,22), "w": 6},
+		{"op": "circle", "c": Vector2(32,32), "r": 5, "fill": true},
+	],
+	"cos_hull_skull": [
+		{"op": "circle", "c": Vector2(32,24), "r": 16, "fill": true},
+		{"op": "rect", "c": Vector2(32,44), "size": Vector2(18,12), "rot": 0},
+	],
+	"cos_hull_dragon_crest": [
+		{"op": "poly", "pts": [Vector2(32,8), Vector2(48,22), Vector2(52,42), Vector2(32,56), Vector2(12,42), Vector2(16,22)]},
+	],
+	"cos_hull_biohazard": [
+		{"op": "circle", "c": Vector2(32,32), "r": 6, "fill": true},
+		{"op": "arc", "c": Vector2(32,32), "r": 18, "a0": -30, "a1": 30, "w": 6},
+		{"op": "arc", "c": Vector2(32,32), "r": 18, "a0": 90, "a1": 150, "w": 6},
+		{"op": "arc", "c": Vector2(32,32), "r": 18, "a0": 210, "a1": 270, "w": 6},
+	],
+	"cos_hull_lightning_bolt": [
+		{"op": "poly", "pts": [Vector2(36,6), Vector2(18,30), Vector2(32,30), Vector2(26,58), Vector2(46,26), Vector2(32,26)]},
+	],
+	"cos_hull_shark_mouth": [
+		{"op": "arc", "c": Vector2(32,24), "r": 20, "a0": 30, "a1": 150, "w": 8},
+		{"op": "poly", "pts": [Vector2(20,38), Vector2(24,48), Vector2(28,38), Vector2(32,48), Vector2(36,38), Vector2(40,48), Vector2(44,38)]},
+	],
+	"cos_hull_wings": [
+		{"op": "poly", "pts": [Vector2(32,32), Vector2(8,16), Vector2(12,38)]},
+		{"op": "poly", "pts": [Vector2(32,32), Vector2(56,16), Vector2(52,38)]},
+	],
+	"cos_hull_bullseye": [
+		{"op": "circle", "c": Vector2(32,32), "r": 20, "fill": false, "w": 4},
+		{"op": "circle", "c": Vector2(32,32), "r": 12, "fill": false, "w": 4},
+		{"op": "circle", "c": Vector2(32,32), "r": 4, "fill": true},
+	],
+	"cos_track_neon_cyan": [
+		{"op": "rect", "c": Vector2(32,32), "size": Vector2(44,14), "rot": 0},
+		{"op": "line", "a": Vector2(10,32), "b": Vector2(54,32), "w": 4},
+	],
+	"cos_track_magma_track": [
+		{"op": "rect", "c": Vector2(32,32), "size": Vector2(44,14), "rot": 0},
+		{"op": "circle", "c": Vector2(32,18), "r": 6, "fill": true},
+	],
+	"cos_track_plasma": [
+		{"op": "rect", "c": Vector2(32,32), "size": Vector2(44,14), "rot": 0},
+		{"op": "circle", "c": Vector2(32,32), "r": 8, "fill": true},
+	],
+	"cos_track_emerald_track": [
+		{"op": "rect", "c": Vector2(32,32), "size": Vector2(44,14), "rot": 0},
+		{"op": "circle", "c": Vector2(22,32), "r": 6, "fill": true},
+		{"op": "circle", "c": Vector2(42,32), "r": 6, "fill": true},
+	],
+	"cos_track_carbon_track": [
+		{"op": "rect", "c": Vector2(32,32), "size": Vector2(44,14), "rot": 0},
+	],
+	"cos_turret_cyber_turret": [
+		{"op": "circle", "c": Vector2(32,30), "r": 20, "fill": true},
+		{"op": "rect", "c": Vector2(50,30), "size": Vector2(24,8), "rot": 0},
+		{"op": "line", "a": Vector2(20,30), "b": Vector2(44,30), "w": 4},
+	],
+	"cos_turret_magma_turret": [
+		{"op": "circle", "c": Vector2(32,30), "r": 20, "fill": true},
+		{"op": "rect", "c": Vector2(50,30), "size": Vector2(24,8), "rot": 0},
+		{"op": "circle", "c": Vector2(32,30), "r": 8, "fill": true},
+	],
+	"cos_turret_plasma_turret": [
+		{"op": "circle", "c": Vector2(32,30), "r": 20, "fill": true},
+		{"op": "rect", "c": Vector2(50,30), "size": Vector2(24,8), "rot": 0},
+		{"op": "circle", "c": Vector2(32,30), "r": 6, "fill": false, "w": 4},
+	],
+	"cos_turret_steampunk_turret": [
+		{"op": "circle", "c": Vector2(32,30), "r": 20, "fill": true},
+		{"op": "rect", "c": Vector2(50,30), "size": Vector2(24,8), "rot": 0},
+		{"op": "circle", "c": Vector2(32,30), "r": 8, "fill": false, "w": 3},
+	],
+	"cos_turret_chrome_turret": [
+		{"op": "circle", "c": Vector2(32,30), "r": 20, "fill": true},
+		{"op": "rect", "c": Vector2(50,30), "size": Vector2(24,8), "rot": 0},
+		{"op": "arc", "c": Vector2(32,30), "r": 14, "a0": 180, "a1": 270, "w": 4},
+	],
 }
 
 static var TEXTURE_PATHS := {
@@ -701,6 +814,7 @@ static var TEXTURE_PATHS := {
 	"corrosive_acid": "res://art/perks/corrosive_acid.png",
 	"acid_cloud": "res://art/perks/acid_cloud.png",
 	"corroding_armor": "res://art/perks/corroding_armor.png",
+	"acid_bomb": "res://art/perks/corrosive_acid.png",
 	"bot_rapid": "res://art/perks/rapid_fire.png",
 	"bot_speed": "res://art/perks/sprinter.png",
 	"bot_tough": "res://art/perks/heavy_armor.png",

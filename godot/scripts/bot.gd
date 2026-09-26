@@ -149,6 +149,32 @@ func update(tank: Tank, world) -> void:
 		target_dist = Vector2(tgt.x - tank.x, tgt.y - tank.y).length()
 		has_shot = true if lobbed else _los_cache
 
+	if tank.is_rammer_boss:
+		if tank.rammer_state == "telegraph" or tank.rammer_state == "charge":
+			return
+		if tank.rammer_state == "idle":
+			if tgt != null and target_dist < 520.0:
+				tank.start_rammer_charge(tgt.x, tgt.y, world)
+				return
+			elif world.mode == "defense" and world.base != null:
+				var d_b := Vector2(world.base["x"] - tank.x, world.base["y"] - tank.y).length()
+				if d_b < 480.0:
+					tank.start_rammer_charge(world.base["x"], world.base["y"], world)
+					return
+
+	if tank.is_chimera_boss:
+		# When cloaked, Chimera stalks into ambush position (behind/flanking the target)
+		if tank.shadow_timer > 0 and tgt != null:
+			var flank_angle: float = tgt.body_angle + PI
+			var stalk_dist := 130.0
+			var flank_x: float = tgt.x + cos(flank_angle) * stalk_dist
+			var flank_y: float = tgt.y + sin(flank_angle) * stalk_dist
+			_move_toward(tank, world, flank_x, flank_y)
+			tank.slew_turret_to(atan2(tgt.y - tank.y, tgt.x - tank.x))
+			if target_dist <= 220.0 and has_shot:
+				_try_fire(tank, world, tgt, target_dist, has_shot)
+			return
+
 	_maybe_use_ability(tank, world, target_dist, has_shot)
 
 	if dodge_timer <= 0:
@@ -393,7 +419,7 @@ func _do_combat(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> v
 	_try_fire(tank, world, tgt, target_dist, has_shot)
 
 func _try_dash(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> bool:
-	if tank.dash_cooldown > 0 or tank.dash_range > 0.0:
+	if tank.is_rammer_boss or tank.dash_cooldown > 0 or tank.dash_range > 0.0:
 		return false
 	if dash_timer > 0:
 		return false
@@ -457,7 +483,7 @@ func on_damaged(attacker) -> void:
 		_los_cache = true
 
 func _maybe_use_ability(tank: Tank, world, target_dist: float, has_shot: bool) -> void:
-	if tank.ability_id == "" or tank.ability_cd > 0:
+	if tank.is_rammer_boss or tank.ability_id == "" or tank.ability_cd > 0:
 		return
 	match tank.ability_id:
 		"shockwave":
@@ -473,7 +499,7 @@ func _maybe_use_ability(tank: Tank, world, target_dist: float, has_shot: bool) -
 				tank.use_ability(world)
 
 func _try_fire(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> void:
-	if tgt == null or not has_shot:
+	if tank.is_rammer_boss or tgt == null or not has_shot:
 		return
 	if target_dist > fire_range:
 		return

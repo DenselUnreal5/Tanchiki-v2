@@ -61,15 +61,31 @@ func _style_button(target: Button, donor: Button) -> void:
 
 func set_data(perk_id: String, icon_color: Color, name_text: String, state_text: String,
 		action_text: String, action_disabled: bool, equipped: bool, can_buy: bool,
-		card_id: String) -> void:
+		card_id: String, rarity: String = "", desc_text: String = "") -> void:
 	set_meta("card_id", card_id)
-	var border := Cfg.UI_ACCENT_DIM if equipped else (Color(Cfg.UI_GOLD, 0.45) if can_buy else Cfg.UI_BORDER)
+	var border := Cfg.UI_ACCENT if equipped else (
+		Color("#ffd700", 0.85) if rarity == "legendary" else (
+			Color("#c084fc", 0.75) if rarity == "epic" else (
+				Color(Cfg.UI_GOLD, 0.45) if can_buy else Cfg.UI_BORDER
+			)
+		)
+	)
 	add_theme_stylebox_override("panel", UiKit.card_style(border))
 
 	_icon.perk_id = perk_id
 	_icon.icon_color = icon_color
+	var badge := ""
+	if rarity == "legendary":
+		badge = " [color=#ffd700][★ ЛЕГЕНДА][/color]"
+	elif rarity == "epic":
+		badge = " [color=#c084fc][★ ЭПИК][/color]"
+	elif rarity == "rare":
+		badge = " [color=#60a5fa][★ РЕДКИЙ][/color]"
 	_name_label.text = name_text
-	_state_label.text = state_text
+	if desc_text != "":
+		_state_label.text = "%s · %s" % [state_text, desc_text]
+	else:
+		_state_label.text = state_text
 
 	_action_btn.text = action_text
 	_action_btn.disabled = action_disabled

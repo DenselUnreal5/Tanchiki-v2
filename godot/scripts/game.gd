@@ -504,6 +504,11 @@ func _bind_world_events(w: World) -> void:
 		if Net.role == "host":
 			Net.host_event("wave_started", {"n": n}))
 
+	w.synergy_unlocked.connect(func(player, build_id: String, build_name: String, col: Color):
+		hud.banner("⚡ " + build_name.to_upper() + " ⚡", col, 140, 26)
+		if Net.role == "host":
+			Net.host_event("feed", {"text": "⚡ " + build_name + " АКТИВИРОВАН!", "color": col.to_html()}))
+
 	w.damage_number.connect(func(x: float, y: float, text: String, color: Color):
 		if floaters.size() > 80:
 			floaters.pop_front()

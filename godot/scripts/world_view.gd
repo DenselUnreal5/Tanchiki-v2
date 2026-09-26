@@ -91,6 +91,7 @@ func _draw() -> void:
 		_draw_tiles()
 	_draw_scorches()
 	_draw_ao()
+	_draw_acid_pools()
 	_draw_pickups()
 	_draw_weapon_pickups()
 	_draw_perk_drops()
@@ -102,6 +103,7 @@ func _draw() -> void:
 	_draw_tanks()
 	_draw_bullets()
 	_draw_particles()
+	_draw_shockwaves()
 	_draw_floaters()
 	_draw_offscreen_markers(size)
 
@@ -311,13 +313,13 @@ func _draw_ground_range(r0: int, r1: int, c0: int, c1: int) -> void:
 		_read_location()
 	var g0: Color = _loc_ground.lerp(Cfg.snow_ground, snow_k)
 	var g1: Color = _loc_ground_alt.lerp(Cfg.snow_ground, snow_k)
-	var city_ground := _loc_id == Locations.CITY
+	var textured_ground := TerrainTextures.has_textures(_loc_id)
 	for r in range(r0, r1 + 1):
 		for c in range(c0, c1 + 1):
 			var gx := float(c * Cfg.TILE)
 			var gy := float(r * Cfg.TILE)
-			if city_ground:
-				draw_texture_rect(TerrainTextures.grass(), Rect2(gx, gy, Cfg.TILE, Cfg.TILE), false)
+			if textured_ground:
+				draw_texture_rect(TerrainTextures.grass(_loc_id), Rect2(gx, gy, Cfg.TILE, Cfg.TILE), false)
 			else:
 				_rect(gx, gy, Cfg.TILE, Cfg.TILE, g0 if (r + c) % 2 == 0 else g1)
 
@@ -373,8 +375,8 @@ func _draw_roof_tile(x: float, y: float, r: int, c: int) -> void:
 	if not _loc_ready:
 		_read_location()
 	var variant := Materials.variant_at(r, c)
-	if _loc_id == Locations.CITY:
-		draw_texture_rect(TerrainTextures.building(variant == 3),
+	if TerrainTextures.has_textures(_loc_id):
+		draw_texture_rect(TerrainTextures.building(variant == 3, _loc_id),
 			Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		var dmg := world.map.damage_ratio(r, c)
 		if dmg > 0.06:
@@ -583,6 +585,41 @@ func _draw_scorches() -> void:
 			continue
 		draw_circle(Vector2(p.x, p.y), 13.0, Color(Cfg.scorch, 0.55))
 		draw_circle(Vector2(p.x, p.y), 7.0, Color(Cfg.scorch, 0.75))
+
+func _draw_acid_pools() -> void:
+	if world == null or world.acid_pools.is_empty():
+		return
+	for pool in world.acid_pools:
+		if not _in_view(pool.x, pool.y, pool.radius + 10.0):
+			continue
+		var pos := Vector2(pool.x, pool.y)
+		var life_ratio: float = float(pool.timer) / float(maxi(1, pool.max_life))
+		var a: float = clampf(life_ratio * 1.5, 0.0, 1.0)
+		var r: float = pool.radius * (0.85 + 0.15 * minf(1.0, (1.0 - life_ratio) * 4.0))
+
+		# 1. Dark burned edge / acid melt underlayer
+		draw_circle(pos, r + 3.0, Color(0.04, 0.09, 0.04, 0.55 * a))
+
+		# 2. Corrosive caustic liquid body
+		draw_circle(pos, r, Color(0.12, 0.28, 0.08, 0.85 * a))
+
+		# 3. Glowing neon acid contour ring with pulsating edge
+		var pulse: float = 0.80 + 0.20 * sin(float(world.tick) * 0.18 + pool.x * 0.05)
+		draw_arc(pos, r - 1.0, 0, TAU, 28, Color(0.52, 0.80, 0.09, 0.75 * a * pulse), 2.0)
+
+		# 4. Inner brighter chemical pool
+		draw_circle(pos, r * 0.65, Color(0.24, 0.48, 0.12, 0.70 * a))
+
+		# 5. Animated popping acid bubbles
+		for i in 4:
+			var phase: float = float(world.tick) * (0.12 + float(i) * 0.04) + float(i) * 1.8 + pool.y * 0.03
+			var b_rad := r * 0.55 * (0.3 + 0.7 * absf(sin(phase * 0.7)))
+			var b_ang := phase * 1.2 + float(i) * 1.57
+			var b_pos := pos + Vector2(cos(b_ang) * b_rad, sin(b_ang) * b_rad)
+			var b_sz := (2.2 + 1.4 * sin(phase * 2.0)) * a
+			if b_sz > 0.8:
+				draw_circle(b_pos, b_sz, Color(0.64, 0.95, 0.15, 0.85 * a))
+				draw_circle(b_pos - Vector2(0.6, 0.6), maxf(0.5, b_sz * 0.4), Color(0.9, 1.0, 0.6, 0.9 * a))
 
 func _draw_bolts() -> void:
 	draw_set_transform(view_off)
@@ -1015,12 +1052,12 @@ func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
 		_draw_dirt_road(x, y, r, c)
 		_round_road_corners(x, y, r, c)
 		return
-	if _loc_id == Locations.CITY:
+	if TerrainTextures.has_textures(_loc_id):
 		var up2 := _is_paved(r - 1, c)
 		var down2 := _is_paved(r + 1, c)
 		var left2 := _is_paved(r, c - 1)
 		var right2 := _is_paved(r, c + 1)
-		draw_texture_rect(TerrainTextures.road(_city_road_index(r, c, up2, down2, left2, right2)),
+		draw_texture_rect(TerrainTextures.road(_city_road_index(r, c, up2, down2, left2, right2), _loc_id),
 			Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		if _road_class_at(r, c) == RC_SQUARE:
 			_draw_parking_bay(x, y, r, c)
@@ -1103,8 +1140,8 @@ func _draw_bridge_tile(x: float, y: float, r: int, c: int) -> void:
 	if not _loc_ready:
 		_read_location()
 	var horizontal := _is_paved(r, c - 1) or _is_paved(r, c + 1)
-	if _loc_id == Locations.CITY:
-		draw_texture_rect(TerrainTextures.bridge(horizontal), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+	if TerrainTextures.has_textures(_loc_id):
+		draw_texture_rect(TerrainTextures.bridge(horizontal, _loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		return
 	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.bridge)
 
@@ -1143,8 +1180,8 @@ func _same_tile(r: int, c: int, tile: int) -> bool:
 func _draw_grass_tile(x: float, y: float, r: int, c: int) -> void:
 	if not _loc_ready:
 		_read_location()
-	if _loc_id == Locations.CITY:
-		draw_texture_rect(TerrainTextures.grass(), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+	if TerrainTextures.has_textures(_loc_id):
+		draw_texture_rect(TerrainTextures.grass(_loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		if _grass_surrounded(r, c) and Rng.hash01(r * 74351 + c * 5911, 9001) < 0.15:
 			_draw_bush(x, y, r, c)
 		return
@@ -1178,7 +1215,7 @@ func _draw_bush(x: float, y: float, r: int, c: int) -> void:
 	var bs := 20.0
 	var jx := float((r * 13 + c * 7) % 9) - 4.0
 	var by := Cfg.TILE - bs - 4.0 + float((r * 5 + c * 11) % 5)
-	draw_texture_rect(TerrainTextures.bush(),
+	draw_texture_rect(TerrainTextures.bush(_loc_id),
 		Rect2(x + (Cfg.TILE - bs) * 0.5 + jx, y + by, bs, bs), false)
 
 func _draw_sand_tile(x: float, y: float, r: int, c: int) -> void:
@@ -1224,12 +1261,12 @@ func _city_river_index(up: bool, down: bool, left: bool, right: bool) -> int:
 func _draw_water_tile(x: float, y: float, r: int, c: int, phase: float) -> void:
 	if not _loc_ready:
 		_read_location()
-	if _loc_id == Locations.CITY:
+	if TerrainTextures.has_textures(_loc_id):
 		var up := world.map.get_tile(r - 1, c) != Cfg.T_WATER
 		var down := world.map.get_tile(r + 1, c) != Cfg.T_WATER
 		var left := world.map.get_tile(r, c - 1) != Cfg.T_WATER
 		var right := world.map.get_tile(r, c + 1) != Cfg.T_WATER
-		draw_texture_rect(TerrainTextures.river(_city_river_index(up, down, left, right)),
+		draw_texture_rect(TerrainTextures.river(_city_river_index(up, down, left, right), _loc_id),
 			Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		return
 	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.water)
@@ -1243,9 +1280,9 @@ func _draw_water_tile(x: float, y: float, r: int, c: int, phase: float) -> void:
 func _draw_tree_tile(x: float, y: float, r: int, c: int) -> void:
 	if not _loc_ready:
 		_read_location()
-	if _loc_id == Locations.CITY:
-		draw_texture_rect(TerrainTextures.grass(), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
-		draw_texture_rect(TerrainTextures.tree(), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+	if TerrainTextures.has_textures(_loc_id):
+		draw_texture_rect(TerrainTextures.grass(_loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+		draw_texture_rect(TerrainTextures.tree(_loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		return
 	draw_circle(Vector2(x + 16, y + 18), 13, Cfg.tree_dark)
 	var ox := float((r * 7 + c * 13) % 5) - 2.0
@@ -1397,6 +1434,29 @@ func _draw_bullets() -> void:
 			else (Cfg.bullet if b.from_player else Cfg.bullet_enemy)
 		var trail := color
 		trail.a = 0.35
+		if b.owner != null:
+			if b.owner.has_method("has_build") and b.owner.has_build("ghost_sniper"):
+				color = Color("#c084fc")
+				trail = Color("#a855f7", 0.6)
+				draw_line(pos - Vector2(b.vx, b.vy) * 4.5, pos, trail, 2.5)
+				draw_circle(pos, 3.5, color)
+				draw_circle(pos, 1.6, Color.WHITE)
+				continue
+			if b.cannon_kind == "freeze" and b.owner.has_method("has_build") and b.owner.has_build("ice_hunter"):
+				color = Color("#00f0ff")
+				trail = Color("#38bdf8", 0.7)
+				draw_line(pos - Vector2(b.vx, b.vy) * 3.5, pos, trail, 3.0)
+				draw_circle(pos, 4.0, Color("#38bdf8"))
+				draw_circle(pos, 2.0, Color.WHITE)
+				continue
+			if b.cannon_kind == "acid" and b.owner.has_method("has_build") and b.owner.has_build("acid_hunter"):
+				color = Color("#84cc16")
+				trail = Color("#65a30d", 0.7)
+				draw_line(pos - Vector2(b.vx, b.vy) * 3.5, pos, trail, 3.0)
+				draw_circle(pos, 4.0, Color("#84cc16"))
+				draw_circle(pos, 2.0, Color("#d9f99d"))
+				continue
+
 		draw_line(pos - Vector2(b.vx, b.vy) * 2.5, pos, trail, 2.0)
 		draw_circle(pos, 3, color)
 		draw_circle(pos, 1.4, Color.WHITE)
@@ -1420,6 +1480,77 @@ func _draw_particles() -> void:
 		c.a = maxf(0.0, ps.life[i] / ps.max_life[i])
 		var s := ps.size[i]
 		_rect(x - s * 0.5, y - s * 0.5, s, s, c)
+
+func _draw_shockwaves() -> void:
+	if world == null or world.shockwaves.is_empty():
+		return
+	draw_set_transform(view_off)
+	for sw in world.shockwaves:
+		var sx: float = float(sw["x"])
+		var sy: float = float(sw["y"])
+		var max_r: float = float(sw["radius"])
+		if not _in_view(sx, sy, max_r + 40.0):
+			continue
+		var life: int = int(sw["life"])
+		var max_life: int = maxi(1, int(sw["max_life"]))
+		var t: float = 1.0 - float(life) / float(max_life)
+		var ease_r: float = 1.0 - pow(1.0 - t, 3.0)
+		var cur_r: float = maxf(4.0, max_r * ease_r)
+		var alpha: float = clampf(1.0 - t * 0.95, 0.0, 1.0)
+		var col: Color = sw.get("color", Color.WHITE)
+		var center := Vector2(sx, sy)
+		var kind: String = sw.get("kind", "")
+
+		if kind == "acid":
+			# Semi-transparent toxic vapor cloud filling the blast radius
+			draw_circle(center, cur_r, Color(col.r, col.g, col.b, alpha * 0.22))
+
+			# Glowing neon-acid primary expanding wave ring
+			var outer_col := Color(0.65, 1.0, 0.35, alpha * 0.95)
+			draw_arc(center, cur_r, 0, TAU, 48, outer_col, 4.0 * (1.0 - t * 0.4))
+
+			# Inner secondary wave
+			if cur_r > 16.0:
+				var mid_col := Color(0.85, 1.0, 0.55, alpha * 0.70)
+				draw_arc(center, cur_r * 0.82, 0, TAU, 40, mid_col, 2.5 * (1.0 - t * 0.5))
+
+			# Third trailing corrosive ripple
+			if cur_r > 32.0:
+				var in_col := Color(0.35, 0.75, 0.15, alpha * 0.45)
+				draw_arc(center, cur_r * 0.55, 0, TAU, 32, in_col, 2.0)
+
+			# Expanding toxic bubbles at wave perimeter
+			var bubble_count := 10
+			for b_idx in bubble_count:
+				var ang: float = float(b_idx) / float(bubble_count) * TAU + t * 0.8
+				var b_dist: float = cur_r * (0.90 + 0.10 * sin(float(b_idx) * 2.3 + t * 4.0))
+				var b_pos := center + Vector2(cos(ang) * b_dist, sin(ang) * b_dist)
+				var b_sz: float = (3.2 + 1.6 * sin(float(b_idx) * 3.7)) * (1.0 - t * 0.5)
+				draw_circle(b_pos, b_sz, Color(0.7, 1.0, 0.3, alpha * 0.85))
+				draw_circle(b_pos, maxf(1.0, b_sz - 1.2), Color(0.9, 1.0, 0.7, alpha * 0.9))
+		elif kind == "freeze":
+			# Crystalline frost flash & frost ring
+			draw_circle(center, cur_r, Color(0.1, 0.6, 1.0, alpha * 0.22))
+			var frost_col := Color(0.2, 0.95, 1.0, alpha * 0.95)
+			draw_arc(center, cur_r, 0, TAU, 36, frost_col, 4.0 * (1.0 - t * 0.3))
+			if cur_r > 14.0:
+				draw_arc(center, cur_r * 0.75, 0, TAU, 28, Color(1.0, 1.0, 1.0, alpha * 0.75), 2.2)
+		elif kind == "synergy":
+			# Majestic celebratory expanding synergy ring
+			draw_circle(center, cur_r, Color(col.r, col.g, col.b, alpha * 0.2))
+			draw_arc(center, cur_r, 0, TAU, 48, Color(col.r, col.g, col.b, alpha * 0.95), 4.5 * (1.0 - t * 0.4))
+			if cur_r > 18.0:
+				draw_arc(center, cur_r * 0.85, 0, TAU, 40, Color.WHITE, 2.0 * (1.0 - t * 0.5))
+		else:
+			# Standard shockwave / blast
+			var ring_col := Color(col.r, col.g, col.b, alpha * 0.85)
+			var fill_c := Color(col.r, col.g, col.b, alpha * 0.12)
+			draw_circle(center, cur_r, fill_c)
+			draw_arc(center, cur_r, 0, TAU, 44, ring_col, 3.5 * (1.0 - t * 0.5))
+			if cur_r > 18.0:
+				draw_arc(center, cur_r * 0.78, 0, TAU, 36, Color(1.0, 1.0, 1.0, alpha * 0.65), 1.8)
+
+	draw_set_transform(Vector2.ZERO)
 
 func _draw_floaters() -> void:
 	for f in floaters:
@@ -1479,7 +1610,59 @@ func _draw_wreck(wreck) -> void:
 		draw_circle(Vector2(fx, fy), r, Color(1.0, 0.72, 0.24, 0.75 * a * flicker))
 		draw_circle(Vector2(fx, fy), r * 0.45, Color(1.0, 0.94, 0.72, 0.85 * a * flicker))
 
+func _draw_rammer_telegraph(tank: Tank) -> void:
+	if not tank.is_rammer_boss or tank.rammer_state != "telegraph" or tank.rammer_telegraph_ticks <= 0:
+		return
+	var pos := Vector2(tank.x, tank.y)
+	var dir: float = tank.rammer_dir
+	var lane_w := 48.0
+	var lane_len := 420.0
+	var progress: float = 1.0 - (float(tank.rammer_telegraph_ticks) / float(Cfg.RAMMER_TELEGRAPH_TICKS))
+	var pulse: float = 0.65 + 0.35 * sin(float(world.tick) * 0.45)
+
+	draw_set_transform(view_off + pos, dir)
+
+	# 1. Semi-transparent directional warning strip
+	var lane_color := Color(1.0, 0.28, 0.05, 0.16 * pulse)
+	draw_rect(Rect2(20.0, -lane_w * 0.5, lane_len, lane_w), lane_color)
+
+	# 2. Glowing hazard side borders
+	var edge_color := Color(1.0, 0.50, 0.1, 0.75 * pulse)
+	draw_line(Vector2(20.0, -lane_w * 0.5), Vector2(20.0 + lane_len, -lane_w * 0.5), edge_color, 2.0)
+	draw_line(Vector2(20.0, lane_w * 0.5), Vector2(20.0 + lane_len, lane_w * 0.5), edge_color, 2.0)
+
+	# 3. Animated forward-flowing arrows / chevrons (>>>)
+	var arrow_step := 42.0
+	var offset := fmod(float(world.tick) * 4.5, arrow_step)
+	var cur_x := 24.0 + offset
+	while cur_x < 20.0 + lane_len - 14.0:
+		var arrow_c := Color(1.0, 0.75, 0.2, 0.55 * pulse)
+		var hw := lane_w * 0.36
+		var pts := PackedVector2Array([
+			Vector2(cur_x - 12.0, -hw),
+			Vector2(cur_x + 8.0, 0.0),
+			Vector2(cur_x - 12.0, hw),
+			Vector2(cur_x - 6.0, 0.0),
+		])
+		draw_colored_polygon(pts, arrow_c)
+		cur_x += arrow_step
+
+	# 4. Target impact reticle at the end of the lane
+	var end_x := 20.0 + lane_len
+	var end_alpha := 0.45 + 0.35 * sin(float(world.tick) * 0.6)
+	draw_arc(Vector2(end_x, 0.0), lane_w * 0.45, 0, TAU, 20, Color(1.0, 0.2, 0.1, end_alpha), 2.5)
+	draw_circle(Vector2(end_x, 0.0), 5.0, Color(1.0, 0.4, 0.1, end_alpha * 0.8))
+
+	# 5. Charge-up countdown progress bar along the center line
+	var bar_len := lane_len * progress
+	draw_line(Vector2(20.0, 0.0), Vector2(20.0 + bar_len, 0.0), Color(1.0, 0.9, 0.4, 0.85), 3.0)
+
+	draw_set_transform(view_off)
+
 func _draw_tanks() -> void:
+	for tank in world.tanks:
+		if tank.alive and _in_view(tank.x, tank.y, 480):
+			_draw_rammer_telegraph(tank)
 	for tank in world.tanks:
 		if not tank.alive or not _in_view(tank.x, tank.y, 40):
 			continue
@@ -1488,13 +1671,27 @@ func _draw_tanks() -> void:
 		_draw_tank(tank)
 
 func _is_stealth_hidden(tank: Tank) -> bool:
-	if tank.shadow_timer <= 0 or player == null or player.tank == null or tank == player.tank:
+	if player == null or player.tank == null or tank == player.tank:
 		return false
 	if not world.are_hostile(player.tank, tank):
 		return false
+
+	var is_cloaked := tank.shadow_timer > 0
+	if not is_cloaked and tank.has_method("has_build") and tank.has_build("stealth_hunter"):
+		if world != null and world.map != null:
+			var t := world.map.get_tile(int(tank.y / Cfg.TILE), int(tank.x / Cfg.TILE))
+			if t == Cfg.T_GRASS:
+				is_cloaked = true
+
+	if not is_cloaked:
+		return false
+
 	if float(player.tank.mods.get("hearingMult", 1.0)) > 1.0:
 		var range: float = Cfg.KEEN_EAR_STEALTH_RANGE * float(tank.mods.get("noiseMult", 1.0))
 		if Vector2(tank.x - player.tank.x, tank.y - player.tank.y).length() <= range:
+			return false
+	elif is_cloaked:
+		if Vector2(tank.x - player.tank.x, tank.y - player.tank.y).length() <= 140.0:
 			return false
 	return true
 
@@ -1548,7 +1745,11 @@ func _draw_tank(tank: Tank) -> void:
 	])
 	draw_colored_polygon(body, palette["body"])
 
-	_draw_camo(tank, hw, hh, palette)
+	var skin_id := String(tank.cosmetics.get("skin", "none"))
+	if skin_id != "" and skin_id != "none":
+		_draw_premium_skin(tank, hw, hh, nose, palette, skin_id)
+	else:
+		_draw_camo(tank, hw, hh, palette)
 
 	_rect(-hw + 3.0, hh - 8.0, tank.width - 6.0, 6.0, palette["dark"])
 	_rect(-hw + 4.5, hh - 6.5, tank.width - 9.0, 1.2, Color(0, 0, 0, 0.35))
@@ -1568,6 +1769,70 @@ func _draw_tank(tank: Tank) -> void:
 				Color(0.95, 0.75, 0.1, 0.75))
 
 	_draw_hull_pattern(tank, hw, hh)
+
+	# Synergy visual accents on hull
+	if tank.has_method("has_build"):
+		if tank.has_build("juggernaut"):
+			var ram_c := Color("#ef4444", 0.95)
+			var pulse := 0.75 + 0.25 * sin(world.tick * 0.2)
+			draw_line(Vector2(-hw * 0.95, -hh - 2), Vector2(0, -hh - 7), ram_c, 3.0)
+			draw_line(Vector2(0, -hh - 7), Vector2(hw * 0.95, -hh - 2), ram_c, 3.0)
+			draw_circle(Vector2(0, -hh - 7), 2.5 * pulse, Color("#fbbf24"))
+		if tank.has_build("stealth_hunter"):
+			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#10b981", 0.85))
+		if tank.has_build("lightning"):
+			var spark_a := 0.5 + 0.5 * sin(world.tick * 0.3)
+			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#f59e0b", spark_a))
+		if tank.has_build("ice_hunter"):
+			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#06b6d4", 0.9))
+		if tank.has_build("acid_hunter"):
+			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#84cc16", 0.9))
+		if tank.has_build("ghost_sniper"):
+			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#a855f7", 0.9))
+		if bool(shape.get("plow", false)):
+			var plow_dark := Color("#1c1d1f")
+			var plow_steel := Color("#52525b")
+			var plow_pts := PackedVector2Array([
+				Vector2(-hw - 3.0, -hh + 3.0),
+				Vector2(-hw - 1.0, -hh - 7.0),
+				Vector2(0.0, -hh - 13.0),
+				Vector2(hw + 1.0, -hh - 7.0),
+				Vector2(hw + 3.0, -hh + 3.0),
+				Vector2(hw, -hh + 5.0),
+				Vector2(-hw, -hh + 5.0),
+			])
+			draw_colored_polygon(plow_pts, plow_dark)
+			draw_polyline(plow_pts, plow_steel, 2.0)
+
+			# 5 Sharp triangular steel spikes
+			for spk_x in [-hw * 0.75, -hw * 0.35, 0.0, hw * 0.35, hw * 0.75]:
+				var tip_y := -hh - 14.0 if absf(spk_x) < 2.0 else -hh - 10.0
+				var spike_pts := PackedVector2Array([
+					Vector2(spk_x - 3.0, -hh - 5.0),
+					Vector2(spk_x, tip_y),
+					Vector2(spk_x + 3.0, -hh - 5.0),
+				])
+				draw_colored_polygon(spike_pts, Color("#e4e4e7"))
+				draw_line(Vector2(spk_x, tip_y), Vector2(spk_x + 2.5, -hh - 5.0), Color(1, 1, 1, 0.75), 1.0)
+
+			# Warning hazard stripes along plow
+			for i in 4:
+				var sx := -hw + 4.0 + float(i) * (hw * 2.0 - 8.0) / 4.0
+				draw_line(Vector2(sx, -hh + 4.0), Vector2(sx + 4.0, -hh - 3.0), Color("#f59e0b", 0.9), 2.0)
+
+		if bool(shape.get("chimera", false)):
+			# Stealth-faceted angular armor plates & twin glowing acid canisters
+			var pulse := 0.75 + 0.25 * sin(world.tick * 0.25)
+			for c_side in [-1.0, 1.0]:
+				var cx: float = c_side * (hw - 4.5)
+				var cy: float = hh - 10.0
+				_rect(cx - 2.5, cy - 6.0, 5.0, 12.0, Color("#0b140b"))
+				_rect(cx - 2.0, cy - 5.0, 4.0, 10.0, Color("#182b18"))
+				_rect(cx - 1.5, cy - 4.0, 3.0, 8.0, Color(0.52, 0.80, 0.09, 0.85 * pulse))
+				draw_circle(Vector2(cx, cy - 1.0), 1.2, Color("#bef264"))
+			var stealth_line := Color(0.52, 0.80, 0.09, 0.65 * pulse)
+			draw_line(Vector2(-hw + 3.0, -hh + nose), Vector2(0.0, -hh + 3.0), stealth_line, 1.5)
+			draw_line(Vector2(hw - 3.0, -hh + nose), Vector2(0.0, -hh + 3.0), stealth_line, 1.5)
 
 	var light := PI * 0.75 - tank.body_angle
 	var lit := Color(1, 1, 1, 0.13)
@@ -1595,35 +1860,47 @@ func _draw_tank(tank: Tank) -> void:
 	var bl := float(shape["barrel_len"])
 	var bw := float(shape["barrel_w"])
 
-	draw_set_transform(view_off + pos, tank.turret_angle)
-	var b0 := tr * 0.5
-	var b1 := b0 + bl
-	match String(shape["muzzle"]):
-		"twin":
-			for off in [-4.5, 4.5]:
-				_rect(b0, off - bw * 0.5, bl, bw, barrel_base)
-				_rect(b1 - 4.0, off - bw * 0.5 - 1.0, 5.0, bw + 2.0, barrel_dark)
-		"tube":
-			_rect(b0, -bw * 0.5, bl, bw, barrel_base)
-			_rect(b1 - 3.0, -bw * 0.5 - 2.0, 5.0, bw + 4.0, barrel_dark)
-		"brake":
-			_rect(b0, -bw * 0.5, bl, bw, barrel_base)
-			_rect(b1 - 8.0, -bw * 0.5 - 1.8, 3.0, bw + 3.6, barrel_dark)
-			_rect(b1 - 3.5, -bw * 0.5 - 1.8, 3.5, bw + 3.6, barrel_dark)
-		_:
-			_rect(b0, -bw * 0.5, bl, bw, barrel_base)
-			_rect(b1 - 4.0, -bw * 0.5 - 1.0, 5.0, bw + 2.0, barrel_dark)
-	if cannon_accent.a > 0.0:
-		_rect(b1 - 14.0, -bw * 0.5 - 0.5, 5.0, bw + 1.0, cannon_accent)
-	if tank.heat > 0.25:
-		var glow := Color(1.0, 0.35, 0.1, minf(0.85, (tank.heat - 0.25) * 1.1))
-		if tank.overheated:
-			glow = Color(1.0, 0.75, 0.45, 0.75 + 0.2 * sin(world.tick * 0.4))
-		_rect(b1 - 9.0, -bw * 0.5 - 0.5, 9.0, bw + 1.0, glow)
+	if bl > 0.0:
+		draw_set_transform(view_off + pos, tank.turret_angle)
+		var b0 := tr * 0.5
+		var b1 := b0 + bl
+		match String(shape["muzzle"]):
+			"twin":
+				for off in [-4.5, 4.5]:
+					_rect(b0, off - bw * 0.5, bl, bw, barrel_base)
+					_rect(b1 - 4.0, off - bw * 0.5 - 1.0, 5.0, bw + 2.0, barrel_dark)
+			"twin_acid":
+				var acid_glow := Color(0.52, 0.80, 0.09, 0.9)
+				for off in [-4.5, 4.5]:
+					_rect(b0, off - bw * 0.5, bl, bw, barrel_base)
+					_rect(b1 - 5.0, off - bw * 0.5 - 1.0, 6.0, bw + 2.0, barrel_dark)
+					_rect(b0 + 4.0, off - 1.0, bl - 10.0, 2.0, acid_glow)
+			"tube":
+				_rect(b0, -bw * 0.5, bl, bw, barrel_base)
+				_rect(b1 - 3.0, -bw * 0.5 - 2.0, 5.0, bw + 4.0, barrel_dark)
+			"brake":
+				_rect(b0, -bw * 0.5, bl, bw, barrel_base)
+				_rect(b1 - 8.0, -bw * 0.5 - 1.8, 3.0, bw + 3.6, barrel_dark)
+				_rect(b1 - 3.5, -bw * 0.5 - 1.8, 3.5, bw + 3.6, barrel_dark)
+			_:
+				_rect(b0, -bw * 0.5, bl, bw, barrel_base)
+				_rect(b1 - 4.0, -bw * 0.5 - 1.0, 5.0, bw + 2.0, barrel_dark)
+		if cannon_accent.a > 0.0:
+			_rect(b1 - 14.0, -bw * 0.5 - 0.5, 5.0, bw + 1.0, cannon_accent)
+		if tank.heat > 0.25:
+			var glow := Color(1.0, 0.35, 0.1, minf(0.85, (tank.heat - 0.25) * 1.1))
+			if tank.overheated:
+				glow = Color(1.0, 0.75, 0.45, 0.75 + 0.2 * sin(world.tick * 0.4))
+			_rect(b1 - 9.0, -bw * 0.5 - 0.5, 9.0, bw + 1.0, glow)
 
-	if String(shape["muzzle"]) != "twin":
-		_rect(b0, -bw * 0.5, b1 - b0 - 3.0, 1.0, Color(1, 1, 1, 0.18))
-	_rect(b0 - 1.0, -bw * 0.5 - 2.0, 4.5, bw + 4.0, barrel_dark)
+		if String(shape["muzzle"]) != "twin":
+			_rect(b0, -bw * 0.5, b1 - b0 - 3.0, 1.0, Color(1, 1, 1, 0.18))
+		_rect(b0 - 1.0, -bw * 0.5 - 2.0, 4.5, bw + 4.0, barrel_dark)
+	else:
+		draw_set_transform(view_off + pos, tank.turret_angle)
+		var visor_pulse := 0.65 + 0.35 * sin(float(world.tick) * 0.35)
+		draw_arc(Vector2.ZERO, tr * 0.7, -PI * 0.4, PI * 0.4, 10, Color(1.0, 0.45, 0.1, visor_pulse), 3.0)
+		draw_circle(Vector2.ZERO, tr * 0.35, Color(1.0, 0.3, 0.05, 0.8 * visor_pulse))
 
 	draw_set_transform(view_off + pos)
 	var turret_dark: Color = Cosmetics.color_of("turret", turret_id, palette["dark"]) 		if has_turret_color else palette["dark"]
@@ -1633,6 +1910,25 @@ func _draw_tank(tank: Tank) -> void:
 	if tr >= 7.5:
 		draw_circle(Vector2(-tr * 0.25, -tr * 0.25), tr * 0.30, Color(0, 0, 0, 0.30))
 		draw_arc(Vector2.ZERO, tr - 1.0, PI * 0.7, PI * 1.55, 10, Color(1, 1, 1, 0.16), 1.5)
+
+	var anim_tick_turret: float = float(world.tick) if (world != null and "tick" in world) else float(Time.get_ticks_msec()) * 0.06
+	if turret_id == "cyber_turret":
+		var pulse := 0.6 + 0.4 * sin(anim_tick_turret * 0.2)
+		draw_arc(Vector2.ZERO, tr - 1.0, -PI * 0.4, PI * 0.4, 12, Color("#00f0ff", pulse), 2.0)
+	elif turret_id == "magma_turret":
+		var heat := 0.7 + 0.3 * sin(anim_tick_turret * 0.15)
+		draw_line(Vector2(-tr * 0.5, 0), Vector2(tr * 0.5, 0), Color("#ffaa00", heat), 2.0)
+		draw_circle(Vector2.ZERO, tr * 0.35, Color("#ff4500", heat))
+	elif turret_id == "plasma_turret":
+		var pulse := 0.6 + 0.4 * sin(anim_tick_turret * 0.25)
+		draw_circle(Vector2.ZERO, tr * 0.45, Color("#a855f7", pulse))
+		draw_circle(Vector2.ZERO, tr * 0.2, Color("#ffffff", pulse))
+	elif turret_id == "steampunk_turret":
+		draw_circle(Vector2.ZERO, tr * 0.45, Color("#fef08a"))
+		draw_circle(Vector2.ZERO, tr * 0.45, Color("#78350f"), false, 1.2)
+		draw_line(Vector2.ZERO, Vector2(cos(anim_tick_turret * 0.05) * tr * 0.35, sin(anim_tick_turret * 0.05) * tr * 0.35), Color("#dc2626"), 1.2)
+	elif turret_id == "chrome_turret":
+		draw_arc(Vector2.ZERO, tr - 1.5, PI * 0.8, PI * 1.5, 12, Color(1, 1, 1, 0.75), 1.8)
 
 	draw_set_transform(view_off + pos, tank.turret_angle)
 	if bool(shape["scope"]):
@@ -1699,6 +1995,24 @@ func _draw_tank(tank: Tank) -> void:
 		if tank.carrying_flag:
 			_text_center("⚑", Vector2(tank.x + 16, tank.y - 16), 14, Color("#ffee55"))
 
+		if tank.is_chimera_clone:
+			var holo_pulse := 0.65 + 0.35 * sin(float(world.tick) * 0.4)
+			var scanline_c := Color(0.2, 0.9, 1.0, 0.35 * holo_pulse)
+			for sl in 5:
+				var s_y: float = tank.y - hh + float(sl) * (tank.height / 4.0) + fmod(float(world.tick) * 1.5, tank.height / 4.0)
+				draw_line(Vector2(tank.x - hw - 2.0, s_y), Vector2(tank.x + hw + 2.0, s_y), scanline_c, 1.0)
+			draw_arc(Vector2(tank.x + sin(float(world.tick) * 0.5) * 2.5, tank.y), hw * 1.1, 0, TAU, 16, Color(1.0, 0.2, 0.8, 0.3 * holo_pulse), 1.5)
+
+		if tank.shadow_timer > 0:
+			var shim_pulse := 0.45 + 0.35 * sin(float(world.tick) * 0.3)
+			var shim_col := Color(0.4, 0.9, 0.3, 0.40 * shim_pulse)
+			draw_arc(Vector2(tank.x, tank.y), hw * 1.25, 0, TAU, 20, shim_col, 2.0)
+			for sh in 3:
+				var a_sh := float(world.tick) * 0.08 + float(sh) * 2.1
+				draw_line(Vector2(tank.x - cos(a_sh) * hw, tank.y - sin(a_sh) * hh),
+					Vector2(tank.x + cos(a_sh) * hw, tank.y + sin(a_sh) * hh),
+					Color(0.8, 1.0, 0.5, 0.25 * shim_pulse), 1.5)
+
 func _draw_ellipse(center: Vector2, rx: float, ry: float, color: Color) -> void:
 	var pts := PackedVector2Array()
 	for i in 20:
@@ -1729,8 +2043,8 @@ func _build_camo_geometry(id: String, hw: float, hh: float) -> Array:
 	var y0 := -hh + 2.0
 	var y1 := hh - 2.0
 	match id:
-		"digital", "winter", "urban":
-			var cell := 3.0 if id == "digital" else (4.5 if id == "winter" else 5.5)
+		"digital", "winter", "urban", "camo_digital_neon":
+			var cell := 3.0 if (id == "digital" or id == "camo_digital_neon") else (4.5 if id == "winter" else 5.5)
 			var row := 0
 			var y := y0
 			while y < y1:
@@ -1760,7 +2074,7 @@ func _build_camo_geometry(id: String, hw: float, hh: float) -> Array:
 					])})
 				k += 1
 				y2 += 5.0
-		"splinter":
+		"splinter", "camo_forest", "camo_ocean":
 			for i in 3:
 				var yy := y0 + (y1 - y0) * (float(i) + 0.15) / 3.0
 				var h2 := (y1 - y0) / 3.4
@@ -1774,7 +2088,7 @@ func _build_camo_geometry(id: String, hw: float, hh: float) -> Array:
 						Vector2(x1, yy + h2 * 0.5), Vector2(x1 - hw * 0.85, yy + h2 * 0.15),
 						Vector2(x1 - hw * 0.45, yy + h2 * 0.95), Vector2(x1, yy + h2 * 1.1),
 					])})
-		"desert":
+		"desert", "camo_lava":
 			for i in 13:
 				var px := x0 + (x1 - x0) * Rng.hash01(i, 11)
 				var py := y0 + (y1 - y0) * Rng.hash01(i, 23)
@@ -1782,6 +2096,24 @@ func _build_camo_geometry(id: String, hw: float, hh: float) -> Array:
 				out.append({"t": 2,
 					"x": clampf(px, x0 + r, x1 - r), "y": clampf(py, y0 + r, y1 - r),
 					"r": r, "slot": 0 if i % 2 == 0 else 1})
+		"camo_carbon":
+			var cell := 2.5
+			var row := 0
+			var y := y0
+			while y < y1:
+				var col := 0
+				var x := x0
+				while x < x1:
+					if (row + col) % 2 == 0:
+						out.append({"t": 0, "x": x, "y": y,
+							"w": minf(cell, x1 - x), "h": minf(cell, y1 - y), "slot": 0})
+					else:
+						out.append({"t": 0, "x": x, "y": y,
+							"w": minf(cell, x1 - x), "h": minf(cell, y1 - y), "slot": 1})
+					col += 1
+					x += cell
+				row += 1
+				y += cell
 	return out
 
 func _draw_camo(tank: Tank, hw: float, hh: float, palette: Dictionary) -> void:
@@ -1840,6 +2172,208 @@ func _draw_hull_pattern(tank: Tank, hw: float, hh: float) -> void:
 					Vector2(-hw + 4, y), Vector2(0, y - 5),
 					Vector2(hw - 4, y), Vector2(0, y + 2),
 				]), Color(0.53, 0.8, 1.0, a))
+		"skull":
+			draw_circle(Vector2(0, -2.0), 5.5, Color(1, 1, 1, a))
+			_rect(-3.0, 3.0, 6.0, 4.0, Color(1, 1, 1, a))
+			_rect(-2.0, 3.5, 1.0, 3.5, Color(0, 0, 0, a))
+			_rect(0, 3.5, 1.0, 3.5, Color(0, 0, 0, a))
+			_rect(1.0, 3.5, 1.0, 3.5, Color(0, 0, 0, a))
+			draw_circle(Vector2(-2.2, -1.8), 1.6, Color(0, 0, 0, a))
+			draw_circle(Vector2(2.2, -1.8), 1.6, Color(0, 0, 0, a))
+			draw_line(Vector2(0, 0.5), Vector2(0, 1.8), Color(0, 0, 0, a), 1.2)
+		"dragon_crest":
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(0, -7.0), Vector2(4.0, -3.0), Vector2(6.0, 2.0),
+				Vector2(3.0, 5.0), Vector2(0, 7.0), Vector2(-3.0, 5.0),
+				Vector2(-6.0, 2.0), Vector2(-4.0, -3.0)
+			]), Color(1, 0.8, 0.2, a))
+			draw_circle(Vector2(-2.0, -0.5), 1.2, Color(0.8, 0.1, 0.1, a))
+			draw_circle(Vector2(2.0, -0.5), 1.2, Color(0.8, 0.1, 0.1, a))
+		"biohazard":
+			var c_col := Color("#84cc16", a)
+			draw_arc(Vector2(0, -3.0), 3.5, 0.0, TAU, 16, c_col, 1.5)
+			draw_arc(Vector2(-2.6, 2.0), 3.5, 0.0, TAU, 16, c_col, 1.5)
+			draw_arc(Vector2(2.6, 2.0), 3.5, 0.0, TAU, 16, c_col, 1.5)
+			draw_circle(Vector2.ZERO, 1.5, c_col)
+		"lightning_bolt":
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(2.0, -8.0), Vector2(-4.0, 0.0), Vector2(0.0, 0.0),
+				Vector2(-2.0, 8.0), Vector2(4.0, -1.0), Vector2(0.5, -1.0)
+			]), Color(1, 0.9, 0.1, a))
+		"shark_mouth":
+			_rect(-hw * 0.7, -hh + 3.0, hw * 1.4, 4.0, Color("#b91c1c", a))
+			for i in 5:
+				var tx := -hw * 0.6 + float(i) * (hw * 1.2 / 4.0)
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(tx - 1.5, -hh + 3.0), Vector2(tx, -hh + 6.5), Vector2(tx + 1.5, -hh + 3.0)
+				]), Color(1, 1, 1, a))
+		"wings":
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(0, 2.0), Vector2(-hw + 3.0, -4.0), Vector2(-hw + 5.0, 0.0),
+				Vector2(-2.0, 4.0)
+			]), Color(0.7, 0.85, 1.0, a))
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(0, 2.0), Vector2(hw - 3.0, -4.0), Vector2(hw - 5.0, 0.0),
+				Vector2(2.0, 4.0)
+			]), Color(0.7, 0.85, 1.0, a))
+		"bullseye":
+			draw_circle(Vector2.ZERO, 6.0, Color(1, 0.2, 0.2, a), false, 1.5)
+			draw_circle(Vector2.ZERO, 3.0, Color(1, 1, 1, a), false, 1.5)
+			draw_circle(Vector2.ZERO, 1.2, Color(1, 0.2, 0.2, a))
+			draw_line(Vector2(-8.0, 0), Vector2(8.0, 0), Color(1, 1, 1, a * 0.7), 1.0)
+			draw_line(Vector2(0, -8.0), Vector2(0, 8.0), Color(1, 1, 1, a * 0.7), 1.0)
+
+func _draw_premium_skin(tank: Tank, hw: float, hh: float, nose: float, _palette: Dictionary, skin_id: String) -> void:
+	var anim_tick: float = float(world.tick) if (world != null and "tick" in world) else float(Time.get_ticks_msec()) * 0.06
+	var x0 := -hw + 2.0
+	var x1 := hw - 2.0
+	var y0 := -hh + nose + 1.0
+	var y1 := hh - 2.0
+	var w := x1 - x0
+	var h := y1 - y0
+
+	match skin_id:
+		"cyberpunk":
+			_rect(x0, y0, w, h, Color("#090d16", 0.95))
+			var cy := y0
+			while cy < y1:
+				draw_line(Vector2(x0, cy), Vector2(x1, cy), Color("#00f0ff", 0.08), 1.0)
+				cy += 6.0
+			var p_cyan := Color("#00f0ff", 0.85)
+			var p_pink := Color("#ec4899", 0.85)
+			draw_polyline(PackedVector2Array([
+				Vector2(-hw + 4.0, hh - 4.0),
+				Vector2(-hw + 4.0, 0.0),
+				Vector2(-2.0, 0.0),
+				Vector2(-2.0, -hh + nose + 4.0)
+			]), p_cyan, 1.6)
+			draw_polyline(PackedVector2Array([
+				Vector2(hw - 4.0, hh - 4.0),
+				Vector2(hw - 4.0, 4.0),
+				Vector2(2.0, 4.0),
+				Vector2(2.0, -hh + nose + 4.0)
+			]), p_pink, 1.6)
+			var led_a := 0.6 + 0.4 * sin(anim_tick * 0.2)
+			draw_circle(Vector2(-hw + 4.0, hh - 4.0), 2.0, Color("#00f0ff", led_a))
+			draw_circle(Vector2(-2.0, -hh + nose + 4.0), 2.0, Color("#00f0ff", led_a))
+			draw_circle(Vector2(hw - 4.0, hh - 4.0), 2.0, Color("#ec4899", led_a))
+			draw_circle(Vector2(2.0, -hh + nose + 4.0), 2.0, Color("#ec4899", led_a))
+			var scan_y := y0 + fmod(anim_tick * 1.8, h)
+			draw_line(Vector2(x0, scan_y), Vector2(x1, scan_y), Color("#00f0ff", 0.45), 1.5)
+
+		"magma":
+			_rect(x0, y0, w, h, Color("#16110f", 0.95))
+			var heat := 0.75 + 0.25 * sin(anim_tick * 0.12)
+			draw_polyline(PackedVector2Array([
+				Vector2(-hw + 3.0, -hh + nose + 3.0),
+				Vector2(-hw * 0.3, -2.0),
+				Vector2(hw * 0.4, 2.0),
+				Vector2(hw - 3.0, hh - 3.0)
+			]), Color("#ff4500", heat), 2.5)
+			draw_polyline(PackedVector2Array([
+				Vector2(-hw + 3.0, -hh + nose + 3.0),
+				Vector2(-hw * 0.3, -2.0),
+				Vector2(hw * 0.4, 2.0),
+				Vector2(hw - 3.0, hh - 3.0)
+			]), Color("#ffea00", heat), 1.0)
+			draw_polyline(PackedVector2Array([
+				Vector2(hw - 3.0, -hh + nose + 4.0),
+				Vector2(2.0, -5.0),
+				Vector2(-4.0, 5.0),
+				Vector2(-hw + 3.0, hh - 4.0)
+			]), Color("#ff3300", heat), 2.0)
+			draw_circle(Vector2.ZERO, 4.0 * heat, Color("#ffaa00", 0.85))
+			draw_circle(Vector2.ZERO, 2.0, Color("#ffffff", heat))
+
+		"steampunk":
+			_rect(x0, y0, w, h, Color("#78350f", 0.95))
+			_rect(x0 + 2.0, y0 + 2.0, w - 4.0, (h - 4.0) * 0.48, Color("#b45309", 0.85))
+			_rect(x0 + 2.0, y0 + h * 0.52, w - 4.0, (h - 4.0) * 0.46, Color("#92400e", 0.85))
+			for rx in [x0 + 2.0, x1 - 2.0]:
+				var ry := y0 + 3.0
+				while ry < y1:
+					draw_circle(Vector2(rx, ry), 1.0, Color("#fef08a", 0.9))
+					ry += 5.0
+			var cog_rot := anim_tick * 0.04
+			var cog_c := Vector2(0, hh - 8.0)
+			draw_circle(cog_c, 4.5, Color("#d97706"))
+			for i in 6:
+				var ang := cog_rot + float(i) * TAU / 6.0
+				draw_line(cog_c, cog_c + Vector2(cos(ang), sin(ang)) * 6.0, Color("#fef08a"), 1.4)
+			draw_circle(cog_c, 2.0, Color("#451a03"))
+
+		"void":
+			_rect(x0, y0, w, h, Color("#090614", 0.95))
+			draw_circle(Vector2(-3.0, -2.0), 9.0, Color("#7c3aed", 0.25))
+			draw_circle(Vector2(4.0, 3.0), 8.0, Color("#2563eb", 0.20))
+			for i in 8:
+				var sx := x0 + w * (0.15 + 0.7 * Rng.hash01(i, 41))
+				var sy := y0 + h * (0.15 + 0.7 * Rng.hash01(i, 73))
+				var star_a := 0.4 + 0.6 * sin(anim_tick * 0.15 + float(i) * 1.5)
+				draw_circle(Vector2(sx, sy), 1.2, Color(1, 1, 1, star_a))
+				if i % 3 == 0:
+					draw_line(Vector2(sx - 2.5, sy), Vector2(sx + 2.5, sy), Color(1, 1, 1, star_a * 0.8), 0.8)
+					draw_line(Vector2(sx, sy - 2.5), Vector2(sx, sy + 2.5), Color(1, 1, 1, star_a * 0.8), 0.8)
+
+		"dragon":
+			_rect(x0, y0, w, h, Color("#064e3b", 0.95))
+			var row := 0
+			var sy2 := y0 + 3.0
+			while sy2 < y1 - 2.0:
+				var sx2 := x0 + (2.5 if row % 2 == 1 else 0.0) + 3.0
+				while sx2 < x1 - 2.0:
+					draw_polyline(PackedVector2Array([
+						Vector2(sx2 - 2.5, sy2),
+						Vector2(sx2, sy2 + 3.0),
+						Vector2(sx2 + 2.5, sy2)
+					]), Color("#059669", 0.7), 1.2)
+					sx2 += 5.0
+				row += 1
+				sy2 += 3.5
+			for k in 4:
+				var ky := y0 + 3.0 + float(k) * 6.5
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(-2.5, ky + 4.0), Vector2(0, ky), Vector2(2.5, ky + 4.0)
+				]), Color("#eab308", 0.9))
+
+		"toxic":
+			_rect(x0, y0, w, h, Color("#18181b", 0.95))
+			var hz_y := y0 + 2.0
+			var step := 4.0
+			while hz_y < y1 - 2.0:
+				var hz_col := Color("#eab308", 0.85) if int(hz_y / step) % 2 == 0 else Color("#09090b", 0.85)
+				_rect(-hw + 1.0, hz_y, 3.5, step, hz_col)
+				_rect(hw - 4.5, hz_y, 3.5, step, hz_col)
+				hz_y += step
+			var bio_a := 0.7 + 0.3 * sin(anim_tick * 0.15)
+			draw_arc(Vector2(0, -3.0), 3.0, 0.0, TAU, 16, Color("#84cc16", bio_a), 1.5)
+			draw_arc(Vector2(-2.5, 2.0), 3.0, 0.0, TAU, 16, Color("#84cc16", bio_a), 1.5)
+			draw_arc(Vector2(2.5, 2.0), 3.0, 0.0, TAU, 16, Color("#84cc16", bio_a), 1.5)
+			draw_circle(Vector2.ZERO, 1.5, Color("#84cc16", bio_a))
+
+		"golden_emperor":
+			_rect(x0, y0, w, h, Color("#d4af37", 0.95))
+			_rect(-hw * 0.45, -hh + nose + 4.0, hw * 0.9, (hh - nose) * 1.5, Color("#881337", 0.85))
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(-4.0, -2.0), Vector2(-2.5, 3.0), Vector2(2.5, 3.0), Vector2(4.0, -2.0),
+				Vector2(2.0, 0.0), Vector2(0, -3.0), Vector2(-2.0, 0.0)
+			]), Color("#fef08a", 0.95))
+			var sweep := fmod(anim_tick * 2.0, (w + 24.0)) - 12.0
+			draw_line(Vector2(x0 + sweep, y0), Vector2(x0 + sweep + 8.0, y1), Color(1, 1, 1, 0.45), 2.0)
+
+		"arctic_frost":
+			_rect(x0, y0, w, h, Color("#0284c7", 0.85))
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(-hw * 0.7, -hh + nose + 2.0), Vector2(-hw * 0.2, y0 + h * 0.4),
+				Vector2(-hw * 0.8, y0 + h * 0.6)
+			]), Color("#7dd3fc", 0.75))
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(hw * 0.7, -hh + nose + 2.0), Vector2(hw * 0.2, y0 + h * 0.4),
+				Vector2(hw * 0.8, y0 + h * 0.6)
+			]), Color("#bae6fd", 0.85))
+			draw_line(Vector2(0, -hh + nose), Vector2(0, -hh), Color("#ffffff", 0.9), 2.0)
+			draw_line(Vector2(-3.0, -hh + nose + 3.0), Vector2(3.0, -hh + nose + 3.0), Color("#e0f2fe", 0.8), 1.5)
+
 
 func _draw_offscreen_markers(size: Vector2) -> void:
 	if world.mode != "ctf" or player.tank == null:

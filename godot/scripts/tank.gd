@@ -85,6 +85,24 @@ var boss_stat_mult := 1.0
 var telegraph_ticks := 0
 var telegraph_kind := ""
 
+var is_rammer_boss := false
+var rammer_state := "idle"
+var rammer_telegraph_ticks := 0
+var rammer_charge_ticks := 0
+var rammer_cooldown_ticks := 0
+var rammer_dir := 0.0
+var rammer_mine_timer := 0
+var rammer_charge_mine_timer := 0
+var rammer_base_damage_dealt := 0.0
+
+var is_chimera_boss := false
+var is_chimera_clone := false
+var chimera_clone_parent = null
+var chimera_cloak_timer := 0
+var chimera_pool_timer := 0
+var chimera_clones_spawned := false
+var chimera_ambush_ready := false
+
 var in_water := false
 var water_timer := 0
 var quicksand_timer := 0
@@ -178,7 +196,7 @@ var carrying_flag: bool:
 	get: return flag != null
 
 var can_fire: bool:
-	get: return alive and fire_cooldown <= 0 and not overheated
+	get: return alive and fire_cooldown <= 0 and not overheated and not is_rammer_boss
 
 func _update_heat(world) -> void:
 	if owner == null:
@@ -246,8 +264,20 @@ func recompute() -> void:
 	speed = base_speed * float(mods["speedMult"]) * enrage_speed_mult
 	fire_rate = maxi(4, int(round(float(base_fire_rate) * float(mods["fireRateMult"]) * enrage_fire_rate_mult)))
 	hp = clampf(round(max_hp * hp_ratio), 1.0, max_hp)
+	if has_build("stealth_hunter"):
+		mods["evasionChance"] = 1.0 - (1.0 - float(mods.get("evasionChance", 0.0))) * 0.75
+	if is_chimera_boss:
+		mods["evasionChance"] = 1.0 - (1.0 - float(mods.get("evasionChance", 0.0))) * 0.75
+	if is_chimera_clone:
+		mods["evasionChance"] = 1.0 - (1.0 - float(mods.get("evasionChance", 0.0))) * 0.80
 	if not flags.has("shield"):
 		shield_hp = 0.0
+
+func has_build(build_id: String) -> bool:
+	return Perks.is_build_complete(build_id, perk_ids)
+
+func completed_builds() -> Array:
+	return Perks.completed_builds(perk_ids)
 
 func thrust(dx: float, dy: float) -> void:
 	if dx == 0.0 and dy == 0.0:
@@ -319,6 +349,8 @@ func update(world) -> void:
 				world.deal_damage(self, tick_dmg, acid_attacker, "acid")
 				if acid_stacks >= Cfg.ACID_STACK_MAX and acid_attacker != null \
 						and acid_attacker.alive and acid_attacker.flags.has("acidCloud"):
+					world.particles.burst(x, y, [Color("#84cc16"), Color("#a3e635"), Color.WHITE], 14, 2, 5, 14, 28, world.rng)
+					world.damage_number.emit(x, y - 24, "☁️ ЕДКОЕ ОБЛАКО", Color("#84cc16"))
 					for other in world.tanks:
 						if other == self or not other.alive or not world.are_hostile(acid_attacker, other):
 							continue
@@ -340,39 +372,45 @@ func update(world) -> void:
 	_update_shield(world)
 	_update_boss_phase(world)
 
+	if is_rammer_boss:
+		_update_rammer_boss(world)
+	if is_chimera_boss:
+		_update_chimera_boss(world)
+
 	if freeze_ticks <= 0:
 		if owner != null:
 			owner.control(self, world)
 		elif brain != null:
 			brain.update(self, world)
 
-	if dash_range > 0.0:
-		var boost := speed * Cfg.DASH_SPEED_MULT
-		vx = cos(angle) * boost
-		vy = sin(angle) * boost
+	if not (is_rammer_boss and rammer_state == "charge"):
+		if dash_range > 0.0:
+			var boost := speed * Cfg.DASH_SPEED_MULT
+			vx = cos(angle) * boost
+			vy = sin(angle) * boost
 
-	var before_x := x
-	var before_y := y
-	_move(world)
-	var moved := Vector2(x - before_x, y - before_y).length()
+		var before_x := x
+		var before_y := y
+		_move(world)
+		var moved := Vector2(x - before_x, y - before_y).length()
 
-	if wants_move and moved < 0.2:
-		stall_ticks += 1
-		worst_stall = maxi(worst_stall, stall_ticks)
-	else:
-		stall_ticks = 0
-
-	if dash_range > 0.0:
-		dash_range -= moved
-		if moved < 0.15:
-			dash_stall += 1
-			if dash_stall >= 3:
-				dash_range = 0.0
+		if wants_move and moved < 0.2:
+			stall_ticks += 1
+			worst_stall = maxi(worst_stall, stall_ticks)
 		else:
-			dash_stall = 0
-		if dash_range <= 0.0:
-			dash_range = 0.0
-			dash_stall = 0
+			stall_ticks = 0
+
+		if dash_range > 0.0:
+			dash_range -= moved
+			if moved < 0.15:
+				dash_stall += 1
+				if dash_stall >= 3:
+					dash_range = 0.0
+			else:
+				dash_stall = 0
+			if dash_range <= 0.0:
+				dash_range = 0.0
+				dash_stall = 0
 	_check_water(world)
 	_try_ram(world)
 
@@ -448,6 +486,18 @@ func _update_boss_phase(world) -> void:
 	if not is_boss or max_hp <= 0.0:
 		return
 	var ratio := hp / max_hp
+	if is_rammer_boss:
+		if boss_phase < 2 and ratio <= 0.5:
+			boss_phase = 2
+			enrage_speed_mult = 1.15
+			recompute()
+			world.feed.emit(I18n.t("feed.rammerEnrage", {"name": name},
+				"%s в ярости — таран теперь оставляет мины!" % name), Color("#ff3355"))
+			world.particles.burst(x, y, [Color("#ff3355"), Color("#ffaa33")], 24, 3, 6, 20, 34, world.rng)
+			world.add_shake(7.0, x, y)
+			Sfx.play("thunder", x, y)
+		return
+
 	if boss_phase < 2 and ratio <= Cfg.BOSS_PHASE2_HP:
 		boss_phase = 2
 		enrage_speed_mult = Cfg.BOSS_PHASE2_SPEED_MULT
@@ -470,6 +520,186 @@ func _update_boss_phase(world) -> void:
 		world.particles.burst(x, y, [Cfg.shield, Color("#ff3355")], 30, 3, 7, 22, 38, world.rng)
 		world.add_shake(9.0, x, y)
 		Sfx.play("thunder", x, y)
+
+func start_rammer_charge(tx: float, ty: float, world) -> void:
+	if not is_rammer_boss or not alive or rammer_state != "idle":
+		return
+	rammer_state = "telegraph"
+	rammer_telegraph_ticks = Cfg.RAMMER_TELEGRAPH_TICKS
+	rammer_dir = atan2(ty - y, tx - x)
+	angle = rammer_dir
+	body_angle = rammer_dir
+	turret_angle = rammer_dir
+	world.particles.burst(x, y, [Color("#ff6600"), Color("#ffcc00")], 12, 2, 4, 10, 20, world.rng)
+	world.add_shake(4.0, x, y)
+	Sfx.play("thunder", x, y)
+
+func _update_rammer_boss(world) -> void:
+	# Ability 2: Drop a mine behind every 3 seconds
+	rammer_mine_timer -= 1
+	if rammer_mine_timer <= 0:
+		rammer_mine_timer = Cfg.RAMMER_MINE_INTERVAL
+		var bx := x - cos(body_angle) * (height * 0.5 + 8.0)
+		var by := y - sin(body_angle) * (height * 0.5 + 8.0)
+		world.mines.append(Ent.Mine.new(bx, by, self, Cfg.MINE_LIFE))
+		world.particles.burst(bx, by, [Color("#ffaa33"), Color("#666666")], 6, 2, 4, 8, 14, world.rng)
+
+	match rammer_state:
+		"telegraph":
+			rammer_telegraph_ticks -= 1
+			vx *= 0.4
+			vy *= 0.4
+			if world.tick % 4 == 0:
+				world.particles.burst(x, y, [Color("#888888"), Color("#ff6600")], 3, 1, 3, 6, 12, world.rng)
+			if rammer_telegraph_ticks <= 0:
+				rammer_state = "charge"
+				rammer_charge_ticks = Cfg.RAMMER_CHARGE_TICKS
+				rammer_charge_mine_timer = 0
+				world.spawn_shockwave(x, y, 80.0, "ram", Color("#ff7700"), 20)
+				world.particles.burst(x, y, [Color("#ff4400"), Color("#ffbb00"), Color.WHITE], 24, 3, 7, 20, 36, world.rng)
+				world.add_shake(12.0, x, y)
+				Sfx.play("thunder", x, y)
+
+		"charge":
+			rammer_charge_ticks -= 1
+			var spd := Cfg.RAMMER_CHARGE_SPEED
+			vx = cos(rammer_dir) * spd
+			vy = sin(rammer_dir) * spd
+			x += vx
+			y += vy
+			body_angle = rammer_dir
+			turret_angle = rammer_dir
+			angle = rammer_dir
+
+			if world.tick % 2 == 0:
+				world.particles.burst(x, y, [Color("#ff4400"), Color("#ffa500"), Color("#333333")], 4, 2, 5, 8, 18, world.rng)
+
+			# Phase 2 (< 50% HP): Mines dropped continuously during charge
+			if max_hp > 0.0 and (hp / max_hp) <= 0.5:
+				rammer_charge_mine_timer -= 1
+				if rammer_charge_mine_timer <= 0:
+					rammer_charge_mine_timer = Cfg.RAMMER_CHARGE_MINE_INTERVAL
+					var mx := x - cos(rammer_dir) * (height * 0.5 + 8.0)
+					var my := y - sin(rammer_dir) * (height * 0.5 + 8.0)
+					world.mines.append(Ent.Mine.new(mx, my, self, Cfg.MINE_LIFE))
+					world.particles.burst(mx, my, [Color("#ff4400"), Color("#ffcc00")], 6, 2, 4, 10, 16, world.rng)
+
+			# Destroy obstacles in path
+			var map: GameMap = world.map
+			var hw := width * 0.5 + 4.0
+			var hh := height * 0.5 + 4.0
+			var r_min := map.row_at(y - hh)
+			var r_max := map.row_at(y + hh)
+			var c_min := map.col_at(x - hw)
+			var c_max := map.col_at(x + hw)
+			var hit_hard := false
+
+			for r in range(r_min, r_max + 1):
+				for c in range(c_min, c_max + 1):
+					var t: int = map.get_tile(r, c)
+					if t == Cfg.T_BRICK or t == Cfg.T_ADOBE:
+						world.hit_building(r, c, 999.0, "ram", c * Cfg.TILE + 16, r * Cfg.TILE + 16, self)
+					elif t == Cfg.T_TREE:
+						map.set_tile(r, c, Cfg.T_EMPTY)
+						world.particles.burst(c * Cfg.TILE + 16, r * Cfg.TILE + 16, [Cfg.tree, Cfg.tree_dark], 12, 2, 5, 14, 24, world.rng)
+					elif t == Cfg.T_WALL:
+						hit_hard = true
+
+			if hit_hard or x <= col_w or x >= map.width - col_w or y <= col_h or y >= map.height - col_h:
+				rammer_charge_ticks = 0
+				world.spawn_shockwave(x, y, 90.0, "ram", Color("#ff4400"), 22)
+				world.add_shake(14.0, x, y)
+				Sfx.play("crack", x, y)
+
+			x = clampf(x, col_w * 0.5 + 2.0, map.width - col_w * 0.5 - 2.0)
+			y = clampf(y, col_h * 0.5 + 2.0, map.height - col_h * 0.5 - 2.0)
+
+			# Ramming collision with tanks
+			for other in world.tanks:
+				if other == self or not other.alive or not world.are_hostile(self, other):
+					continue
+				var d2: float = (other.x - x) * (other.x - x) + (other.y - y) * (other.y - y)
+				if d2 <= 42.0 * 42.0:
+					var ram_dmg: float = 110.0 * dmg_scale
+					world.deal_damage(other, ram_dmg, self, "ram")
+					other.vx += cos(rammer_dir) * 16.0
+					other.vy += sin(rammer_dir) * 16.0
+					world.spawn_shockwave(other.x, other.y, 60.0, "ram", Color("#ef4444"), 16)
+					world.particles.burst(other.x, other.y, [Color("#ff4400"), Color.WHITE], 16, 2, 6, 16, 28, world.rng)
+					Sfx.play("crack", other.x, other.y)
+					world.add_shake(8.0, other.x, other.y)
+
+			# Defense base rule: max 50 total damage
+			if world.mode == "defense" and world.base != null:
+				var db := Vector2(world.base["x"] - x, world.base["y"] - y).length()
+				if db <= float(world.base["radius"]) + 20.0:
+					var remaining_cap: float = maxf(0.0, Cfg.RAMMER_BASE_MAX_TOTAL_DMG - rammer_base_damage_dealt)
+					if remaining_cap > 0.0:
+						var applied_base_hit := minf(remaining_cap, 50.0)
+						rammer_base_damage_dealt += applied_base_hit
+						world.base["hp"] = maxf(0.0, float(world.base["hp"]) - applied_base_hit)
+						world.damage_number.emit(world.base["x"], world.base["y"] - 30, "-%d БАЗА!" % int(applied_base_hit), Color("#ff4444"))
+						world.add_shake(12.0, world.base["x"], world.base["y"])
+						Sfx.play("hit")
+
+			if rammer_charge_ticks <= 0:
+				rammer_state = "cooldown"
+				rammer_cooldown_ticks = Cfg.RAMMER_COOLDOWN_TICKS
+				vx = 0.0
+				vy = 0.0
+
+		"cooldown":
+			rammer_cooldown_ticks -= 1
+			if rammer_cooldown_ticks <= 0:
+				rammer_state = "idle"
+
+func _update_chimera_boss(world) -> void:
+	if not alive:
+		return
+
+	# Ability 1: Predator Cloak
+	if shadow_timer > 0:
+		chimera_ambush_ready = true
+		turbo_timer = maxi(turbo_timer, 2)
+	else:
+		chimera_cloak_timer -= 1
+		if chimera_cloak_timer <= 0:
+			chimera_cloak_timer = Cfg.CHIMERA_CLOAK_INTERVAL
+			shadow_timer = Cfg.CHIMERA_CLOAK_DURATION
+			turbo_timer = Cfg.CHIMERA_CLOAK_DURATION
+			chimera_ambush_ready = true
+			world.particles.burst(x, y, [Color("#84cc16"), Color("#a3e635"), Color("#182b18")], 20, 2, 5, 14, 26, world.rng)
+			world.spawn_shockwave(x, y, 60.0, "acid", Color("#84cc16"), 18)
+			Sfx.play("steam", x, y)
+			world.feed.emit(I18n.t("feed.chimeraCloak", {"name": name},
+				"🧪 %s активирует оптический камуфляж хищника!" % name), Color("#84cc16"))
+
+	# Ability 2: Corrosive Trail (Acid Pools) while moving
+	var spd := sqrt(vx * vx + vy * vy)
+	if spd > 0.4:
+		chimera_pool_timer -= 1
+		if chimera_pool_timer <= 0:
+			chimera_pool_timer = 50
+			var bx := x - cos(body_angle) * (height * 0.45)
+			var by := y - sin(body_angle) * (height * 0.45)
+			world.spawn_acid_pool(bx, by, Cfg.CHIMERA_ACID_POOL_RADIUS, self, Cfg.CHIMERA_ACID_POOL_DURATION)
+			world.particles.burst(bx, by, [Color("#84cc16"), Color("#4d7c0f")], 4, 1, 3, 6, 12, world.rng)
+
+	# Phase 2 (< 50% HP): Holographic decoy clones
+	if max_hp > 0.0 and (hp / max_hp) <= 0.5 and not chimera_clones_spawned:
+		chimera_clones_spawned = true
+		world.spawn_chimera_clone(self, -1.0)
+		world.spawn_chimera_clone(self, 1.0)
+		shadow_timer = Cfg.CHIMERA_CLOAK_DURATION
+		turbo_timer = Cfg.CHIMERA_CLOAK_DURATION
+		chimera_ambush_ready = true
+		world.spawn_shockwave(x, y, 80.0, "acid", Color("#84cc16"), 24)
+		world.particles.burst(x, y, [Color("#84cc16"), Color("#00ffff"), Color("#ff00ff"), Color.WHITE], 32, 3, 7, 20, 38, world.rng)
+		world.damage_number.emit(x, y - 30, "🧪 ГОЛОГРАММЫ!", Color("#84cc16"))
+		Sfx.play("thunder", x, y)
+		world.feed.emit(I18n.t("feed.chimeraClones", {"name": name},
+			"🧪 %s развёртывает голографических клонов и уходит в тень!" % name), Color("#84cc16"))
+
 
 func _move(world, crush_trees: bool = true) -> void:
 	var map: GameMap = world.map
@@ -591,6 +821,38 @@ func shoot(world) -> bool:
 	var muzzle_x := x + cos(turret_angle) * muzzle_len
 	var muzzle_y := y + sin(turret_angle) * muzzle_len
 	var scale_v := dmg_scale
+
+	if is_chimera_boss or is_chimera_clone:
+		var is_ambush := is_chimera_boss and (chimera_ambush_ready or shadow_timer > 0)
+		var cur_dmg_scale := scale_v
+		if is_ambush:
+			chimera_ambush_ready = false
+			shadow_timer = 0
+			cur_dmg_scale *= 2.0
+			world.damage_number.emit(muzzle_x, muzzle_y - 24, "🎯 ЗАПАДНЯ! 2X", Color("#a3e635"))
+			world.spawn_shockwave(muzzle_x, muzzle_y, 70.0, "acid", Color("#84cc16"), 20)
+			world.particles.burst(muzzle_x, muzzle_y, [Color("#84cc16"), Color("#a3e635"), Color.WHITE], 20, 2, 6, 14, 28, world.rng)
+			Sfx.play("steam", muzzle_x, muzzle_y)
+
+		var perp := turret_angle + PI / 2.0
+		var ox := cos(perp) * 5.0
+		var oy := sin(perp) * 5.0
+		for off: float in [-1.0, 1.0]:
+			var bx: float = muzzle_x + ox * off
+			var by: float = muzzle_y + oy * off
+			var b := Ent.Bullet.new(bx, by, turret_angle, self, cur_dmg_scale)
+			b.cannon_kind = "acid"
+			b.pierce = 0
+			b.explosive = false
+			b.keep_bricks = false
+			if is_ambush:
+				b.acid_burst = true
+			world.bullets.append(b)
+
+		world.particles.burst(muzzle_x, muzzle_y, [Color("#84cc16"), Color("#a3e635"), Color.WHITE], 8, 2, 4, 10, 14, world.rng)
+		Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
+		world.notify_shot(self)
+		return true
 
 	var wp := Weapons.get_weapon(weapon) if weapon != "" else {}
 	if not wp.is_empty():
@@ -811,6 +1073,7 @@ func _shockwave(world) -> void:
 		other.vx += (dx / d) * Cfg.SHOCKWAVE_PUSH * k
 		other.vy += (dy / d) * Cfg.SHOCKWAVE_PUSH * k
 
+	world.spawn_shockwave(x, y, Cfg.SHOCKWAVE_R, "shockwave", Color("#ff55ff"), 24)
 	world.particles.burst(x, y, [Color("#ff55ff"), Color("#ffaaff"), Color.WHITE],
 		30, 3, 7, 26, 52, world.rng)
 	world.add_shake(9.0, x, y)
@@ -824,9 +1087,25 @@ func _acid_bomb(world) -> void:
 		if dx * dx + dy * dy > Cfg.SHOCKWAVE_R * Cfg.SHOCKWAVE_R:
 			continue
 		other.apply_acid(world, self, dmg_scale, Cfg.ACID_BOMB_STACKS)
+
+	world.spawn_shockwave(x, y, Cfg.SHOCKWAVE_R, "acid", Color("#84cc16"), 26)
+
+	var spray_count := 36
+	for i in spray_count:
+		var ang: float = float(i) / float(spray_count) * TAU + (world.rng.nextf() - 0.5) * 0.2
+		var spd: float = 3.2 + world.rng.nextf() * 3.0
+		var col: Color = Color("#9dff5c") if (i % 2 == 0) else Color("#c4ff60")
+		if i % 6 == 0:
+			col = Color.WHITE
+		world.particles.spawn(x, y, col, 3.5 + world.rng.nextf() * 2.5, 20.0 + world.rng.nextf() * 15.0,
+			world.rng, cos(ang) * spd, sin(ang) * spd)
+
 	world.particles.burst(x, y, [Color("#9dff5c"), Color("#4a7a2a"), Color.WHITE],
 		30, 3, 7, 26, 52, world.rng)
+	world.damage_number.emit(x, y - 32, "☣️ ЧУМНОЙ ШКВАЛ!", Color("#84cc16"))
 	world.add_shake(9.0, x, y)
+	Sfx.play("steam", x, y)
+	Sfx.play("explosion", x, y)
 
 func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 	var result := {"applied": 0.0, "killed": false, "evaded": false, "reflected": 0.0}
@@ -973,6 +1252,10 @@ func respawn(nx: float, ny: float) -> void:
 	boss_phase = 1
 	enrage_speed_mult = 1.0
 	enrage_fire_rate_mult = 1.0
+	chimera_cloak_timer = 0
+	chimera_pool_timer = 0
+	chimera_clones_spawned = false
+	chimera_ambush_ready = false
 	recompute()
 	if brain != null:
 		brain.reset()

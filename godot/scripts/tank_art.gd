@@ -32,6 +32,16 @@ static var CHASSIS := {
 		"turret_r": 11.5, "barrel_len": 30.0, "barrel_w": 6.0, "muzzle": "twin",
 		"plates": true, "antenna": true, "scope": false, "stripes": true,
 	},
+	"boss_rammer": {
+		"w": 36.0, "h": 38.0, "track_w": 10.0, "wheels": 5, "nose": 0.22,
+		"turret_r": 11.0, "barrel_len": 0.0, "barrel_w": 0.0, "muzzle": "none",
+		"plates": true, "antenna": false, "scope": false, "stripes": true, "plow": true,
+	},
+	"boss_chimera": {
+		"w": 32.0, "h": 36.0, "track_w": 8.0, "wheels": 5, "nose": 0.30,
+		"turret_r": 10.0, "barrel_len": 26.0, "barrel_w": 5.0, "muzzle": "twin_acid",
+		"plates": true, "antenna": true, "scope": true, "stripes": false, "chimera": true,
+	},
 }
 
 const MAX_COLLIDE_W := 26.0

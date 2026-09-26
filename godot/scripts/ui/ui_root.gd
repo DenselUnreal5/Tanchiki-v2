@@ -386,6 +386,7 @@ func _build_menu() -> void:
 func _on_menu_nav(id: String) -> void:
 	match id:
 		"garage": open_garage()
+		"cosmetics": open_cosmetics()
 		"gallery": open_gallery()
 		"achievements": open_achievements()
 		"daily": open_daily()
@@ -724,6 +725,16 @@ func close_garage() -> void:
 
 var is_garage_open: bool:
 	get: return _hub != null and _hub.visible and _hub_active_tab == "garage"
+
+func open_cosmetics(focus_id: String = "") -> void:
+	_open_hub_tab("cosmetics", focus_id)
+
+func close_cosmetics() -> void:
+	if _hub_active_tab == "cosmetics":
+		close_hub()
+
+var is_cosmetics_open: bool:
+	get: return _hub != null and _hub.visible and _hub_active_tab == "cosmetics"
 
 
 func open_stats() -> void:
@@ -1183,11 +1194,12 @@ func _refresh_settings_language() -> void:
 		btn.text = I18n.t("btn.close", {}, "Закрыть")
 
 func _build_general_tab() -> void:
-	var theme_keys := ["noir", "military", "scifi"]
+	var theme_keys := ["noir", "military", "scifi", "material"]
 	var theme_labels := [
 		I18n.t("theme.noir", {}, "Нуар"),
 		I18n.t("theme.military", {}, "Военное досье"),
 		I18n.t("theme.scifi", {}, "Sci-Fi"),
+		I18n.t("theme.material", {}, "Pixel"),
 	]
 	var idx := maxi(0, theme_keys.find(Sets.ui_theme))
 	_settings_body.add_child(UiKit.choice_row(
