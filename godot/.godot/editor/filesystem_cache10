@@ -1,8 +1,8 @@
 78098b89c88a74ebe8c20117b8754620
-::res://::1790345816
-export_presets.cfg::TextFile::-1::1790347166::0::1::::<><><>0<>0<><>::
+::res://::1790348546
+export_presets.cfg::TextFile::-1::1790350846::0::1::::<><><>0<>0<><>::
 icon.ico::OtherFile::-1::1788275069::0::1::::<><><>0<>0<><>::
-icon.svg::CompressedTexture2D::2727636235757500454::1787928656::1787931073::1::::<><><>0<>0<>14605896b800f51fdeab039d8fde2a9b<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
+icon.svg::CompressedTexture2D::2727636235757500454::1790348294::1790350890::1::::<><><>0<>0<>14605896b800f51fdeab039d8fde2a9b<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 package.json::JSON::-1::1789691088::0::1::::<><><>0<>0<><>::
 README.md::TextFile::-1::1789691088::0::1::::<><><>0<>0<><>::
 render.yaml::TextFile::-1::1789691088::0::1::::<><><>0<>0<><>::
@@ -110,7 +110,7 @@ updates.gd::GDScript::4450020931874397632::1788264736::0::1::::<>MarginContainer
 ::res://addons/godotsteam/linuxarm64/::1788264736
 ::res://addons/godotsteam/osx/::1788264735
 ::res://addons/godotsteam/win32/::1788264735
-::res://addons/godotsteam/win64/::1790347173
+::res://addons/godotsteam/win64/::1790350884
 ::res://addons/godot_ai/::1788264782
 client_configurator.gd::GDScript::1846084051969471465::1788264781::0::1::::McpClientConfigurator<>RefCounted<><>0<>1<><>::
 connection.gd::GDScript::3256190740644037847::1788264778::0::1::::McpConnection<>Node<><>0<>1<><>::
@@ -259,12 +259,12 @@ windows_port_reservation.gd::GDScript::3786839279967695522::1788264780::0::1::::
 plugin.cfg::TextFile::-1::1788705734::0::1::::<><><>0<>0<><>::
 plugin.gd::GDScript::6393802344689256642::1788705738::0::1::::<>EditorPlugin<><>0<>1<><>::
 progression_view.gd::GDScript::8955403953147439032::1788706005::0::1::::<>Control<><>0<>1<><>::
-::res://art/::1790079214
+::res://art/::1790348805
 ::res://art/cannons/::1789888773
 acid.png::CompressedTexture2D::754973682888904581::1789888664::1789888773::1::::<><><>0<>0<>240beb5a501c92316473a54c8433ef8e<>res://.godot/imported/acid.png-23c206f31a9c626ab4ecda67bd519157.ctex::
 ice.png::CompressedTexture2D::7634944085742721598::1789888664::1789888773::1::::<><><>0<>0<>4ed64fd6e913ff0c1e01c43e5c4daac6<>res://.godot/imported/ice.png-b292124c47bcc45c3190f5fd530d77d5.ctex::
 standard.png::CompressedTexture2D::6284383547865411704::1789888664::1789888773::1::::<><><>0<>0<>8fe8340741d9a62a64c80855be1ba44d<>res://.godot/imported/standard.png-3714b2211d154917b0c0bca8712628b8.ctex::
-::res://art/perks/::1790344472
+::res://art/perks/::1790347187
 acid_cloud.png::CompressedTexture2D::4778972700823287687::1790344472::1790347187::1::::<><><>0<>0<>62890928cc2b3e6911d2a5db0cba6c88<>res://.godot/imported/acid_cloud.png-deac899e0dfedcd639a9a3579289dd74.ctex::
 all_terrain.png::CompressedTexture2D::4944020064740993723::1789888665::1789888773::1::::<><><>0<>0<>73226e3bcebad6b719031d260dc401fd<>res://.godot/imported/all_terrain.png-bca9c2276e6f9b2bb61255af1ebf3530.ctex::
 amphibious.png::CompressedTexture2D::5666698330071005299::1789888665::1789888773::1::::<><><>0<>0<>a2fd40688bc287c2c5fc126bea01156b<>res://.godot/imported/amphibious.png-00ee8bbe506f16b242be6cee278ac1e5.ctex::
@@ -328,7 +328,7 @@ turbo.png::CompressedTexture2D::113461215213555310::1789888665::1789888772::1:::
 vampire.png::CompressedTexture2D::2170852522959177141::1789888665::1789888772::1::::<><><>0<>0<>5c9e4c5a8bb7f7bcc9543663613068eb<>res://.godot/imported/vampire.png-9149708270463d924fe5798b4eb76cf9.ctex::
 ::res://art/perks_src/::1788706975
 ::res://art/terrain/::1790079214
-::res://art/terrain/city/::1790335729
+::res://art/terrain/city/::1790347188
 bridge1.png::CompressedTexture2D::756573235396153358::1790071659::1790079301::1::::<><><>0<>0<>27b7bbd429de0f0fe6098c88b1380469<>res://.godot/imported/bridge1.png-2d078749855c62054fcbb1491bbf4d6b.ctex::
 bridge2.png::CompressedTexture2D::3140685097300946636::1790071658::1790079301::1::::<><><>0<>0<>bda5f8d13fe8024a6537697933956bee<>res://.godot/imported/bridge2.png-46a35b56a8c5036b588f48182242ff7e.ctex::
 bush1.png::CompressedTexture2D::3471678866183318442::1790071658::1790079301::1::::<><><>0<>0<>d875a7a171e9fb5586987859944bfb12<>res://.godot/imported/bush1.png-13c012632eb5dff0388191bc42eabf1a.ctex::
@@ -377,7 +377,7 @@ speed.png::CompressedTexture2D::7915750047543160077::1789888665::1789888772::1::
 gatling.png::CompressedTexture2D::6311059947227318418::1789888665::1789888772::1::::<><><>0<>0<>6dd2e2f9b40979f6fd4c61de15412136<>res://.godot/imported/gatling.png-75382b36f8752a07a7e4e9e9b0a8bcf3.ctex::
 rockets.png::CompressedTexture2D::2213413695077989515::1789888665::1789888772::1::::<><><>0<>0<>dd76fbe9e723b98ad96c7a770df9963a<>res://.godot/imported/rockets.png-7269dc63ed67024d541764a5f6ff86bd.ctex::
 shotgun.png::CompressedTexture2D::4286455927281510393::1789888665::1789888772::1::::<><><>0<>0<>faf6068a109b2ad6ee89d08e8044bffe<>res://.godot/imported/shotgun.png-999d62e903f2a6a1cff53b0b22db63ed.ctex::
-::res://build/::1790338934
+::res://build/::1790347202
 steam_appid.txt::TextFile::-1::1789219174::0::1::::<><><>0<>0<><>::
 Как запустить.txt::TextFile::-1::1788078767::0::1::::<><><>0<>0<><>::
 ::res://build/linux/::1789218364
@@ -405,11 +405,11 @@ cannon_card.tscn::PackedScene::-1::1789733397::0::1::::<><><>0<>0<><>::res://scr
 cosmetic_card.tscn::PackedScene::-1::1789727174::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/cosmetic_card.gd<>res://scripts/ui/perk_icon_view.gd
 gallery_detail.tscn::PackedScene::-1::1789898750::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/gallery_detail.gd<>res://scripts/ui/perk_icon_view.gd
 upgrade_card.tscn::PackedScene::-1::1789733544::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/upgrade_card.gd<>res://scripts/ui/perk_icon_view.gd<>res://scripts/ui/focus_ring_panel.gd
-::res://scripts/::1790331421
+::res://scripts/::1790348637
 abilities.gd::GDScript::358552042098184283::1790063334::0::1::::Abilities<>RefCounted<><>0<>0<><>::
 achievements.gd::GDScript::9215880570170937460::1790063334::0::1::::Achievements<>RefCounted<><>0<>1<><>::
 audio.gd::GDScript::1963427527760383837::1790063334::0::1::::<>Node<><>0<>0<><>::
-bot.gd::GDScript::8443291483184613177::1790331421::0::1::::BotBrain<>RefCounted<><>0<>0<><>::
+bot.gd::GDScript::8443291483184613177::1790349335::0::1::::BotBrain<>RefCounted<><>0<>0<><>::
 cannons.gd::GDScript::7249812311845871779::1790063334::0::1::::Cannons<>RefCounted<><>0<>1<><>::
 cli.gd::GDScript::2538835076614515544::1790063334::0::1::::Cli<>RefCounted<><>0<>0<><>::
 config.gd::GDScript::3454630245960735069::1790336698::0::1::::Cfg<>RefCounted<><>0<>1<><>::
@@ -418,7 +418,7 @@ daily.gd::GDScript::9047289685965659327::1790063334::0::1::::Daily<>RefCounted<>
 enemy_types.gd::GDScript::1909527229773509602::1790063334::0::1::::EnemyTypes<>RefCounted<><>0<>0<><>::
 entities.gd::GDScript::6435990306499678281::1790063334::0::1::::Ent<>RefCounted<><>0<>0<><>::
 fonts.gd::GDScript::283160381254097390::1790063334::0::1::::<>Node<><>0<>1<><>::
-game.gd::GDScript::3618699815177207155::1790337903::0::1::::<>Node<><>0<>0<><>::
+game.gd::GDScript::3618699815177207155::1790348380::0::1::::<>Node<><>0<>0<><>::
 game_map.gd::GDScript::869548647071203478::1790331419::0::1::::GameMap<>RefCounted<><>0<>0<><>::
 i18n.gd::GDScript::7752327099371892178::1790322031::0::1::::<>Node<><>0<>0<><>::
 input_schemes.gd::GDScript::6466869239133353224::1790063334::0::1::::Ctl<>RefCounted<><>0<>0<><>::
@@ -446,7 +446,7 @@ upgrades.gd::GDScript::2622605299426661031::1790063334::0::1::::Upgrades<>RefCou
 utils.gd::GDScript::7436398411069476782::1790063334::0::1::::Rng<>RefCounted<><>0<>0<><>::
 weapons.gd::GDScript::141350927022214648::1790063334::0::1::::Weapons<>RefCounted<><>0<>0<><>::
 weather.gd::GDScript::6899618592559140047::1790063334::0::1::::WeatherSystem<>RefCounted<><>0<>0<><>::
-world.gd::GDScript::2854068884894288357::1790340978::0::1::::World<>RefCounted<><>0<>0<><>::
+world.gd::GDScript::2854068884894288357::1790349218::0::1::::World<>RefCounted<><>0<>0<><>::
 world_view.gd::GDScript::8347266231888317091::1790336896::0::1::::WorldView<>Node2D<><>0<>0<><>::
 ::res://scripts/fx/::1790331420
 ao_layer.gd::GDScript::7209396354025576534::1790331420::0::1::::AoLayer<>RefCounted<><>0<>0<><>::
@@ -476,7 +476,7 @@ menu_tank_view.gd::GDScript::3482116127110748191::1790063334::0::1::::MenuTankVi
 perk_icons.gd::GDScript::2322829844658101209::1790344548::0::1::::PerkIcons<>RefCounted<><>0<>1<><>::
 perk_icon_view.gd::GDScript::4251603391104036902::1790063334::0::1::::PerkIconView<>Control<><>0<>1<><>::
 skill_node.gd::GDScript::3181888036238547878::1790344578::0::1::::SkillNode<>BaseButton<><>0<>1<><>::
-splash.gd::GDScript::1773164144262193816::1790063334::0::1::::Splash<>Control<><>0<>0<><>::
+splash.gd::GDScript::1773164144262193816::1790350855::0::1::::Splash<>Control<><>0<>0<><>::
 themed_panel.gd::GDScript::6771807485460741499::1790063334::0::1::::ThemedPanel<>MarginContainer<><>0<>1<><>::
 ui_kit.gd::GDScript::3681456458134837129::1790063334::0::1::::UiKit<>RefCounted<><>0<>1<><>::
 ui_root.gd::GDScript::3688552235975243827::1790344626::0::1::::UiRoot<>Control<><>0<>0<><>::
@@ -498,7 +498,7 @@ post_fx.gdshader::Shader::4553687491999387694::1789735194::0::1::::<><><>0<>0<><
 ::res://src/::1789715376
 ::res://suno/::1789715518
 battle v1.mp3::AudioStreamMP3::4753728558382026501::1789691094::1789715518::1::::<><><>0<>0<>62df19327ebf7721e375e6bc375b692f<>res://.godot/imported/battle v1.mp3-f835384ad3f8653f50abd50585950e2f.mp3str::
-::res://tests/::1790344032
+::res://tests/::1790348546
 art_sheet.gd::GDScript::7569179757509836739::1790063334::0::1::::<>Node<><>0<>0<><>::
 art_sheet.tscn::PackedScene::-1::1788178926::0::1::::<><><>0<>0<><>::res://tests/art_sheet.gd
 audio_dump.gd::GDScript::8989594936174849139::1790063334::0::1::::<>Node<><>0<>0<><>::

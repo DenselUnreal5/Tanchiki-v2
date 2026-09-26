@@ -89,10 +89,66 @@ export class BotBrain {
     this.escapeCooldown = 0;
     this.escapeDir = this.rng() < 0.5 ? 1 : -1;
     this.dashTimer = 0;
+    this.noiseX = 0;
+    this.noiseY = 0;
+    this.noiseTimer = 0;
+    this.aimNoise = 0;
+    this.aimNoiseTimer = 0;
+    this.perceptionTimer = 0;
+    this.losCache = false;
   }
 
   get accuracy() {
     return clamp(this.baseAccuracy + (this.ownerMods?.accuracyBonus ?? 0), 0.1, 0.98);
+  }
+
+  hearShot(sx, sy, shooter = null) {
+    const dNew = dist2(sx, sy, this.lastX, this.lastY);
+    const dOld = dist2(this.noiseX, this.noiseY, this.lastX, this.lastY);
+    const isPlayer = shooter && shooter.isPlayerControlled;
+
+    if (this.noiseTimer <= 0 || dNew < dOld || isPlayer) {
+      this.noiseX = sx;
+      this.noiseY = sy;
+      this.noiseTimer = 100;
+      if (!this.target || !this.losCache) {
+        this.perceptionTimer = 0;
+      }
+    }
+  }
+
+  onDamaged(attacker) {
+    if (!attacker || !attacker.alive) return;
+    let shouldSwitch = false;
+    if (!this.target || !this.target.alive) {
+      shouldSwitch = true;
+    } else if (!this.losCache) {
+      shouldSwitch = true;
+    } else if (attacker.isPlayerControlled && !this.target.isPlayerControlled) {
+      shouldSwitch = true;
+    } else {
+      const dCurr = dist2(this.target.x, this.target.y, this.lastX, this.lastY);
+      const dAtt = dist2(attacker.x, attacker.y, this.lastX, this.lastY);
+      if (dAtt < dCurr * 0.8) {
+        shouldSwitch = true;
+      }
+    }
+
+    if (shouldSwitch) {
+      this.target = attacker;
+      this.state = STATE.COMBAT;
+      this.reactTimer = Math.min(this.reactTimer, Math.max(2, Math.floor(this.reactTime * 0.25)));
+      this.perceptionTimer = 0;
+      this.losCache = true;
+    }
+  }
+
+  #targetValid(tank, world, t) {
+    if (!t || !t.alive || !world.areHostile(tank, t)) return false;
+    if (t.shadowTimer > 0) return false;
+    const d2 = dist2(tank.x, tank.y, t.x, t.y);
+    if (t.abilityActive && t.abilityActive('smoke') && d2 > 160 * 160) return false;
+    return d2 <= BOT_SIGHT * BOT_SIGHT;
   }
 
   update(tank, world) {
@@ -110,11 +166,18 @@ export class BotBrain {
     this.#trackStuck(tank);
 
     // ---- восприятие -------------------------------------------------------
-    const visible = findVisibleEnemy(tank, world);
-    const threat = findBestThreat(tank, world);
-    const target = threat ?? visible.tank;
+    this.perceptionTimer--;
+    if (this.perceptionTimer <= 0 || !this.target || !this.#targetValid(tank, world, this.target)) {
+      this.target = findBestThreat(tank, world, this.lobbed);
+      this.perceptionTimer = 3 + Math.floor(this.rng() * 3);
+      this.losCache = false;
+      if (this.target) {
+        this.losCache = world.map.hasLineOfSight(tank.x, tank.y, this.target.x, this.target.y);
+      }
+    }
+    const target = this.target;
     const targetDist = target ? dist(tank.x, tank.y, target.x, target.y) : Infinity;
-    const hasShot = target ? world.map.hasLineOfSight(tank.x, tank.y, target.x, target.y) : false;
+    const hasShot = target ? (this.lobbed ? true : this.losCache) : false;
 
     // ---- уклонение от летящей пули ---------------------------------------
     if (this.dodgeTimer <= 0) {
@@ -126,6 +189,18 @@ export class BotBrain {
         this.#steer(tank, world, tank.x + Math.cos(dodgeAngle) * 60, tank.y + Math.sin(dodgeAngle) * 60);
         this.dodgeTimer = 15;
         // Уклоняясь, всё равно пытаемся отвечать — как в оригинале.
+        this.#tryFire(tank, world, target, targetDist, hasShot);
+        return;
+      }
+    }
+
+    // Реакция на звук выстрелов в отсутствие цели
+    if (this.noiseTimer > 0) {
+      this.noiseTimer--;
+      if (!target) {
+        const soundDir = Math.atan2(this.noiseY - tank.y, this.noiseX - tank.x);
+        tank.slewTurretTo(soundDir);
+        this.#moveToward(tank, world, this.noiseX, this.noiseY);
         this.#tryFire(tank, world, target, targetDist, hasShot);
         return;
       }
@@ -263,6 +338,20 @@ export class BotBrain {
     const mw = map.width;
     const mh = map.height;
     const options = [];
+
+    const isFfa = world.mode === 'ffa';
+    if (isFfa) {
+      if (world.shotPings && world.shotPings.length > 0) {
+        const ping = world.shotPings[world.shotPings.length - 1];
+        options.push({ x: ping.x, y: ping.y, spread: 4 });
+      }
+      for (const pl of (world.players || [])) {
+        if (pl.tank && pl.tank.alive && world.areHostile(tank, pl.tank)) {
+          options.push({ x: pl.tank.x, y: pl.tank.y, spread: 6 });
+        }
+      }
+    }
+
     const own = world.homeFor(tank.team);
     if (own) options.push({ x: own.x, y: own.y, spread: 6 });
     options.push({ x: mw / 2, y: mh / 2, spread: 8 });
@@ -305,17 +394,21 @@ export class BotBrain {
     const hpRatio = tank.hp / tank.maxHP;
     const enemies = countNearby(world, tank, 400, true);
     const allies = countNearby(world, tank, 400, false);
-    const outnumbered = enemies > allies + 1;
+    const isFfa = world.mode === 'ffa';
+    const outnumbered = isFfa ? false : (enemies > allies + 1);
     // В режиме выживания уходим раньше и дальше: цена смерти здесь —
     // вылет из партии, а не просто штраф за смерть.
-    const retreatHp = this.survival ? 0.55 : 0.3;
-    const backDist = this.survival ? 200 : 150;
+    const retreatHp = isFfa ? 0.20 : (this.survival ? 0.55 : 0.3);
+    const backDist = isFfa ? 120 : (this.survival ? 200 : 150);
 
     if (hpRatio < retreatHp || outnumbered) {
       // Отход: держим цель в прицеле, но отъезжаем назад.
       const back = aim + Math.PI;
       const range = hpRatio < retreatHp ? backDist : 120;
       this.#steer(tank, world, tank.x + Math.cos(back) * range, tank.y + Math.sin(back) * range);
+    } else if (!hasShot) {
+      // Цель за укрытием/углом: сближаемся по A*, а не упираемся в стену
+      this.#moveToward(tank, world, target.x, target.y);
     } else if (this.#tryDash(tank, world, target, targetDist, hasShot)) {
       // Рывок-таран: бот сближается на высокой скорости, дальше разбираемся.
     } else if (targetDist > this.keepMax) {
@@ -356,23 +449,28 @@ export class BotBrain {
     return true;
   }
   #aim(tank, angle) {
-    const spread = (1 - this.accuracy) * (this.rng() - 0.5) * 0.4;
-    tank.slewTurretTo(angle + spread);
+    this.aimNoiseTimer--;
+    if (this.aimNoiseTimer <= 0) {
+      this.aimNoise = (1 - this.accuracy) * (this.rng() - 0.5) * 0.35;
+      this.aimNoiseTimer = 12 + Math.floor(this.rng() * 10);
+    }
+    tank.slewTurretTo(angle + this.aimNoise);
   }
 
   #tryFire(tank, world, target, targetDist, hasShot) {
     if (!target || !hasShot) return;
     if (targetDist > this.fireRange) return;
-    if (this.reactTimer > 0 || !tank.canFire) return;
 
     const predicted = predictPosition(tank, target);
     const aim = Math.atan2(predicted.y - tank.y, predicted.x - tank.x);
     this.#aim(tank, aim);
 
+    if (this.reactTimer > 0 || !tank.canFire) return;
+
     // Стреляем только если башня уже смотрит достаточно близко к цели —
     // иначе бот палит в стену рядом с собой.
     const off = Math.abs(Math.atan2(Math.sin(tank.turretAngle - aim), Math.cos(tank.turretAngle - aim)));
-    const tolerance = 0.12 + (1 - this.accuracy) * 0.25;
+    const tolerance = 0.14 + (1 - this.accuracy) * 0.25;
     if (off > tolerance) return;
 
     // Миномёт стреляет по дуге — снаряд перелетает укрытия.
@@ -499,30 +597,60 @@ export function findVisibleEnemy(tank, world) {
 
 /**
  * Оценка угроз: приоритет тем, кто ближе, слабее по HP и несёт наш флаг.
+ * В FFA игрок имеет высший приоритет, а также цели, нанёсшие нам урон.
  * Возвращает танк или null.
  */
-export function findBestThreat(tank, world) {
+export function findBestThreat(tank, world, lobbed = false) {
   let best = null;
   let bestScore = -Infinity;
-  const sight2 = BOT_SIGHT * BOT_SIGHT;
+  let fallbackThreat = null;
+  let fallbackDist2 = Infinity;
+  const sight = BOT_SIGHT;
+  const sight2 = sight * sight;
+  const isFfa = world.mode === 'ffa';
+
   for (const other of world.tanks) {
     if (other === tank || !other.alive) continue;
     if (!world.areHostile(tank, other)) continue;
     const d2 = dist2(tank.x, tank.y, other.x, other.y);
     if (d2 > sight2) continue;
-    if (!world.map.hasLineOfSight(tank.x, tank.y, other.x, other.y)) continue;
+    if (other.abilityActive && other.abilityActive('smoke') && d2 > 160 * 160) continue;
 
-    const d = Math.sqrt(d2);
-    let score = (BOT_SIGHT - d) / BOT_SIGHT; // ближе — важнее
-    score += (1 - other.hp / other.maxHP) * 0.6; // добить раненого
-    if (other.carryingFlag && other.team !== tank.team) score += 1.5; // остановить флагоносца
-    if (other.isPlayerControlled) score += 0.25; // человек опаснее бота
-    if (score > bestScore) {
-      bestScore = score;
-      best = other;
+    const hasLos = lobbed || world.map.hasLineOfSight(tank.x, tank.y, other.x, other.y);
+    if (hasLos) {
+      const d = Math.sqrt(d2);
+      let score = (sight - d) / sight; // ближе — важнее
+      score += (1 - other.hp / other.maxHP) * 0.6; // добить раненого
+      if (other.carryingFlag && other.team !== tank.team) score += 1.5; // остановить флагоносца
+
+      // В FFA режиме игрок — главный фокус интереса для ботов
+      if (other.isPlayerControlled) {
+        score += isFfa ? 1.4 : 0.5;
+        if (d < BOT_COMBAT_RANGE) score += 0.8;
+      }
+
+      // Если эта цель недавно нанесла нам урон — возмездие
+      if (other === tank.lastAttacker) score += 1.2;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = other;
+      }
+    } else {
+      // Нет прямой видимости: кандидат для сближения, если видимых врагов рядом нет
+      let fDist2 = d2;
+      if (other.isPlayerControlled) fDist2 *= 0.4;
+      if (other === tank.lastAttacker) fDist2 *= 0.5;
+      if (fDist2 < fallbackDist2) {
+        fallbackDist2 = fDist2;
+        fallbackThreat = other;
+      }
     }
   }
-  return best;
+
+  if (best) return best;
+  if (fallbackThreat && isFfa) return fallbackThreat;
+  return null;
 }
 
 /** Ближайшая пуля, которая по курсу попадёт в танк. */

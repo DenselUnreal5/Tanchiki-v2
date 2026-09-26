@@ -16,10 +16,12 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="Тянчики — Battle Tanks"
 config/description="Top-down танковый шутер: FFA, Захват флага, Царь горы, Оборона."
-config/version="0.9.21"
+config/version="0.9.22"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
+boot_splash/bg_color=Color(0.024, 0.035, 0.067, 1)
+boot_splash/show_image=false
 
 [autoload]
 

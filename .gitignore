@@ -2,6 +2,8 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+~*
+*.tmp
 
 # Сборки: пересобираются из исходников двумя командами.
 godot/build/

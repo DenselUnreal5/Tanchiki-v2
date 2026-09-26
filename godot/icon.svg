@@ -1,8 +1,251 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-<rect width="128" height="128" rx="18" fill="#0a0a0a"/>
-<rect x="26" y="46" width="76" height="52" rx="8" fill="#3f7d3f"/>
-<rect x="18" y="52" width="12" height="40" rx="4" fill="#2a2a2a"/>
-<rect x="98" y="52" width="12" height="40" rx="4" fill="#2a2a2a"/>
-<circle cx="64" cy="62" r="16" fill="#2b5c2b"/>
-<rect x="58" y="18" width="12" height="34" fill="#222"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Shield Gradient -->
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#070b12"/>
+    </linearGradient>
+
+    <!-- Metallic Gold/Amber Gradient -->
+    <linearGradient id="amberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="30%" stop-color="#f59e0b"/>
+      <stop offset="70%" stop-color="#d97706"/>
+      <stop offset="100%" stop-color="#78350f"/>
+    </linearGradient>
+
+    <!-- Cyan Energy Gradient -->
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#67e8f9"/>
+      <stop offset="50%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#0e7490"/>
+    </linearGradient>
+
+    <!-- Metal Armor Light Gradient -->
+    <linearGradient id="metalLight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#64748b"/>
+      <stop offset="40%" stop-color="#334155"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <!-- Metal Armor Dark Gradient -->
+    <linearGradient id="metalDark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#334155"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <!-- Barrel Gradient -->
+    <linearGradient id="barrelGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="40%" stop-color="#94a3b8"/>
+      <stop offset="60%" stop-color="#cbd5e1"/>
+      <stop offset="80%" stop-color="#64748b"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+
+    <!-- Track Tread Gradient -->
+    <linearGradient id="treadGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#090d16"/>
+    </linearGradient>
+
+    <!-- Soft Ambient Glow -->
+    <radialGradient id="haloGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.35"/>
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Ambient Backdrop Halo -->
+  <circle cx="256" cy="256" r="240" fill="url(#haloGlow)"/>
+
+  <!-- ==================== CROSSED HEAVY CANNONS ==================== -->
+  <g opacity="0.85">
+    <!-- Crossed Left-to-Right Cannon Barrel -->
+    <g transform="rotate(45 256 256)">
+      <rect x="244" y="40" width="24" height="432" rx="4" fill="url(#metalDark)" stroke="#475569" stroke-width="2"/>
+      <!-- Muzzle Brakes -->
+      <path d="M236 44 L276 44 L276 72 L236 72 Z" fill="url(#metalLight)" stroke="#f59e0b" stroke-width="1.5"/>
+      <line x1="236" y1="54" x2="276" y2="54" stroke="#0f172a" stroke-width="3"/>
+      <line x1="236" y1="62" x2="276" y2="62" stroke="#0f172a" stroke-width="3"/>
+      <path d="M236 440 L276 440 L276 468 L236 468 Z" fill="url(#metalLight)" stroke="#475569" stroke-width="1.5"/>
+    </g>
+
+    <!-- Crossed Right-to-Left Cannon Barrel -->
+    <g transform="rotate(-45 256 256)">
+      <rect x="244" y="40" width="24" height="432" rx="4" fill="url(#metalDark)" stroke="#475569" stroke-width="2"/>
+      <!-- Muzzle Brakes -->
+      <path d="M236 44 L276 44 L276 72 L236 72 Z" fill="url(#metalLight)" stroke="#f59e0b" stroke-width="1.5"/>
+      <line x1="236" y1="54" x2="276" y2="54" stroke="#0f172a" stroke-width="3"/>
+      <line x1="236" y1="62" x2="276" y2="62" stroke="#0f172a" stroke-width="3"/>
+      <path d="M236 440 L276 440 L276 468 L236 468 Z" fill="url(#metalLight)" stroke="#475569" stroke-width="1.5"/>
+    </g>
+  </g>
+
+  <!-- ==================== TACTICAL HEXAGONAL BALLISTIC SHIELD ==================== -->
+  <!-- Outer Shield Shadow / Border -->
+  <polygon points="256,44 446,120 446,368 256,472 66,368 66,120" fill="#050811" stroke="#334155" stroke-width="4"/>
+
+  <!-- Outer Shield Neon Circuit -->
+  <polygon points="256,52 438,124 438,362 256,462 74,362 74,124" fill="url(#shieldGrad)" stroke="url(#amberGrad)" stroke-width="3.5"/>
+
+  <!-- Inner Chamfer Plate -->
+  <polygon points="256,66 422,132 422,352 256,446 90,352 90,132" fill="#0a0f1d" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Tactical Grid Accent Lines Inside Shield -->
+  <path d="M130 150 L382 150 M110 220 L402 220 M110 290 L402 290 M130 360 L382 360" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="6 6" opacity="0.6"/>
+  <line x1="256" y1="70" x2="256" y2="440" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="6 6" opacity="0.6"/>
+
+  <!-- Shield Corner Rivets / Tactical Bolts -->
+  <circle cx="256" cy="60" r="4" fill="#f59e0b"/>
+  <circle cx="430" cy="128" r="4" fill="#f59e0b"/>
+  <circle cx="430" cy="358" r="4" fill="#f59e0b"/>
+  <circle cx="256" cy="454" r="4" fill="#f59e0b"/>
+  <circle cx="82" cy="358" r="4" fill="#f59e0b"/>
+  <circle cx="82" cy="128" r="4" fill="#f59e0b"/>
+
+  <!-- ==================== MAIN BATTLE TANK ==================== -->
+  <g id="tank_body" transform="translate(0, 8)">
+
+    <!-- LEFT TRACK ASSEMBLY -->
+    <!-- Track Outer Shadow -->
+    <path d="M104 200 L146 170 L146 390 L104 366 Z" fill="#05080e"/>
+    <!-- Track Tread Base -->
+    <path d="M108 204 L144 176 L144 384 L108 362 Z" fill="url(#treadGrad)" stroke="#334155" stroke-width="2"/>
+    <!-- Left Track Segments / Cleats -->
+    <path d="M108 214 L144 186 M108 232 L144 204 M108 250 L144 222 M108 268 L144 240 M108 286 L144 258 M108 304 L144 276 M108 322 L144 294 M108 340 L144 312 M108 358 L144 330" stroke="#475569" stroke-width="2"/>
+    <!-- Left Road Wheels / Sprockets -->
+    <circle cx="126" cy="226" r="9" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+    <circle cx="126" cy="262" r="9" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <circle cx="126" cy="298" r="9" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <circle cx="126" cy="334" r="9" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+
+    <!-- RIGHT TRACK ASSEMBLY -->
+    <!-- Track Outer Shadow -->
+    <path d="M408 200 L366 170 L366 390 L408 366 Z" fill="#05080e"/>
+    <!-- Track Tread Base -->
+    <path d="M404 204 L368 176 L368 384 L404 362 Z" fill="url(#treadGrad)" stroke="#334155" stroke-width="2"/>
+    <!-- Right Track Segments / Cleats -->
+    <path d="M404 214 L368 186 M404 232 L368 204 M404 250 L368 222 M404 268 L368 240 M404 286 L368 258 M404 304 L368 276 M404 322 L368 294 M404 340 L368 312 M404 358 L368 330" stroke="#475569" stroke-width="2"/>
+    <!-- Right Road Wheels / Sprockets -->
+    <circle cx="386" cy="226" r="9" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+    <circle cx="386" cy="262" r="9" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <circle cx="386" cy="298" r="9" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <circle cx="386" cy="334" r="9" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+
+    <!-- MAIN HULL CHASSIS -->
+    <!-- Lower Glacis Shadow -->
+    <polygon points="146,384 366,384 378,354 134,354" fill="#090d16" stroke="#1e293b" stroke-width="2"/>
+    <!-- Main Upper Hull Glacis -->
+    <polygon points="142,210 370,210 380,356 132,356" fill="url(#metalDark)" stroke="#475569" stroke-width="2"/>
+
+    <!-- Reactive Armor (ERA) Modular Blocks on Upper Glacis -->
+    <!-- Row 1 -->
+    <rect x="152" y="310" width="30" height="18" rx="2" fill="url(#metalLight)" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="188" y="310" width="30" height="18" rx="2" fill="url(#metalLight)" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="224" y="310" width="30" height="18" rx="2" fill="url(#metalLight)" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="258" y="310" width="30" height="18" rx="2" fill="url(#metalLight)" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="294" y="310" width="30" height="18" rx="2" fill="url(#metalLight)" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="330" y="310" width="30" height="18" rx="2" fill="url(#metalLight)" stroke="#1e293b" stroke-width="1.5"/>
+    <!-- Row 2 -->
+    <rect x="164" y="332" width="38" height="16" rx="2" fill="url(#metalLight)" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="208" y="332" width="44" height="16" rx="2" fill="url(#metalLight)" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="260" y="332" width="44" height="16" rx="2" fill="url(#metalLight)" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="310" y="332" width="38" height="16" rx="2" fill="url(#metalLight)" stroke="#1e293b" stroke-width="1.5"/>
+
+    <!-- Headlight / Cyber Sensor Assemblies -->
+    <polygon points="146,236 172,236 166,252 144,252" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+    <circle cx="157" cy="244" r="4" fill="#38bdf8"/>
+    <polygon points="366,236 340,236 346,252 368,252" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+    <circle cx="355" cy="244" r="4" fill="#38bdf8"/>
+
+    <!-- Front Center Tactical Insignia (Glowing Chevron) -->
+    <path d="M236 364 L256 376 L276 364 L276 370 L256 382 L236 370 Z" fill="url(#amberGrad)"/>
+
+    <!-- ==================== CANNON BARREL ==================== -->
+    <!-- Heavy Main Gun Barrel -->
+    <rect x="243" y="88" width="26" height="132" rx="3" fill="url(#barrelGrad)" stroke="#1e293b" stroke-width="2"/>
+    <!-- Gun Thermal Sleeve Bands -->
+    <rect x="241" y="116" width="30" height="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1"/>
+    <rect x="241" y="146" width="30" height="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1"/>
+    <rect x="241" y="176" width="30" height="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+
+    <!-- Glowing Energy Rail Lines on Cannon -->
+    <line x1="251" y1="96" x2="251" y2="190" stroke="#38bdf8" stroke-width="2" opacity="0.9"/>
+    <line x1="261" y1="96" x2="261" y2="190" stroke="#38bdf8" stroke-width="2" opacity="0.9"/>
+
+    <!-- Multi-Chamber Tactical Muzzle Brake -->
+    <path d="M234 68 L278 68 L278 92 L234 92 Z" fill="url(#metalDark)" stroke="url(#amberGrad)" stroke-width="2"/>
+    <!-- Baffle Vents -->
+    <rect x="230" y="72" width="52" height="4" rx="1" fill="#090d16" stroke="#475569" stroke-width="1"/>
+    <rect x="230" y="82" width="52" height="4" rx="1" fill="#090d16" stroke="#475569" stroke-width="1"/>
+    <!-- Barrel Crown Opening -->
+    <ellipse cx="256" cy="68" rx="12" ry="6" fill="#06080e" stroke="#38bdf8" stroke-width="2"/>
+    <circle cx="256" cy="68" r="4" fill="#38bdf8"/>
+
+    <!-- ==================== TURRET ASSEMBLY ==================== -->
+    <!-- Turret Base Ring -->
+    <ellipse cx="256" cy="230" rx="96" ry="38" fill="#0c1220" stroke="#334155" stroke-width="2"/>
+
+    <!-- Turret Main Armored Mantlet & Cheek Plates -->
+    <!-- Left Cheek Plate (Sloped) -->
+    <polygon points="172,216 230,192 230,248 168,266" fill="url(#metalLight)" stroke="#475569" stroke-width="2"/>
+    <!-- Right Cheek Plate (Sloped) -->
+    <polygon points="340,216 282,192 282,248 344,266" fill="url(#metalDark)" stroke="#334155" stroke-width="2"/>
+    <!-- Center Gun Mantlet / Rotor -->
+    <polygon points="230,188 282,188 288,252 224,252" fill="url(#metalLight)" stroke="#64748b" stroke-width="2"/>
+
+    <!-- Turret Roof Plate -->
+    <polygon points="200,186 312,186 332,204 180,204" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+
+    <!-- Commander Cupola / Panoramic Sight (Left Roof) -->
+    <ellipse cx="214" cy="195" rx="12" ry="7" fill="#0f172a" stroke="#f59e0b" stroke-width="1.5"/>
+    <ellipse cx="214" cy="195" rx="6" ry="3" fill="#38bdf8"/>
+
+    <!-- Gunner Primary Sight / Laser Rangefinder (Right Mantlet) -->
+    <rect x="286" y="204" width="18" height="14" rx="3" fill="#090d16" stroke="#f59e0b" stroke-width="1.5"/>
+    <circle cx="295" cy="211" r="4" fill="#f59e0b"/>
+
+    <!-- Smoke Grenade Discharger Pods -->
+    <!-- Left 3-tube Launcher -->
+    <g transform="rotate(-15 178 220)">
+      <rect x="170" y="214" width="6" height="14" rx="1.5" fill="#090d16" stroke="#475569" stroke-width="1"/>
+      <rect x="178" y="214" width="6" height="14" rx="1.5" fill="#090d16" stroke="#475569" stroke-width="1"/>
+      <rect x="186" y="214" width="6" height="14" rx="1.5" fill="#090d16" stroke="#475569" stroke-width="1"/>
+    </g>
+    <!-- Right 3-tube Launcher -->
+    <g transform="rotate(15 334 220)">
+      <rect x="320" y="214" width="6" height="14" rx="1.5" fill="#090d16" stroke="#475569" stroke-width="1"/>
+      <rect x="328" y="214" width="6" height="14" rx="1.5" fill="#090d16" stroke="#475569" stroke-width="1"/>
+      <rect x="336" y="214" width="6" height="14" rx="1.5" fill="#090d16" stroke="#475569" stroke-width="1"/>
+    </g>
+
+    <!-- Turret Edge Cyber Neon Trim -->
+    <path d="M174 266 L226 250 L286 250 L338 266" stroke="url(#amberGrad)" stroke-width="2.5" fill="none"/>
+  </g>
+
+  <!-- ==================== TACTICAL RETICLE & SENSOR OVERLAYS ==================== -->
+  <!-- Target Reticle Ring -->
+  <circle cx="256" cy="256" r="176" fill="none" stroke="#38bdf8" stroke-width="1" stroke-dasharray="12 18" opacity="0.45"/>
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4 32" opacity="0.55"/>
+
+  <!-- Crosshairs Ticks -->
+  <line x1="256" y1="20" x2="256" y2="38" stroke="#f59e0b" stroke-width="2.5"/>
+  <line x1="256" y1="474" x2="256" y2="492" stroke="#f59e0b" stroke-width="2.5"/>
+  <line x1="20" y1="256" x2="38" y2="256" stroke="#f59e0b" stroke-width="2.5"/>
+  <line x1="474" y1="256" x2="492" y2="256" stroke="#f59e0b" stroke-width="2.5"/>
+
+  <!-- Sensor Degree Marks -->
+  <path d="M246 28 L256 18 L266 28" fill="none" stroke="#38bdf8" stroke-width="1.5"/>
+  <path d="M246 484 L256 494 L266 484" fill="none" stroke="#38bdf8" stroke-width="1.5"/>
+
+  <!-- Corner Brackets on Shield -->
+  <path d="M80 140 L80 116 L104 116" fill="none" stroke="#38bdf8" stroke-width="2.5"/>
+  <path d="M432 140 L432 116 L408 116" fill="none" stroke="#38bdf8" stroke-width="2.5"/>
+  <path d="M80 348 L80 372 L104 372" fill="none" stroke="#38bdf8" stroke-width="2.5"/>
+  <path d="M432 348 L432 372 L408 372" fill="none" stroke="#38bdf8" stroke-width="2.5"/>
 </svg>

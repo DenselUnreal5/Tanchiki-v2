@@ -54,6 +54,8 @@ var waypoint_stall := 0
 var path_cooldown := 0
 var perception_timer := 0
 var _los_cache := false
+var _aim_noise := 0.0
+var _aim_noise_timer := 0
 
 const STEER_OFFSETS := [
 	0.0, 0.3, -0.3, 0.6, -0.6, 0.95, -0.95, 1.35, -1.35,
@@ -109,6 +111,8 @@ func reset() -> void:
 	waypoint_stall = 0
 	path_cooldown = 0
 	perception_timer = 0
+	_aim_noise = 0.0
+	_aim_noise_timer = 0
 
 var accuracy: float:
 	get: return clampf(base_accuracy + float(owner_mods.get("accuracyBonus", 0.0)), 0.1, 0.98)
@@ -183,6 +187,8 @@ func update(tank: Tank, world) -> void:
 	if noise_timer > 0:
 		noise_timer -= 1
 		if tgt == null:
+			var sound_dir := atan2(noise_y - tank.y, noise_x - tank.x)
+			tank.slew_turret_to(sound_dir)
 			_move_toward(tank, world, noise_x, noise_y)
 			_try_fire(tank, world, tgt, target_dist, has_shot)
 			_track_frozen(tank, tgt, target_dist)
@@ -311,6 +317,16 @@ func _pick_patrol_point(tank: Tank, world) -> Vector2:
 	var mw := map.width
 	var mh := map.height
 	var options := []
+
+	var is_ffa: bool = world.mode == "ffa"
+	if is_ffa:
+		if not world.shot_pings.is_empty():
+			var ping: Dictionary = world.shot_pings[world.shot_pings.size() - 1]
+			options.append({"x": float(ping["x"]), "y": float(ping["y"]), "spread": 4.0})
+		for pl in world.players:
+			if pl.tank != null and pl.tank.alive and world.are_hostile(tank, pl.tank):
+				options.append({"x": pl.tank.x, "y": pl.tank.y, "spread": 6.0})
+
 	var own = world.home_for(tank.team)
 	if own != null:
 		options.append({"x": own.x, "y": own.y, "spread": 6.0})
@@ -352,14 +368,17 @@ func _do_combat(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> v
 	var hp_ratio := tank.hp / tank.max_hp
 	var enemies := count_nearby(world, tank, 400.0, true)
 	var allies := count_nearby(world, tank, 400.0, false)
-	var outnumbered := enemies > allies + 1
-	var retreat_hp := 0.55 if survival else 0.3
-	var back_dist := 200.0 if survival else 150.0
+	var is_ffa: bool = world.mode == "ffa"
+	var outnumbered: bool = false if is_ffa else (enemies > allies + 1)
+	var retreat_hp := 0.20 if is_ffa else (0.55 if survival else 0.3)
+	var back_dist := 120.0 if is_ffa else (200.0 if survival else 150.0)
 
 	if hp_ratio < retreat_hp or outnumbered:
 		var back := aim + PI
 		var range_v := back_dist if hp_ratio < retreat_hp else 120.0
 		_steer(tank, world, tank.x + cos(back) * range_v, tank.y + sin(back) * range_v)
+	elif not has_shot:
+		_move_toward(tank, world, tgt.x, tgt.y)
 	elif _try_dash(tank, world, tgt, target_dist, has_shot):
 		pass
 	elif target_dist > keep_max:
@@ -396,15 +415,46 @@ func _try_dash(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> bo
 	return true
 
 func _aim(tank: Tank, a: float) -> void:
-	var spread := (1.0 - accuracy) * (rng.nextf() - 0.5) * 0.4
-	tank.slew_turret_to(a + spread)
+	_aim_noise_timer -= 1
+	if _aim_noise_timer <= 0:
+		_aim_noise = (1.0 - accuracy) * (rng.nextf() - 0.5) * 0.35
+		_aim_noise_timer = 12 + int(rng.nextf() * 10.0)
+	tank.slew_turret_to(a + _aim_noise)
 
-func hear_shot(sx: float, sy: float) -> void:
-	if noise_timer > 0:
+func hear_shot(sx: float, sy: float, shooter = null) -> void:
+	var d_new := Vector2(sx - last_x, sy - last_y).length_squared()
+	var d_old := Vector2(noise_x - last_x, noise_y - last_y).length_squared()
+	var is_player: bool = shooter != null and shooter.is_player_controlled
+
+	if noise_timer <= 0 or d_new < d_old or is_player:
+		noise_x = sx
+		noise_y = sy
+		noise_timer = 100
+		if target == null or not _los_cache:
+			perception_timer = 0
+
+func on_damaged(attacker) -> void:
+	if attacker == null or not attacker.alive:
 		return
-	noise_x = sx
-	noise_y = sy
-	noise_timer = 150
+	var should_switch := false
+	if target == null or not target.alive:
+		should_switch = true
+	elif not _los_cache:
+		should_switch = true
+	elif attacker.is_player_controlled and not target.is_player_controlled:
+		should_switch = true
+	else:
+		var d_curr := Vector2(target.x - last_x, target.y - last_y).length_squared()
+		var d_att := Vector2(attacker.x - last_x, attacker.y - last_y).length_squared()
+		if d_att < d_curr * 0.8:
+			should_switch = true
+
+	if should_switch:
+		target = attacker
+		state = STATE_COMBAT
+		react_timer = mini(react_timer, maxi(2, int(react_time * 0.25)))
+		perception_timer = 0
+		_los_cache = true
 
 func _maybe_use_ability(tank: Tank, world, target_dist: float, has_shot: bool) -> void:
 	if tank.ability_id == "" or tank.ability_cd > 0:
@@ -427,15 +477,16 @@ func _try_fire(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> vo
 		return
 	if target_dist > fire_range:
 		return
-	if react_timer > 0 or not tank.can_fire:
-		return
 
 	var predicted := predict_position(tank, tgt)
 	var aim: float = atan2(predicted.y - tank.y, predicted.x - tank.x)
 	_aim(tank, aim)
 
+	if react_timer > 0 or not tank.can_fire:
+		return
+
 	var off := absf(atan2(sin(tank.turret_angle - aim), cos(tank.turret_angle - aim)))
-	var tolerance := 0.12 + (1.0 - accuracy) * 0.25
+	var tolerance := 0.14 + (1.0 - accuracy) * 0.25
 	if off > tolerance:
 		return
 
@@ -623,7 +674,14 @@ static func sight_range(world) -> float:
 static func find_best_threat(tank: Tank, world, lobbed: bool = false):
 	var sight := sight_range(world)
 	var sight2 := sight * sight
-	var near: Array = []
+	var is_ffa: bool = world.mode == "ffa"
+
+	var best = null
+	var best_score := -INF
+
+	var fallback_threat = null
+	var fallback_dist2 := INF
+
 	for other in world.tank_grid.query(tank.x, tank.y, sight):
 		if other == tank or not other.alive:
 			continue
@@ -638,31 +696,46 @@ static func find_best_threat(tank: Tank, world, lobbed: bool = false):
 			continue
 		if other.ability_active("smoke") and d2 > Cfg.SMOKE_VISION * Cfg.SMOKE_VISION:
 			continue
-		var i := near.size()
-		while i > 0 and float(near[i - 1][0]) > d2:
-			i -= 1
-		if i < THREAT_CANDIDATES:
-			near.insert(i, [d2, other])
-			if near.size() > THREAT_CANDIDATES:
-				near.resize(THREAT_CANDIDATES)
 
-	var best = null
-	var best_score := -INF
-	for entry in near:
-		var other = entry[1]
-		if not lobbed and not world.map.has_line_of_sight(tank.x, tank.y, other.x, other.y):
-			continue
-		var d := sqrt(float(entry[0]))
-		var score := (sight - d) / sight
-		score += (1.0 - other.hp / other.max_hp) * 0.6
-		if other.carrying_flag and other.team != tank.team:
-			score += 1.5
-		if other.is_player_controlled:
-			score += 0.25
-		if score > best_score:
-			best_score = score
-			best = other
-	return best
+		var has_los: bool = lobbed or world.map.has_line_of_sight(tank.x, tank.y, other.x, other.y)
+		if has_los:
+			var d := sqrt(d2)
+			var score := (sight - d) / sight
+			score += (1.0 - other.hp / other.max_hp) * 0.6
+			if other.carrying_flag and other.team != tank.team:
+				score += 1.5
+
+			# В FFA режиме игрок — главный фокус интереса для ботов
+			if other.is_player_controlled:
+				score += 1.4 if is_ffa else 0.5
+				if d < Cfg.BOT_COMBAT_RANGE:
+					score += 0.8
+
+			# Если эта цель недавно нанесла нам урон — возмездие
+			if other == tank.last_attacker:
+				score += 1.2
+
+			if score > best_score:
+				best_score = score
+				best = other
+		else:
+			# Нет прямой видимости: кандидат для сближения, если видимых врагов рядом нет
+			var f_dist2 := d2
+			if other.is_player_controlled:
+				f_dist2 *= 0.4
+			if other == tank.last_attacker:
+				f_dist2 *= 0.5
+			if f_dist2 < fallback_dist2:
+				fallback_dist2 = f_dist2
+				fallback_threat = other
+
+	if best != null:
+		return best
+
+	if fallback_threat != null and is_ffa:
+		return fallback_threat
+
+	return null
 
 const INCOMING_BULLET_MAX_RANGE := 600.0
 

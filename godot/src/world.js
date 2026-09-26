@@ -699,6 +699,9 @@ export class World {
 
     target.lastAttacker = attacker;
     target.lastAttackerTick = this.tick;
+    if (target.brain?.onDamaged && attacker && attacker !== target && attacker.alive && this.areHostile(target, attacker)) {
+      target.brain.onDamaged(attacker);
+    }
 
     // Обратный урон от «Отражения» — до проверки смерти, чтобы взаимное
     // уничтожение работало предсказуемо.

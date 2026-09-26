@@ -160,7 +160,7 @@ func notify_shot(shooter) -> void:
 		var dy: float = t.y - shooter.y
 		if dx * dx + dy * dy > r2:
 			continue
-		t.brain.hear_shot(shooter.x, shooter.y)
+		t.brain.hear_shot(shooter.x, shooter.y, shooter)
 
 func _update_storm() -> void:
 	for i in range(bolts.size() - 1, -1, -1):
@@ -997,6 +997,8 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 
 	target.last_attacker = attacker
 	target.last_attacker_tick = tick
+	if target.brain != null and attacker != null and attacker != target and attacker.alive and are_hostile(target, attacker):
+		target.brain.on_damaged(attacker)
 
 	if float(res["reflected"]) > 0.0 and attacker != null and attacker.alive:
 		deal_damage(attacker, float(res["reflected"]), target, "reflect")

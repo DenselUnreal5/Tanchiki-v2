@@ -74,7 +74,7 @@ func _ready() -> void:
 	if get_tree().current_scene == self:
 		var splash := Splash.new()
 		_root.add_child(splash)
-		await get_tree().create_timer(1.0).timeout
+		await splash.finished
 		splash.queue_free()
 
 	ui.show_menu()
