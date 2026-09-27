@@ -19,7 +19,8 @@ func _ready() -> void:
 				if int(r["bridges"]) > LevelGen.MAX_BRIDGES:
 					mark += "   СЛИШКОМ МНОГО ПЕРЕПРАВ"
 					failures += 1
-				if r["total"] > 200 and float(r["share"]) < 0.70:
+				var is_organic := String(Locations.get_location(loc).get("terrain", "grid")) == "organic"
+				if not is_organic and r["total"] > 200 and float(r["share"]) < 0.70:
 					mark += "   СЕТКА РВАНАЯ"
 					failures += 1
 				if walk < 0.97:

@@ -141,7 +141,16 @@ static func carve(map: GameMap, rng: Rng, cols: int, rows: int,
 		if pos >= 2 and pos + int(st["w"]) <= rows - 2:
 			usable.append(st)
 	if usable.is_empty():
-		return
+		# Нет уличной сетки (органический рельеф, см. OrganicGen) или ни
+		# одна улица не подошла по границам — переправы всё равно нужны:
+		# T_WATER не входит в is_drivable_tile, а
+		# GameMap.ensure_connectivity() намеренно не прокладывает
+		# аварийный коридор через воду, так что без моста река
+		# безвозвратно режет карту пополам.
+		var count := clampi((rows - 4) / 14, 1, SINGLE_RIVER_MAX_BRIDGES)
+		for i in count:
+			var pos: int = 2 + int(round(float(i + 1) * float(rows - 4) / float(count + 1)))
+			usable.append({"pos": pos, "w": 2})
 	var want: int = mini(SINGLE_RIVER_MAX_BRIDGES, usable.size())
 	for i in want:
 		var idx := 0

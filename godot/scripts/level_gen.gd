@@ -36,7 +36,7 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 
 	var arch := archetype
 	if arch == "auto" or arch == "":
-		var arch_pool := ["avenues", "plaza", "river", "fortress", "labyrinths", "industrial"]
+		var arch_pool := ["avenues", "plaza", "river", "fortress", "labyrinths", "industrial", "radial"]
 		arch = arch_pool[int(rng.nextf() * arch_pool.size()) % arch_pool.size()]
 
 	var cols := Cfg.COLS
@@ -57,12 +57,21 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		map.set_tile(0, c, Cfg.T_WALL)
 		map.set_tile(rows - 1, c, Cfg.T_WALL)
 
-	var plan := MapPlan.build(rng, cols, rows, loc)
-	RoadNet.paint(map, plan)
-	for block in plan["blocks"]:
-		Districts.paint(map, rng, block, loc)
-	RoadNet.restripe_streets(map, plan)
-	RoadNet.paint_links(map, plan)
+	var plan: Dictionary
+	if String(loc.get("terrain", "grid")) == "organic":
+		# Полная замена уличной сетки клеточным автоматом (скальные гряды/
+		# заросли между полянами и тропами) — см. OrganicGen. plan остаётся
+		# валидным пустым словарём для потребителей вроде
+		# world_view.gd::_build_road_class() (дорог тут просто нет).
+		plan = {"v": [], "h": [], "blocks": [], "circles": [], "seeds": [], "links": []}
+		OrganicGen.build(map, rng, cols, rows, loc)
+	else:
+		plan = MapPlan.build(rng, cols, rows, loc)
+		RoadNet.paint(map, plan)
+		for block in plan["blocks"]:
+			Districts.paint(map, rng, block, loc)
+		RoadNet.restripe_streets(map, plan)
+		RoadNet.paint_links(map, plan)
 
 	# Применение архитектурного стиля карты
 	if arch == "plaza":
@@ -74,6 +83,10 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		for corner in [[6, 6], [6, cols - 7], [rows - 7, 6], [rows - 7, cols - 7]]:
 			_fill_rect(map, corner[0] - 2, corner[0] + 2, corner[1] - 2, corner[1] + 2, Cfg.T_WALL)
 			map.set_tile(corner[0], corner[1], Cfg.T_EMPTY)
+	elif arch == "radial" and mode in ["ffa", "koth"] and bool(loc.get("arterials", true)):
+		_build_radial(map, rng, cols, rows, loc)
+	elif arch == "avenues" and mode in ["ffa", "koth"] and bool(loc.get("arterials", true)):
+		_build_avenues(map, rng, cols, rows, loc)
 
 	var river_weight: float = float(loc["river"])
 	if arch == "river" and river_weight < 0.8:
@@ -125,6 +138,58 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		"location": loc_id,
 		"archetype": arch,
 	}
+
+## Архетип "radial": кольцевые бульвары + лучевые улицы от центра карты —
+## та же точка, что уже использует "ядерный" seed района в
+## MapPlan._district_seeds() и куда сходится схлопывание карты в KOTH
+## (World._setup_koth()'s flood_tiles, отсортированные по расстоянию от
+## края) — совпадение центра усиливает связку с KOTH без лишней
+## координации кода. Рисуется поверх уже готовой сетки/зданий, как и
+## plaza/fortress — гарантия ширины/формы держится конструктивно.
+static func _build_radial(map: GameMap, rng: Rng, cols: int, rows: int,
+		loc: Dictionary) -> void:
+	var cx := float(cols) / 2.0
+	var cy := float(rows) / 2.0
+	var w: float = float(loc.get("arterial_w", MapPlan.ARTERIAL_W))
+	var min_dim := float(mini(cols, rows))
+	var radii := [min_dim * 0.32]
+	if cols >= 100 and rng.nextf() < 0.5:
+		radii.append(min_dim * 0.46)
+	for radius in radii:
+		RoadNet.paint_ring(map, cx, cy, radius, w)
+	var spokes := 5 + int(rng.nextf() * 3.0)
+	var phase := rng.nextf() * TAU / float(spokes)
+	for i in spokes:
+		RoadNet.paint_spoke(map, cx, cy, phase + TAU * float(i) / float(spokes), w)
+
+## Архетип "avenues": одна или две диагональные магистрали угол-в-угол
+## через всю карту, поверх уже готовой сетки/зданий — режут прямоугольные
+## кварталы на треугольные/трапециевидные куски (RoadNet.paint_thick_line
+## тот же примитив, что и лучи "radial", просто между двумя произвольными
+## точками, а не от центра до края). Если проведены обе — на пересечении
+## в центре карты ставится маленькая площадь-«арка» как landmark.
+static func _build_avenues(map: GameMap, rng: Rng, cols: int, rows: int,
+		loc: Dictionary) -> void:
+	var w: float = float(loc.get("arterial_w", MapPlan.ARTERIAL_W))
+	var m := 3.0
+	var backslash := [Vector2(m, m), Vector2(float(cols) - 1.0 - m, float(rows) - 1.0 - m)]
+	var slash := [Vector2(float(cols) - 1.0 - m, m), Vector2(m, float(rows) - 1.0 - m)]
+
+	var draw_backslash := rng.nextf() < 0.5
+	var draw_both := rng.nextf() < 0.35
+	if draw_both:
+		RoadNet.paint_thick_line(map, backslash[0].x, backslash[0].y, backslash[1].x, backslash[1].y, w)
+		RoadNet.paint_thick_line(map, slash[0].x, slash[0].y, slash[1].x, slash[1].y, w)
+		var cr := rows / 2
+		var cc := cols / 2
+		_fill_rect(map, cr - 3, cr + 3, cc - 3, cc + 3, Cfg.T_ROAD)
+		map.set_tile(cr - 3, cc, Cfg.T_WALL)
+		map.set_tile(cr + 3, cc, Cfg.T_WALL)
+		map.set_tile(cr, cc - 3, Cfg.T_WALL)
+		map.set_tile(cr, cc + 3, Cfg.T_WALL)
+	else:
+		var line: Array = backslash if draw_backslash else slash
+		RoadNet.paint_thick_line(map, line[0].x, line[0].y, line[1].x, line[1].y, w)
 
 static func _fill_rect(map: GameMap, r0: int, r1: int, c0: int, c1: int, tile: int) -> void:
 	for r in range(maxi(1, r0), mini(map.rows - 2, r1) + 1):

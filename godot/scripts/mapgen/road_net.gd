@@ -24,6 +24,74 @@ static func paint(map: GameMap, plan: Dictionary) -> void:
 static func restripe_streets(map: GameMap, plan: Dictionary) -> void:
 	paint(map, plan)
 
+## Кольцевой бульвар архетипа "radial" — не сплошной круг (как
+## _paint_circle для маленьких перекрёстков), а полоса шириной width
+## вокруг радиуса radius.
+static func paint_ring(map: GameMap, cx: float, cy: float, radius: float,
+		width: float) -> void:
+	var r_out := radius + width * 0.5
+	var box := int(ceil(r_out)) + 1
+	var icx := int(round(cx))
+	var icy := int(round(cy))
+	for dr in range(-box, box + 1):
+		for dc in range(-box, box + 1):
+			var r := icy + dr
+			var c := icx + dc
+			if r <= 0 or c <= 0 or r >= map.rows - 1 or c >= map.cols - 1:
+				continue
+			var d := sqrt(float(dr * dr + dc * dc))
+			if absf(d - radius) <= width * 0.5:
+				map.set_tile(r, c, Cfg.T_ROAD)
+
+## Луч от центра до края карты (с учётом рамки стен) под углом angle —
+## для архетипа "radial".
+static func paint_spoke(map: GameMap, cx: float, cy: float, angle: float,
+		width: float) -> void:
+	var dx := cos(angle)
+	var dy := sin(angle)
+	var t_max := _ray_box_exit(cx, cy, dx, dy, map.cols, map.rows)
+	paint_thick_line(map, cx, cy, cx + dx * t_max, cy + dy * t_max, width)
+
+## Толстая линия между двумя произвольными точками (в тайлах) — общий
+## примитив и для лучей "radial" (точка до края карты), и для диагоналей
+## "avenues" (угол до угла). Шаг 0.6 тайла с запасом от разрывов при
+## прорисовке квадратом (см. _stamp_square).
+static func paint_thick_line(map: GameMap, x0: float, y0: float, x1: float, y1: float,
+		width: float) -> void:
+	var dx := x1 - x0
+	var dy := y1 - y0
+	var dist := sqrt(dx * dx + dy * dy)
+	if dist < 0.001:
+		_stamp_square(map, x0, y0, width)
+		return
+	var steps := int(ceil(dist / 0.6))
+	for i in steps + 1:
+		var t := float(i) / float(steps)
+		_stamp_square(map, x0 + dx * t, y0 + dy * t, width)
+
+static func _ray_box_exit(cx: float, cy: float, dx: float, dy: float,
+		cols: int, rows: int) -> float:
+	var t := INF
+	if dx > 0.0:
+		t = minf(t, (float(cols - 2) - cx) / dx)
+	elif dx < 0.0:
+		t = minf(t, (1.0 - cx) / dx)
+	if dy > 0.0:
+		t = minf(t, (float(rows - 2) - cy) / dy)
+	elif dy < 0.0:
+		t = minf(t, (1.0 - cy) / dy)
+	return t
+
+static func _stamp_square(map: GameMap, px: float, py: float, width: float) -> void:
+	var half := width * 0.5
+	var r0 := int(floor(py - half))
+	var r1 := int(ceil(py + half))
+	var c0 := int(floor(px - half))
+	var c1 := int(ceil(px + half))
+	for r in range(maxi(1, r0), mini(map.rows - 2, r1) + 1):
+		for c in range(maxi(1, c0), mini(map.cols - 2, c1) + 1):
+			map.set_tile(r, c, Cfg.T_ROAD)
+
 static func paint_links(map: GameMap, plan: Dictionary) -> void:
 	for link in plan.get("links", []):
 		for r in range(maxi(1, int(link["r0"])), mini(map.rows - 2, int(link["r1"])) + 1):
