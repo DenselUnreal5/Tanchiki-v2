@@ -15,6 +15,7 @@ const ARCHETYPES := [
 	{"id": "radial", "name": "👑 Кольца", "desc": "Кольца и лучи от центра"},
 	{"id": "labyrinths", "name": "🧩 Лабиринт", "desc": "Тактические укрытия"},
 	{"id": "industrial", "name": "🏭 Промзона", "desc": "Контейнеры и ангары"},
+	{"id": "canyon", "name": "🏜 Каньон", "desc": "Ущелья и мосты"},
 ]
 
 const MODES := [

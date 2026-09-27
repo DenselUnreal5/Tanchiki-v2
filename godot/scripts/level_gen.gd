@@ -1,6 +1,7 @@
 class_name LevelGen
 extends RefCounted
 
+const Archetypes = preload("res://scripts/mapgen/archetypes.gd")
 const MAX_BRIDGES := WaterGen.MAX_BRIDGES
 
 static func _ctf_player_area(cols: int, rows: int) -> Dictionary:
@@ -36,7 +37,7 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 
 	var arch := archetype
 	if arch == "auto" or arch == "":
-		var arch_pool := ["avenues", "plaza", "river", "fortress", "labyrinths", "industrial", "radial"]
+		var arch_pool := ["avenues", "plaza", "river", "fortress", "labyrinths", "industrial", "radial", "canyon"]
 		arch = arch_pool[int(rng.nextf() * arch_pool.size()) % arch_pool.size()]
 
 	var cols := Cfg.COLS
@@ -74,19 +75,12 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		RoadNet.paint_links(map, plan)
 
 	# Применение архитектурного стиля карты
-	if arch == "plaza":
-		var cr := rows / 2
-		var cc := cols / 2
-		_fill_rect(map, cr - 4, cr + 4, cc - 4, cc + 4, Cfg.T_ROAD)
-		_fill_rect(map, cr - 1, cr + 1, cc - 1, cc + 1, Cfg.T_WALL)
-	elif arch == "fortress":
-		for corner in [[6, 6], [6, cols - 7], [rows - 7, 6], [rows - 7, cols - 7]]:
-			_fill_rect(map, corner[0] - 2, corner[0] + 2, corner[1] - 2, corner[1] + 2, Cfg.T_WALL)
-			map.set_tile(corner[0], corner[1], Cfg.T_EMPTY)
-	elif arch == "radial" and mode in ["ffa", "koth"] and bool(loc.get("arterials", true)):
+	if arch == "radial" and mode in ["ffa", "koth"] and bool(loc.get("arterials", true)):
 		_build_radial(map, rng, cols, rows, loc)
 	elif arch == "avenues" and mode in ["ffa", "koth"] and bool(loc.get("arterials", true)):
 		_build_avenues(map, rng, cols, rows, loc)
+	else:
+		Archetypes.apply(map, rng, arch, cols, rows, mode, loc)
 
 	var river_weight: float = float(loc["river"])
 	if arch == "river" and river_weight < 0.8:
