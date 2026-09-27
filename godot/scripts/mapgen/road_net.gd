@@ -53,21 +53,22 @@ static func paint_spoke(map: GameMap, cx: float, cy: float, angle: float,
 	paint_thick_line(map, cx, cy, cx + dx * t_max, cy + dy * t_max, width)
 
 ## Толстая линия между двумя произвольными точками (в тайлах) — общий
-## примитив и для лучей "radial" (точка до края карты), и для диагоналей
-## "avenues" (угол до угла). Шаг 0.6 тайла с запасом от разрывов при
-## прорисовке квадратом (см. _stamp_square).
+## примитив для лучей "radial" (точка до края карты), диагоналей "avenues"
+## (угол до угла) и мостов архипелага "shore" (остров до материка, tile =
+## T_BRIDGE). Шаг 0.6 тайла с запасом от разрывов при прорисовке квадратом
+## (см. _stamp_square).
 static func paint_thick_line(map: GameMap, x0: float, y0: float, x1: float, y1: float,
-		width: float) -> void:
+		width: float, tile: int = Cfg.T_ROAD) -> void:
 	var dx := x1 - x0
 	var dy := y1 - y0
 	var dist := sqrt(dx * dx + dy * dy)
 	if dist < 0.001:
-		_stamp_square(map, x0, y0, width)
+		_stamp_square(map, x0, y0, width, tile)
 		return
 	var steps := int(ceil(dist / 0.6))
 	for i in steps + 1:
 		var t := float(i) / float(steps)
-		_stamp_square(map, x0 + dx * t, y0 + dy * t, width)
+		_stamp_square(map, x0 + dx * t, y0 + dy * t, width, tile)
 
 static func _ray_box_exit(cx: float, cy: float, dx: float, dy: float,
 		cols: int, rows: int) -> float:
@@ -82,7 +83,8 @@ static func _ray_box_exit(cx: float, cy: float, dx: float, dy: float,
 		t = minf(t, (1.0 - cy) / dy)
 	return t
 
-static func _stamp_square(map: GameMap, px: float, py: float, width: float) -> void:
+static func _stamp_square(map: GameMap, px: float, py: float, width: float,
+		tile: int = Cfg.T_ROAD) -> void:
 	var half := width * 0.5
 	var r0 := int(floor(py - half))
 	var r1 := int(ceil(py + half))
@@ -90,7 +92,7 @@ static func _stamp_square(map: GameMap, px: float, py: float, width: float) -> v
 	var c1 := int(ceil(px + half))
 	for r in range(maxi(1, r0), mini(map.rows - 2, r1) + 1):
 		for c in range(maxi(1, c0), mini(map.cols - 2, c1) + 1):
-			map.set_tile(r, c, Cfg.T_ROAD)
+			map.set_tile(r, c, tile)
 
 static func paint_links(map: GameMap, plan: Dictionary) -> void:
 	for link in plan.get("links", []):

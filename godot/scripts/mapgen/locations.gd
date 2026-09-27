@@ -113,7 +113,8 @@ static var LIST := {
 	"shore": {
 		"id": "shore", "name": "Побережье", "icon": "🌊", "music": "combat",
 		"block_min": 9, "block_max": 14,
-		"arterials": true, "circles": true, "river": 1.4,
+		"arterials": true, "circles": true, "river": 0.0,
+		"coast_frac": 0.18,
 		"districts": {"downtown": 2, "residential": 4, "industrial": 3, "park": 2},
 		"cover": "sand", "cover_chance": 0.20, "ruin_chance": 0.0,
 		"ground_tile": Cfg.T_GRASS, "yard_tile": Cfg.T_ROAD,

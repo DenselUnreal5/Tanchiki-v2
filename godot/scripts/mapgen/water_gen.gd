@@ -158,6 +158,90 @@ static func carve(map: GameMap, rng: Rng, cols: int, rows: int,
 			idx = int(round(float(i) * float(usable.size() - 1) / float(want - 1)))
 		_bridge(map, usable[idx], left, right, cols)
 
+## Архипелаг для локации "shore": залив/океан на одной стороне карты
+## (не река через центр — сплошная водная полоса у левого или правого
+## края, волнистая береговая линия) + несколько островов, каждый со своим
+## деревянным мостом на материк. Мосты кладутся СРАЗУ при постройке
+## острова, а не полагаются на общий аварийный рубеж
+## GameMap.ensure_connectivity() — тот намеренно не режет коридор через
+## T_WATER (_carve_put пропускает воду), так что без явного моста остров
+## остался бы недостижим навсегда.
+static func carve_archipelago(map: GameMap, rng: Rng, cols: int, rows: int,
+		loc: Dictionary) -> void:
+	var frac: float = float(loc.get("coast_frac", 0.18))
+	var from_left := rng.nextf() < 0.5
+	var band_w := float(cols) * frac
+	var base := band_w * (0.75 + rng.nextf() * 0.3)
+	var amp := band_w * 0.26
+	var freq := 0.05 + rng.nextf() * 0.04
+	var phase := rng.nextf() * TAU
+
+	# Береговая линия: волнистая граница между морем (у выбранного края)
+	# и материком — тот же приём синусоиды, что и у WaterGen.carve() для
+	# рек, только граница у края карты, а не полосой через середину.
+	var boundary := PackedInt32Array()
+	boundary.resize(rows)
+	for r in range(1, rows - 1):
+		var edge_c: int = int(round(base + sin(float(r) * freq + phase) * amp))
+		edge_c = clampi(edge_c, 2, int(band_w * 1.6))
+		boundary[r] = edge_c
+		if from_left:
+			for c in range(1, mini(cols - 2, edge_c) + 1):
+				map.set_tile(r, c, Cfg.T_WATER)
+		else:
+			for c in range(maxi(1, cols - 1 - edge_c), cols - 1):
+				map.set_tile(r, c, Cfg.T_WATER)
+
+	var island_count := 2 + int(rng.nextf() * 3.0)
+	var placed: Array = []
+	var attempts := 0
+	while placed.size() < island_count and attempts < 200:
+		attempts += 1
+		var r := 6 + int(rng.nextf() * float(maxi(1, rows - 12)))
+		var edge_c: int = boundary[r]
+		var margin := 3.0
+		var reach := float(edge_c) - margin * 2.0
+		if reach < 4.0:
+			continue
+		var depth := margin + rng.nextf() * reach
+		var ic: float
+		if from_left:
+			ic = depth
+		else:
+			ic = float(cols - 1) - depth
+		var radius := 2.5 + rng.nextf() * 2.0
+		var too_close := false
+		for p in placed:
+			var pc: float = p["c"]
+			var pr: float = p["r"]
+			var pradius: float = p["radius"]
+			if Vector2(ic - pc, float(r) - pr).length() < radius + pradius + 6.0:
+				too_close = true
+				break
+		if too_close:
+			continue
+		_stamp_island(map, ic, float(r), radius)
+		# Мост идёт не до самого края карты, а чуть за береговую линию —
+		# на пару тайлов вглубь суши, чтобы гарантированно упереться в
+		# сухую землю, а не в кромку воды на волнистой границе.
+		var target_c: float = float(edge_c) + 3.0 if from_left else float(cols - 1 - edge_c) - 3.0
+		RoadNet.paint_thick_line(map, ic, float(r), target_c, float(r), 2.0, Cfg.T_BRIDGE)
+		placed.append({"c": ic, "r": float(r), "radius": radius})
+	shore(map, 1, rows - 2, 1, cols - 2)
+
+static func _stamp_island(map: GameMap, cx: float, cy: float, radius: float) -> void:
+	var box := int(ceil(radius)) + 1
+	var icx := int(round(cx))
+	var icy := int(round(cy))
+	for dr in range(-box, box + 1):
+		for dc in range(-box, box + 1):
+			var r := icy + dr
+			var c := icx + dc
+			if r <= 0 or c <= 0 or r >= map.rows - 1 or c >= map.cols - 1:
+				continue
+			if sqrt(float(dr * dr + dc * dc)) <= radius:
+				map.set_tile(r, c, Cfg.T_EMPTY)
+
 static func shore(map: GameMap, r0: int, r1: int, c0: int, c1: int) -> void:
 	for r in range(maxi(1, r0), mini(map.rows - 2, r1) + 1):
 		for c in range(maxi(1, c0), mini(map.cols - 2, c1) + 1):

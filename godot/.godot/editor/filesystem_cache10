@@ -1,6 +1,6 @@
 78098b89c88a74ebe8c20117b8754620
-::res://::1790496610
-export_presets.cfg::TextFile::-1::1790494190::0::1::::<><><>0<>0<><>::
+::res://::1790511702
+export_presets.cfg::TextFile::-1::1790511702::0::1::::<><><>0<>0<><>::
 icon.ico::OtherFile::-1::1790419239::0::1::::<><><>0<>0<><>::
 icon.svg::CompressedTexture2D::2727636235757500454::1790419145::1790419184::1::::<><><>0<>0<>14605896b800f51fdeab039d8fde2a9b<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 package.json::JSON::-1::1790418521::0::1::::<><><>0<>0<><>::
@@ -110,7 +110,7 @@ updates.gd::GDScript::4450020931874397632::1788264736::0::1::::<>MarginContainer
 ::res://addons/godotsteam/linuxarm64/::1788264736
 ::res://addons/godotsteam/osx/::1788264735
 ::res://addons/godotsteam/win32/::1788264735
-::res://addons/godotsteam/win64/::1790510791
+::res://addons/godotsteam/win64/::1790511754
 ::res://addons/godot_ai/::1788264782
 client_configurator.gd::GDScript::1846084051969471465::1788264781::0::1::::McpClientConfigurator<>RefCounted<><>0<>1<><>::
 connection.gd::GDScript::3256190740644037847::1788264778::0::1::::McpConnection<>Node<><>0<>1<><>::
@@ -441,7 +441,7 @@ cannon_card.tscn::PackedScene::-1::1789733397::0::1::::<><><>0<>0<><>::res://scr
 cosmetic_card.tscn::PackedScene::-1::1789727174::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/cosmetic_card.gd<>res://scripts/ui/perk_icon_view.gd
 gallery_detail.tscn::PackedScene::-1::1789898750::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/gallery_detail.gd<>res://scripts/ui/perk_icon_view.gd
 upgrade_card.tscn::PackedScene::-1::1789733544::0::1::::<><><>0<>0<><>::res://scripts/ui/cards/upgrade_card.gd<>res://scripts/ui/perk_icon_view.gd<>res://scripts/ui/focus_ring_panel.gd
-::res://scripts/::1790510315
+::res://scripts/::1790511315
 abilities.gd::GDScript::358552042098184283::1790063334::0::1::::Abilities<>RefCounted<><>0<>0<><>::
 achievements.gd::GDScript::9215880570170937460::1790063334::0::1::::Achievements<>RefCounted<><>0<>1<><>::
 audio.gd::GDScript::1963427527760383837::1790063334::0::1::::<>Node<><>0<>0<><>::
@@ -458,7 +458,7 @@ game.gd::GDScript::3618699815177207155::1790439120::0::1::::<>Node<><>0<>0<><>::
 game_map.gd::GDScript::869548647071203478::1790331419::0::1::::GameMap<>RefCounted<><>0<>0<><>::
 i18n.gd::GDScript::7752327099371892178::1790439239::0::1::::<>Node<><>0<>0<><>::
 input_schemes.gd::GDScript::6466869239133353224::1790063334::0::1::::Ctl<>RefCounted<><>0<>0<><>::
-level_gen.gd::GDScript::1997713937418890681::1790510315::0::1::::LevelGen<>RefCounted<><>0<>0<><>::
+level_gen.gd::GDScript::1997713937418890681::1790511315::0::1::::LevelGen<>RefCounted<><>0<>0<><>::
 materials.gd::GDScript::9096667548189479692::1790066393::0::1::::Materials<>RefCounted<><>0<>0<><>::
 menu_tips.gd::GDScript::7941142830139344::1790063334::0::1::::MenuTips<>RefCounted<><>0<>1<><>::
 minimap.gd::GDScript::5513988171960333537::1790336871::0::1::::Minimap<>Control<><>0<>0<><>::
@@ -488,14 +488,14 @@ world_view.gd::GDScript::8347266231888317091::1790432505::0::1::::WorldView<>Nod
 ao_layer.gd::GDScript::7209396354025576534::1790331420::0::1::::AoLayer<>RefCounted<><>0<>0<><>::
 glow_layer.gd::GDScript::5756036760933120443::1790408999::0::1::::GlowLayer<>Node2D<><>0<>0<><>::
 post_fx.gd::GDScript::1819170646793171924::1790063334::0::1::::PostFx<>RefCounted<><>0<>0<><>::
-::res://scripts/mapgen/::1790510497
+::res://scripts/mapgen/::1790511324
 districts.gd::GDScript::35154835553993730::1790337825::0::1::::Districts<>RefCounted<><>0<>0<><>::
-locations.gd::GDScript::8619647235858426824::1790510394::0::1::::Locations<>RefCounted<><>0<>0<><>::
+locations.gd::GDScript::8619647235858426824::1790511324::0::1::::Locations<>RefCounted<><>0<>0<><>::
 map_plan.gd::GDScript::1605742695856394595::1790066534::0::1::::MapPlan<>RefCounted<><>0<>0<><>::
 organic_gen.gd::GDScript::8640401725404037943::1790510293::0::1::::OrganicGen<>RefCounted<><>0<>0<><>::
-road_net.gd::GDScript::1540664074171164717::1790507509::0::1::::RoadNet<>RefCounted<><>0<>0<><>::
+road_net.gd::GDScript::1540664074171164717::1790511217::0::1::::RoadNet<>RefCounted<><>0<>0<><>::
 village_gen.gd::GDScript::3642040194501763694::1790066704::0::1::::VillageGen<>RefCounted<><>0<>0<><>::
-water_gen.gd::GDScript::1139894706958651265::1790510356::0::1::::WaterGen<>RefCounted<><>0<>0<><>::
+water_gen.gd::GDScript::1139894706958651265::1790511268::0::1::::WaterGen<>RefCounted<><>0<>0<><>::
 ::res://scripts/net/::1789892225
 net.gd::GDScript::7747230783792505045::1790063334::0::1::::<>Node<><>0<>0<><>::
 net_protocol.gd::GDScript::5560179296915627482::1790063334::0::1::::NetProtocol<>RefCounted<><>0<>0<><>::
@@ -535,7 +535,7 @@ post_fx.gdshader::Shader::4553687491999387694::1789735194::0::1::::<><><>0<>0<><
 ::res://src/::1789715376
 ::res://suno/::1789715518
 battle v1.mp3::AudioStreamMP3::4753728558382026501::1789691094::1789715518::1::::<><><>0<>0<>62df19327ebf7721e375e6bc375b692f<>res://.godot/imported/battle v1.mp3-f835384ad3f8653f50abd50585950e2f.mp3str::
-::res://tests/::1790510778
+::res://tests/::1790511413
 art_sheet.gd::GDScript::7569179757509836739::1790063334::0::1::::<>Node<><>0<>0<><>::
 art_sheet.tscn::PackedScene::-1::1788178926::0::1::::<><><>0<>0<><>::res://tests/art_sheet.gd
 audio_dump.gd::GDScript::8989594936174849139::1790063334::0::1::::<>Node<><>0<>0<><>::

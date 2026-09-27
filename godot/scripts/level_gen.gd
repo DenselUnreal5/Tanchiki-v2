@@ -92,7 +92,12 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	if arch == "river" and river_weight < 0.8:
 		river_weight = 1.0
 
-	if (mode == "ffa" or mode == "koth" or arch == "river") and river_weight > 0.0:
+	if loc_id == "shore":
+		# Архипелаг вместо реки через центр — залив на одной стороне карты
+		# + острова с мостами (см. WaterGen.carve_archipelago). Заменяет
+		# обычную реку для этой локации целиком, во всех режимах.
+		WaterGen.carve_archipelago(map, rng, cols, rows, loc)
+	elif (mode == "ffa" or mode == "koth" or arch == "river") and river_weight > 0.0:
 		if loc_id == "city":
 			WaterGen.carve_city_canals(map, rng, cols, rows, plan["h"])
 		else:
