@@ -19,7 +19,7 @@ const ARCHETYPES := [
 const MODES := [
 	{"id": "ffa", "name": "💥 Каждый за себя", "desc": "Классический бой до 40 фрагов"},
 	{"id": "ctf", "name": "🚩 Захват флага", "desc": "1 нейтральный флаг, цель — 5 захватов"},
-	{"id": "koth", "name": "👑 Царь горы", "desc": "Удержание центральной высоты"},
+	{"id": "koth", "name": "👑 Царь горы (Боссы)", "desc": "Битва на выживание против 3 боссов"},
 	{"id": "defense", "name": "🛡 Оборона", "desc": "Защита штаба от штурма"},
 ]
 
@@ -235,13 +235,14 @@ func _build_canvas_toolbar(parent: Control) -> void:
 	top_bar.add_theme_constant_override("separation", 8)
 	parent.add_child(top_bar)
 
-	var title_lbl := UiKit.title("ПРЕДПРОСМОТР КАРТЫ", 18, Cfg.UI_TEXT)
+	var title_lbl := UiKit.label("🗺 ПРЕДПРОСМОТР КАРТЫ", 14, Cfg.UI_TEXT, true)
 	top_bar.add_child(title_lbl)
 
 	_title_sub = UiKit.label("", 11, Cfg.UI_MUTED)
 	_title_sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_sub.clip_text = true
 	_title_sub.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_title_sub.custom_minimum_size = Vector2(0, 0)
 	top_bar.add_child(_title_sub)
 
 	# Zoom controls
@@ -260,12 +261,12 @@ func _build_canvas_toolbar(parent: Control) -> void:
 	btn_reset.pressed.connect(func(): if _canvas: _canvas.reset_view())
 	top_bar.add_child(btn_reset)
 
-	var btn_tex := UiKit.small(" 🎨 Текстуры ")
+	var btn_tex := UiKit.small(" 🎨 ")
 	btn_tex.tooltip_text = "Переключить отображение текстур биома или схемы"
 	btn_tex.pressed.connect(func():
 		if _canvas:
 			_canvas.show_textures = not _canvas.show_textures
-			btn_tex.text = " 🎨 Текстуры " if _canvas.show_textures else " 📐 Схема "
+			btn_tex.text = " 🎨 " if _canvas.show_textures else " 📐 "
 			_canvas.queue_redraw()
 	)
 	top_bar.add_child(btn_tex)
@@ -274,6 +275,7 @@ func _build_canvas_area(parent: Control) -> void:
 	var canvas_frame := PanelContainer.new()
 	canvas_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	canvas_frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	canvas_frame.custom_minimum_size = Vector2(0, 0)
 	canvas_frame.add_theme_stylebox_override("panel",
 		UiKit.flat(Color("#090b0c"), Cfg.RADIUS_MD, 2, Cfg.UI_BORDER))
 	parent.add_child(canvas_frame)
@@ -282,6 +284,7 @@ func _build_canvas_area(parent: Control) -> void:
 	_canvas.editor = self
 	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_canvas.custom_minimum_size = Vector2(0, 0)
 	_canvas.clip_contents = true
 	canvas_frame.add_child(_canvas)
 
@@ -294,37 +297,42 @@ func _build_canvas_footer(parent: Control) -> void:
 	_info_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_info_label.clip_text = true
 	_info_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_info_label.custom_minimum_size = Vector2(0, 0)
 	bot_bar.add_child(_info_label)
 
-	var hint := UiKit.label("🖱 Панорама: зажать ЛКМ · ⚙ Зум: колёсико · ⌨ Пробел: случайный сид", 11, Cfg.UI_MUTED)
+	var hint := UiKit.label("🖱 Панорама: ЛКМ · ⚙ Зум: колёсико · ⌨ Space: сид", 10, Cfg.UI_MUTED)
 	hint.clip_text = true
 	hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	hint.custom_minimum_size = Vector2(0, 0)
 	bot_bar.add_child(hint)
 
 func _build_control_panel(parent: Control) -> void:
 	var panel := ThemedPanel.new()
-	panel.custom_minimum_size = Vector2(350, 0)
+	panel.custom_minimum_size = Vector2(320, 0)
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_END
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.seed_value = randi()
 	# Override default ThemedPanel padding for a tighter, cleaner fit
-	panel.add_theme_constant_override("margin_left", 14)
-	panel.add_theme_constant_override("margin_right", 14)
-	panel.add_theme_constant_override("margin_top", 12)
-	panel.add_theme_constant_override("margin_bottom", 12)
+	panel.add_theme_constant_override("margin_left", 10)
+	panel.add_theme_constant_override("margin_right", 10)
+	panel.add_theme_constant_override("margin_top", 10)
+	panel.add_theme_constant_override("margin_bottom", 10)
 	parent.add_child(panel)
 
 	# Outer vertical layout holding: Fixed Header, Scrollable Options, Fixed Action Footer
 	var panel_vbox := VBoxContainer.new()
 	panel_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel_vbox.add_theme_constant_override("separation", 8)
+	panel_vbox.add_theme_constant_override("separation", 6)
 	panel.add_child(panel_vbox)
 
 	# --- Pinned Header ---
 	var hdr := UiKit.vbox(1)
-	var t := UiKit.title("РЕДАКТОР КАРТ", 18, Cfg.UI_TEXT)
+	var t := UiKit.label("🗺 РЕДАКТОР КАРТ", 15, Cfg.UI_TEXT, true)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hdr.add_child(t)
 	var sub := UiKit.label("Генератор разнообразных тактических карт", 10, Cfg.UI_MUTED)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hdr.add_child(sub)
 	panel_vbox.add_child(hdr)
 
@@ -339,15 +347,15 @@ func _build_control_panel(parent: Control) -> void:
 
 	var vcol := VBoxContainer.new()
 	vcol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vcol.add_theme_constant_override("separation", 9)
+	vcol.add_theme_constant_override("separation", 8)
 	scroll.add_child(vcol)
 
 	# Section 1: Biomes
 	vcol.add_child(UiKit.label("ЛОКАЦИЯ И БИОМ", 11, Cfg.UI_ACCENT, true))
 	var loc_grid := GridContainer.new()
 	loc_grid.columns = 2
-	loc_grid.add_theme_constant_override("h_separation", 5)
-	loc_grid.add_theme_constant_override("v_separation", 5)
+	loc_grid.add_theme_constant_override("h_separation", 4)
+	loc_grid.add_theme_constant_override("v_separation", 4)
 	vcol.add_child(loc_grid)
 
 	_loc_buttons.clear()
@@ -372,8 +380,8 @@ func _build_control_panel(parent: Control) -> void:
 	vcol.add_child(UiKit.label("РЕЖИМ БОЯ", 11, Cfg.UI_ACCENT, true))
 	var mode_grid := GridContainer.new()
 	mode_grid.columns = 2
-	mode_grid.add_theme_constant_override("h_separation", 5)
-	mode_grid.add_theme_constant_override("v_separation", 5)
+	mode_grid.add_theme_constant_override("h_separation", 4)
+	mode_grid.add_theme_constant_override("v_separation", 4)
 	vcol.add_child(mode_grid)
 
 	_mode_buttons.clear()
@@ -398,8 +406,8 @@ func _build_control_panel(parent: Control) -> void:
 	vcol.add_child(UiKit.label("АРХИТЕКТУРА И СТИЛЬ КАРТЫ", 11, Cfg.UI_ACCENT, true))
 	var arch_grid := GridContainer.new()
 	arch_grid.columns = 2
-	arch_grid.add_theme_constant_override("h_separation", 5)
-	arch_grid.add_theme_constant_override("v_separation", 5)
+	arch_grid.add_theme_constant_override("h_separation", 4)
+	arch_grid.add_theme_constant_override("v_separation", 4)
 	vcol.add_child(arch_grid)
 
 	_arch_buttons.clear()
@@ -421,7 +429,7 @@ func _build_control_panel(parent: Control) -> void:
 
 	# Section 4: Seed & Level
 	var seed_row := HBoxContainer.new()
-	seed_row.add_theme_constant_override("separation", 8)
+	seed_row.add_theme_constant_override("separation", 6)
 	vcol.add_child(seed_row)
 
 	var seed_col := VBoxContainer.new()
@@ -455,13 +463,13 @@ func _build_control_panel(parent: Control) -> void:
 	var lvl_col := VBoxContainer.new()
 	lvl_col.add_child(UiKit.label("УРОВЕНЬ", 10, Cfg.UI_MUTED, true))
 	var lvl_row := HBoxContainer.new()
-	lvl_row.add_theme_constant_override("separation", 3)
+	lvl_row.add_theme_constant_override("separation", 2)
 	lvl_col.add_child(lvl_row)
 
 	_level_buttons.clear()
 	for l in range(1, 6):
-		var lb := UiKit.toggle(str(l), 11)
-		lb.custom_minimum_size = Vector2(26, 26)
+		var lb := UiKit.toggle(str(l), 10)
+		lb.custom_minimum_size = Vector2(22, 22)
 		lb.button_group = _level_btn_group
 		lb.button_pressed = (l == current_level)
 		lb.pressed.connect(func():
@@ -481,8 +489,8 @@ func _build_control_panel(parent: Control) -> void:
 
 	var sgrid := GridContainer.new()
 	sgrid.columns = 2
-	sgrid.add_theme_constant_override("h_separation", 10)
-	sgrid.add_theme_constant_override("v_separation", 4)
+	sgrid.add_theme_constant_override("h_separation", 8)
+	sgrid.add_theme_constant_override("v_separation", 3)
 	stats_card.add_child(sgrid)
 
 	_stat_size = _add_stat_row(sgrid, "📐 Размеры:", "-")
@@ -493,13 +501,13 @@ func _build_control_panel(parent: Control) -> void:
 	_stat_flags = _add_stat_row(sgrid, "🎯 Точек целей:", "-")
 
 	# --- Pinned Footer Action Bar (Always Visible!) ---
-	var footer_box := UiKit.vbox(6)
+	var footer_box := UiKit.vbox(5)
 	panel_vbox.add_child(footer_box)
 
 	footer_box.add_child(_make_divider())
 
 	_btn_battle = UiKit.primary("⚔ В БОЙ НА ЭТОЙ КАРТЕ!", 14)
-	_btn_battle.custom_minimum_size = Vector2(0, 40)
+	_btn_battle.custom_minimum_size = Vector2(0, 38)
 	_btn_battle.pressed.connect(_on_battle_pressed)
 	footer_box.add_child(_btn_battle)
 
@@ -509,7 +517,7 @@ func _build_control_panel(parent: Control) -> void:
 
 	_btn_gen = UiKit.secondary("🎲 Случайно (Space)", 11)
 	_btn_gen.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_btn_gen.custom_minimum_size = Vector2(0, 32)
+	_btn_gen.custom_minimum_size = Vector2(0, 30)
 	_btn_gen.pressed.connect(func():
 		randomize_seed()
 		generate_map())
@@ -517,7 +525,7 @@ func _build_control_panel(parent: Control) -> void:
 
 	_btn_close = UiKit.secondary("✖ В меню (Esc)", 11)
 	_btn_close.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_btn_close.custom_minimum_size = Vector2(0, 32)
+	_btn_close.custom_minimum_size = Vector2(0, 30)
 	_btn_close.pressed.connect(func(): close_requested.emit())
 	act_row.add_child(_btn_close)
 

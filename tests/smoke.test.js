@@ -1462,6 +1462,8 @@ test('Оборона: поражение при разрушенной базе,
 test('koth: 40 врагов, без респауна и победа последнего выжившего', () => {  const { world } = makeWorld({ mode: 'koth', playerCount: 1 });
   const enemies = world.tanks.filter((t) => t.isBot).length;
   assert.equal(enemies, MODES.koth.enemies, 'в «Царе горы» должно быть 40 врагов');
+  const bosses = world.tanks.filter((t) => t.isBot && t.enemyType?.boss);
+  assert.ok(bosses.length >= 1, 'в «Царе горы» должны присутствовать боссы');
   assert.equal(world.timeLimit, MODES.koth.duration);
 
   // Снимаем спавн-защиту, чтобы урон проходил сразу.

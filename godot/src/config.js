@@ -181,7 +181,7 @@ export const MODES = {
   ctf: { id: 'ctf', name: 'Захват флага', capLimit: 5, flagsPerTeam: 1, teamSize: 4 },
   koth: {
     id: 'koth',
-    name: 'Царь горы',
+    name: 'Царь горы (Боссы)',
     enemies: 40,
     duration: 5 * 60 * TICK_HZ, // 5 минут — лимит партии
     floodDuration: 2 * 60 * TICK_HZ, // 2 минуты — полное затопление карты

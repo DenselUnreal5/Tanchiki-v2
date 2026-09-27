@@ -28,7 +28,7 @@ const EN = {
   'menu.mode': 'Mode',
   'mode.ffa': 'Free For All',
   'mode.ctf': 'Capture The Flag',
-  'mode.koth': 'King of the Hill',
+  'mode.koth': 'King of the Hill (Bosses)',
   'mode.defense': 'Defense',
   'menu.diff': 'Difficulty',
   'diff.easy': 'Easy',
@@ -194,7 +194,7 @@ const EN = {
 
   // ------------------------------------------------------------- табло
   'sb.defense': 'Defense — wave {cur} of {total}',
-  'sb.koth': 'King of the Hill — last one standing wins',
+  'sb.koth': 'King of the Hill (Boss Battle) — defeat the bosses and survive',
   'sb.ffa': 'Free For All — {target} kills to win',
   'sb.ctf': 'CTF — Allies {a} : {b} Enemies (to {target})',
   'sb.hint': 'Tab — hide',
@@ -211,7 +211,7 @@ const EN = {
   'player1': 'Player 1',
   'player2': 'Player 2',
   'feed.start.ffa': 'Free For All: be the first to reach the kill cap',
-  'feed.start.koth': 'King of the Hill: outlive everyone on the sinking map',
+  'feed.start.koth': 'King of the Hill (Boss Battle): defeat the 3 bosses and survive on the sinking arena!',
   'feed.start.defense': 'Defense: hold the base against waves of enemies',
   'feed.start.ctf': 'CTF: bring enemy flags back to your base',
   'feed.connected': "Connected to the server. Let's play!",

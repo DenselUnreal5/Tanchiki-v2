@@ -252,7 +252,7 @@ func _settings_options() -> Dictionary:
 		"mode": [
 			["ffa", _tr("mode.ffa", "Каждый за себя")],
 			["ctf", _tr("mode.ctf", "Захват флага")],
-			["koth", _tr("mode.koth", "Царь горы")],
+			["koth", _tr("mode.koth", "Царь горы (Боссы)")],
 			["defense", _tr("mode.defense", "Оборона")],
 		],
 		"difficulty": [

@@ -365,7 +365,7 @@ const MODES := {
 	"ffa": {"id": "ffa", "name": "Каждый за себя", "frag_limit": 40},
 	"ctf": {"id": "ctf", "name": "Захват флага", "cap_limit": 5, "flags_per_team": 1, "team_size": 4},
 	"koth": {
-		"id": "koth", "name": "Царь горы",
+		"id": "koth", "name": "Царь горы (Боссы)",
 		"enemies": 40,
 		"duration": 5 * 60 * 60,
 		"flood_duration": 2 * 60 * 60,

@@ -437,7 +437,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		"ffa":
 			start_hint = I18n.t("feed.start.ffa", {}, "Каждый за себя: наберите фраги первым")
 		"koth":
-			start_hint = I18n.t("feed.start.koth", {}, "Царь горы: переживите всех на тонущей карте")
+			start_hint = I18n.t("feed.start.koth", {}, "Царь горы (Битва с боссами): одолейте 3 боссов и выживите на тонущей арене!")
 		"defense":
 			start_hint = I18n.t("feed.start.defense", {}, "Оборона: удерживайте базу от волн врагов")
 		_:

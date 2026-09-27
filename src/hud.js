@@ -178,12 +178,13 @@ export class Hud {
       } else if (world.mode === 'koth') {
         const left = Math.max(0, world.timeLimit - world.tick);
         const sec = Math.ceil(left / 60);
-        panel.objective.textContent =
-          t('hud.alive', {
-            cur: progress.current,
-            total: progress.total,
-            time: `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`,
-          }, `Выживших ${progress.current} / ${progress.total}   ⏱ ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`);
+        const timeStr = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+        const aliveBosses = world.tanks.filter((t) => t.alive && t.enemyType?.boss).length;
+        if (aliveBosses > 0) {
+          panel.objective.textContent = `👑 Царь Горы · Боссы: ${aliveBosses} · Выживших: ${progress.current}/${progress.total}   ⏱ ${timeStr}`;
+        } else {
+          panel.objective.textContent = `👑 ВСЕ БОССЫ ПОВЕРЖЕНЫ! · Выживших: ${progress.current}/${progress.total}   ⏱ ${timeStr}`;
+        }
       } else if (world.mode === 'ffa') {
         panel.objective.textContent =
           t('hud.frags', { cur: progress.current, target: progress.target, deaths: player.deaths },
@@ -308,7 +309,7 @@ export class Hud {
       world.mode === 'defense'
         ? t('sb.defense', { cur: world.wave, total: MODES.defense.waves }, `Оборона — волна ${world.wave} из ${MODES.defense.waves}`)
         : world.mode === 'koth'
-          ? t('sb.koth', null, 'Царь горы — побеждает последний выживший')
+          ? t('sb.koth', null, 'Царь горы (Битва с боссами) — одолейте боссов и выживите')
           : world.mode === 'ffa'
             ? t('sb.ffa', { target }, `Каждый за себя — до ${target} фрагов`)
             : t('sb.ctf', { a: world.teamScore.player, b: world.teamScore.enemy, target },

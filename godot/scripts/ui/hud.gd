@@ -322,9 +322,21 @@ func update_hud(world: World) -> void:
 				var left_ticks := maxi(0, world.time_limit - world.tick)
 				var sec := int(ceil(float(left_ticks) / 60.0))
 				var time_str := "%d:%02d" % [sec / 60, sec % 60]
-				objective.text = I18n.t("hud.alive",
-					{"cur": progress["current"], "total": progress["total"], "time": time_str},
-					"Выживших %d / %d   ⏱ %s" % [progress["current"], progress["total"], time_str])
+				var alive_bosses := 0
+				var boss_icons := ""
+				for t in world.tanks:
+					if t.alive and t.is_boss:
+						alive_bosses += 1
+						if not t.enemy_type.is_empty() and t.enemy_type.has("icon"):
+							boss_icons += " " + String(t.enemy_type["icon"])
+				if alive_bosses > 0:
+					objective.text = I18n.t("hud.koth_bosses",
+						{"bosses": alive_bosses, "icons": boss_icons, "cur": progress["current"], "total": progress["total"], "time": time_str},
+						"👑 Царь Горы · Боссы: %d%s · Выживших %d/%d   ⏱ %s" % [alive_bosses, boss_icons, progress["current"], progress["total"], time_str])
+				else:
+					objective.text = I18n.t("hud.koth_cleared",
+						{"cur": progress["current"], "total": progress["total"], "time": time_str},
+						"👑 ВСЕ БОССЫ ПОВЕРЖЕНЫ! · Выживших %d/%d   ⏱ %s" % [progress["current"], progress["total"], time_str])
 			"ffa":
 				objective.text = I18n.t("hud.frags",
 					{"cur": progress["current"], "target": progress["target"], "deaths": player.deaths},
@@ -486,7 +498,7 @@ func _render_scoreboard(world: World) -> void:
 				head = I18n.t("sb.defense", {"cur": world.wave, "total": total_waves},
 					"Оборона — волна %d из %d" % [world.wave, total_waves])
 		"koth":
-			head = I18n.t("sb.koth", {}, "Царь горы — побеждает последний выживший")
+			head = I18n.t("sb.koth", {}, "Царь горы (Битва с боссами) — одолейте боссов и выживите")
 		"ffa":
 			head = I18n.t("sb.ffa", {"target": target}, "Каждый за себя — до %d фрагов" % target)
 		_:

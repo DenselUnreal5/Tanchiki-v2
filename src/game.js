@@ -284,7 +284,7 @@ export class Game {
       s.mode === 'ffa'
         ? t('feed.start.ffa', null, 'Каждый за себя: наберите фраги первым')
         : s.mode === 'koth'
-          ? t('feed.start.koth', null, 'Царь горы: переживите всех на тонущей карте')
+          ? t('feed.start.koth', null, 'Царь горы (Битва с боссами): одолейте 3 боссов и выживите на тонущей карте')
           : s.mode === 'defense'
             ? t('feed.start.defense', null, 'Оборона: удерживайте базу от волн врагов')
             : t('feed.start.ctf', null, 'Захват флага: везите чужие флаги на свою базу'),

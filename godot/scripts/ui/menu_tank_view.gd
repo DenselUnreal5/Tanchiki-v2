@@ -6,6 +6,12 @@ var glow_tex: GradientTexture2D
 var muzzle := 0.0
 var auto_turret := false
 var center_in_rect := false
+var custom_minimum_size := Vector2.ZERO:
+	set(v):
+		custom_minimum_size = v
+		if size == Vector2.ZERO:
+			size = v
+var size := Vector2.ZERO
 
 func _process(_delta: float) -> void:
 	if auto_turret and display_tank != null:

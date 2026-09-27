@@ -524,8 +524,16 @@ func _spawn_combatants() -> void:
 		_spawn_bot_team("player", maxi(0, size - humans_player), "ally")
 		_spawn_bot_team("enemy", maxi(0, size - humans_enemy), "enemy")
 	elif mode == "koth":
-		for i in int(Cfg.MODES["koth"]["enemies"]):
-			_spawn_bot("bot_%d" % i, "enemy")
+		var total_enemies: int = int(Cfg.MODES["koth"]["enemies"])
+		var bosses: Array = ["boss_rammer", "boss_chimera", "boss"]
+		var elite_roster: Array = ["heavy", "sniper", "mortar", "scout", "grunt"]
+		for i in total_enemies:
+			var forced_type := ""
+			if i < bosses.size():
+				forced_type = bosses[i]
+			else:
+				forced_type = elite_roster[(i - bosses.size()) % elite_roster.size()]
+			_spawn_bot("bot_%d" % i, "enemy", forced_type)
 	elif mode == "defense":
 		pass
 	else:
@@ -562,7 +570,7 @@ func _spawn_bot_team(team: String, count: int, color_key: String) -> void:
 func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Tank:
 	var diff := difficulty
 	var type := EnemyTypes.pick(ramp, rng, forced_type)
-	if bool(type["boss"]) and boss_alive:
+	if bool(type["boss"]) and boss_alive and mode != "koth":
 		type = EnemyTypes.get_type("grunt")
 	var boss_mult := {"hp": 1.0, "dmg": 1.0}
 	if bool(type["boss"]):
@@ -1279,8 +1287,8 @@ func _update_acid_pools() -> void:
 					particles.burst(tank.x, tank.y, [Color("#84cc16"), Color("#a3e635")], 2, 1, 2, 6, 12, rng)
 
 		if tick % 12 == 0 and rng.nextf() < 0.6:
-			var ang := rng.nextf() * TAU
-			var dist := rng.nextf() * pool.radius * 0.7
+			var ang: float = rng.nextf() * TAU
+			var dist: float = rng.nextf() * float(pool.radius) * 0.7
 			particles.burst(pool.x + cos(ang) * dist, pool.y + sin(ang) * dist,
 				[Color("#84cc16"), Color("#a3e635"), Color("#4d7c0f")], 2, 1, 3, 8, 16, rng)
 
@@ -1378,10 +1386,26 @@ func _kill_tank(victim, killer, source: String) -> void:
 		wrecks.append(Ent.Wreck.new(victim, rng))
 
 	if not victim.enemy_type.is_empty() and bool(victim.enemy_type.get("boss", false)):
-		boss_alive = false
+		var any_boss_alive := false
+		for t in tanks:
+			if t != victim and t.alive and not t.enemy_type.is_empty() and bool(t.enemy_type.get("boss", false)):
+				any_boss_alive = true
+				break
+		boss_alive = any_boss_alive
 
 	if mode == "koth":
-		_drop_perk(victim)
+		if not victim.enemy_type.is_empty() and bool(victim.enemy_type.get("boss", false)):
+			# Drop cluster of 3 epic perks + medkit around the boss
+			for i in 3:
+				var angle_off: float = float(i) * TAU / 3.0
+				_drop_perk_at(victim.x + cos(angle_off) * 36.0, victim.y + sin(angle_off) * 36.0)
+			pickups.append(Ent.Pickup.new(victim.x, victim.y, "health", rng))
+			particles.burst(victim.x, victim.y, [Color("#ffd700"), Color("#ff00ff"), Color("#00ffff")], 32, 3, 7, 24, 40, rng)
+			feed.emit(I18n.t("feed.kothBossKilled", {"name": victim.name},
+				"💥 БОСС ПОВЕРЖЕН: %s! 3 эпических трофея и аптечка на арене!" % victim.name), Color("#ffd700"))
+			Sfx.play("thunder", victim.x, victim.y)
+		else:
+			_drop_perk(victim)
 
 	if victim.flag != null:
 		var f = victim.flag
@@ -1485,6 +1509,9 @@ func _maybe_give_bot_perk(bot) -> void:
 	bot_perk.emit(bot, perk)
 
 func _drop_perk(victim) -> void:
+	_drop_perk_at(victim.x, victim.y)
+
+func _drop_perk_at(px: float, py: float) -> void:
 	var allowed := []
 	for p in Perks.LIST:
 		if Perks.is_perk_allowed_in_mode(p["id"], mode):
@@ -1492,8 +1519,8 @@ func _drop_perk(victim) -> void:
 	if allowed.is_empty():
 		return
 	var perk: Dictionary = rng.pick(allowed)
-	perk_drops.append(Ent.PerkPickup.new(victim.x, victim.y, String(perk["id"]), rng))
-	particles.burst(victim.x, victim.y, [Color("#ff88ff"), Color.WHITE], 8, 2, 4, 12, 18, rng)
+	perk_drops.append(Ent.PerkPickup.new(px, py, String(perk["id"]), rng))
+	particles.burst(px, py, [Color("#ff88ff"), Color.WHITE], 8, 2, 4, 12, 18, rng)
 
 const MAX_DEBRIS := 300
 

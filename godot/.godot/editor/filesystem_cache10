@@ -1,6 +1,6 @@
 78098b89c88a74ebe8c20117b8754620
-::res://::1790434540
-export_presets.cfg::TextFile::-1::1790418502::0::1::::<><><>0<>0<><>::
+::res://::1790496610
+export_presets.cfg::TextFile::-1::1790494190::0::1::::<><><>0<>0<><>::
 icon.ico::OtherFile::-1::1790419239::0::1::::<><><>0<>0<><>::
 icon.svg::CompressedTexture2D::2727636235757500454::1790419145::1790419184::1::::<><><>0<>0<>14605896b800f51fdeab039d8fde2a9b<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 package.json::JSON::-1::1790418521::0::1::::<><><>0<>0<><>::
@@ -110,7 +110,7 @@ updates.gd::GDScript::4450020931874397632::1788264736::0::1::::<>MarginContainer
 ::res://addons/godotsteam/linuxarm64/::1788264736
 ::res://addons/godotsteam/osx/::1788264735
 ::res://addons/godotsteam/win32/::1788264735
-::res://addons/godotsteam/win64/::1790434714
+::res://addons/godotsteam/win64/::1790496662
 ::res://addons/godot_ai/::1788264782
 client_configurator.gd::GDScript::1846084051969471465::1788264781::0::1::::McpClientConfigurator<>RefCounted<><>0<>1<><>::
 connection.gd::GDScript::3256190740644037847::1788264778::0::1::::McpConnection<>Node<><>0<>1<><>::
@@ -413,7 +413,7 @@ speed.png::CompressedTexture2D::7915750047543160077::1789888665::1789888772::1::
 gatling.png::CompressedTexture2D::6311059947227318418::1789888665::1789888772::1::::<><><>0<>0<>6dd2e2f9b40979f6fd4c61de15412136<>res://.godot/imported/gatling.png-75382b36f8752a07a7e4e9e9b0a8bcf3.ctex::
 rockets.png::CompressedTexture2D::2213413695077989515::1789888665::1789888772::1::::<><><>0<>0<>dd76fbe9e723b98ad96c7a770df9963a<>res://.godot/imported/rockets.png-7269dc63ed67024d541764a5f6ff86bd.ctex::
 shotgun.png::CompressedTexture2D::4286455927281510393::1789888665::1789888772::1::::<><><>0<>0<>faf6068a109b2ad6ee89d08e8044bffe<>res://.godot/imported/shotgun.png-999d62e903f2a6a1cff53b0b22db63ed.ctex::
-::res://build/::1790434705
+::res://build/::1790494240
 steam_appid.txt::TextFile::-1::1789219174::0::1::::<><><>0<>0<><>::
 Как запустить.txt::TextFile::-1::1788078767::0::1::::<><><>0<>0<><>::
 ::res://build/linux/::1789218364
@@ -448,15 +448,15 @@ audio.gd::GDScript::1963427527760383837::1790063334::0::1::::<>Node<><>0<>0<><>:
 bot.gd::GDScript::8443291483184613177::1790432409::0::1::::BotBrain<>RefCounted<><>0<>0<><>::
 cannons.gd::GDScript::7249812311845871779::1790063334::0::1::::Cannons<>RefCounted<><>0<>1<><>::
 cli.gd::GDScript::2538835076614515544::1790063334::0::1::::Cli<>RefCounted<><>0<>0<><>::
-config.gd::GDScript::3454630245960735069::1790431753::0::1::::Cfg<>RefCounted<><>0<>1<><>::
+config.gd::GDScript::3454630245960735069::1790439092::0::1::::Cfg<>RefCounted<><>0<>1<><>::
 cosmetics.gd::GDScript::6803650049752673310::1790423542::0::1::::Cosmetics<>RefCounted<><>0<>1<><>::
 daily.gd::GDScript::9047289685965659327::1790063334::0::1::::Daily<>RefCounted<><>0<>0<><>::
 enemy_types.gd::GDScript::1909527229773509602::1790431767::0::1::::EnemyTypes<>RefCounted<><>0<>0<><>::
 entities.gd::GDScript::6435990306499678281::1790432217::0::1::::Ent<>RefCounted<><>0<>0<><>::
 fonts.gd::GDScript::283160381254097390::1790063334::0::1::::<>Node<><>0<>1<><>::
-game.gd::GDScript::3618699815177207155::1790419984::0::1::::<>Node<><>0<>0<><>::
+game.gd::GDScript::3618699815177207155::1790439120::0::1::::<>Node<><>0<>0<><>::
 game_map.gd::GDScript::869548647071203478::1790331419::0::1::::GameMap<>RefCounted<><>0<>0<><>::
-i18n.gd::GDScript::7752327099371892178::1790432518::0::1::::<>Node<><>0<>0<><>::
+i18n.gd::GDScript::7752327099371892178::1790439239::0::1::::<>Node<><>0<>0<><>::
 input_schemes.gd::GDScript::6466869239133353224::1790063334::0::1::::Ctl<>RefCounted<><>0<>0<><>::
 level_gen.gd::GDScript::1997713937418890681::1790340866::0::1::::LevelGen<>RefCounted<><>0<>0<><>::
 materials.gd::GDScript::9096667548189479692::1790066393::0::1::::Materials<>RefCounted<><>0<>0<><>::
@@ -482,7 +482,7 @@ upgrades.gd::GDScript::2622605299426661031::1790063334::0::1::::Upgrades<>RefCou
 utils.gd::GDScript::7436398411069476782::1790063334::0::1::::Rng<>RefCounted<><>0<>0<><>::
 weapons.gd::GDScript::141350927022214648::1790063334::0::1::::Weapons<>RefCounted<><>0<>0<><>::
 weather.gd::GDScript::6899618592559140047::1790063334::0::1::::WeatherSystem<>RefCounted<><>0<>0<><>::
-world.gd::GDScript::2854068884894288357::1790432397::0::1::::World<>RefCounted<><>0<>0<><>::
+world.gd::GDScript::2854068884894288357::1790496586::0::1::::World<>RefCounted<><>0<>0<><>::
 world_view.gd::GDScript::8347266231888317091::1790432505::0::1::::WorldView<>Node2D<><>0<>0<><>::
 ::res://scripts/fx/::1790331420
 ao_layer.gd::GDScript::7209396354025576534::1790331420::0::1::::AoLayer<>RefCounted<><>0<>0<><>::
@@ -502,13 +502,13 @@ transport.gd::GDScript::3957519971015809989::1790063334::0::1::::NetTransport<>R
 ::res://scripts/ui/::1790338919
 focus_ring_panel.gd::GDScript::4209079584236708559::1790063334::0::1::::FocusRingPanel<>PanelContainer<><>0<>1<><>::
 hub.gd::GDScript::4358643378463104090::1790423783::0::1::::Hub<>Control<><>0<>1<><>::
-hud.gd::GDScript::2334105068861991288::1790063334::0::1::::Hud<>Control<><>0<>0<><>::
+hud.gd::GDScript::2334105068861991288::1790439145::0::1::::Hud<>Control<><>0<>0<><>::
 keybind_button.gd::GDScript::3866004163466750405::1790063334::0::1::::KeybindButton<>Button<><>0<>0<><>::
 loading_screen.gd::GDScript::361056769812282966::1790322029::0::1::::LoadingScreen<>Control<><>0<>0<><>::
-main_menu.gd::GDScript::2947440531904071081::1790417505::0::1::::MainMenu<>Control<><>0<>1<><>::
-map_editor.gd::GDScript::3362128571363391563::1790434596::0::1::::MapEditor<>Control<><>0<>0<><>::
+main_menu.gd::GDScript::2947440531904071081::1790439107::0::1::::MainMenu<>Control<><>0<>1<><>::
+map_editor.gd::GDScript::3362128571363391563::1790439099::0::1::::MapEditor<>Control<><>0<>0<><>::
 menu_scene.gd::GDScript::194092863869560639::1790063334::0::1::::MenuScene<>Control<><>0<>1<><>::
-menu_tank_view.gd::GDScript::3482116127110748191::1790423718::0::1::::MenuTankView<>WorldView<><>0<>0<><>::
+menu_tank_view.gd::GDScript::3482116127110748191::1790495965::0::1::::MenuTankView<>WorldView<><>0<>0<><>::
 perk_icons.gd::GDScript::2322829844658101209::1790423691::0::1::::PerkIcons<>RefCounted<><>0<>1<><>::
 perk_icon_view.gd::GDScript::4251603391104036902::1790063334::0::1::::PerkIconView<>Control<><>0<>1<><>::
 skill_node.gd::GDScript::3181888036238547878::1790411572::0::1::::SkillNode<>BaseButton<><>0<>1<><>::

@@ -256,9 +256,10 @@ export class World {
       this.#spawnBotTeam('player', Math.max(0, size - humansPlayer), 'ally');
       this.#spawnBotTeam('enemy', Math.max(0, size - humansEnemy), 'enemy');
     } else if (this.mode === 'koth') {
-      // «Царь горы»: ровно столько врагов, сколько задано в режиме.
+      // «Царь горы: битва с боссами»: ровно 40 врагов во главе с боссами.
       for (let i = 0; i < MODES.koth.enemies; i++) {
-        this.#spawnBot(`bot_${i}`, 'enemy');
+        const forced = i < 3 ? 'boss' : null;
+        this.#spawnBot(`bot_${i}`, 'enemy', forced);
       }
     } else if (this.mode === 'defense') {
       // «Оборона»: враги приходят волнами, спавним первую сразу.
@@ -283,8 +284,8 @@ export class World {
   #spawnBot(team, colorKey, forcedType = null) {
     const diff = this.difficulty;
     let type = pickEnemyType(this.ramp, this.rng, forcedType);
-    // Босс на поле боя только один: пока жив — не спавним второго.
-    if (type.boss && this.bossAlive) type = getEnemyType('grunt');
+    // Босс на поле боя только один (кроме режима Царь горы)
+    if (type.boss && this.bossAlive && this.mode !== 'koth') type = getEnemyType('grunt');
     const spot = this.#freeSpot(team);
     const tank = new Tank({
       x: spot.x,
@@ -744,11 +745,22 @@ export class World {
     victim.onDeath(this, killer);
     victim.respawnTimer = RESPAWN_DELAY;
 
-    // Босс убит — можно снова спавнить нового.
-    if (victim.enemyType?.boss) this.bossAlive = false;
+    // Босс убит — проверяем, остались ли другие боссы.
+    if (victim.enemyType?.boss) {
+      this.bossAlive = this.tanks.some((t) => t !== victim && t.alive && t.enemyType?.boss);
+    }
 
-    // «Царь горы»: убитый роняет случайный перк.
-    if (this.mode === 'koth') this.#dropPerk(victim);
+    // «Царь горы»: босс роняет 3 перка веером, обычный враг — 1 перк.
+    if (this.mode === 'koth') {
+      if (victim.enemyType?.boss) {
+        for (let i = 0; i < 3; i++) {
+          const angle = (i * 2 * Math.PI) / 3;
+          this.#dropPerkAt(victim.x + Math.cos(angle) * 36, victim.y + Math.sin(angle) * 36);
+        }
+      } else {
+        this.#dropPerk(victim);
+      }
+    }
 
     // Флаг выпадает на месте гибели.
     if (victim.flag) {
@@ -858,11 +870,15 @@ export class World {
 
   /** Роняет перк на месте гибели — только перки, разрешённые в режиме. */
   #dropPerk(victim) {
+    this.#dropPerkAt(victim.x, victim.y);
+  }
+
+  #dropPerkAt(px, py) {
     const allowed = PERKS.filter((p) => isPerkAllowedInMode(p.id, this.mode));
     if (!allowed.length) return;
     const perk = choice(this.rng, allowed);
-    this.perkDrops.push(new PerkPickup(victim.x, victim.y, perk.id));
-    this.particles.burst(victim.x, victim.y, ['#ff88ff', '#ffffff'], 8, 2, 4, 12, 18, this.rng);
+    this.perkDrops.push(new PerkPickup(px, py, perk.id));
+    this.particles.burst(px, py, ['#ff88ff', '#ffffff'], 8, 2, 4, 12, 18, this.rng);
   }
 
   // ------------------------------------------------------------- крючки из entities
