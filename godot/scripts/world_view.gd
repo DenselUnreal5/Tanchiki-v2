@@ -101,6 +101,7 @@ func _draw() -> void:
 	_draw_base()
 	_draw_wrecks()
 	_draw_tanks()
+	_draw_acid_streams()
 	_draw_bullets()
 	_draw_particles()
 	_draw_shockwaves()
@@ -620,6 +621,88 @@ func _draw_acid_pools() -> void:
 			if b_sz > 0.8:
 				draw_circle(b_pos, b_sz, Color(0.64, 0.95, 0.15, 0.85 * a))
 				draw_circle(b_pos - Vector2(0.6, 0.6), maxf(0.5, b_sz * 0.4), Color(0.9, 1.0, 0.6, 0.9 * a))
+
+func _draw_acid_streams() -> void:
+	if world == null:
+		return
+	for tank in world.tanks:
+		if not tank.alive or not tank.chimera_stream_active or tank.chimera_stream_timer <= 0:
+			continue
+		var mx: float = tank.x + cos(tank.turret_angle) * tank.muzzle_len
+		var my: float = tank.y + sin(tank.turret_angle) * tank.muzzle_len
+		var start_p := Vector2(mx, my)
+		var end_p: Vector2 = tank.chimera_stream_target_point
+		var length: float = start_p.distance_to(end_p)
+		if length < 8.0:
+			continue
+		if not _in_view(mx, my, length + 50.0):
+			continue
+
+		var dir: Vector2 = (end_p - start_p) / length
+		var norm: Vector2 = Vector2(-dir.y, dir.x)
+		var steps: int = maxi(8, int(length / 12.0))
+
+		var outer_left := PackedVector2Array()
+		var outer_right := PackedVector2Array()
+		var inner_left := PackedVector2Array()
+		var inner_right := PackedVector2Array()
+		var core_pts := PackedVector2Array()
+
+		var anim_phase: float = float(world.tick) * 0.42 + float(tank.id) * 2.1
+
+		for i in steps + 1:
+			var t: float = float(i) / float(steps)
+			var wave: float = sin(anim_phase - t * 12.0) * (3.5 * t)
+			var pt: Vector2 = start_p + dir * (t * length) + norm * wave
+			core_pts.append(pt)
+
+			var base_w: float = lerpf(6.0, Cfg.CHIMERA_STREAM_WIDTH, t)
+			var w_outer: float = (base_w * 0.5) * (0.85 + 0.15 * sin(anim_phase * 1.5 - t * 8.0))
+			var w_inner: float = w_outer * 0.52
+
+			outer_left.append(pt + norm * w_outer)
+			outer_right.append(pt - norm * w_outer)
+			inner_left.append(pt + norm * w_inner)
+			inner_right.append(pt - norm * w_inner)
+
+		# 1. Outer viscous caustic green mantle
+		var outer_poly := PackedVector2Array()
+		for p in outer_left:
+			outer_poly.append(p)
+		for j in range(outer_right.size() - 1, -1, -1):
+			outer_poly.append(outer_right[j])
+		draw_colored_polygon(outer_poly, Color(0.18, 0.46, 0.08, 0.82))
+
+		# 2. Inner intense chemical lime jet
+		var inner_poly := PackedVector2Array()
+		for p in inner_left:
+			inner_poly.append(p)
+		for j in range(inner_right.size() - 1, -1, -1):
+			inner_poly.append(inner_right[j])
+		draw_colored_polygon(inner_poly, Color(0.64, 0.94, 0.18, 0.92))
+
+		# 3. Hot neon core line
+		draw_polyline(core_pts, Color(0.92, 1.0, 0.65, 0.85), 2.5)
+
+		# 4. Traveling boiling bubbles inside stream
+		for b in 4:
+			var bt: float = fmod(float(world.tick) * 0.09 + float(b) * 0.25, 1.0)
+			var b_wave: float = sin(anim_phase - bt * 12.0) * (3.5 * bt)
+			var b_pos: Vector2 = start_p + dir * (bt * length) + norm * (b_wave + sin(bt * 20.0) * 1.5)
+			var b_r: float = lerpf(2.0, 4.0, bt)
+			draw_circle(b_pos, b_r, Color(0.72, 1.0, 0.22, 0.90))
+			draw_circle(b_pos - Vector2(0.5, 0.5), maxf(0.8, b_r * 0.4), Color(1.0, 1.0, 0.85, 0.95))
+
+		# 5. Muzzle nozzle flare
+		draw_circle(start_p, 8.0, Color(0.4, 0.8, 0.1, 0.55))
+		draw_circle(start_p, 4.0, Color(0.85, 1.0, 0.4, 0.95))
+
+		# 6. Impact splash crown at destination
+		var pulse: float = 0.8 + 0.2 * sin(float(world.tick) * 0.7)
+		draw_circle(end_p, 16.0 * pulse, Color(0.2, 0.55, 0.1, 0.45))
+		draw_circle(end_p, 10.0 * pulse, Color(0.65, 0.95, 0.18, 0.75))
+		draw_circle(end_p, 5.0, Color(0.95, 1.0, 0.7, 0.95))
+		draw_arc(end_p, 14.0 * pulse, 0, TAU, 18, Color(0.75, 1.0, 0.25, 0.8), 2.0)
 
 func _draw_bolts() -> void:
 	draw_set_transform(view_off)
@@ -1659,10 +1742,64 @@ func _draw_rammer_telegraph(tank: Tank) -> void:
 
 	draw_set_transform(view_off)
 
+func _draw_chimera_telegraph(tank: Tank) -> void:
+	if not (tank.is_chimera_boss or tank.is_chimera_clone) or tank.chimera_stream_warmup_ticks <= 0:
+		return
+	var mx: float = tank.x + cos(tank.turret_angle) * tank.muzzle_len
+	var my: float = tank.y + sin(tank.turret_angle) * tank.muzzle_len
+	var start_p := Vector2(mx, my)
+	var end_p: Vector2 = tank.chimera_stream_target_point
+	var length: float = start_p.distance_to(end_p)
+	if length < 8.0:
+		return
+	if not _in_view(mx, my, length + 60.0):
+		return
+
+	var progress: float = clampf(1.0 - (float(tank.chimera_stream_warmup_ticks) / float(Cfg.CHIMERA_STREAM_WARMUP_TICKS)), 0.0, 1.0)
+	var pulse: float = 0.65 + 0.35 * sin(float(world.tick) * 0.45)
+	var dir: Vector2 = (end_p - start_p) / length
+	var norm: Vector2 = Vector2(-dir.y, dir.x)
+
+	# 1. Acid hazard warning cone on ground
+	var half_w_start := 4.0
+	var half_w_end: float = Cfg.CHIMERA_STREAM_WIDTH * 0.55
+	var cone_pts := PackedVector2Array([
+		start_p + norm * half_w_start,
+		end_p + norm * half_w_end,
+		end_p - norm * half_w_end,
+		start_p - norm * half_w_start,
+	])
+	var cone_color := Color(0.65, 0.95, 0.1, (0.10 + 0.14 * progress) * pulse)
+	draw_colored_polygon(cone_pts, cone_color)
+
+	# 2. Glowing hazard side borders
+	var edge_color := Color(0.75, 1.0, 0.15, (0.50 + 0.35 * progress) * pulse)
+	draw_line(start_p + norm * half_w_start, end_p + norm * half_w_end, edge_color, 1.8)
+	draw_line(start_p - norm * half_w_start, end_p - norm * half_w_end, edge_color, 1.8)
+
+	# 3. Charging laser guide line from muzzle to current progress
+	var guide_color := Color(0.85, 1.0, 0.3, 0.30 * pulse)
+	draw_line(start_p, end_p, guide_color, 1.2)
+	var charge_end: Vector2 = start_p + dir * (length * progress)
+	draw_line(start_p, charge_end, Color(0.95, 1.0, 0.5, 0.85 * pulse), 2.5)
+
+	# 4. Muzzle energy gathering orb
+	var orb_r: float = 2.5 + 4.5 * progress + 1.0 * sin(float(world.tick) * 0.8)
+	draw_circle(start_p, orb_r * 1.5, Color(0.4, 0.85, 0.1, 0.35 * pulse))
+	draw_circle(start_p, orb_r, Color(0.8, 1.0, 0.25, 0.85))
+	draw_circle(start_p, orb_r * 0.45, Color(1.0, 1.0, 0.9, 0.95))
+
+	# 5. Danger reticle at impact point
+	var ret_r: float = 8.0 + 3.0 * sin(float(world.tick) * 0.6)
+	var ret_color := Color(0.85, 1.0, 0.2, (0.6 + 0.35 * progress) * pulse)
+	draw_arc(end_p, ret_r, 0, TAU, 16, ret_color, 2.0)
+	draw_circle(end_p, 3.5 * pulse, Color(1.0, 0.4, 0.1, 0.85))
+
 func _draw_tanks() -> void:
 	for tank in world.tanks:
 		if tank.alive and _in_view(tank.x, tank.y, 480):
 			_draw_rammer_telegraph(tank)
+			_draw_chimera_telegraph(tank)
 	for tank in world.tanks:
 		if not tank.alive or not _in_view(tank.x, tank.y, 40):
 			continue

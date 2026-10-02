@@ -286,6 +286,7 @@ class Mine extends RefCounted:
 	var timer: int
 	var alive := true
 	var armed: bool
+	var arming_ticks: int = 0
 
 	func _init(x_: float, y_: float, owner_, life: int) -> void:
 		x = x_
@@ -299,6 +300,9 @@ class Mine extends RefCounted:
 		timer -= 1
 		if timer <= 0:
 			alive = false
+			return
+		if arming_ticks > 0:
+			arming_ticks -= 1
 			return
 		if owner != null and not armed:
 			var d := Vector2(x - owner.x, y - owner.y).length()

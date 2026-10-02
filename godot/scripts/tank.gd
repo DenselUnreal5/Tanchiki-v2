@@ -104,6 +104,13 @@ var chimera_cloak_timer := 0
 var chimera_pool_timer := 0
 var chimera_clones_spawned := false
 var chimera_ambush_ready := false
+var chimera_stream_active := false
+var chimera_stream_timer := 0
+var chimera_stream_cd := 0
+var chimera_stream_warmup_ticks := 0
+var chimera_stream_target_point := Vector2.ZERO
+var chimera_stream_overdrive := false
+var boss_damage_grace_ticks := 0
 
 var in_water := false
 var water_timer := 0
@@ -198,7 +205,7 @@ var carrying_flag: bool:
 	get: return flag != null
 
 var can_fire: bool:
-	get: return alive and fire_cooldown <= 0 and not overheated and not is_rammer_boss
+	get: return alive and fire_cooldown <= 0 and not overheated and not is_rammer_boss and not is_chimera_boss and not is_chimera_clone
 
 func _update_heat(world) -> void:
 	if owner == null:
@@ -380,7 +387,7 @@ func update(world) -> void:
 
 	if is_rammer_boss:
 		_update_rammer_boss(world)
-	if is_chimera_boss:
+	if is_chimera_boss or is_chimera_clone:
 		_update_chimera_boss(world)
 
 	if freeze_ticks <= 0:
@@ -588,7 +595,9 @@ func _update_rammer_boss(world) -> void:
 					rammer_charge_mine_timer = Cfg.RAMMER_CHARGE_MINE_INTERVAL
 					var mx := x - cos(rammer_dir) * (height * 0.5 + 8.0)
 					var my := y - sin(rammer_dir) * (height * 0.5 + 8.0)
-					world.mines.append(Ent.Mine.new(mx, my, self, Cfg.MINE_LIFE))
+					var m := Ent.Mine.new(mx, my, self, Cfg.MINE_LIFE)
+					m.arming_ticks = Cfg.RAMMER_CHARGE_MINE_ARMING_TICKS
+					world.mines.append(m)
 					world.particles.burst(mx, my, [Color("#ff4400"), Color("#ffcc00")], 6, 2, 4, 10, 16, world.rng)
 
 			# Destroy obstacles in path
@@ -630,10 +639,10 @@ func _update_rammer_boss(world) -> void:
 				var d2: float = (other.x - x) * (other.x - x) + (other.y - y) * (other.y - y)
 				if d2 <= 42.0 * 42.0:
 					rammer_charge_hit.append(other)
-					var ram_dmg: float = minf(110.0 * dmg_scale, other.max_hp * Cfg.BOSS_HIT_CAP_FRACTION)
+					var ram_dmg: float = minf(Cfg.RAMMER_CHARGE_MAX_DMG * dmg_scale, other.max_hp * Cfg.BOSS_HIT_CAP_FRACTION)
 					world.deal_damage(other, ram_dmg, self, "ram")
-					other.vx += cos(rammer_dir) * 16.0
-					other.vy += sin(rammer_dir) * 16.0
+					other.vx += cos(rammer_dir) * 14.0
+					other.vy += sin(rammer_dir) * 14.0
 					world.spawn_shockwave(other.x, other.y, 60.0, "ram", Color("#ef4444"), 16)
 					world.particles.burst(other.x, other.y, [Color("#ff4400"), Color.WHITE], 16, 2, 6, 16, 28, world.rng)
 					Sfx.play("crack", other.x, other.y)
@@ -670,22 +679,38 @@ func _update_chimera_boss(world) -> void:
 	if not alive:
 		return
 
-	# Ability 1: Predator Cloak
-	if shadow_timer > 0:
-		chimera_ambush_ready = true
-		turbo_timer = maxi(turbo_timer, 2)
-	else:
-		chimera_cloak_timer -= 1
-		if chimera_cloak_timer <= 0:
-			chimera_cloak_timer = Cfg.CHIMERA_CLOAK_INTERVAL
+	if is_chimera_boss:
+		# Ability 1: Predator Cloak
+		if shadow_timer > 0:
+			chimera_ambush_ready = true
+			turbo_timer = maxi(turbo_timer, 2)
+		else:
+			chimera_cloak_timer -= 1
+			if chimera_cloak_timer <= 0:
+				chimera_cloak_timer = Cfg.CHIMERA_CLOAK_INTERVAL
+				shadow_timer = Cfg.CHIMERA_CLOAK_DURATION
+				turbo_timer = Cfg.CHIMERA_CLOAK_DURATION
+				chimera_ambush_ready = true
+				world.particles.burst(x, y, [Color("#84cc16"), Color("#a3e635"), Color("#182b18")], 20, 2, 5, 14, 26, world.rng)
+				world.spawn_shockwave(x, y, 60.0, "acid", Color("#84cc16"), 18)
+				Sfx.play("steam", x, y)
+				world.feed.emit(I18n.t("feed.chimeraCloak", {"name": name},
+					"🧪 %s активирует оптический камуфляж хищника!" % name), Color("#84cc16"))
+
+		# Phase 2 (< 50% HP): Holographic decoy clones
+		if max_hp > 0.0 and (hp / max_hp) <= 0.5 and not chimera_clones_spawned:
+			chimera_clones_spawned = true
+			world.spawn_chimera_clone(self, -1.0)
+			world.spawn_chimera_clone(self, 1.0)
 			shadow_timer = Cfg.CHIMERA_CLOAK_DURATION
 			turbo_timer = Cfg.CHIMERA_CLOAK_DURATION
 			chimera_ambush_ready = true
-			world.particles.burst(x, y, [Color("#84cc16"), Color("#a3e635"), Color("#182b18")], 20, 2, 5, 14, 26, world.rng)
-			world.spawn_shockwave(x, y, 60.0, "acid", Color("#84cc16"), 18)
-			Sfx.play("steam", x, y)
-			world.feed.emit(I18n.t("feed.chimeraCloak", {"name": name},
-				"🧪 %s активирует оптический камуфляж хищника!" % name), Color("#84cc16"))
+			world.spawn_shockwave(x, y, 80.0, "acid", Color("#84cc16"), 24)
+			world.particles.burst(x, y, [Color("#84cc16"), Color("#00ffff"), Color("#ff00ff"), Color.WHITE], 32, 3, 7, 20, 38, world.rng)
+			world.damage_number.emit(x, y - 30, "🧪 ГОЛОГРАММЫ!", Color("#84cc16"))
+			Sfx.play("thunder", x, y)
+			world.feed.emit(I18n.t("feed.chimeraClones", {"name": name},
+				"🧪 %s развёртывает голографических клонов и уходит в тень!" % name), Color("#84cc16"))
 
 	# Ability 2: Corrosive Trail (Acid Pools) while moving
 	var spd := sqrt(vx * vx + vy * vy)
@@ -698,20 +723,170 @@ func _update_chimera_boss(world) -> void:
 			world.spawn_acid_pool(bx, by, Cfg.CHIMERA_ACID_POOL_RADIUS, self, Cfg.CHIMERA_ACID_POOL_DURATION)
 			world.particles.burst(bx, by, [Color("#84cc16"), Color("#4d7c0f")], 4, 1, 3, 6, 12, world.rng)
 
-	# Phase 2 (< 50% HP): Holographic decoy clones
-	if max_hp > 0.0 and (hp / max_hp) <= 0.5 and not chimera_clones_spawned:
-		chimera_clones_spawned = true
-		world.spawn_chimera_clone(self, -1.0)
-		world.spawn_chimera_clone(self, 1.0)
-		shadow_timer = Cfg.CHIMERA_CLOAK_DURATION
-		turbo_timer = Cfg.CHIMERA_CLOAK_DURATION
-		chimera_ambush_ready = true
-		world.spawn_shockwave(x, y, 80.0, "acid", Color("#84cc16"), 24)
-		world.particles.burst(x, y, [Color("#84cc16"), Color("#00ffff"), Color("#ff00ff"), Color.WHITE], 32, 3, 7, 20, 38, world.rng)
-		world.damage_number.emit(x, y - 30, "🧪 ГОЛОГРАММЫ!", Color("#84cc16"))
-		Sfx.play("thunder", x, y)
-		world.feed.emit(I18n.t("feed.chimeraClones", {"name": name},
-			"🧪 %s развёртывает голографических клонов и уходит в тень!" % name), Color("#84cc16"))
+	# Ability 3: Acid Jet Stream with Warmup Telegraph
+	if chimera_stream_cd > 0:
+		chimera_stream_cd -= 1
+
+	if chimera_stream_active:
+		chimera_stream_timer -= 1
+		_process_chimera_stream(world)
+		if chimera_stream_timer <= 0:
+			chimera_stream_active = false
+			chimera_stream_cd = Cfg.CHIMERA_STREAM_COOLDOWN
+	elif chimera_stream_warmup_ticks > 0:
+		chimera_stream_warmup_ticks -= 1
+		# Slow down movement during telegraph warmup
+		vx *= 0.82
+		vy *= 0.82
+		_update_chimera_telegraph(world)
+		var mx: float = x + cos(turret_angle) * muzzle_len
+		var my: float = y + sin(turret_angle) * muzzle_len
+		if chimera_stream_warmup_ticks % 8 == 0:
+			world.particles.burst(mx, my, [Color("#bef264"), Color("#84cc16"), Color("#ffffff")], 2, 1, 2, 4, 8, world.rng)
+		if chimera_stream_warmup_ticks <= 0:
+			start_chimera_stream(world)
+	elif is_chimera_clone and chimera_clone_parent != null and chimera_clone_parent.alive:
+		# Clone synchronizes telegraph warmup with parent
+		if chimera_clone_parent.chimera_stream_warmup_ticks > 0 and chimera_stream_warmup_ticks <= 0 and not chimera_stream_active and chimera_stream_cd <= 0:
+			start_chimera_warmup(world)
+	elif is_chimera_boss and chimera_stream_cd <= 0 and shadow_timer <= 0:
+		# Check if target is in front within stream range (150 px) & line of sight
+		var has_target_in_range := false
+		for other in world.tanks:
+			if other == self or not other.alive or other.team == team:
+				continue
+			var d2: float = (other.x - x) * (other.x - x) + (other.y - y) * (other.y - y)
+			if d2 <= Cfg.CHIMERA_STREAM_RANGE * Cfg.CHIMERA_STREAM_RANGE:
+				var to_a: float = atan2(other.y - y, other.x - x)
+				var diff: float = absf(atan2(sin(turret_angle - to_a), cos(turret_angle - to_a)))
+				if diff < 0.55 and world.map.has_line_of_sight(x, y, other.x, other.y):
+					has_target_in_range = true
+					break
+		if has_target_in_range:
+			start_chimera_warmup(world)
+
+func start_chimera_warmup(world) -> void:
+	chimera_stream_warmup_ticks = Cfg.CHIMERA_STREAM_WARMUP_TICKS
+	_update_chimera_telegraph(world)
+	var mx: float = x + cos(turret_angle) * muzzle_len
+	var my: float = y + sin(turret_angle) * muzzle_len
+	Sfx.play("steam", mx, my)
+	if is_chimera_boss and not is_chimera_clone:
+		world.damage_number.emit(x, y - 24, "⚠️ ЗАРЯДКА КИСЛОТЫ", Color("#a3e635"))
+
+func _update_chimera_telegraph(world) -> void:
+	var muzzle_x: float = x + cos(turret_angle) * muzzle_len
+	var muzzle_y: float = y + sin(turret_angle) * muzzle_len
+	var dir_x: float = cos(turret_angle)
+	var dir_y: float = sin(turret_angle)
+	var max_len: float = Cfg.CHIMERA_STREAM_RANGE
+	var step_size: float = 10.0
+	var cur_dist: float = 0.0
+	var hit_pos: Vector2 = Vector2(muzzle_x + dir_x * max_len, muzzle_y + dir_y * max_len)
+	while cur_dist < max_len:
+		cur_dist += step_size
+		var test_x: float = muzzle_x + dir_x * cur_dist
+		var test_y: float = muzzle_y + dir_y * cur_dist
+		var r: int = world.map.row_at(test_y)
+		var c: int = world.map.col_at(test_x)
+		if not world.map.in_bounds(r, c):
+			hit_pos = Vector2(test_x, test_y)
+			break
+		var tile: int = world.map.get_tile(r, c)
+		if GameMap.is_solid_tile(tile):
+			hit_pos = Vector2(test_x, test_y)
+			break
+	chimera_stream_target_point = hit_pos
+
+func start_chimera_stream(world) -> void:
+	chimera_stream_active = true
+	chimera_stream_timer = Cfg.CHIMERA_STREAM_BURST_TICKS
+	chimera_stream_warmup_ticks = 0
+	var mx: float = x + cos(turret_angle) * muzzle_len
+	var my: float = y + sin(turret_angle) * muzzle_len
+	world.spawn_shockwave(mx, my, 32.0, "acid", Color("#84cc16"), 10)
+	world.particles.burst(mx, my, [Color("#84cc16"), Color("#a3e635"), Color.WHITE], 10, 2, 4, 10, 18, world.rng)
+	Sfx.play("steam", mx, my)
+	if is_chimera_boss and not is_chimera_clone:
+		world.feed.emit(I18n.t("feed.chimeraStream", {"name": name},
+			"🧪 %s заливает сектор непрерывной струёй кислоты!" % name), Color("#a3e635"))
+
+func _process_chimera_stream(world) -> void:
+	if not alive:
+		chimera_stream_active = false
+		chimera_stream_warmup_ticks = 0
+		return
+
+	var muzzle_x: float = x + cos(turret_angle) * muzzle_len
+	var muzzle_y: float = y + sin(turret_angle) * muzzle_len
+	var dir_x: float = cos(turret_angle)
+	var dir_y: float = sin(turret_angle)
+	var max_len: float = Cfg.CHIMERA_STREAM_RANGE
+	var step_size: float = 10.0
+	var cur_dist: float = 0.0
+	var hit_pos: Vector2 = Vector2(muzzle_x + dir_x * max_len, muzzle_y + dir_y * max_len)
+	var hit_tile_row := -1
+	var hit_tile_col := -1
+
+	while cur_dist < max_len:
+		cur_dist += step_size
+		var test_x: float = muzzle_x + dir_x * cur_dist
+		var test_y: float = muzzle_y + dir_y * cur_dist
+		var r: int = world.map.row_at(test_y)
+		var c: int = world.map.col_at(test_x)
+		if not world.map.in_bounds(r, c):
+			hit_pos = Vector2(test_x, test_y)
+			break
+		var tile: int = world.map.get_tile(r, c)
+		if GameMap.is_solid_tile(tile):
+			hit_pos = Vector2(test_x, test_y)
+			hit_tile_row = r
+			hit_tile_col = c
+			break
+
+	chimera_stream_target_point = hit_pos
+	var stream_len: float = Vector2(hit_pos.x - muzzle_x, hit_pos.y - muzzle_y).length()
+
+	# Damage enemy tanks intersecting the acid stream
+	var normal_x: float = -dir_y
+	var normal_y: float = dir_x
+	var radius: float = Cfg.CHIMERA_STREAM_WIDTH * 0.75 + Cfg.TANK_BODY_R * 0.6
+	var mult: float = (0.50 if is_chimera_clone else 1.0) * boss_stat_mult * dmg_scale
+	var tick_dmg: float = Cfg.CHIMERA_STREAM_TICK_DMG * mult
+
+	for other in world.tanks:
+		if other == self or not other.alive or other.team == team:
+			continue
+		var to_ox: float = other.x - muzzle_x
+		var to_oy: float = other.y - muzzle_y
+		var proj_len: float = to_ox * dir_x + to_oy * dir_y
+		if proj_len < -10.0 or proj_len > stream_len + 15.0:
+			continue
+		var perp_dist: float = absf(to_ox * normal_x + to_oy * normal_y)
+		if perp_dist <= radius:
+			world.deal_damage(other, tick_dmg, self, "acid_stream")
+			# Apply acid debuff stack only every 20 ticks (~0.33s), capped at 3 stacks max!
+			if chimera_stream_timer % 20 == 0 and other.acid_stacks < 3:
+				other.apply_acid(world, self, 1.0, 1)
+			if world.rng.nextf() < 0.20:
+				world.particles.burst(other.x, other.y, [Color("#84cc16"), Color("#a3e635"), Color("#4d7c0f")], 2, 1, 2, 6, 12, world.rng)
+
+	# Erode bricks if hitting brick wall
+	if hit_tile_row != -1 and hit_tile_col != -1:
+		var tile: int = world.map.get_tile(hit_tile_row, hit_tile_col)
+		if tile == Cfg.T_BRICK:
+			world.map.apply_damage(hit_tile_row, hit_tile_col, 0.35, "acid_stream")
+
+	# Periodically spawn a small acid puddle at impact point (every 30 ticks)
+	if chimera_stream_timer % 30 == 0:
+		world.spawn_acid_pool(hit_pos.x, hit_pos.y, 14.0, self, 80)
+
+	# Sound & particles
+	if chimera_stream_timer % 16 == 0:
+		Sfx.play("steam", muzzle_x, muzzle_y)
+
+	# Impact splash particles
+	world.particles.burst(hit_pos.x, hit_pos.y, [Color("#84cc16"), Color("#a3e635"), Color("#22c55e")], 2, 1, 3, 6, 12, world.rng)
 
 
 func _move(world, crush_trees: bool = true) -> void:
@@ -838,36 +1013,7 @@ func shoot(world) -> bool:
 	var scale_v := dmg_scale
 
 	if is_chimera_boss or is_chimera_clone:
-		var is_ambush := is_chimera_boss and (chimera_ambush_ready or shadow_timer > 0)
-		var cur_dmg_scale := scale_v
-		if is_ambush:
-			chimera_ambush_ready = false
-			shadow_timer = 0
-			cur_dmg_scale *= 2.0
-			world.damage_number.emit(muzzle_x, muzzle_y - 24, "🎯 ЗАПАДНЯ! 2X", Color("#a3e635"))
-			world.spawn_shockwave(muzzle_x, muzzle_y, 70.0, "acid", Color("#84cc16"), 20)
-			world.particles.burst(muzzle_x, muzzle_y, [Color("#84cc16"), Color("#a3e635"), Color.WHITE], 20, 2, 6, 14, 28, world.rng)
-			Sfx.play("steam", muzzle_x, muzzle_y)
-
-		var perp := turret_angle + PI / 2.0
-		var ox := cos(perp) * 5.0
-		var oy := sin(perp) * 5.0
-		for off: float in [-1.0, 1.0]:
-			var bx: float = muzzle_x + ox * off
-			var by: float = muzzle_y + oy * off
-			var b := Ent.Bullet.new(bx, by, turret_angle, self, cur_dmg_scale)
-			b.cannon_kind = "acid"
-			b.pierce = 0
-			b.explosive = false
-			b.keep_bricks = false
-			if is_ambush:
-				b.acid_burst = true
-			world.bullets.append(b)
-
-		world.particles.burst(muzzle_x, muzzle_y, [Color("#84cc16"), Color("#a3e635"), Color.WHITE], 8, 2, 4, 10, 14, world.rng)
-		Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
-		world.notify_shot(self)
-		return true
+		return false
 
 	var wp := Weapons.get_weapon(weapon) if weapon != "" else {}
 	if not wp.is_empty():
@@ -1215,6 +1361,9 @@ func on_death(world, killer) -> void:
 	acid_ticks_left = 0
 	acid_tick_timer = 0
 	acid_attacker = null
+	chimera_stream_active = false
+	chimera_stream_timer = 0
+	chimera_stream_warmup_ticks = 0
 
 	world.particles.burst(x, y, Cfg.explosion, 30, 3, 8, 20, 40, world.rng)
 	Sfx.play("explosion", x, y)
@@ -1275,6 +1424,10 @@ func respawn(nx: float, ny: float) -> void:
 	chimera_pool_timer = 0
 	chimera_clones_spawned = false
 	chimera_ambush_ready = false
+	chimera_stream_active = false
+	chimera_stream_timer = 0
+	chimera_stream_cd = 0
+	chimera_stream_warmup_ticks = 0
 	recompute()
 	if brain != null:
 		brain.reset()

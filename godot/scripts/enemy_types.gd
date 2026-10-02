@@ -63,7 +63,7 @@ const LIST := {
 		"id": "boss_chimera", "name": "Фантом-Химера", "icon": "🧪",
 		"hp_mult": 20.0, "speed_mult": 1.25, "fire_rate_mult": 0.85, "dmg_scale": 1.35,
 		"accuracy_bonus": 0.15, "react_mult": 0.8,
-		"fire_range": 440.0, "keep_min": 140.0, "keep_max": 300.0,
+		"fire_range": 150.0, "keep_min": 50.0, "keep_max": 130.0,
 		"chassis": "boss_chimera", "role": "phantom", "color_key": "boss_chimera",
 		"weight": 3, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
 		"base_hp": Cfg.CHIMERA_BOSS_BASE_HP,

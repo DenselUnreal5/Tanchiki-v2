@@ -162,17 +162,26 @@ func update(tank: Tank, world) -> void:
 					tank.start_rammer_charge(world.base["x"], world.base["y"], world)
 					return
 
-	if tank.is_chimera_boss:
+	if tank.is_chimera_boss or tank.is_chimera_clone:
+		# When spraying continuous acid or during pre-attack warmup, lock onto target and maintain roasting distance
+		if (tank.chimera_stream_active or tank.chimera_stream_warmup_ticks > 0) and tgt != null:
+			tank.slew_turret_to(atan2(tgt.y - tank.y, tgt.x - tank.x))
+			if target_dist > 120.0:
+				_move_toward(tank, world, tgt.x, tgt.y)
+			elif target_dist < 50.0:
+				var back_a := atan2(tank.y - tgt.y, tank.x - tgt.x)
+				_move_toward(tank, world, tank.x + cos(back_a) * 60.0, tank.y + sin(back_a) * 60.0)
+			return
+
 		# When cloaked, Chimera stalks into ambush position (behind/flanking the target)
 		if tank.shadow_timer > 0 and tgt != null:
 			var flank_angle: float = tgt.body_angle + PI
-			var stalk_dist := 130.0
+			var stalk_dist := 100.0
 			var flank_x: float = tgt.x + cos(flank_angle) * stalk_dist
 			var flank_y: float = tgt.y + sin(flank_angle) * stalk_dist
 			_move_toward(tank, world, flank_x, flank_y)
 			tank.slew_turret_to(atan2(tgt.y - tank.y, tgt.x - tank.x))
-			if target_dist <= 220.0 and has_shot:
-				_try_fire(tank, world, tgt, target_dist, has_shot)
+			# Do NOT fire bullets when cloaked! Chimera attacks strictly with acid stream!
 			return
 
 	_maybe_use_ability(tank, world, target_dist, has_shot)
@@ -499,7 +508,7 @@ func _maybe_use_ability(tank: Tank, world, target_dist: float, has_shot: bool) -
 				tank.use_ability(world)
 
 func _try_fire(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> void:
-	if tank.is_rammer_boss or tgt == null or not has_shot:
+	if tank.is_rammer_boss or tank.is_chimera_boss or tank.is_chimera_clone or tank.chimera_stream_active or tank.chimera_stream_warmup_ticks > 0 or tgt == null or not has_shot:
 		return
 	if target_dist > fire_range:
 		return

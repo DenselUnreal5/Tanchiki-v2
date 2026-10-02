@@ -451,6 +451,7 @@ var EN := {
 	"feed.rammerExplode": "💥 {name}'s reactor detonates in a colossal blast (50m)!",
 	"feed.chimeraCloak": "🧪 {name} activates optic predator camouflage and slips into the shadows!",
 	"feed.chimeraClones": "🧪 {name} deploys holographic decoys to flank players!",
+	"feed.chimeraStream": "🧪 {name} spews a continuous stream of caustic acid across the sector!",
 	"feed.chimeraExplode": "☣️ {name}'s caustic core ruptures, releasing a deluge of acid!",
 	"enemy.boss_chimera.name": "Phantom Chimera",
 

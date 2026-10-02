@@ -1093,6 +1093,17 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		amount *= Cfg.CORRODING_ARMOR_MULT
 		is_corroded_hit = true
 
+	# Ребаланс урона боссов и защита от ваншота
+	if attacker != null and attacker.alive and attacker.is_boss:
+		if mode == "koth" and target != null and not target.is_player_controlled and not target.is_boss:
+			amount *= Cfg.BOSS_KOTH_BOT_DMG_MULT
+		if target != null and target.is_player_controlled:
+			if target.boss_damage_grace_ticks > 0 and source == "bullet":
+				amount *= Cfg.BOSS_BURST_GRACE_REDUCTION
+			elif amount >= target.max_hp * 0.20:
+				target.boss_damage_grace_ticks = Cfg.BOSS_BURST_GRACE_TICKS
+			amount = minf(amount, target.max_hp * Cfg.BOSS_HIT_CAP_FRACTION)
+
 	var res: Dictionary = target.take_damage(self, amount, attacker, source)
 	if bool(res["evaded"]) or float(res["applied"]) <= 0.0:
 		return 0.0
@@ -1323,9 +1334,9 @@ func spawn_chimera_clone(parent_tank: Tank, side: float) -> Tank:
 		"accuracy": 0.8,
 		"react_time": 15,
 		"role": "attacker",
-		"fire_range": 400.0,
-		"keep_min": 100.0,
-		"keep_max": 240.0,
+		"fire_range": 150.0,
+		"keep_min": 50.0,
+		"keep_max": 130.0,
 		"lobbed": false,
 		"survival": mode == "koth",
 		"rng": rng,
