@@ -19,6 +19,9 @@ var _wave_sub: Label
 var _scoreboard: ThemedPanel
 var _scoreboard_body: VBoxContainer
 var scoreboard_visible := false
+var _last_sb_data: Array = []
+var _perk_tooltip: PanelContainer
+var _perk_tooltip_body: VBoxContainer
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -48,10 +51,30 @@ func _ready() -> void:
 
 	_scoreboard = UiKit.panel()
 	_scoreboard.visible = false
-	_scoreboard.custom_minimum_size = Vector2(460, 0)
+	_scoreboard.custom_minimum_size = Vector2(500, 0)
+	_scoreboard.mouse_filter = Control.MOUSE_FILTER_STOP
 	_scoreboard_body = UiKit.vbox(4)
+	_scoreboard_body.mouse_filter = Control.MOUSE_FILTER_PASS
 	_scoreboard.add_child(_scoreboard_body)
 	add_child(_scoreboard)
+
+	_perk_tooltip = PanelContainer.new()
+	_perk_tooltip.visible = false
+	_perk_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_perk_tooltip.z_index = 200
+	var tip_st := UiKit.flat(Color(0.06, 0.08, 0.12, 0.96), Cfg.RADIUS_SM)
+	tip_st.border_width_left = 3
+	tip_st.border_color = Cfg.UI_GOLD
+	tip_st.content_margin_left = 10
+	tip_st.content_margin_right = 10
+	tip_st.content_margin_top = 8
+	tip_st.content_margin_bottom = 8
+	_perk_tooltip.add_theme_stylebox_override("panel", tip_st)
+
+	_perk_tooltip_body = UiKit.vbox(4)
+	_perk_tooltip_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_perk_tooltip.add_child(_perk_tooltip_body)
+	add_child(_perk_tooltip)
 
 func build(players: Array, world: World) -> void:
 	for p in panels.values():
@@ -95,6 +118,25 @@ func build(players: Array, world: World) -> void:
 		var heat_wrap: Control = heat_bar["wrap"]
 		var heat_fill: ColorRect = heat_bar["fill"]
 		left.add_child(heat_wrap)
+
+		var acid_row := UiKit.hbox(4)
+		acid_row.visible = false
+		acid_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		left.add_child(acid_row)
+
+		var acid_icon := UiKit.label("🧪", 10)
+		acid_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		acid_row.add_child(acid_icon)
+
+		var acid_label := UiKit.label("", 10, Color("#a3e635"), true)
+		acid_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		acid_row.add_child(acid_label)
+
+		var acid_bar := UiKit.rounded_bar(70, 5, Color("#84cc16"))
+		var acid_bar_wrap: Control = acid_bar["wrap"]
+		var acid_bar_fill: ColorRect = acid_bar["fill"]
+		acid_bar_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		acid_row.add_child(acid_bar_wrap)
 
 		var right := UiKit.vbox(2)
 		right.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -146,6 +188,7 @@ func build(players: Array, world: World) -> void:
 			"name": name_label, "hp_wrap": hp_wrap, "hp_fill": hp_fill, "hp_bg": hp_bg,
 			"shield_fill": shield_fill, "hp_text": hp_text,
 			"heat_fill": heat_fill, "heat_wrap": heat_wrap,
+			"acid_row": acid_row, "acid_label": acid_label, "acid_fill": acid_bar_fill,
 			"net": net_label,
 			"score": score, "objective": objective, "weather": weather_label,
 			"xp_label": xp_label, "xp_fill": xp_fill, "perks": perks,
@@ -189,14 +232,27 @@ func layout(players: Array, world: World = null) -> void:
 	var screen := get_viewport_rect().size
 	var wave_ui := world != null and world.mode == "defense"
 	_wave_box.visible = wave_ui
-	var feed_y := 132.0 if split else 10.0
 	if wave_ui:
 		_wave_box.position = Vector2(screen.x * 0.5 - 150.0, 10.0)
 		_wave_box.custom_minimum_size = Vector2(300, 0)
 		_wave_box.size = Vector2(300, 46)
-		feed_y = maxf(feed_y, 66.0)
-	_feed_box.position = Vector2(screen.x * 0.5 - 180.0, feed_y)
-	_feed_box.custom_minimum_size = Vector2(360, 0)
+
+	var mm_w := 140.0 if split else 200.0
+	var mm_h := roundf(mm_w / maxf(0.2, _map_aspect))
+	var feed_x := screen.x - mm_w - 10.0
+	var feed_y := 10.0 + mm_h + 8.0
+	if not players.is_empty():
+		var p0: PlayerState = players[0]
+		var vp: Rect2 = p0.viewport
+		feed_x = vp.position.x + vp.size.x - mm_w - 10.0
+		feed_y = vp.position.y + 10.0 + mm_h + 8.0
+	_feed_box.position = Vector2(feed_x, feed_y)
+	_feed_box.custom_minimum_size = Vector2(mm_w, 0)
+	_feed_box.size = Vector2(mm_w, 0)
+	for child in _feed_box.get_children():
+		if child is Control:
+			child.custom_minimum_size = Vector2(mm_w, 0)
+
 	_banner.position = Vector2(screen.x * 0.5 - 300.0, screen.y * 0.22)
 	_banner.size = Vector2(600, 40)
 	_scoreboard.position = Vector2(screen.x * 0.5 - 230.0, screen.y * 0.5 - 180.0)
@@ -302,6 +358,20 @@ func update_hud(world: World) -> void:
 			hp_text += I18n.t("hud.shield", {"n": int(ceil(tank.shield_hp))},
 				" +%d щит" % int(ceil(tank.shield_hp)))
 		(panel["hp_text"] as Label).text = hp_text
+
+		var acid_row: Control = panel["acid_row"]
+		var acid_label: Label = panel["acid_label"]
+		var acid_fill: ColorRect = panel["acid_fill"]
+		if tank.acid_stacks > 0 and tank.acid_ticks_left > 0:
+			acid_row.visible = true
+			var sec_left: float = float(tank.acid_ticks_left) / float(Cfg.TICK_HZ)
+			acid_label.text = "КИСЛОТА ×%d · %.1f с" % [tank.acid_stacks, sec_left]
+			var prog: float = clampf(float(tank.acid_ticks_left) / float(Cfg.ACID_DURATION_TICKS), 0.0, 1.0)
+			acid_fill.size.x = 70.0 * prog
+			var pulse: float = 0.8 + 0.2 * sin(float(world.tick) * 0.35)
+			acid_label.modulate = Color(1.0, 1.0, 1.0, pulse)
+		else:
+			acid_row.visible = false
 
 		(panel["score"] as Label).text = I18n.t("hud.score", {"n": player.score}, "Счёт %d" % player.score)
 
@@ -427,20 +497,32 @@ func update_hud(world: World) -> void:
 			var tw := create_tween()
 			tw.tween_property(_banner, "modulate:a", 0.0, 0.25)
 	if scoreboard_visible:
-		_render_scoreboard(world)
+		var sb_rows := world.scoreboard()
+		if sb_rows != _last_sb_data:
+			_last_sb_data = sb_rows.duplicate(true)
+			_render_scoreboard(world, sb_rows)
 
 func add_feed(text: String, color: Color = Color.WHITE) -> void:
 	var entry := PanelContainer.new()
-	var st := UiKit.flat(Color(0, 0, 0, 0.72), Cfg.RADIUS_SM)
+	var st := UiKit.flat(Color(0, 0, 0, 0.30), Cfg.RADIUS_SM)
 	st.border_width_left = 3
-	st.border_color = color
-	st.content_margin_left = 10
-	st.content_margin_right = 10
+	st.border_color = Color(color.r, color.g, color.b, 0.85)
+	st.content_margin_left = 8
+	st.content_margin_right = 8
 	st.content_margin_top = 3
 	st.content_margin_bottom = 3
 	entry.add_theme_stylebox_override("panel", st)
-	entry.add_child(UiKit.label(text, 11))
+
+	var lbl := UiKit.label(text, 11)
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	entry.add_child(lbl)
 	entry.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var feed_w: float = _feed_box.custom_minimum_size.x if _feed_box.custom_minimum_size.x > 0.0 else 200.0
+	entry.custom_minimum_size = Vector2(feed_w, 0)
+	entry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
 	_feed_box.add_child(entry)
 	_feed_box.move_child(entry, 0)
 	feed_entries.push_front({"node": entry, "life": FEED_LIFE})
@@ -475,16 +557,116 @@ func banner(text: String, color: Color = Cfg.UI_GOLD, ticks: int = 150, font_siz
 func toggle_scoreboard(world: World) -> void:
 	scoreboard_visible = not scoreboard_visible
 	_scoreboard.visible = scoreboard_visible
-	if scoreboard_visible and world != null:
-		_render_scoreboard(world)
+	if not scoreboard_visible:
+		_hide_perk_tooltip()
+	elif world != null:
+		_last_sb_data.clear()
+		_render_scoreboard(world, world.scoreboard())
 
 func hide_scoreboard() -> void:
 	scoreboard_visible = false
 	_scoreboard.visible = false
+	_hide_perk_tooltip()
 
-func _render_scoreboard(world: World) -> void:
+func _resolve_perk_info(id: String) -> Dictionary:
+	var p := Perks.get_perk(id)
+	if not p.is_empty():
+		return {
+			"name": I18n.dn(p, "name", "perk"),
+			"desc": I18n.dn(p, "desc", "perk"),
+			"icon": String(p.get("icon", "⭐")),
+			"category": String(p.get("category", "")),
+		}
+	var bp := Perks.get_bot_perk(id)
+	if not bp.is_empty():
+		return {
+			"name": I18n.dn(bp, "name", "perk"),
+			"desc": I18n.dn(bp, "desc", "perk"),
+			"icon": String(bp.get("icon", "🤖")),
+			"category": "bot",
+		}
+	var ab := Abilities.get_ability(id)
+	if not ab.is_empty():
+		return {
+			"name": I18n.dn(ab, "name", "ability"),
+			"desc": I18n.dn(ab, "desc", "ability"),
+			"icon": String(ab.get("icon", "✦")),
+			"category": "ability",
+		}
+	return {
+		"name": id.capitalize(),
+		"desc": "",
+		"icon": "⭐",
+		"category": "",
+	}
+
+func _show_perk_tooltip(id: String, source_node: Control) -> void:
+	if _perk_tooltip == null:
+		return
+	for child in _perk_tooltip_body.get_children():
+		child.queue_free()
+
+	var info := _resolve_perk_info(id)
+	var header := UiKit.hbox(6)
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_perk_tooltip_body.add_child(header)
+
+	var icon_view := PerkIcons.make_view(id, 20, Cfg.UI_GOLD)
+	icon_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header.add_child(icon_view)
+
+	var name_lbl := UiKit.label(info["name"], 12, Cfg.UI_GOLD, true)
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header.add_child(name_lbl)
+
+	var cat: String = String(info["category"])
+	if cat != "":
+		var cat_text := ""
+		match cat:
+			"fire": cat_text = "[ОГОНЬ]"
+			"defense": cat_text = "[ЗАЩИТА]"
+			"speed": cat_text = "[СКОРОСТЬ]"
+			"special": cat_text = "[ОСОБОЕ]"
+			"challenge": cat_text = "[ЧЕЛЛЕНДЖ]"
+			"bot": cat_text = "[БОТ]"
+			"ability": cat_text = "[НАВЫК]"
+			_: cat_text = "[%s]" % cat.to_upper()
+		var cat_lbl := UiKit.label(cat_text, 9, Cfg.UI_MUTED)
+		cat_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		header.add_child(cat_lbl)
+
+	var desc_text: String = String(info["desc"])
+	if desc_text != "":
+		var desc_lbl := UiKit.label(desc_text, 11, Cfg.UI_TEXT)
+		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc_lbl.custom_minimum_size = Vector2(250, 0)
+		desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_perk_tooltip_body.add_child(desc_lbl)
+
+	_perk_tooltip.reset_size()
+	var gpos := source_node.global_position
+	var vp_size := get_viewport_rect().size
+	var tip_x := gpos.x - 20.0
+	var tip_y := gpos.y - _perk_tooltip.size.y - 10.0
+	if tip_y < 10.0:
+		tip_y = gpos.y + source_node.size.y + 10.0
+	if tip_x + 280.0 > vp_size.x - 10.0:
+		tip_x = vp_size.x - 280.0 - 10.0
+	if tip_x < 10.0:
+		tip_x = 10.0
+	_perk_tooltip.global_position = Vector2(tip_x, tip_y)
+	_perk_tooltip.visible = true
+
+func _hide_perk_tooltip() -> void:
+	if _perk_tooltip != null:
+		_perk_tooltip.visible = false
+
+func _render_scoreboard(world: World, rows: Array = []) -> void:
 	for child in _scoreboard_body.get_children():
 		child.queue_free()
+
+	if rows.is_empty():
+		rows = world.scoreboard()
 
 	var target: int = Cfg.MODES["ffa"]["frag_limit"] if world.mode == "ffa" else Cfg.MODES["ctf"]["cap_limit"]
 	var head := ""
@@ -513,7 +695,8 @@ func _render_scoreboard(world: World) -> void:
 	var grid := GridContainer.new()
 	grid.columns = 5
 	grid.add_theme_constant_override("h_separation", 14)
-	grid.add_theme_constant_override("v_separation", 3)
+	grid.add_theme_constant_override("v_separation", 4)
+	grid.mouse_filter = Control.MOUSE_FILTER_PASS
 	_scoreboard_body.add_child(grid)
 
 	for h in [I18n.t("go.table.rank", {}, "#"), I18n.t("go.table.tank", {}, "Танк"),
@@ -521,7 +704,6 @@ func _render_scoreboard(world: World) -> void:
 			I18n.t("sb.perks", {}, "Перки")]:
 		grid.add_child(UiKit.label(String(h).to_upper(), 10, Cfg.UI_MUTED))
 
-	var rows := world.scoreboard()
 	for i in rows.size():
 		var r: Dictionary = rows[i]
 		var color: Color = Cfg.UI_ACCENT if bool(r["is_human"]) else Cfg.UI_TEXT
@@ -532,12 +714,30 @@ func _render_scoreboard(world: World) -> void:
 		grid.add_child(name_label)
 		grid.add_child(UiKit.label(str(r["kills"]), 12, color))
 		grid.add_child(UiKit.label(str(r["deaths"]), 12, color))
+
 		var icons := HBoxContainer.new()
-		icons.add_theme_constant_override("separation", 2)
+		icons.add_theme_constant_override("separation", 3)
+		icons.mouse_filter = Control.MOUSE_FILTER_PASS
 		for id in r["perks"]:
-			icons.add_child(PerkIcons.make_view(String(id), 14, Cfg.UI_GOLD))
+			var p_id := String(id)
+			var p_box := PanelContainer.new()
+			var p_st := UiKit.flat(Color(0.12, 0.15, 0.20, 0.85), Cfg.RADIUS_SM)
+			p_st.content_margin_left = 3
+			p_st.content_margin_right = 3
+			p_st.content_margin_top = 2
+			p_st.content_margin_bottom = 2
+			p_box.add_theme_stylebox_override("panel", p_st)
+			p_box.mouse_filter = Control.MOUSE_FILTER_STOP
+
+			var v := PerkIcons.make_view(p_id, 14, Cfg.UI_GOLD)
+			v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			p_box.add_child(v)
+
+			p_box.mouse_entered.connect(func(): _show_perk_tooltip(p_id, p_box))
+			p_box.mouse_exited.connect(_hide_perk_tooltip)
+			icons.add_child(p_box)
 		grid.add_child(icons)
 
-	var hint := UiKit.label(I18n.t("sb.hint", {}, "Tab — скрыть"), 10, Cfg.UI_MUTED)
+	var hint := UiKit.label(I18n.t("sb.hint", {}, "Tab — скрыть · Наведите курсор на перк для описания"), 10, Cfg.UI_MUTED)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_scoreboard_body.add_child(hint)

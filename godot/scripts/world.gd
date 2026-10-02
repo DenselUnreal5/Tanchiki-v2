@@ -1141,14 +1141,20 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 			if heal > 0.0:
 				attacker.hp = minf(attacker.max_hp, attacker.hp + heal)
 
-	damage_number.emit(target.x, target.y - 20,
-		"-%d" % int(round(float(res["applied"]))),
-		Color("#ff4444") if target.owner != null else Color("#ffee55"))
+	var applied_int := int(round(float(res["applied"])))
+	if applied_int > 0:
+		damage_number.emit(target.x, target.y - 20,
+			"-%d" % applied_int,
+			Color("#ff4444") if target.owner != null else Color("#ffee55"))
 	if target.owner != null:
-		target.owner.damage_flash = 12
-		target.owner.shake = maxf(target.owner.shake, 5.0)
-		target.owner.clean_streak = 0
-		Sfx.play("hit")
+		if source == "acid_stream":
+			target.owner.damage_flash = maxi(target.owner.damage_flash, 5)
+			target.owner.clean_streak = 0
+		else:
+			target.owner.damage_flash = 12
+			target.owner.shake = maxf(target.owner.shake, 5.0)
+			target.owner.clean_streak = 0
+			Sfx.play("hit")
 	elif source == "bullet":
 		Sfx.play("hit", target.x, target.y)
 

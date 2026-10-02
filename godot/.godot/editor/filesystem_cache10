@@ -111,7 +111,7 @@ updates.gd::GDScript::4450020931874397632::1788264736::0::1::::<>MarginContainer
 ::res://addons/godotsteam/linuxarm64/::1788264736
 ::res://addons/godotsteam/osx/::1788264735
 ::res://addons/godotsteam/win32/::1788264735
-::res://addons/godotsteam/win64/::1790948606
+::res://addons/godotsteam/win64/::1790954827
 ::res://addons/godot_ai/::1788264782
 client_configurator.gd::GDScript::1846084051969471465::1788264781::0::1::::McpClientConfigurator<>RefCounted<><>0<>1<><>::
 connection.gd::GDScript::3256190740644037847::1788264778::0::1::::McpConnection<>Node<><>0<>1<><>::
@@ -470,7 +470,7 @@ spatial_grid.gd::GDScript::6455919537103794809::1790079947::0::1::::SpatialGrid<
 steam_stats.gd::GDScript::6308970617864694810::1790063334::0::1::::SteamStats<>RefCounted<><>0<>0<><>::
 surfaces.gd::GDScript::6404371831240324898::1790066482::0::1::::Surfaces<>RefCounted<><>0<>0<><>::
 synth.gd::GDScript::1904475009763383429::1790063334::0::1::::Synth<>RefCounted<><>0<>0<><>::
-tank.gd::GDScript::3746041196683425427::1790948112::0::1::::Tank<>RefCounted<><>0<>0<><>::
+tank.gd::GDScript::3746041196683425427::1790954544::0::1::::Tank<>RefCounted<><>0<>0<><>::
 tank_art.gd::GDScript::6658902625051372667::1790431797::0::1::::TankArt<>RefCounted<><>0<>0<><>::
 terrain_textures.gd::GDScript::8817393573131015455::1790409940::0::1::::TerrainTextures<>RefCounted<><>0<>0<><>::
 tile_bake_view.gd::GDScript::8490947446517054574::1790331417::0::1::::TileBakeView<>WorldView<><>0<>0<><>::
@@ -479,7 +479,7 @@ upgrades.gd::GDScript::2622605299426661031::1790063334::0::1::::Upgrades<>RefCou
 utils.gd::GDScript::7436398411069476782::1790063334::0::1::::Rng<>RefCounted<><>0<>0<><>::
 weapons.gd::GDScript::141350927022214648::1790063334::0::1::::Weapons<>RefCounted<><>0<>0<><>::
 weather.gd::GDScript::6899618592559140047::1790063334::0::1::::WeatherSystem<>RefCounted<><>0<>0<><>::
-world.gd::GDScript::2854068884894288357::1790948368::0::1::::World<>RefCounted<><>0<>0<><>::
+world.gd::GDScript::2854068884894288357::1790954472::0::1::::World<>RefCounted<><>0<>0<><>::
 world_view.gd::GDScript::8347266231888317091::1790948404::0::1::::WorldView<>Node2D<><>0<>0<><>::
 ::res://scripts/fx/::1790331420
 ao_layer.gd::GDScript::7209396354025576534::1790331420::0::1::::AoLayer<>RefCounted<><>0<>0<><>::
@@ -501,7 +501,7 @@ transport.gd::GDScript::3957519971015809989::1790063334::0::1::::NetTransport<>R
 ::res://scripts/ui/::1790670228
 focus_ring_panel.gd::GDScript::4209079584236708559::1790063334::0::1::::FocusRingPanel<>PanelContainer<><>0<>1<><>::
 hub.gd::GDScript::4358643378463104090::1790423783::0::1::::Hub<>Control<><>0<>1<><>::
-hud.gd::GDScript::2334105068861991288::1790439145::0::1::::Hud<>Control<><>0<>0<><>::
+hud.gd::GDScript::2334105068861991288::1790954797::0::1::::Hud<>Control<><>0<>0<><>::
 keybind_button.gd::GDScript::3866004163466750405::1790063334::0::1::::KeybindButton<>Button<><>0<>0<><>::
 loading_screen.gd::GDScript::361056769812282966::1790322029::0::1::::LoadingScreen<>Control<><>0<>0<><>::
 main_menu.gd::GDScript::2947440531904071081::1790670228::0::1::::MainMenu<>Control<><>0<>1<><>::

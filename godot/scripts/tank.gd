@@ -111,6 +111,7 @@ var chimera_stream_warmup_ticks := 0
 var chimera_stream_target_point := Vector2.ZERO
 var chimera_stream_overdrive := false
 var boss_damage_grace_ticks := 0
+var acid_stream_hit_accum := 0.0
 
 var in_water := false
 var water_timer := 0
@@ -865,6 +866,11 @@ func _process_chimera_stream(world) -> void:
 		var perp_dist: float = absf(to_ox * normal_x + to_oy * normal_y)
 		if perp_dist <= radius:
 			world.deal_damage(other, tick_dmg, self, "acid_stream")
+			other.acid_stream_hit_accum += tick_dmg
+			if other.acid_stream_hit_accum >= 2.0:
+				var show_val := int(round(other.acid_stream_hit_accum))
+				world.damage_number.emit(other.x, other.y - 20, "-%d" % show_val, Color("#a3e635"))
+				other.acid_stream_hit_accum = 0.0
 			# Apply acid debuff stack only every 20 ticks (~0.33s), capped at 3 stacks max!
 			if chimera_stream_timer % 20 == 0 and other.acid_stacks < 3:
 				other.apply_acid(world, self, 1.0, 1)
@@ -1364,6 +1370,7 @@ func on_death(world, killer) -> void:
 	chimera_stream_active = false
 	chimera_stream_timer = 0
 	chimera_stream_warmup_ticks = 0
+	acid_stream_hit_accum = 0.0
 
 	world.particles.burst(x, y, Cfg.explosion, 30, 3, 8, 20, 40, world.rng)
 	Sfx.play("explosion", x, y)
@@ -1428,6 +1435,7 @@ func respawn(nx: float, ny: float) -> void:
 	chimera_stream_timer = 0
 	chimera_stream_cd = 0
 	chimera_stream_warmup_ticks = 0
+	acid_stream_hit_accum = 0.0
 	recompute()
 	if brain != null:
 		brain.reset()
