@@ -75,9 +75,9 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		RoadNet.paint_links(map, plan)
 
 	# Применение архитектурного стиля карты
-	if arch == "radial" and mode in ["ffa", "koth"] and bool(loc.get("arterials", true)):
+	if arch == "radial" and mode in ["ffa", "koth", "defense"] and bool(loc.get("arterials", true)):
 		_build_radial(map, rng, cols, rows, loc)
-	elif arch == "avenues" and mode in ["ffa", "koth"] and bool(loc.get("arterials", true)):
+	elif arch == "avenues" and mode in ["ffa", "koth", "defense"] and bool(loc.get("arterials", true)):
 		_build_avenues(map, rng, cols, rows, loc)
 	else:
 		Archetypes.apply(map, rng, arch, cols, rows, mode, loc)
@@ -161,6 +161,35 @@ static func _build_radial(map: GameMap, rng: Rng, cols: int, rows: int,
 	for i in spokes:
 		RoadNet.paint_spoke(map, cx, cy, phase + TAU * float(i) / float(spokes), w)
 
+	var outer: float = radii[radii.size() - 1] + w * 2.0
+	for r in range(1, rows - 1):
+		for c in range(1, cols - 1):
+			var dr := float(r) - cy
+			var dc := float(c) - cx
+			if sqrt(dr * dr + dc * dc) <= outer:
+				continue
+			var t := map.get_tile(r, c)
+			if t == Cfg.T_ROAD or t == Cfg.T_BRIDGE or t == Cfg.T_WATER:
+				continue
+			map.set_tile(r, c, Cfg.T_EMPTY)
+
+	var cover_count := maxi(4, int(min_dim / 14.0))
+	var placed := 0
+	var tries := 0
+	while placed < cover_count and tries < cover_count * 12:
+		tries += 1
+		var rr := 2 + int(rng.nextf() * float(rows - 4))
+		var cc := 2 + int(rng.nextf() * float(cols - 4))
+		var dr2 := float(rr) - cy
+		var dc2 := float(cc) - cx
+		var dist := sqrt(dr2 * dr2 + dc2 * dc2)
+		if dist <= outer + 3.0:
+			continue
+		if map.get_tile(rr, cc) != Cfg.T_EMPTY:
+			continue
+		_cover_block(map, rr, cc, 2, 2)
+		placed += 1
+
 ## Архетип "avenues": одна или две диагональные магистрали угол-в-угол
 ## через всю карту, поверх уже готовой сетки/зданий — режут прямоугольные
 ## кварталы на треугольные/трапециевидные куски (RoadNet.paint_thick_line
@@ -179,6 +208,8 @@ static func _build_avenues(map: GameMap, rng: Rng, cols: int, rows: int,
 	if draw_both:
 		RoadNet.paint_thick_line(map, backslash[0].x, backslash[0].y, backslash[1].x, backslash[1].y, w)
 		RoadNet.paint_thick_line(map, slash[0].x, slash[0].y, slash[1].x, slash[1].y, w)
+		_thin_along_line(map, rng, backslash[0].x, backslash[0].y, backslash[1].x, backslash[1].y, w)
+		_thin_along_line(map, rng, slash[0].x, slash[0].y, slash[1].x, slash[1].y, w)
 		var cr := rows / 2
 		var cc := cols / 2
 		_fill_rect(map, cr - 3, cr + 3, cc - 3, cc + 3, Cfg.T_ROAD)
@@ -189,6 +220,39 @@ static func _build_avenues(map: GameMap, rng: Rng, cols: int, rows: int,
 	else:
 		var line: Array = backslash if draw_backslash else slash
 		RoadNet.paint_thick_line(map, line[0].x, line[0].y, line[1].x, line[1].y, w)
+		_thin_along_line(map, rng, line[0].x, line[0].y, line[1].x, line[1].y, w)
+
+static func _thin_along_line(map: GameMap, rng: Rng, x0: float, y0: float, x1: float, y1: float,
+		w: float) -> void:
+	var dx := x1 - x0
+	var dy := y1 - y0
+	var dist := sqrt(dx * dx + dy * dy)
+	if dist < 0.001:
+		return
+	var steps := int(ceil(dist / 0.6))
+	var nx := -dy / dist
+	var ny := dx / dist
+	var inner := w * 1.5
+	var outer := w * 4.5
+	var band_steps := int(ceil((outer - inner) / 0.6))
+	for i in steps + 1:
+		var t := float(i) / float(steps)
+		var px := x0 + dx * t
+		var py := y0 + dy * t
+		for side in [-1.0, 1.0]:
+			for j in band_steps + 1:
+				if rng.nextf() >= 0.18:
+					continue
+				var band := inner + (outer - inner) * float(j) / float(band_steps)
+				var tx: float = px + nx * band * side
+				var ty: float = py + ny * band * side
+				var r := int(round(ty))
+				var c := int(round(tx))
+				if r <= 0 or c <= 0 or r >= map.rows - 1 or c >= map.cols - 1:
+					continue
+				var tile := map.get_tile(r, c)
+				if tile == Cfg.T_BRICK or tile == Cfg.T_WALL:
+					map.set_tile(r, c, Cfg.T_EMPTY)
 
 static func _fill_rect(map: GameMap, r0: int, r1: int, c0: int, c1: int, tile: int) -> void:
 	for r in range(maxi(1, r0), mini(map.rows - 2, r1) + 1):

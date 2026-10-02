@@ -1229,7 +1229,7 @@ func _rammer_death_explosion(victim) -> void:
 		if dist > exp_r:
 			continue
 		var falloff := 1.0 - (dist / exp_r)
-		var dmg: float = Cfg.RAMMER_EXPLOSION_DMG * falloff
+		var dmg: float = minf(Cfg.RAMMER_EXPLOSION_DMG * falloff, other.max_hp * Cfg.BOSS_HIT_CAP_FRACTION)
 		deal_damage(other, dmg, victim, "blast")
 		var push := 14.0 * falloff
 		if dist > 0.001:
@@ -1364,7 +1364,7 @@ func _chimera_death_acid(victim: Tank) -> void:
 		if dist > exp_r:
 			continue
 		var falloff := 1.0 - (dist / exp_r)
-		var dmg: float = 80.0 * falloff
+		var dmg: float = minf(80.0 * falloff, other.max_hp * Cfg.BOSS_HIT_CAP_FRACTION)
 		deal_damage(other, dmg, victim, "acid")
 		other.apply_acid(self, victim, 1.0, Cfg.ACID_STACK_MAX)
 

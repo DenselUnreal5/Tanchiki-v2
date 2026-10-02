@@ -12,14 +12,6 @@ func _ready() -> void:
 	game.ui.close_garage()
 	await _frames(5)
 
-	await _check_main_menu_button("Галерея перков", func(): return bool(game.ui.is_gallery_open))
-	game.ui.close_gallery()
-	await _frames(5)
-
-	await _check_main_menu_button("Достижения", func(): return bool(game.ui.is_achievements_open))
-	game.ui.close_achievements()
-	await _frames(5)
-
 	game.ui.open_gallery()
 	await _frames(10)
 	await _check_hub_tab("ГАРАЖ", "garage")
@@ -37,14 +29,6 @@ func _ready() -> void:
 
 	await _check_main_menu_button("Гараж", func(): return bool(game.ui.is_garage_open))
 	game.ui.close_garage()
-	await _frames(5)
-
-	await _check_main_menu_button("Галерея перков", func(): return bool(game.ui.is_gallery_open))
-	game.ui.close_gallery()
-	await _frames(5)
-
-	await _check_main_menu_button("Достижения", func(): return bool(game.ui.is_achievements_open))
-	game.ui.close_achievements()
 	await _frames(5)
 
 	if failures == 0:

@@ -22,6 +22,7 @@ static func build(map: GameMap, rng: Rng, cols: int, rows: int, loc: Dictionary)
 	var grid := _seed(rng, cols, rows, fill_prob)
 	for i in ITERATIONS:
 		grid = _step(grid, cols, rows)
+	_carve_trails(grid, rng, cols, rows)
 	for r in range(1, rows - 1):
 		for c in range(1, cols - 1):
 			map.set_tile(r, c, Cfg.T_WALL if grid[r * cols + c] == 1 else Cfg.T_EMPTY)
@@ -51,6 +52,57 @@ static func _step(grid: PackedByteArray, cols: int, rows: int) -> PackedByteArra
 
 ## Рамка карты (за пределами [1,dim-2]) считается стеной — прижимает форму
 ## к границе и снижает число изолированных карманов у самого края.
+static func _carve_trails(grid: PackedByteArray, rng: Rng, cols: int, rows: int) -> void:
+	var count := 3 + int(rng.nextf() * 3.0)
+	for i in count:
+		var horizontal := rng.nextf() < 0.5
+		var x: float
+		var y: float
+		var tx: float
+		var ty: float
+		if horizontal:
+			y = 2.0 + rng.nextf() * float(rows - 4)
+			x = 1.0
+			ty = 2.0 + rng.nextf() * float(rows - 4)
+			tx = float(cols - 2)
+		else:
+			x = 2.0 + rng.nextf() * float(cols - 4)
+			y = 1.0
+			tx = 2.0 + rng.nextf() * float(cols - 4)
+			ty = float(rows - 2)
+		_walk_trail(grid, rng, cols, rows, x, y, tx, ty)
+
+static func _walk_trail(grid: PackedByteArray, rng: Rng, cols: int, rows: int,
+		x0: float, y0: float, x1: float, y1: float) -> void:
+	var x := x0
+	var y := y0
+	var steps := int(float(cols + rows) * 0.6)
+	for i in steps:
+		var dx := x1 - x
+		var dy := y1 - y
+		var dist := sqrt(dx * dx + dy * dy)
+		if dist < 1.5:
+			break
+		var step_x := dx / dist + (rng.nextf() - 0.5) * 0.9
+		var step_y := dy / dist + (rng.nextf() - 0.5) * 0.9
+		x = clampf(x + step_x, 2.0, float(cols - 3))
+		y = clampf(y + step_y, 2.0, float(rows - 3))
+		_clear_disc(grid, cols, rows, x, y, 1.4)
+
+static func _clear_disc(grid: PackedByteArray, cols: int, rows: int,
+		cx: float, cy: float, radius: float) -> void:
+	var box := int(ceil(radius)) + 1
+	var icx := int(round(cx))
+	var icy := int(round(cy))
+	for dr in range(-box, box + 1):
+		for dc in range(-box, box + 1):
+			var r := icy + dr
+			var c := icx + dc
+			if r <= 0 or c <= 0 or r >= rows - 1 or c >= cols - 1:
+				continue
+			if sqrt(float(dr * dr + dc * dc)) <= radius:
+				grid[r * cols + c] = 0
+
 static func _wall_neighbors(grid: PackedByteArray, cols: int, rows: int, r: int, c: int) -> int:
 	var count := 0
 	for dr in range(-1, 2):

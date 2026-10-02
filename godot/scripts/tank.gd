@@ -94,6 +94,8 @@ var rammer_dir := 0.0
 var rammer_mine_timer := 0
 var rammer_charge_mine_timer := 0
 var rammer_base_damage_dealt := 0.0
+var rammer_charge_hit: Array = []
+var rammer_daze_ticks := 0
 
 var is_chimera_boss := false
 var is_chimera_clone := false
@@ -334,6 +336,8 @@ func update(world) -> void:
 			_resolve_telegraphed_attack(world)
 	if enrage_shield_ticks > 0:
 		enrage_shield_ticks -= 1
+	if rammer_daze_ticks > 0:
+		rammer_daze_ticks -= 1
 	if freeze_ticks > 0:
 		freeze_ticks -= 1
 	if acid_ticks_left > 0:
@@ -346,6 +350,8 @@ func update(world) -> void:
 				acid_tick_timer = Cfg.ACID_TICK_INTERVAL
 				var acid_mult: float = float(acid_attacker.mods["acidDmgMult"]) if acid_attacker != null else 1.0
 				var tick_dmg: float = Cfg.ACID_DMG_PER_STACK_TICK * float(acid_stacks) * acid_dmg_scale * acid_mult
+				if acid_attacker != null and acid_attacker.is_boss:
+					tick_dmg = minf(tick_dmg, max_hp * Cfg.BOSS_HIT_CAP_FRACTION)
 				world.deal_damage(self, tick_dmg, acid_attacker, "acid")
 				if acid_stacks >= Cfg.ACID_STACK_MAX and acid_attacker != null \
 						and acid_attacker.alive and acid_attacker.flags.has("acidCloud"):
@@ -555,6 +561,7 @@ func _update_rammer_boss(world) -> void:
 				rammer_state = "charge"
 				rammer_charge_ticks = Cfg.RAMMER_CHARGE_TICKS
 				rammer_charge_mine_timer = 0
+				rammer_charge_hit.clear()
 				world.spawn_shockwave(x, y, 80.0, "ram", Color("#ff7700"), 20)
 				world.particles.burst(x, y, [Color("#ff4400"), Color("#ffbb00"), Color.WHITE], 24, 3, 7, 20, 36, world.rng)
 				world.add_shake(12.0, x, y)
@@ -618,9 +625,12 @@ func _update_rammer_boss(world) -> void:
 			for other in world.tanks:
 				if other == self or not other.alive or not world.are_hostile(self, other):
 					continue
+				if rammer_charge_hit.has(other):
+					continue
 				var d2: float = (other.x - x) * (other.x - x) + (other.y - y) * (other.y - y)
 				if d2 <= 42.0 * 42.0:
-					var ram_dmg: float = 110.0 * dmg_scale
+					rammer_charge_hit.append(other)
+					var ram_dmg: float = minf(110.0 * dmg_scale, other.max_hp * Cfg.BOSS_HIT_CAP_FRACTION)
 					world.deal_damage(other, ram_dmg, self, "ram")
 					other.vx += cos(rammer_dir) * 16.0
 					other.vy += sin(rammer_dir) * 16.0
@@ -645,8 +655,11 @@ func _update_rammer_boss(world) -> void:
 			if rammer_charge_ticks <= 0:
 				rammer_state = "cooldown"
 				rammer_cooldown_ticks = Cfg.RAMMER_COOLDOWN_TICKS
+				rammer_daze_ticks = Cfg.RAMMER_DAZE_TICKS
 				vx = 0.0
 				vy = 0.0
+				world.damage_number.emit(x, y - 34, "⚡ ОГЛУШЁН!", Color("#ffee55"))
+				world.particles.burst(x, y, [Color("#ffee55"), Color("#888888")], 18, 2, 5, 14, 24, world.rng)
 
 		"cooldown":
 			rammer_cooldown_ticks -= 1
@@ -790,6 +803,8 @@ func _check_water(world) -> void:
 		world.particles.burst(x, y, [Cfg.water_light], 1, 2, 2, 10, 10, world.rng)
 
 func _try_ram(world) -> void:
+	if is_rammer_boss and rammer_state == "charge":
+		return
 	var spd := sqrt(vx * vx + vy * vy)
 	if spd <= Cfg.RAM_MIN_SPEED:
 		return
@@ -948,7 +963,7 @@ func _resolve_telegraphed_attack(world) -> void:
 		return
 	var muzzle_x := x + cos(turret_angle) * muzzle_len
 	var muzzle_y := y + sin(turret_angle) * muzzle_len
-	var n := Cfg.BOSS_BARRAGE_BULLETS
+	var n := Cfg.BOSS_BARRAGE_BULLETS + (Cfg.BOSS_PHASE3_BARRAGE_BONUS_BULLETS if boss_phase >= 3 else 0)
 	for i in n:
 		var off := (float(i) - float(n - 1) * 0.5) * Cfg.BOSS_BARRAGE_SPREAD * 2.0 / float(n - 1)
 		world.bullets.append(Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle + off,
@@ -1002,6 +1017,8 @@ func use_ability(world) -> bool:
 		return false
 
 	ability_cd = int(ab["cooldown"])
+	if ability_id == "boss_barrage" and boss_phase >= 3:
+		ability_cd = int(round(float(ability_cd) * Cfg.BOSS_PHASE3_BARRAGE_COOLDOWN_MULT))
 	ability_timer = int(ab["duration"])
 
 	match ability_id:
@@ -1124,6 +1141,8 @@ func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 		dmg *= Cfg.BULWARK_DAMAGE_MULT
 	if enrage_shield_ticks > 0:
 		dmg *= Cfg.BOSS_PHASE3_SHIELD_MULT
+	if rammer_daze_ticks > 0:
+		dmg *= Cfg.RAMMER_DAZE_DMG_MULT
 
 	if shield_hp > 0.0:
 		var absorbed := minf(shield_hp, dmg)

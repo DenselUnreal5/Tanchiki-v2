@@ -168,7 +168,9 @@ static func carve(map: GameMap, rng: Rng, cols: int, rows: int,
 ## остался бы недостижим навсегда.
 static func carve_archipelago(map: GameMap, rng: Rng, cols: int, rows: int,
 		loc: Dictionary) -> void:
-	var frac: float = float(loc.get("coast_frac", 0.18))
+	var frac_min: float = float(loc.get("coast_frac_min", 0.18))
+	var frac_max: float = float(loc.get("coast_frac_max", frac_min))
+	var frac: float = rng.range_f(frac_min, frac_max)
 	var from_left := rng.nextf() < 0.5
 	var band_w := float(cols) * frac
 	var base := band_w * (0.75 + rng.nextf() * 0.3)
@@ -226,6 +228,14 @@ static func carve_archipelago(map: GameMap, rng: Rng, cols: int, rows: int,
 		# сухую землю, а не в кромку воды на волнистой границе.
 		var target_c: float = float(edge_c) + 3.0 if from_left else float(cols - 1 - edge_c) - 3.0
 		RoadNet.paint_thick_line(map, ic, float(r), target_c, float(r), 2.0, Cfg.T_BRIDGE)
+		if radius > 4.0:
+			var pier_len := 5.0 + radius
+			var target_r: float
+			if float(r) < float(rows) * 0.5:
+				target_r = maxf(3.0, float(r) - pier_len)
+			else:
+				target_r = minf(float(rows) - 4.0, float(r) + pier_len)
+			RoadNet.paint_thick_line(map, ic, float(r), ic, target_r, 1.5, Cfg.T_BRIDGE)
 		placed.append({"c": ic, "r": float(r), "radius": radius})
 	shore(map, 1, rows - 2, 1, cols - 2)
 

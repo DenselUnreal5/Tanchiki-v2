@@ -237,6 +237,8 @@ class Bullet extends RefCounted:
 
 			var amount: float = (Cfg.BULLET_DMG_MIN + world.rng.nextf() \
 				* (Cfg.BULLET_DMG_MAX - Cfg.BULLET_DMG_MIN)) * dmg_scale
+			if owner != null and owner.is_boss:
+				amount = minf(amount, tank.max_hp * Cfg.BOSS_HIT_CAP_FRACTION)
 			world.deal_damage(tank, amount, owner, "bullet")
 
 			if explosive:

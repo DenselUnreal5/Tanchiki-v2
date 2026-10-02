@@ -453,8 +453,9 @@ func start_match(net_opts: Dictionary = {}) -> void:
 
 	state = S_PLAYING
 	Mus.play_combat(String(world.level.get("location", Locations.CITY)))
+	var start_picks := 3 if String(s["mode"]) == "koth" else 1
 	for p in players:
-		p.pending_level_ups += 1
+		p.pending_level_ups += start_picks
 	_process_perk_queue()
 
 func to_menu() -> void:
