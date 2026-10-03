@@ -98,8 +98,8 @@ func _init(opts: Dictionary) -> void:
 	map = opts["map"]
 	level = opts["level"]
 	mode = String(opts["mode"])
-	difficulty_key = String(opts["difficulty"])
-	difficulty = Cfg.DIFFICULTY[difficulty_key]
+	difficulty_key = String(opts.get("difficulty", "medium"))
+	difficulty = Cfg.DIFFICULTY.get(difficulty_key, Cfg.DIFFICULTY["medium"])
 	players = opts["players"]
 	player_level = int(opts.get("player_level", 1))
 	for p in players:
@@ -1169,6 +1169,7 @@ func execute_frozen_kill(victim, attacker) -> void:
 	var amount: float = victim.max_hp * Cfg.FROZEN_BOSS_RAM_FRACTION if is_boss else victim.hp
 	victim.hp = maxf(0.0, victim.hp - amount)
 	victim.freeze_ticks = 0
+	victim.freeze_max_ticks = 0
 	victim.last_attacker = attacker
 	victim.last_attacker_tick = tick
 	if attacker != null:
@@ -1457,6 +1458,23 @@ func _credit_player_kill(player, victim, source: String) -> void:
 	if levels > 0:
 		session_level_up.emit(player, levels)
 	global_xp.emit(Cfg.XP_PER_KILL)
+
+	var victim_type := ""
+	if victim.is_chimera_boss and not victim.is_chimera_clone:
+		victim_type = "boss_chimera"
+	elif victim.is_chimera_clone:
+		victim_type = "chimera_clone"
+	elif victim.is_rammer_boss:
+		victim_type = "boss_rammer"
+	elif not victim.enemy_type.is_empty():
+		victim_type = String(victim.enemy_type.get("id", "grunt"))
+	elif victim.is_boss:
+		victim_type = "boss"
+	elif victim.is_bot:
+		victim_type = "grunt"
+
+	if victim_type != "":
+		Prof.record_bestiary_kill(victim_type)
 
 	if not victim.enemy_type.is_empty() and bool(victim.enemy_type.get("boss", false)):
 		var boss_reward := Cfg.REWARD_KILL * 5

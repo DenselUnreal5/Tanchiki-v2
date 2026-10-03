@@ -76,8 +76,12 @@ func _draw() -> void:
 
 		var palette := Cfg.team_palette(tank.color_key)
 		var col: Color = Color.WHITE if is_viewer else palette["body"]
+		if tank.freeze_ticks > 0:
+			col = Color("#38bdf8")
 		var s := 4.0 if (is_viewer or tank.is_player_controlled) else 3.0
 		draw_rect(Rect2(tank.x * sx - s * 0.5, tank.y * sy - s * 0.5, s, s), col)
+		if tank.freeze_ticks > 0:
+			draw_arc(Vector2(tank.x * sx, tank.y * sy), s + 1.2, 0, TAU, 12, Color("#a5f3fc"), 1.0)
 
 	_draw_shot_pings(sx, sy, viewer)
 

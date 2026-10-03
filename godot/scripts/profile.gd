@@ -76,6 +76,7 @@ var cannon_owned := {}
 var equipped_cannon := "standard"
 var equipped_color1 := "p1"
 var equipped_color2 := "p2"
+var bestiary_kills: Dictionary = {}
 
 func _ready() -> void:
 	_empty_stats()
@@ -173,6 +174,13 @@ func _apply(data: Dictionary) -> void:
 	var eq_cannon := String(data.get("equippedCannon", "standard"))
 	if is_cannon_owned(eq_cannon):
 		equipped_cannon = eq_cannon
+	var bk = data.get("bestiaryKills", {})
+	if bk is Dictionary:
+		bestiary_kills = bk.duplicate()
+	if int(bestiary_kills.get("boss", 0)) == 0 and int(stats.get("bossKills", 0)) > 0:
+		bestiary_kills["boss"] = int(stats.get("bossKills", 0))
+	if int(bestiary_kills.get("grunt", 0)) == 0 and int(stats.get("totalKills", 0)) > 0:
+		bestiary_kills["grunt"] = 1
 	_refresh_daily_if_stale()
 
 func save_profile() -> void:
@@ -193,6 +201,7 @@ func save_profile() -> void:
 		"equippedColor2": equipped_color2,
 		"cannonOwned": cannon_owned.keys(),
 		"equippedCannon": equipped_cannon,
+		"bestiaryKills": bestiary_kills,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f != null:
@@ -215,6 +224,7 @@ func reset() -> void:
 	equipped_color2 = "p2"
 	cannon_owned.clear()
 	equipped_cannon = "standard"
+	bestiary_kills.clear()
 	_sync_level_unlocks()
 	save_profile()
 
@@ -530,3 +540,18 @@ func _sync_level_unlocks() -> void:
 	bump_stat("globalLevel", global_level)
 	check_challenges()
 	check_ranks()
+
+func record_bestiary_kill(tank_id: String) -> void:
+	if tank_id.is_empty():
+		return
+	var cur: int = int(bestiary_kills.get(tank_id, 0))
+	bestiary_kills[tank_id] = cur + 1
+	save_profile()
+
+func get_bestiary_kills(tank_id: String) -> int:
+	return int(bestiary_kills.get(tank_id, 0))
+
+func is_bestiary_unlocked(tank_id: String) -> bool:
+	if Bestiary.is_player_tank(tank_id):
+		return true
+	return get_bestiary_kills(tank_id) > 0

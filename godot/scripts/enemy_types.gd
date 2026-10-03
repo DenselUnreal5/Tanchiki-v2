@@ -52,7 +52,7 @@ const LIST := {
 	},
 	"boss_rammer": {
 		"id": "boss_rammer", "name": "Джаггернаут-Таран", "icon": "🦏",
-		"hp_mult": 30.0, "speed_mult": 0.85, "fire_rate_mult": 1.0, "dmg_scale": 1.25,
+		"hp_mult": 34.0, "speed_mult": 0.95, "fire_rate_mult": 1.0, "dmg_scale": 1.40,
 		"accuracy_bonus": 0.0, "react_mult": 1.0,
 		"fire_range": 0.0, "keep_min": 0.0, "keep_max": 200.0,
 		"chassis": "boss_rammer", "role": "rammer", "color_key": "boss_rammer",

@@ -387,6 +387,8 @@ func _on_menu_nav(id: String) -> void:
 	match id:
 		"garage": open_garage()
 		"cosmetics": open_cosmetics()
+		"bestiary": open_bestiary()
+		"encyclopedia": open_encyclopedia()
 		"gallery": open_gallery()
 		"achievements": open_achievements()
 		"daily": open_daily()
@@ -717,6 +719,8 @@ var is_gallery_open: bool:
 
 
 func open_garage(focus_id: String = "") -> void:
+	if hub != null:
+		hub.garage_submode = "upgrades"
 	_open_hub_tab("garage", focus_id)
 
 func close_garage() -> void:
@@ -735,6 +739,21 @@ func close_cosmetics() -> void:
 
 var is_cosmetics_open: bool:
 	get: return _hub != null and _hub.visible and _hub_active_tab == "cosmetics"
+
+func open_encyclopedia(focus_id: String = "") -> void:
+	if hub != null:
+		hub.garage_submode = "encyclopedia"
+	_open_hub_tab("garage", focus_id)
+
+func open_bestiary(focus_id: String = "") -> void:
+	open_encyclopedia(focus_id)
+
+func close_bestiary() -> void:
+	if _hub_active_tab == "garage" and hub != null and hub.garage_submode == "encyclopedia":
+		close_hub()
+
+var is_bestiary_open: bool:
+	get: return _hub != null and _hub.visible and _hub_active_tab == "garage" and hub != null and hub.garage_submode == "encyclopedia"
 
 
 func open_stats() -> void:

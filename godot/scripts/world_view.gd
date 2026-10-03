@@ -1742,6 +1742,46 @@ func _draw_rammer_telegraph(tank: Tank) -> void:
 
 	draw_set_transform(view_off)
 
+func _draw_rammer_spin(tank: Tank) -> void:
+	if not tank.is_rammer_boss or tank.rammer_state != "spin" or tank.rammer_spin_ticks <= 0:
+		return
+	var pos := Vector2(tank.x, tank.y)
+	if not _in_view(tank.x, tank.y, 220):
+		return
+	var pulse: float = 0.70 + 0.30 * sin(float(world.tick) * 0.5)
+	var rot: float = float(world.tick) * 0.35
+
+	draw_set_transform(view_off + pos)
+
+	# 1. Outer danger / mine scatter radius
+	var max_r: float = Cfg.RAMMER_SPIN_RADIUS_MAX
+	draw_circle(Vector2.ZERO, max_r, Color(1.0, 0.30, 0.0, 0.08 * pulse))
+	draw_arc(Vector2.ZERO, max_r, 0, TAU, 36, Color(1.0, 0.45, 0.1, 0.40 * pulse), 1.5)
+
+	# 2. Whirling vortex ring and saw-teeth at mid radius
+	var mid_r := 90.0
+	draw_arc(Vector2.ZERO, mid_r, rot, rot + TAU, 24, Color(1.0, 0.65, 0.15, 0.60 * pulse), 2.0)
+	var teeth := 8
+	for i in teeth:
+		var a: float = rot + i * (TAU / float(teeth))
+		var inner_pt := Vector2(cos(a) * (mid_r - 12.0), sin(a) * (mid_r - 12.0))
+		var outer_pt := Vector2(cos(a + 0.25) * (mid_r + 14.0), sin(a + 0.25) * (mid_r + 14.0))
+		var back_pt := Vector2(cos(a + 0.12) * mid_r, sin(a + 0.12) * mid_r)
+		var pts := PackedVector2Array([inner_pt, outer_pt, back_pt])
+		draw_colored_polygon(pts, Color(1.0, 0.75, 0.2, 0.55 * pulse))
+
+	# 3. Inner lethal kinetic buzzsaw zone (melee damage zone)
+	var inner_r := 48.0
+	draw_circle(Vector2.ZERO, inner_r, Color(1.0, 0.2, 0.0, 0.25 * pulse))
+	draw_arc(Vector2.ZERO, inner_r, -rot * 1.5, -rot * 1.5 + TAU, 20, Color(1.0, 0.9, 0.3, 0.85), 2.5)
+
+	# 4. Whirlwind spiral arcs
+	for i in 4:
+		var start_a: float = rot * 2.0 + i * (PI * 0.5)
+		draw_arc(Vector2.ZERO, 30.0 + i * 15.0, start_a, start_a + 1.2, 12, Color(1.0, 0.55, 0.1, 0.7 * pulse), 2.0)
+
+	draw_set_transform(view_off)
+
 func _draw_chimera_telegraph(tank: Tank) -> void:
 	if not (tank.is_chimera_boss or tank.is_chimera_clone) or tank.chimera_stream_warmup_ticks <= 0:
 		return
@@ -1799,6 +1839,7 @@ func _draw_tanks() -> void:
 	for tank in world.tanks:
 		if tank.alive and _in_view(tank.x, tank.y, 480):
 			_draw_rammer_telegraph(tank)
+			_draw_rammer_spin(tank)
 			_draw_chimera_telegraph(tank)
 	for tank in world.tanks:
 		if not tank.alive or not _in_view(tank.x, tank.y, 40):
@@ -1833,10 +1874,11 @@ func _is_stealth_hidden(tank: Tank) -> bool:
 	return true
 
 func _draw_tank(tank: Tank) -> void:
+	var anim_tick: float = float(world.tick) if (world != null and "tick" in world) else float(Time.get_ticks_msec()) * 0.06
 	var palette := Cfg.team_palette(tank.color_key)
 	var shape := TankArt.chassis(tank.chassis_id)
-	var is_viewer := player.tank == tank
-	var is_ally := world != null and player.tank != null \
+	var is_viewer := player != null and player.tank == tank
+	var is_ally := world != null and player != null and player.tank != null \
 		and not world.are_hostile(player.tank, tank) and not is_viewer
 	var pos := Vector2(tank.x, tank.y)
 	var hw := tank.width * 0.5
@@ -1856,6 +1898,8 @@ func _draw_tank(tank: Tank) -> void:
 	for side in [-1.0, 1.0]:
 		var tx: float = side * hw - tw * 0.5
 		_rect(tx, -hh, tw, tank.height, track_fill)
+		if tank.freeze_ticks > 0:
+			_rect(tx, -hh, tw, tank.height, Color(0.35, 0.75, 1.0, 0.35))
 		for k in wheels:
 			var wy := -hh + tank.height * (float(k) + 0.5) / float(wheels)
 			_rect(tx + tw * 0.5 - wheel_r, wy - wheel_r, wheel_r * 2.0, wheel_r * 2.0, wheel_col)
@@ -1907,18 +1951,22 @@ func _draw_tank(tank: Tank) -> void:
 
 	_draw_hull_pattern(tank, hw, hh)
 
+	if tank.freeze_ticks > 0:
+		draw_colored_polygon(body, Color(0.35, 0.75, 1.0, 0.38))
+		draw_polyline(body, Color(0.85, 0.98, 1.0, 0.75), 1.4)
+
 	# Synergy visual accents on hull
 	if tank.has_method("has_build"):
 		if tank.has_build("juggernaut"):
 			var ram_c := Color("#ef4444", 0.95)
-			var pulse := 0.75 + 0.25 * sin(world.tick * 0.2)
+			var pulse := 0.75 + 0.25 * sin(anim_tick * 0.2)
 			draw_line(Vector2(-hw * 0.95, -hh - 2), Vector2(0, -hh - 7), ram_c, 3.0)
 			draw_line(Vector2(0, -hh - 7), Vector2(hw * 0.95, -hh - 2), ram_c, 3.0)
 			draw_circle(Vector2(0, -hh - 7), 2.5 * pulse, Color("#fbbf24"))
 		if tank.has_build("stealth_hunter"):
 			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#10b981", 0.85))
 		if tank.has_build("lightning"):
-			var spark_a := 0.5 + 0.5 * sin(world.tick * 0.3)
+			var spark_a := 0.5 + 0.5 * sin(anim_tick * 0.3)
 			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#f59e0b", spark_a))
 		if tank.has_build("ice_hunter"):
 			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#06b6d4", 0.9))
@@ -1959,7 +2007,7 @@ func _draw_tank(tank: Tank) -> void:
 
 		if bool(shape.get("chimera", false)):
 			# Stealth-faceted angular armor plates & twin glowing acid canisters
-			var pulse := 0.75 + 0.25 * sin(world.tick * 0.25)
+			var pulse := 0.75 + 0.25 * sin(anim_tick * 0.25)
 			for c_side in [-1.0, 1.0]:
 				var cx: float = c_side * (hw - 4.5)
 				var cy: float = hh - 10.0
@@ -2027,7 +2075,7 @@ func _draw_tank(tank: Tank) -> void:
 		if tank.heat > 0.25:
 			var glow := Color(1.0, 0.35, 0.1, minf(0.85, (tank.heat - 0.25) * 1.1))
 			if tank.overheated:
-				glow = Color(1.0, 0.75, 0.45, 0.75 + 0.2 * sin(world.tick * 0.4))
+				glow = Color(1.0, 0.75, 0.45, 0.75 + 0.2 * sin(anim_tick * 0.4))
 			_rect(b1 - 9.0, -bw * 0.5 - 0.5, 9.0, bw + 1.0, glow)
 
 		if String(shape["muzzle"]) != "twin":
@@ -2035,7 +2083,7 @@ func _draw_tank(tank: Tank) -> void:
 		_rect(b0 - 1.0, -bw * 0.5 - 2.0, 4.5, bw + 4.0, barrel_dark)
 	else:
 		draw_set_transform(view_off + pos, tank.turret_angle)
-		var visor_pulse := 0.65 + 0.35 * sin(float(world.tick) * 0.35)
+		var visor_pulse := 0.65 + 0.35 * sin(anim_tick * 0.35)
 		draw_arc(Vector2.ZERO, tr * 0.7, -PI * 0.4, PI * 0.4, 10, Color(1.0, 0.45, 0.1, visor_pulse), 3.0)
 		draw_circle(Vector2.ZERO, tr * 0.35, Color(1.0, 0.3, 0.05, 0.8 * visor_pulse))
 
@@ -2044,6 +2092,9 @@ func _draw_tank(tank: Tank) -> void:
 	var turret_body: Color = Cosmetics.color_of("turret", turret_id, palette["body"]) 		if has_turret_color else palette["body"]
 	draw_circle(Vector2.ZERO, tr, turret_dark)
 	draw_circle(Vector2.ZERO, tr - 2.0, turret_body)
+	if tank.freeze_ticks > 0:
+		draw_circle(Vector2.ZERO, tr, Color(0.38, 0.78, 1.0, 0.40))
+		draw_arc(Vector2.ZERO, tr, 0, TAU, 18, Color(0.9, 0.98, 1.0, 0.80), 1.2)
 	if tr >= 7.5:
 		draw_circle(Vector2(-tr * 0.25, -tr * 0.25), tr * 0.30, Color(0, 0, 0, 0.30))
 		draw_arc(Vector2.ZERO, tr - 1.0, PI * 0.7, PI * 1.55, 10, Color(1, 1, 1, 0.16), 1.5)
@@ -2084,7 +2135,7 @@ func _draw_tank(tank: Tank) -> void:
 
 		if tank.spawn_protect > 0:
 			draw_arc(Vector2.ZERO, 20, 0, TAU, 32,
-				Color(1, 1, 1, 0.4 + 0.3 * sin(world.tick * 0.3)), 2.0)
+				Color(1, 1, 1, 0.4 + 0.3 * sin(anim_tick * 0.3)), 2.0)
 		if tank.shield_hp > 0.0:
 			var sh := Cfg.shield
 			sh.a = 0.55
@@ -2109,6 +2160,9 @@ func _draw_tank(tank: Tank) -> void:
 			draw_colored_polygon(PackedVector2Array([
 				Vector2(0, -26), Vector2(-5, -34), Vector2(5, -34)]), palette["trim"])
 
+		if tank.freeze_ticks > 0:
+			_draw_tank_freeze_ice(tank, pos, hw, hh, anim_tick)
+
 		draw_set_transform(view_off)
 		var bar_w := 26.0
 		var ratio := maxf(0.0, tank.hp / tank.max_hp)
@@ -2118,6 +2172,14 @@ func _draw_tank(tank: Tank) -> void:
 			_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w * ratio, 4, bar)
 		if tank.shield_hp > 0.0:
 			_rect(tank.x - bar_w * 0.5, tank.y - 26, bar_w * minf(1.0, tank.shield_hp / 30.0), 2, Cfg.shield)
+		if tank.freeze_ticks > 0:
+			var freeze_max: float = float(tank.freeze_max_ticks) if "freeze_max_ticks" in tank and tank.freeze_max_ticks > 0 else float(Cfg.ICE_FREEZE_TICKS)
+			var fratio := clampf(float(tank.freeze_ticks) / freeze_max, 0.0, 1.0)
+			var f_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
+			_rect(tank.x - bar_w * 0.5, f_y, bar_w, 2.5, Color(0.04, 0.12, 0.20, 0.85))
+			_rect(tank.x - bar_w * 0.5, f_y, bar_w * fratio, 2.5, Color("#38bdf8"))
+			draw_rect(Rect2(tank.x - bar_w * 0.5, f_y, bar_w, 2.5), Color(0.8, 0.95, 1.0, 0.45), false, 0.8)
+			_text_center("❄", Vector2(tank.x - bar_w * 0.5 - 6.0, f_y + 1.0), 8, Color("#a5f3fc"))
 
 		if not is_viewer:
 			var name_color := Color("#88ccff") if is_ally else (Color("#ffee55") if tank.is_player_controlled else Color("#ffaaaa"))
@@ -2149,6 +2211,165 @@ func _draw_tank(tank: Tank) -> void:
 				draw_line(Vector2(tank.x - cos(a_sh) * hw, tank.y - sin(a_sh) * hh),
 					Vector2(tank.x + cos(a_sh) * hw, tank.y + sin(a_sh) * hh),
 					Color(0.8, 1.0, 0.5, 0.25 * shim_pulse), 1.5)
+
+func _draw_ice_glint(pt: Vector2, sz: float, pulse: float) -> void:
+	if pulse <= 0.08:
+		return
+	var s := sz * pulse
+	var col := Color(1.0, 1.0, 1.0, clampf(pulse * 0.95, 0.0, 1.0))
+	draw_line(pt - Vector2(s, 0), pt + Vector2(s, 0), col, 1.4)
+	draw_line(pt - Vector2(0, s), pt + Vector2(0, s), col, 1.4)
+	draw_circle(pt, s * 0.35, Color(0.7, 0.95, 1.0, clampf(pulse * 0.8, 0.0, 1.0)))
+
+func _draw_tank_freeze_ice(tank: Tank, pos: Vector2, hw: float, hh: float, anim_tick: float) -> void:
+	var iw := hw + 6.0
+	var ih := hh + 7.5
+
+	# Pre-thaw vibration warning when freeze is ending (< 60 ticks / 1 sec)
+	var shake := Vector2.ZERO
+	if tank.freeze_ticks < 60:
+		var intensity := (1.0 - float(tank.freeze_ticks) / 60.0) * 1.5
+		shake = Vector2(
+			sin(anim_tick * 2.5) * intensity,
+			cos(anim_tick * 3.1) * intensity
+		)
+
+	# 1. Ground Frost Aura & Cold Mist (world coordinates around tank)
+	draw_set_transform(view_off + pos + shake)
+	var aura_r := maxf(iw, ih) * 1.25
+	draw_circle(Vector2.ZERO, aura_r, Color(0.18, 0.62, 0.92, 0.16))
+	var aura_pulse := 0.35 + 0.15 * sin(anim_tick * 0.15)
+	draw_arc(Vector2.ZERO, aura_r, 0, TAU, 28, Color(0.55, 0.88, 1.0, aura_pulse), 1.6)
+
+	# Drifting cold mist puffs
+	for p_idx in 4:
+		var a_mist := float(p_idx) * (TAU / 4.0) + anim_tick * 0.035
+		var p_dist := aura_r * (0.75 + 0.20 * sin(anim_tick * 0.07 + float(p_idx)))
+		var puff_pos := Vector2(cos(a_mist) * p_dist, sin(a_mist) * p_dist * 0.72)
+		var puff_r := 5.0 + 2.0 * sin(anim_tick * 0.09 + float(p_idx))
+		draw_circle(puff_pos, puff_r, Color(0.70, 0.92, 1.0, 0.13))
+
+	# 2. Main 3D Ice Monolith (aligned to tank chassis angle)
+	draw_set_transform(view_off + pos + shake, tank.body_angle + PI / 2.0)
+
+	var v0 := Vector2(-iw * 0.72, -ih * 1.04)     # top-left shoulder
+	var v1 := Vector2(0.0, -ih * 1.15)            # top glacis prow
+	var v2 := Vector2(iw * 0.76, -ih * 1.02)      # top-right shoulder
+	var v3 := Vector2(iw * 1.10, -ih * 0.45)      # right upper facet
+	var v4 := Vector2(iw * 1.16, ih * 0.40)       # right lower facet
+	var v5 := Vector2(iw * 0.74, ih * 1.06)       # bottom-right corner
+	var v6 := Vector2(-iw * 0.05, ih * 1.14)      # bottom peak
+	var v7 := Vector2(-iw * 0.76, ih * 1.04)      # bottom-left corner
+	var v8 := Vector2(-iw * 1.14, ih * 0.38)      # left lower facet
+	var v9 := Vector2(-iw * 1.08, -ih * 0.42)     # left upper facet
+
+	var outer_poly := PackedVector2Array([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9])
+
+	# Base translucent glacier ice mass
+	draw_colored_polygon(outer_poly, Color(0.32, 0.70, 0.96, 0.52))
+
+	# 3. 3D Internal Shaded Facets (Crystalline Refraction)
+	var c_top := Vector2(iw * 0.08, -ih * 0.35)
+	var c_mid := Vector2(-iw * 0.12, 0.0)
+	var c_bot := Vector2(iw * 0.05, ih * 0.40)
+
+	# Facet 1: Top-Left light crest (catching overhead light)
+	draw_colored_polygon(PackedVector2Array([v0, v1, c_top, v9]), Color(0.85, 0.96, 1.0, 0.44))
+	# Facet 2: Top-Right crest
+	draw_colored_polygon(PackedVector2Array([v1, v2, v3, c_top]), Color(0.65, 0.88, 1.0, 0.36))
+	# Facet 3: Left-Central face
+	draw_colored_polygon(PackedVector2Array([v9, c_top, c_mid, v8]), Color(0.48, 0.80, 0.98, 0.38))
+	# Facet 4: Central Ridge face
+	draw_colored_polygon(PackedVector2Array([c_top, v3, v4, c_bot, c_mid]), Color(0.26, 0.60, 0.90, 0.42))
+	# Facet 5: Bottom-Left face
+	draw_colored_polygon(PackedVector2Array([v8, c_mid, c_bot, v7]), Color(0.36, 0.68, 0.94, 0.40))
+	# Facet 6: Bottom-Right deep shadow face
+	draw_colored_polygon(PackedVector2Array([c_bot, v4, v5, v6]), Color(0.16, 0.46, 0.78, 0.50))
+	# Facet 7: Rear base face
+	draw_colored_polygon(PackedVector2Array([v7, c_bot, v6]), Color(0.22, 0.52, 0.82, 0.46))
+
+	# 4. External Jagged Ice Spikes / Shards Protruding Outward
+	var sp_col1 := Color(0.68, 0.92, 1.0, 0.65)
+	var sp_col2 := Color(0.55, 0.85, 1.0, 0.60)
+	var sp_line := Color(0.95, 1.0, 1.0, 0.90)
+
+	# Left Flank Crystal Spike
+	var s_left := PackedVector2Array([v9, Vector2(-iw * 1.40, -ih * 0.15), v8])
+	draw_colored_polygon(s_left, sp_col1)
+	draw_polyline(s_left, sp_line, 1.4)
+
+	# Right Flank Crystal Spike
+	var s_right := PackedVector2Array([v3, Vector2(iw * 1.44, ih * 0.05), v4])
+	draw_colored_polygon(s_right, sp_col2)
+	draw_polyline(s_right, sp_line, 1.4)
+
+	# Front-Left Spire
+	var s_fl := PackedVector2Array([v0, Vector2(-iw * 0.98, -ih * 1.30), v1])
+	draw_colored_polygon(s_fl, Color(0.82, 0.96, 1.0, 0.68))
+	draw_polyline(s_fl, sp_line, 1.4)
+
+	# Front-Right Spire
+	var s_fr := PackedVector2Array([v1, Vector2(iw * 0.92, -ih * 1.25), v2])
+	draw_colored_polygon(s_fr, Color(0.72, 0.92, 1.0, 0.62))
+	draw_polyline(s_fr, sp_line, 1.4)
+
+	# Rear-Right Crystal
+	var s_rr := PackedVector2Array([v4, Vector2(iw * 1.05, ih * 1.28), v5])
+	draw_colored_polygon(s_rr, Color(0.40, 0.75, 0.95, 0.58))
+	draw_polyline(s_rr, sp_line, 1.4)
+
+	# 5. Frosted Crystal Ridges & Glowing Outline
+	var outer_closed := outer_poly.duplicate()
+	outer_closed.append(outer_poly[0])
+	draw_polyline(outer_closed, Color(0.88, 0.98, 1.0, 0.88), 1.8)
+
+	draw_line(v1, c_top, Color(0.92, 0.98, 1.0, 0.80), 1.5)
+	draw_line(c_top, v3, Color(0.85, 0.96, 1.0, 0.70), 1.3)
+	draw_line(c_top, c_mid, Color(0.90, 0.98, 1.0, 0.75), 1.4)
+	draw_line(c_mid, v9, Color(0.85, 0.96, 1.0, 0.70), 1.3)
+	draw_line(c_mid, v8, Color(0.85, 0.96, 1.0, 0.70), 1.3)
+	draw_line(c_mid, c_bot, Color(0.88, 0.97, 1.0, 0.75), 1.4)
+	draw_line(c_bot, v4, Color(0.80, 0.94, 1.0, 0.70), 1.3)
+	draw_line(c_bot, v6, Color(0.82, 0.95, 1.0, 0.72), 1.3)
+
+	# 6. Frost Cracks Across The Surface
+	var crack1 := PackedVector2Array([
+		Vector2(-iw * 0.5, -ih * 0.8),
+		Vector2(-iw * 0.2, -ih * 0.4),
+		Vector2(iw * 0.1, -ih * 0.1),
+		Vector2(-iw * 0.1, ih * 0.3),
+		Vector2(iw * 0.4, ih * 0.7)
+	])
+	draw_polyline(crack1, Color(1.0, 1.0, 1.0, 0.85), 1.4)
+
+	var crack2 := PackedVector2Array([
+		Vector2(-iw * 0.2, -ih * 0.4),
+		Vector2(iw * 0.25, -ih * 0.35),
+		Vector2(iw * 0.55, -ih * 0.15)
+	])
+	draw_polyline(crack2, Color(0.95, 1.0, 1.0, 0.80), 1.2)
+
+	# Additional stress fractures if nearing thaw (< 80 ticks)
+	if tank.freeze_ticks < 80:
+		var crack3 := PackedVector2Array([
+			Vector2(-iw * 0.7, 0.0),
+			Vector2(-iw * 0.3, ih * 0.1),
+			Vector2(-iw * 0.1, ih * 0.3),
+			Vector2(-iw * 0.4, ih * 0.6)
+		])
+		draw_polyline(crack3, Color(1.0, 1.0, 1.0, 0.90), 1.3)
+		var crack4 := PackedVector2Array([
+			Vector2(iw * 0.1, -ih * 0.1),
+			Vector2(iw * 0.5, ih * 0.1),
+			Vector2(iw * 0.8, ih * 0.35)
+		])
+		draw_polyline(crack4, Color(1.0, 1.0, 1.0, 0.90), 1.3)
+
+	# 7. Glistening Sparkle Glints (4-pointed stars on facet corners)
+	_draw_ice_glint(v1, 3.5, 0.6 + 0.4 * sin(anim_tick * 0.25))
+	_draw_ice_glint(v3, 2.8, 0.5 + 0.5 * sin(anim_tick * 0.22 + 2.1))
+	_draw_ice_glint(v0, 3.0, 0.5 + 0.5 * sin(anim_tick * 0.28 + 4.2))
+	_draw_ice_glint(c_top, 2.6, 0.5 + 0.5 * sin(anim_tick * 0.20 + 1.2))
 
 func _draw_ellipse(center: Vector2, rx: float, ry: float, color: Color) -> void:
 	var pts := PackedVector2Array()

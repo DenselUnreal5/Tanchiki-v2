@@ -150,15 +150,21 @@ func update(tank: Tank, world) -> void:
 		has_shot = true if lobbed else _los_cache
 
 	if tank.is_rammer_boss:
-		if tank.rammer_state == "telegraph" or tank.rammer_state == "charge":
+		if tank.rammer_state == "telegraph" or tank.rammer_state == "charge" or tank.rammer_state == "spin":
 			return
 		if tank.rammer_state == "idle":
 			if tgt != null and target_dist < 520.0:
+				if tank.rammer_spin_cooldown <= 0 and (target_dist < 260.0 or rng.nextf() < 0.35):
+					tank.start_rammer_spin(world)
+					return
 				tank.start_rammer_charge(tgt.x, tgt.y, world)
 				return
 			elif world.mode == "defense" and world.base != null:
 				var d_b := Vector2(world.base["x"] - tank.x, world.base["y"] - tank.y).length()
 				if d_b < 480.0:
+					if tank.rammer_spin_cooldown <= 0 and (d_b < 200.0 or rng.nextf() < 0.35):
+						tank.start_rammer_spin(world)
+						return
 					tank.start_rammer_charge(world.base["x"], world.base["y"], world)
 					return
 

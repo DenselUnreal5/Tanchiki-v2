@@ -6,6 +6,7 @@ var glow_tex: GradientTexture2D
 var muzzle := 0.0
 var auto_turret := false
 var center_in_rect := false
+var is_locked := false
 var custom_minimum_size := Vector2.ZERO:
 	set(v):
 		custom_minimum_size = v
@@ -23,6 +24,17 @@ func _draw() -> void:
 		return
 	if center_in_rect:
 		view_off = size * 0.5
+	if is_locked:
+		var orig_col: String = display_tank.color_key
+		display_tank.color_key = "silhouette"
+		_draw_tank(display_tank)
+		display_tank.color_key = orig_col
+		var center_pt := view_off if center_in_rect else size * 0.5
+		draw_circle(center_pt, 20.0, Color(0.06, 0.08, 0.10, 0.85))
+		draw_arc(center_pt, 20.0, 0.0, TAU, 32, Color(Cfg.UI_BORDER, 0.65), 1.5)
+		if Fonts != null and Fonts.bold != null:
+			draw_string(Fonts.bold, center_pt + Vector2(-9.0, 6.0), "🔒", HORIZONTAL_ALIGNMENT_CENTER, -1, 16)
+		return
 	_draw_tank(display_tank)
 	if muzzle > 0.0 and glow_tex != null:
 		var dir := Vector2(cos(display_tank.turret_angle), sin(display_tank.turret_angle))

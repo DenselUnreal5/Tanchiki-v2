@@ -118,6 +118,7 @@ static var TEAM_COLORS := {
 	"boss": {"body": Color("#3a3a3a"), "dark": Color("#1a1a1a"), "trim": Color("#e74c3c")},
 	"boss_rammer": {"body": Color("#3d2e24"), "dark": Color("#1e140d"), "trim": Color("#f97316")},
 	"boss_chimera": {"body": Color("#182b18"), "dark": Color("#0b140b"), "trim": Color("#84cc16")},
+	"silhouette": {"body": Color("#181b20"), "dark": Color("#0d0f13"), "trim": Color("#2b2e38")},
 }
 
 const PLAYER_SKINS := [
@@ -311,20 +312,27 @@ const BOSS_KOTH_BOT_DMG_MULT := 0.60
 const BOSS_PHASE3_BARRAGE_BONUS_BULLETS := 3
 const BOSS_PHASE3_BARRAGE_COOLDOWN_MULT := 0.6
 
-const RAMMER_BOSS_BASE_HP := 3000.0
-const RAMMER_TELEGRAPH_TICKS := 60
+const RAMMER_BOSS_BASE_HP := 3400.0
+const RAMMER_TELEGRAPH_TICKS := 32
 const RAMMER_CHARGE_TICKS := 42
-const RAMMER_CHARGE_SPEED := 10.5
-const RAMMER_COOLDOWN_TICKS := 110
-const RAMMER_MINE_INTERVAL := 180
-const RAMMER_CHARGE_MINE_INTERVAL := 10
-const RAMMER_CHARGE_MINE_ARMING_TICKS := 45
-const RAMMER_CHARGE_MAX_DMG := 95.0
-const RAMMER_EXPLOSION_RADIUS := 400.0
-const RAMMER_EXPLOSION_DMG := 160.0
-const RAMMER_DAZE_TICKS := 90
-const RAMMER_DAZE_DMG_MULT := 1.4
+const RAMMER_CHARGE_SPEED := 12.0
+const RAMMER_COOLDOWN_TICKS := 60
+const RAMMER_MINE_INTERVAL := 150
+const RAMMER_CHARGE_MINE_INTERVAL := 9
+const RAMMER_CHARGE_MINE_ARMING_TICKS := 35
+const RAMMER_CHARGE_MAX_DMG := 115.0
+const RAMMER_EXPLOSION_RADIUS := 420.0
+const RAMMER_EXPLOSION_DMG := 180.0
+const RAMMER_DAZE_TICKS := 50
+const RAMMER_DAZE_DMG_MULT := 1.3
 const RAMMER_BASE_MAX_TOTAL_DMG := 50.0
+
+const RAMMER_SPIN_DURATION_TICKS := 75
+const RAMMER_SPIN_MINE_INTERVAL := 8
+const RAMMER_SPIN_RADIUS_MIN := 65.0
+const RAMMER_SPIN_RADIUS_MAX := 135.0
+const RAMMER_SPIN_MELEE_DMG := 48.0
+const RAMMER_SPIN_COOLDOWN_TICKS := 240
 
 const CHIMERA_BOSS_BASE_HP := 2000.0
 const CHIMERA_CLOAK_INTERVAL := 500

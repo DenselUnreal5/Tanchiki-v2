@@ -47,6 +47,10 @@ text = ""
 unique_name_in_owner = true
 text = ""
 
+[node name="QuickPlayBtn" type="Button" parent="LeftPanel/Col"]
+unique_name_in_owner = true
+text = ""
+
 [node name="VersionPill" type="PanelContainer" parent="LeftPanel/Col"]
 unique_name_in_owner = true
 

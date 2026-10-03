@@ -24,6 +24,7 @@ var _tip_idx := 0
 @onready var _chip_perks: Label = %ChipPerks
 @onready var _mode_btn: Button = %ModeSummaryBtn
 @onready var _start_btn: Button = %StartBtn
+@onready var _quick_btn: Button = %QuickPlayBtn
 @onready var _version_pill: PanelContainer = %VersionPill
 @onready var _version_label: Label = %VersionLabel
 @onready var _nav_grid: GridContainer = %NavGrid
@@ -47,9 +48,9 @@ func _ready() -> void:
 		}
 	_bg._settings = settings
 
-	_col.add_theme_constant_override("separation", 10)
+	_col.add_theme_constant_override("separation", 6)
 	_title_box.add_theme_constant_override("separation", 2)
-	_hud_row.add_theme_constant_override("separation", 18)
+	_hud_row.add_theme_constant_override("separation", 14)
 
 	_style_chrome()
 	_build_title()
@@ -69,6 +70,10 @@ func _style_chrome() -> void:
 	_left_panel.custom_minimum_size = Vector2(LEFT_PANEL_W, 0)
 	_left_panel.border_color = Color.TRANSPARENT
 	_left_panel.seed_value = randi()
+	_left_panel.add_theme_constant_override("margin_top", 14)
+	_left_panel.add_theme_constant_override("margin_bottom", 14)
+	_left_panel.add_theme_constant_override("margin_left", 18)
+	_left_panel.add_theme_constant_override("margin_right", 18)
 	_settings_panel.custom_minimum_size = Vector2(SETTINGS_PANEL_W, 0)
 	_settings_panel.seed_value = randi()
 	_settings_panel.visible = false
@@ -91,7 +96,7 @@ func _style_chrome() -> void:
 func _build_title() -> void:
 	for c in _title_box.get_children():
 		c.queue_free()
-	var title := UiKit.title("IRON STORM", 32, Cfg.UI_TEXT)
+	var title := UiKit.title("IRON STORM", 30, Cfg.UI_TEXT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_title_box.add_child(title)
 	var sub := UiKit.title("BATTLE TANKS", 12, Color(Cfg.UI_MUTED, 0.75))
@@ -117,16 +122,26 @@ func _build_hud_strip() -> void:
 	_chip_perks.add_theme_color_override("font_color", Cfg.UI_MUTED)
 
 func _build_mode_and_start() -> void:
-	_style_button(_mode_btn, UiKit.secondary("", 14))
-	_mode_btn.custom_minimum_size = Vector2(0, 42)
+	_style_button(_mode_btn, UiKit.secondary("", 13))
+	_mode_btn.custom_minimum_size = Vector2(0, 38)
 	if not _mode_btn.pressed.is_connected(_on_mode_pressed):
 		_mode_btn.pressed.connect(_on_mode_pressed)
 
-	_style_button(_start_btn, UiKit.primary("", 18))
+	_style_button(_start_btn, UiKit.primary("", 17))
 	_start_btn.text = _tr("menu.start", "И Г Р А Т Ь")
-	_start_btn.custom_minimum_size = Vector2(0, 50)
+	_start_btn.custom_minimum_size = Vector2(0, 46)
 	if not _start_btn.pressed.is_connected(_on_start_pressed):
 		_start_btn.pressed.connect(_on_start_pressed)
+
+	_style_button(_quick_btn, UiKit.secondary("", 14))
+	_quick_btn.text = _tr("menu.quick_play", "⚡ БЫСТРЫЙ БОЙ")
+	_quick_btn.custom_minimum_size = Vector2(0, 40)
+	if not _quick_btn.pressed.is_connected(_on_quick_pressed):
+		_quick_btn.pressed.connect(_on_quick_pressed)
+
+	_start_btn.focus_neighbor_bottom = _quick_btn.get_path()
+	_quick_btn.focus_neighbor_top = _start_btn.get_path()
+
 	refresh_mode_summary()
 
 func _on_mode_pressed() -> void:
@@ -137,6 +152,9 @@ func _on_mode_pressed() -> void:
 
 func _on_start_pressed() -> void:
 	start_pressed.emit()
+
+func _on_quick_pressed() -> void:
+	nav_pressed.emit("quick_play")
 
 func _build_version_pill() -> void:
 	_version_label.text = "v" + UiRoot.game_version()
@@ -174,18 +192,18 @@ func _build_nav_grid() -> void:
 	var dest := [
 		["garage", "🔧", _tr("menu.tile.garage", "Гараж")],
 		["daily", "📅", _tr("menu.tile.daily", "Задания")],
+		["achievements", "🏅", _tr("menu.tile.achievements", "Достижения")],
 		["stats", "📊", _tr("menu.stats", "Статистика")],
 		["net", "🌐", _tr("menu.tile.net", "Сетевая игра")],
 		["map_editor", "🗺", _tr("menu.tile.map_editor", "Редактор карт")],
 		["settings", "⚙", _tr("menu.tile.settings", "Настройки")],
-		["quick_play", "🎲", _tr("menu.tile.quick", "Быстрый бой")],
 		["quit", "✖", _tr("menu.quit", "Выход")],
 	]
 	var tiles: Array = []
 	for d in dest:
 		var id: String = d[0]
-		var tile := UiKit.secondary("%s\n%s" % [d[1], d[2]], 12)
-		tile.custom_minimum_size = Vector2(0, 44)
+		var tile := UiKit.secondary("%s\n%s" % [d[1], d[2]], 11)
+		tile.custom_minimum_size = Vector2(0, 40)
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tile.pressed.connect(func(): nav_pressed.emit(id))
 		_nav_grid.add_child(tile)
@@ -207,8 +225,8 @@ func _build_nav_grid() -> void:
 		UiKit.chain_vertical(column)
 	if rows.size() > 0:
 		var first_row: Array = rows[0]
-		first_row[0].focus_neighbor_top = _start_btn.get_path()
-		_start_btn.focus_neighbor_bottom = first_row[0].get_path()
+		first_row[0].focus_neighbor_top = _quick_btn.get_path()
+		_quick_btn.focus_neighbor_bottom = first_row[0].get_path()
 
 func _build_tip_ticker() -> void:
 	_tip_order = range(MenuTips.LIST.size())
@@ -357,14 +375,15 @@ func _settings_budget(top: float, screen_h: float) -> float:
 	return maxf(screen_h - top - 32.0, 200.0)
 
 func _panel_y(screen: Vector2, height: float, top: float) -> float:
-	var centered := screen.y * 0.5 - height * 0.5 + 26.0
-	return clampf(centered, top, maxf(top, screen.y - height - 16.0))
+	var centered := screen.y * 0.5 - height * 0.5
+	var max_y := maxf(top, screen.y - height - 16.0)
+	return clampf(centered, top, max_y)
 
 func layout() -> void:
 	if _left_panel == null:
 		return
 	var screen := get_viewport_rect().size
-	var top := 100.0 if screen.y >= 640.0 else 64.0
+	var top := 50.0
 
 	var left_h: float = _left_panel.get_combined_minimum_size().y
 	_left_panel.size = Vector2(LEFT_PANEL_W, left_h)

@@ -33,7 +33,7 @@ static func apply_command(tank: Tank, world, cmd: Dictionary) -> void:
 		tank.use_ability(world)
 
 static func vibrate(player, weak_magnitude: float, strong_magnitude: float, duration: float) -> void:
-	if player == null or not Sets.pad_vibration:
+	if player == null or not Sets.pad_vibration or player.scheme == null:
 		return
 	if "device" in player.scheme:
 		Input.start_joy_vibration(int(player.scheme.device), weak_magnitude, strong_magnitude, duration)

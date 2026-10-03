@@ -138,6 +138,25 @@ func build(players: Array, world: World) -> void:
 		acid_bar_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		acid_row.add_child(acid_bar_wrap)
 
+		var freeze_row := UiKit.hbox(4)
+		freeze_row.visible = false
+		freeze_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		left.add_child(freeze_row)
+
+		var freeze_icon := UiKit.label("🧊", 10)
+		freeze_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		freeze_row.add_child(freeze_icon)
+
+		var freeze_label := UiKit.label("", 10, Color("#38bdf8"), true)
+		freeze_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		freeze_row.add_child(freeze_label)
+
+		var freeze_bar := UiKit.rounded_bar(70, 5, Color("#0ea5e9"))
+		var freeze_bar_wrap: Control = freeze_bar["wrap"]
+		var freeze_bar_fill: ColorRect = freeze_bar["fill"]
+		freeze_bar_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		freeze_row.add_child(freeze_bar_wrap)
+
 		var right := UiKit.vbox(2)
 		right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		root.add_child(right)
@@ -189,6 +208,7 @@ func build(players: Array, world: World) -> void:
 			"shield_fill": shield_fill, "hp_text": hp_text,
 			"heat_fill": heat_fill, "heat_wrap": heat_wrap,
 			"acid_row": acid_row, "acid_label": acid_label, "acid_fill": acid_bar_fill,
+			"freeze_row": freeze_row, "freeze_label": freeze_label, "freeze_fill": freeze_bar_fill,
 			"net": net_label,
 			"score": score, "objective": objective, "weather": weather_label,
 			"xp_label": xp_label, "xp_fill": xp_fill, "perks": perks,
@@ -372,6 +392,22 @@ func update_hud(world: World) -> void:
 			acid_label.modulate = Color(1.0, 1.0, 1.0, pulse)
 		else:
 			acid_row.visible = false
+
+		var freeze_row: Control = panel.get("freeze_row", null)
+		var freeze_label: Label = panel.get("freeze_label", null)
+		var freeze_fill: ColorRect = panel.get("freeze_fill", null)
+		if freeze_row != null:
+			if tank.freeze_ticks > 0:
+				freeze_row.visible = true
+				var sec_f: float = float(tank.freeze_ticks) / float(Cfg.TICK_HZ)
+				freeze_label.text = "ЗАМОРОЗКА · %.1f с" % sec_f
+				var f_max: float = float(tank.freeze_max_ticks) if "freeze_max_ticks" in tank and tank.freeze_max_ticks > 0 else float(Cfg.ICE_FREEZE_TICKS)
+				var prog_f: float = clampf(float(tank.freeze_ticks) / f_max, 0.0, 1.0)
+				freeze_fill.size.x = 70.0 * prog_f
+				var pulse_f: float = 0.8 + 0.2 * sin(float(world.tick) * 0.4)
+				freeze_label.modulate = Color(1.0, 1.0, 1.0, pulse_f)
+			else:
+				freeze_row.visible = false
 
 		(panel["score"] as Label).text = I18n.t("hud.score", {"n": player.score}, "Счёт %d" % player.score)
 
