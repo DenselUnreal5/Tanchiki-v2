@@ -43,6 +43,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	get_viewport().set_input_as_handled()
 	var key: int = (event as InputEventKey).physical_keycode
+	if key == 0 or key == KEY_NONE:
+		key = (event as InputEventKey).keycode
 	listening = false
 	if key == KEY_ESCAPE:
 		return

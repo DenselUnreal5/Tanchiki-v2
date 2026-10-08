@@ -16,6 +16,11 @@ var _banner_timer := 0
 var _wave_box: VBoxContainer
 var _wave_title: Label
 var _wave_sub: Label
+var _tutorial_box: PanelContainer
+var _tutorial_title: Label
+var _tutorial_step: Label
+var _tutorial_desc: Label
+var _tutorial_progress: Label
 var _scoreboard: ThemedPanel
 var _scoreboard_body: VBoxContainer
 var scoreboard_visible := false
@@ -48,6 +53,40 @@ func _ready() -> void:
 	_wave_sub = UiKit.label("", 12, Cfg.UI_TEXT)
 	_wave_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_wave_box.add_child(_wave_sub)
+
+	_tutorial_box = PanelContainer.new()
+	_tutorial_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tutorial_box.visible = false
+	var tut_st := UiKit.flat(Color(0.05, 0.08, 0.13, 0.94), Cfg.RADIUS_SM, 1, Cfg.UI_GOLD)
+	tut_st.content_margin_left = 14
+	tut_st.content_margin_right = 14
+	tut_st.content_margin_top = 8
+	tut_st.content_margin_bottom = 8
+	_tutorial_box.add_theme_stylebox_override("panel", tut_st)
+
+	var tut_vbox := UiKit.vbox(2)
+	tut_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tutorial_box.add_child(tut_vbox)
+
+	var top_row := UiKit.hbox(8)
+	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tut_vbox.add_child(top_row)
+
+	_tutorial_title = UiKit.label("", 13, Cfg.UI_GOLD, true)
+	_tutorial_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row.add_child(_tutorial_title)
+
+	_tutorial_step = UiKit.label("", 12, Color("#a3e635"), true)
+	top_row.add_child(_tutorial_step)
+
+	_tutorial_desc = UiKit.label("", 11, Cfg.UI_TEXT, false)
+	_tutorial_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tut_vbox.add_child(_tutorial_desc)
+
+	_tutorial_progress = UiKit.label("", 11, Color("#38bdf8"), true)
+	tut_vbox.add_child(_tutorial_progress)
+
+	add_child(_tutorial_box)
 
 	_scoreboard = UiKit.panel()
 	_scoreboard.visible = false
@@ -257,6 +296,14 @@ func layout(players: Array, world: World = null) -> void:
 		_wave_box.custom_minimum_size = Vector2(300, 0)
 		_wave_box.size = Vector2(300, 46)
 
+	var tutorial_ui := world != null and world.mode == "tutorial"
+	_tutorial_box.visible = tutorial_ui
+	if tutorial_ui:
+		var tut_w := minf(540.0, screen.x - 40.0)
+		_tutorial_box.position = Vector2(screen.x * 0.5 - tut_w * 0.5, 10.0)
+		_tutorial_box.custom_minimum_size = Vector2(tut_w, 0)
+		_tutorial_box.size = Vector2(tut_w, 54)
+
 	var mm_w := 140.0 if split else 200.0
 	var mm_h := roundf(mm_w / maxf(0.2, _map_aspect))
 	var feed_x := screen.x - mm_w - 10.0
@@ -322,7 +369,7 @@ func _update_ability(panel: Dictionary, player) -> void:
 	var ab := Abilities.get_ability(tank.ability_id)
 	var label: Label = panel["ability_label"]
 	var fill: ColorRect = panel["ability_fill"]
-	var key := "Q" if player.index == 0 else "Num -"
+	var key := "Q / Й" if player.index == 0 else "Num -"
 	var icon := String(ab.get("icon", "✦"))
 	var name := I18n.dn(ab, "name", "ability")
 	var icon_view: PerkIconView = panel["ability_icon"]
@@ -356,6 +403,16 @@ func _update_ability(panel: Dictionary, player) -> void:
 	icon_view.modulate = label.modulate
 
 func update_hud(world: World) -> void:
+	if world.mode == "tutorial":
+		var tinfo: Dictionary = world.get_tutorial_task_info()
+		_tutorial_box.visible = true
+		_tutorial_title.text = String(tinfo.get("title", ""))
+		_tutorial_step.text = "[ %d / %d ]" % [int(tinfo.get("stage", 1)), int(tinfo.get("total", 12))]
+		_tutorial_desc.text = String(tinfo.get("desc", ""))
+		_tutorial_progress.text = String(tinfo.get("progress_text", ""))
+	else:
+		_tutorial_box.visible = false
+
 	for player in world.players:
 		if not panels.has(player.index):
 			continue
@@ -420,10 +477,10 @@ func update_hud(world: World) -> void:
 				if player.index == 0:
 					if world.airstrike_cooldown > 0:
 						var secs := int(ceil(float(world.airstrike_cooldown) / float(Cfg.TICK_HZ)))
-						strike = I18n.t("hud.strikeCd", {"n": secs}, "  ✈ %dс" % secs)
+						strike = I18n.t("hud.strikeCd", {"n": secs}, "  Удар: %dс" % secs)
 					else:
-						strike = I18n.t("hud.strikeReady", {}, "  ✈ ГОТОВ (F)")
-				objective.text = I18n.t("hud.base", {"hp": base_hp}, "🏰 %d HP" % base_hp) + strike
+						strike = I18n.t("hud.strikeReady", {}, "  Удар: ГОТОВ (F)")
+				objective.text = I18n.t("hud.base", {"hp": base_hp}, "База: %d HP" % base_hp) + strike
 			"koth":
 				var left_ticks := maxi(0, world.time_limit - world.tick)
 				var sec := int(ceil(float(left_ticks) / 60.0))
@@ -438,15 +495,18 @@ func update_hud(world: World) -> void:
 				if alive_bosses > 0:
 					objective.text = I18n.t("hud.koth_bosses",
 						{"bosses": alive_bosses, "icons": boss_icons, "cur": progress["current"], "total": progress["total"], "time": time_str},
-						"👑 Царь Горы · Боссы: %d%s · Выживших %d/%d   ⏱ %s" % [alive_bosses, boss_icons, progress["current"], progress["total"], time_str])
+						"Царь Горы · Боссы: %d%s · Выживших %d/%d   %s" % [alive_bosses, boss_icons, progress["current"], progress["total"], time_str])
 				else:
 					objective.text = I18n.t("hud.koth_cleared",
 						{"cur": progress["current"], "total": progress["total"], "time": time_str},
-						"👑 ВСЕ БОССЫ ПОВЕРЖЕНЫ! · Выживших %d/%d   ⏱ %s" % [progress["current"], progress["total"], time_str])
+						"ВСЕ БОССЫ ПОВЕРЖЕНЫ! · Выживших %d/%d   %s" % [progress["current"], progress["total"], time_str])
 			"ffa":
 				objective.text = I18n.t("hud.frags",
 					{"cur": progress["current"], "target": progress["target"], "deaths": player.deaths},
-					"Фраги %d / %d   ✝ %d" % [progress["current"], progress["target"], player.deaths])
+					"Фраги %d / %d   Смертей: %d" % [progress["current"], progress["target"], player.deaths])
+			"tutorial":
+				var tinfo: Dictionary = progress.get("task", world.get_tutorial_task_info())
+				objective.text = "%s  [%s]" % [tinfo.get("title", "Обучение"), tinfo.get("keys", "")]
 			_:
 				var txt := I18n.t("hud.flags",
 					{"a": world.team_score["player"], "b": world.team_score["enemy"],

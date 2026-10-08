@@ -13,8 +13,8 @@ static var LIST := {
 		"id": "rockets", "name": "Ракеты", "icon": "🚀", "color": Color("#ff5566"),
 		"duration": 60 * 8,
 		"cooldown_mult": 2.2,
-		"dmg_scale": 1.9,
-		"spread": 0.02, "bullets": 1, "explosive": true, "heat_mult": 1.0,
+		"dmg_scale": 2.4,
+		"spread": 0.02, "bullets": 1, "explosive": true, "splash_r": 50.0, "heat_mult": 1.0,
 	},
 	"shotgun": {
 		"id": "shotgun", "name": "Дробовик", "icon": "💥", "color": Color("#ffcc44"),

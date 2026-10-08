@@ -7,22 +7,22 @@ signal battle_requested(settings: Dictionary)
 const BASE_TILE_PX := 14.0
 
 const ARCHETYPES := [
-	{"id": "auto", "name": "🎲 Авто", "desc": "Под стиль биома"},
-	{"id": "avenues", "name": "🏙 Кварталы", "desc": "Проспекты и арки"},
-	{"id": "plaza", "name": "🏛 Площадь", "desc": "Центральный монумент"},
-	{"id": "river", "name": "🌊 Река", "desc": "Долина с мостами"},
-	{"id": "fortress", "name": "🏰 Цитадель", "desc": "Укреплённый центр"},
-	{"id": "radial", "name": "👑 Кольца", "desc": "Кольца и лучи от центра"},
-	{"id": "labyrinths", "name": "🧩 Лабиринт", "desc": "Тактические укрытия"},
-	{"id": "industrial", "name": "🏭 Промзона", "desc": "Контейнеры и ангары"},
-	{"id": "canyon", "name": "🏜 Каньон", "desc": "Ущелья и мосты"},
+	{"id": "auto", "name": "Авто", "desc": "Под стиль биома"},
+	{"id": "avenues", "name": "Кварталы", "desc": "Проспекты и арки"},
+	{"id": "plaza", "name": "Площадь", "desc": "Центральный монумент"},
+	{"id": "river", "name": "Река", "desc": "Долина с мостами"},
+	{"id": "fortress", "name": "Цитадель", "desc": "Укреплённый центр"},
+	{"id": "radial", "name": "Кольца", "desc": "Кольца и лучи от центра"},
+	{"id": "labyrinths", "name": "Лабиринт", "desc": "Тактические укрытия"},
+	{"id": "industrial", "name": "Промзона", "desc": "Контейнеры и ангары"},
+	{"id": "canyon", "name": "Каньон", "desc": "Ущелья и мосты"},
 ]
 
 const MODES := [
-	{"id": "ffa", "name": "💥 Каждый за себя", "desc": "Классический бой до 40 фрагов"},
-	{"id": "ctf", "name": "🚩 Захват флага", "desc": "1 нейтральный флаг, цель — 5 захватов"},
-	{"id": "koth", "name": "👑 Царь горы (Боссы)", "desc": "Битва на выживание против 3 боссов"},
-	{"id": "defense", "name": "🛡 Оборона", "desc": "Защита штаба от штурма"},
+	{"id": "ffa", "name": "Каждый за себя", "desc": "Классический бой до 40 фрагов"},
+	{"id": "ctf", "name": "Захват флага", "desc": "1 нейтральный флаг, цель — 5 захватов"},
+	{"id": "koth", "name": "Царь горы (Боссы)", "desc": "Битва на выживание против 3 боссов"},
+	{"id": "defense", "name": "Оборона", "desc": "Защита штаба от штурма"},
 ]
 
 var current_location: String = "city"
@@ -237,7 +237,7 @@ func _build_canvas_toolbar(parent: Control) -> void:
 	top_bar.add_theme_constant_override("separation", 8)
 	parent.add_child(top_bar)
 
-	var title_lbl := UiKit.label("🗺 ПРЕДПРОСМОТР КАРТЫ", 14, Cfg.UI_TEXT, true)
+	var title_lbl := UiKit.label("ПРЕДПРОСМОТР КАРТЫ", 14, Cfg.UI_TEXT, true)
 	top_bar.add_child(title_lbl)
 
 	_title_sub = UiKit.label("", 11, Cfg.UI_MUTED)
@@ -248,27 +248,27 @@ func _build_canvas_toolbar(parent: Control) -> void:
 	top_bar.add_child(_title_sub)
 
 	# Zoom controls
-	var btn_zoom_out := UiKit.small(" ➖ ")
+	var btn_zoom_out := UiKit.small(" - ")
 	btn_zoom_out.tooltip_text = "Уменьшить масштаб (Колёсико мыши вниз)"
 	btn_zoom_out.pressed.connect(func(): if _canvas: _canvas.zoom_by(0.8))
 	top_bar.add_child(btn_zoom_out)
 
-	var btn_zoom_in := UiKit.small(" ➕ ")
+	var btn_zoom_in := UiKit.small(" + ")
 	btn_zoom_in.tooltip_text = "Увеличить масштаб (Колёсико мыши вверх)"
 	btn_zoom_in.pressed.connect(func(): if _canvas: _canvas.zoom_by(1.25))
 	top_bar.add_child(btn_zoom_in)
 
-	var btn_reset := UiKit.small(" ⛶ Центр ")
+	var btn_reset := UiKit.small(" Центр ")
 	btn_reset.tooltip_text = "Сбросить масштаб и отцентрировать карту"
 	btn_reset.pressed.connect(func(): if _canvas: _canvas.reset_view())
 	top_bar.add_child(btn_reset)
 
-	var btn_tex := UiKit.small(" 🎨 ")
+	var btn_tex := UiKit.small(" Текстуры ")
 	btn_tex.tooltip_text = "Переключить отображение текстур биома или схемы"
 	btn_tex.pressed.connect(func():
 		if _canvas:
 			_canvas.show_textures = not _canvas.show_textures
-			btn_tex.text = " 🎨 " if _canvas.show_textures else " 📐 "
+			btn_tex.text = " Текстуры " if _canvas.show_textures else " Схема "
 			_canvas.queue_redraw()
 	)
 	top_bar.add_child(btn_tex)
@@ -302,7 +302,7 @@ func _build_canvas_footer(parent: Control) -> void:
 	_info_label.custom_minimum_size = Vector2(0, 0)
 	bot_bar.add_child(_info_label)
 
-	var hint := UiKit.label("🖱 Панорама: ЛКМ · ⚙ Зум: колёсико · ⌨ Space: сид", 10, Cfg.UI_MUTED)
+	var hint := UiKit.label("Панорама: ЛКМ · Зум: колёсико · Space: сид", 10, Cfg.UI_MUTED)
 	hint.clip_text = true
 	hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	hint.custom_minimum_size = Vector2(0, 0)
@@ -330,7 +330,7 @@ func _build_control_panel(parent: Control) -> void:
 
 	# --- Pinned Header ---
 	var hdr := UiKit.vbox(1)
-	var t := UiKit.label("🗺 РЕДАКТОР КАРТ", 15, Cfg.UI_TEXT, true)
+	var t := UiKit.label("РЕДАКТОР КАРТ", 15, Cfg.UI_TEXT, true)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hdr.add_child(t)
 	var sub := UiKit.label("Генератор разнообразных тактических карт", 10, Cfg.UI_MUTED)
@@ -453,7 +453,7 @@ func _build_control_panel(parent: Control) -> void:
 			generate_map())
 	seed_input_row.add_child(_seed_input)
 
-	var btn_dice := UiKit.small("🎲")
+	var btn_dice := UiKit.small(" Ранд ")
 	btn_dice.tooltip_text = "Случайный сид"
 	btn_dice.pressed.connect(func():
 		randomize_seed()
@@ -495,12 +495,12 @@ func _build_control_panel(parent: Control) -> void:
 	sgrid.add_theme_constant_override("v_separation", 3)
 	stats_card.add_child(sgrid)
 
-	_stat_size = _add_stat_row(sgrid, "📐 Размеры:", "-")
-	_stat_walkable = _add_stat_row(sgrid, "🚶 Проходимость:", "-")
-	_stat_buildings = _add_stat_row(sgrid, "🏢 Зданий/стен:", "-")
-	_stat_bridges = _add_stat_row(sgrid, "🌉 Переправ:", "-")
-	_stat_roads = _add_stat_row(sgrid, "🛣 Дорог:", "-")
-	_stat_flags = _add_stat_row(sgrid, "🎯 Точек целей:", "-")
+	_stat_size = _add_stat_row(sgrid, "Размеры:", "-")
+	_stat_walkable = _add_stat_row(sgrid, "Проходимость:", "-")
+	_stat_buildings = _add_stat_row(sgrid, "Зданий/стен:", "-")
+	_stat_bridges = _add_stat_row(sgrid, "Переправ:", "-")
+	_stat_roads = _add_stat_row(sgrid, "Дорог:", "-")
+	_stat_flags = _add_stat_row(sgrid, "Точек целей:", "-")
 
 	# --- Pinned Footer Action Bar (Always Visible!) ---
 	var footer_box := UiKit.vbox(5)
@@ -508,7 +508,7 @@ func _build_control_panel(parent: Control) -> void:
 
 	footer_box.add_child(_make_divider())
 
-	_btn_battle = UiKit.primary("⚔ В БОЙ НА ЭТОЙ КАРТЕ!", 14)
+	_btn_battle = UiKit.primary("В БОЙ НА ЭТОЙ КАРТЕ!", 14)
 	_btn_battle.custom_minimum_size = Vector2(0, 38)
 	_btn_battle.pressed.connect(_on_battle_pressed)
 	footer_box.add_child(_btn_battle)
@@ -517,7 +517,7 @@ func _build_control_panel(parent: Control) -> void:
 	act_row.add_theme_constant_override("separation", 6)
 	footer_box.add_child(act_row)
 
-	_btn_gen = UiKit.secondary("🎲 Случайно (Space)", 11)
+	_btn_gen = UiKit.secondary("Случайно (Space)", 11)
 	_btn_gen.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_btn_gen.custom_minimum_size = Vector2(0, 30)
 	_btn_gen.pressed.connect(func():
@@ -525,7 +525,7 @@ func _build_control_panel(parent: Control) -> void:
 		generate_map())
 	act_row.add_child(_btn_gen)
 
-	_btn_close = UiKit.secondary("✖ В меню (Esc)", 11)
+	_btn_close = UiKit.secondary("В меню (Esc)", 11)
 	_btn_close.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_btn_close.custom_minimum_size = Vector2(0, 30)
 	_btn_close.pressed.connect(func(): close_requested.emit())
@@ -969,7 +969,7 @@ class _MapCanvas extends Control:
 				var col: Color = Color("#3498db") if team == "player" else Color("#e74c3c")
 				draw_circle(p, tile_sz * 1.2, Color(col.r, col.g, col.b, 0.25))
 				draw_arc(p, tile_sz * 1.2, 0.0, TAU, 24, col, 2.0)
-				var tag := "🛡 БАЗА [СИНИЕ]" if team == "player" else "💀 БАЗА [КРАСНЫЕ]"
+				var tag := "БАЗА [СИНИЕ]" if team == "player" else "БАЗА [КРАСНЫЕ]"
 				draw_string(Fonts.bold, p + Vector2(-30, -tile_sz * 1.4), tag,
 					HORIZONTAL_ALIGNMENT_CENTER, -1, 10, col)
 
@@ -989,7 +989,7 @@ class _MapCanvas extends Control:
 				draw_circle(p, tile_sz * 1.5, Color(1.0, 0.84, 0.0, 0.35))
 				draw_arc(p, tile_sz * 1.5, 0.0, TAU, 24, gold, 2.5)
 				draw_circle(p, tile_sz * 0.45, gold)
-				draw_string(Fonts.bold, p + Vector2(-32, -tile_sz * 1.7), "🚩 1-й ФЛАГ",
+				draw_string(Fonts.bold, p + Vector2(-32, -tile_sz * 1.7), "1-й ФЛАГ",
 					HORIZONTAL_ALIGNMENT_CENTER, -1, 11, gold)
 			else:
 				# Next sequential flag spawn spots
@@ -1009,4 +1009,4 @@ class _MapCanvas extends Control:
 			draw_rect(h_rect, Color(1.0, 0.7, 0.0, 0.2))
 			draw_rect(h_rect, Color("#ffaa00"), false, 2.0)
 			draw_string(Fonts.bold, h_rect.position + Vector2(h_rect.size.x * 0.5 - 35, h_rect.size.y * 0.5 + 4),
-				"👑 ГОРА", HORIZONTAL_ALIGNMENT_CENTER, -1, 13, Color("#ffdd44"))
+				"ГОРА", HORIZONTAL_ALIGNMENT_CENTER, -1, 13, Color("#ffdd44"))

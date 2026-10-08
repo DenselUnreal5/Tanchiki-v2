@@ -6,22 +6,41 @@
 [node name="CosmeticCard" type="PanelContainer"]
 script = ExtResource("1")
 
-[node name="Row" type="HBoxContainer" parent="."]
+[node name="CardBox" type="VBoxContainer" parent="."]
 unique_name_in_owner = true
 
-[node name="Icon" type="Control" parent="Row"]
+[node name="HeaderRow" type="HBoxContainer" parent="CardBox"]
+unique_name_in_owner = true
+
+[node name="IconWrap" type="PanelContainer" parent="CardBox/HeaderRow"]
+unique_name_in_owner = true
+
+[node name="Icon" type="Control" parent="CardBox/HeaderRow/IconWrap"]
 unique_name_in_owner = true
 script = ExtResource("2")
 
-[node name="Info" type="VBoxContainer" parent="Row"]
+[node name="HeaderInfo" type="VBoxContainer" parent="CardBox/HeaderRow"]
 unique_name_in_owner = true
 
-[node name="NameLabel" type="Label" parent="Row/Info"]
+[node name="NameLabel" type="Label" parent="CardBox/HeaderRow/HeaderInfo"]
 unique_name_in_owner = true
 
-[node name="StateLabel" type="Label" parent="Row/Info"]
+[node name="BadgeLabel" type="RichTextLabel" parent="CardBox/HeaderRow/HeaderInfo"]
+unique_name_in_owner = true
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+
+[node name="DescLabel" type="Label" parent="CardBox"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
+[node name="FooterRow" type="HBoxContainer" parent="CardBox"]
 unique_name_in_owner = true
 
-[node name="ActionBtn" type="Button" parent="Row"]
+[node name="StateLabel" type="Label" parent="CardBox/FooterRow"]
+unique_name_in_owner = true
+
+[node name="ActionBtn" type="Button" parent="CardBox/FooterRow"]
 unique_name_in_owner = true
 text = ""

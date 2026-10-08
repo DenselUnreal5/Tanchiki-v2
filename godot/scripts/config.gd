@@ -119,6 +119,7 @@ static var TEAM_COLORS := {
 	"boss_rammer": {"body": Color("#3d2e24"), "dark": Color("#1e140d"), "trim": Color("#f97316")},
 	"boss_chimera": {"body": Color("#182b18"), "dark": Color("#0b140b"), "trim": Color("#84cc16")},
 	"silhouette": {"body": Color("#181b20"), "dark": Color("#0d0f13"), "trim": Color("#2b2e38")},
+	"target": {"body": Color("#eab308"), "dark": Color("#a16207"), "trim": Color("#fef08a")},
 }
 
 const PLAYER_SKINS := [
@@ -251,7 +252,7 @@ const MINE_MAX := 3
 const WRECK_LIFE := 180
 const WRECK_FADE := 45
 
-const KAMIKAZE_DMG := 60.0
+const KAMIKAZE_DMG := 130.0
 const KAMIKAZE_R := 64.0
 
 const BLAST_TILE_DAMAGE := 70.0
@@ -321,7 +322,8 @@ const RAMMER_MINE_INTERVAL := 150
 const RAMMER_CHARGE_MINE_INTERVAL := 9
 const RAMMER_CHARGE_MINE_ARMING_TICKS := 35
 const RAMMER_CHARGE_MAX_DMG := 115.0
-const RAMMER_EXPLOSION_RADIUS := 420.0
+const RAMMER_EXPLOSION_RADIUS := 260.0
+const RAMMER_MELTDOWN_TICKS := 90
 const RAMMER_EXPLOSION_DMG := 180.0
 const RAMMER_DAZE_TICKS := 50
 const RAMMER_DAZE_DMG_MULT := 1.3
@@ -402,6 +404,10 @@ const MODES := {
 		"wave_delay": 4 * 60,
 		"base_dps": 0.18,
 		"base_radius": 72.0,
+	},
+	"tutorial": {
+		"id": "tutorial", "name": "Курс молодого бойца",
+		"stages": 5,
 	},
 }
 

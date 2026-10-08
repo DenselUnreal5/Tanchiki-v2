@@ -118,6 +118,8 @@ var accuracy: float:
 	get: return clampf(base_accuracy + float(owner_mods.get("accuracyBonus", 0.0)), 0.1, 0.98)
 
 func update(tank: Tank, world) -> void:
+	if tank.freeze_ticks > 0:
+		return
 	owner_mods = tank.mods
 	rng = world.rng
 
@@ -438,9 +440,20 @@ func _try_dash(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> bo
 		return false
 	if dash_timer > 0:
 		return false
-	if tgt == null or not tgt.alive or not has_shot:
+	if tgt == null or not tgt.alive:
 		return false
 	if tank.in_water:
+		return false
+
+	# Замороженная добыча: наивысший приоритет тарана для мгновенного раскола/добивания!
+	var is_frozen_prey: bool = tgt.freeze_ticks > 0
+	if is_frozen_prey and target_dist <= 280.0 and (has_shot or lobbed):
+		tank.angle = atan2(tgt.y - tank.y, tgt.x - tank.x)
+		tank.dash()
+		dash_timer = 60
+		return true
+
+	if not has_shot:
 		return false
 	if target_dist < 60.0 or target_dist > 320.0:
 		return false
@@ -529,7 +542,20 @@ func _try_fire(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> vo
 	var off := absf(atan2(sin(tank.turret_angle - aim), cos(tank.turret_angle - aim)))
 	var tolerance := 0.14 + (1.0 - accuracy) * 0.25
 	if off > tolerance:
+		tank.sniper_laser_ticks = 0
 		return
+
+	var is_sniper: bool = tank.chassis_id == "sniper" or (!tank.enemy_type.is_empty() and String(tank.enemy_type.get("id", "")) == "sniper")
+	if is_sniper:
+		if tank.sniper_laser_ticks <= 0:
+			tank.sniper_laser_ticks = 27
+			Sfx.play("clang", tank.x, tank.y)
+			return
+		elif tank.sniper_laser_ticks > 1:
+			tank.sniper_laser_ticks -= 1
+			return
+		else:
+			tank.sniper_laser_ticks = 0
 
 	if lobbed:
 		tank.shoot_lobbed(world)
@@ -712,6 +738,45 @@ static func sight_range(world) -> float:
 		return Cfg.BOT_SIGHT
 	return Cfg.BOT_SIGHT * world.weather.vision_scale
 
+static func evaluate_threat_score(tank: Tank, other: Tank, world, d: float, has_los: bool) -> float:
+	var sight := sight_range(world)
+	var is_ffa: bool = world.mode == "ffa"
+
+	# Базовый скоринг дистанции (от 0.0 до 1.0)
+	var score: float = (sight - d) / sight
+	if not has_los:
+		score *= 0.5
+
+	# 1. Приоритет обороны базы (критическая угроза базе в Defense)
+	if world.mode == "defense" and world.base != null and other.team != tank.team:
+		var d_base := Vector2(world.base["x"] - other.x, world.base["y"] - other.y).length()
+		if d_base < 360.0:
+			score += 3.0 * (1.0 - d_base / 360.0)
+
+	# 2. Перехват флага (враг несет наш флаг)
+	if other.carrying_flag and other.team != tank.team:
+		score += 2.5
+
+	# 3. Уязвимость: Замороженная цель (смертельно уязвима для тарана и раскола)
+	if other.freeze_ticks > 0:
+		score += 2.0
+
+	# 4. Добивание целей с низким HP (<25% HP)
+	if other.max_hp > 0.0:
+		score += (1.0 - other.hp / other.max_hp) * 1.0
+
+	# 5. Возмездие (агрессор нанес урон нам)
+	if other == tank.last_attacker:
+		score += 1.5
+
+	# 6. Приоритет игрока
+	if other.is_player_controlled:
+		score += 1.4 if is_ffa else 0.6
+		if d < Cfg.BOT_COMBAT_RANGE:
+			score += 0.8
+
+	return score
+
 static func find_best_threat(tank: Tank, world, lobbed: bool = false):
 	var sight := sight_range(world)
 	var sight2 := sight * sight
@@ -739,32 +804,20 @@ static func find_best_threat(tank: Tank, world, lobbed: bool = false):
 			continue
 
 		var has_los: bool = lobbed or world.map.has_line_of_sight(tank.x, tank.y, other.x, other.y)
+		var d := sqrt(d2)
 		if has_los:
-			var d := sqrt(d2)
-			var score := (sight - d) / sight
-			score += (1.0 - other.hp / other.max_hp) * 0.6
-			if other.carrying_flag and other.team != tank.team:
-				score += 1.5
-
-			# В FFA режиме игрок — главный фокус интереса для ботов
-			if other.is_player_controlled:
-				score += 1.4 if is_ffa else 0.5
-				if d < Cfg.BOT_COMBAT_RANGE:
-					score += 0.8
-
-			# Если эта цель недавно нанесла нам урон — возмездие
-			if other == tank.last_attacker:
-				score += 1.2
-
+			var score := evaluate_threat_score(tank, other, world, d, true)
 			if score > best_score:
 				best_score = score
 				best = other
 		else:
 			# Нет прямой видимости: кандидат для сближения, если видимых врагов рядом нет
 			var f_dist2 := d2
-			if other.is_player_controlled:
+			if other.freeze_ticks > 0:
+				f_dist2 *= 0.3
+			elif other.is_player_controlled:
 				f_dist2 *= 0.4
-			if other == tank.last_attacker:
+			elif other == tank.last_attacker:
 				f_dist2 *= 0.5
 			if f_dist2 < fallback_dist2:
 				fallback_dist2 = f_dist2

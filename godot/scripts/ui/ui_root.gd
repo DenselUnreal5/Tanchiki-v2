@@ -18,6 +18,8 @@ const MAX_DEADZONE := 0.5
 static func game_version() -> String:
 	return String(ProjectSettings.get_setting("application/config/version", "0.0.0"))
 
+const Weekly = preload("res://scripts/weekly.gd")
+
 var settings := {
 	"game_type": "single", "mode": "ffa", "difficulty": "medium",
 	"level": -1,
@@ -67,6 +69,10 @@ var _stats_sub: RichTextLabel
 var _daily: Control
 var _daily_body: VBoxContainer
 var _daily_sub: RichTextLabel
+var _leaderboards: Control
+var _leaderboards_body: VBoxContainer
+var _leaderboards_sub: RichTextLabel
+var _leaderboards_active_tab: String = "survival_waves"
 
 var _confirm: ConfirmationDialog
 
@@ -92,15 +98,19 @@ func _ready() -> void:
 	_build_hub()
 	_stats = _make_overlay(true)
 	_stats_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_stats_body = _overlay_body(_stats, "stats.title", "📊 Статистика", _stats_sub,
+	_stats_body = _overlay_body(_stats, "stats.title", "Статистика", _stats_sub,
 		func(): close_stats(), 540)
 	_daily = _make_overlay(true)
 	_daily_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_daily_body = _overlay_body(_daily, "daily.title", "📅 Ежедневные задания",
+	_daily_body = _overlay_body(_daily, "daily.title", "Ежедневные задания",
 		_daily_sub, func(): close_daily())
+	_leaderboards = _make_overlay(true)
+	_leaderboards_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
+	_leaderboards_body = _overlay_body(_leaderboards, "leaderboards.title", "Таблица лидеров",
+		_leaderboards_sub, func(): close_leaderboards(), 560)
 	_net = _make_overlay(true)
 	_net_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
-	_net_body = _overlay_body(_net, "net.title", "🌐 Сетевая игра",
+	_net_body = _overlay_body(_net, "net.title", "Сетевая игра",
 		_net_sub, func(): close_net(), 620)
 
 	_build_settings_shell()
@@ -111,7 +121,7 @@ func _ready() -> void:
 
 	I18n.language_changed.connect(_on_language_changed)
 
-	for ov in [_settings, _net, _stats, _daily, _hub]:
+	for ov in [_settings, _net, _stats, _daily, _hub, _leaderboards]:
 		if ov != null:
 			ov.visibility_changed.connect(_on_menu_overlay_visibility.bind(ov))
 
@@ -203,7 +213,7 @@ func _set_menu_focusable(on: bool) -> void:
 		_cache_focus_off(_menu)
 
 func _any_menu_overlay_open() -> bool:
-	for ov in [_settings, _net, _stats, _daily, _hub, _map_editor]:
+	for ov in [_settings, _net, _stats, _daily, _hub, _map_editor, _leaderboards]:
 		if ov != null and ov.visible:
 			return true
 	return false
@@ -246,6 +256,9 @@ func handle_cancel() -> bool:
 	if _stats != null and _stats.visible:
 		close_stats()
 		return true
+	if _leaderboards != null and _leaderboards.visible:
+		close_leaderboards()
+		return true
 	if _daily != null and _daily.visible:
 		close_daily()
 		return true
@@ -269,7 +282,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_switch_settings_tab(_neighbor_tab_key(_settings_tab_items(), _settings_active_tab, dir))
 		get_viewport().set_input_as_handled()
 	elif _hub != null and _hub.visible:
-		hub.switch_tab(_neighbor_tab_key(hub.tab_items(), hub.active_tab, dir))
+		hub.cycle_tab(dir)
 		get_viewport().set_input_as_handled()
 
 func _neighbor_tab_key(items: Array, current: String, direction: int) -> String:
@@ -389,13 +402,14 @@ func _on_menu_nav(id: String) -> void:
 		"cosmetics": open_cosmetics()
 		"bestiary": open_bestiary()
 		"encyclopedia": open_encyclopedia()
-		"gallery": open_gallery()
+		"gallery", "perks", "perk": open_gallery()
 		"achievements": open_achievements()
 		"daily": open_daily()
 		"stats": open_stats()
 		"net": open_net()
 		"map_editor": open_map_editor()
 		"settings": open_settings()
+		"tutorial": start_tutorial()
 		"quick_play": _start_quick_play()
 		"quit": quit_requested.emit()
 
@@ -445,12 +459,12 @@ func _build_pause() -> void:
 	box.add_child(resume)
 	_pause_resume_btn = resume
 
-	var gallery := UiKit.secondary(I18n.t("pause.gallery", {}, "Галерея перков"), 13)
+	var gallery := UiKit.secondary(I18n.t("pause.gallery", {}, "Боевые перки"), 13)
 	gallery.custom_minimum_size = Vector2(0, 38)
 	gallery.pressed.connect(func(): open_gallery())
 	box.add_child(gallery)
 
-	var settings := UiKit.secondary(I18n.t("menu.settings", {}, "⚙ Настройки"), 13)
+	var settings := UiKit.secondary(I18n.t("menu.settings", {}, "Настройки"), 13)
 	settings.custom_minimum_size = Vector2(0, 38)
 	settings.pressed.connect(func(): open_settings())
 	box.add_child(settings)
@@ -559,6 +573,13 @@ func show_perk_select(player, queue_left: int, rng: Rng) -> void:
 		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty.custom_minimum_size = Vector2(560, 0)
 		_perk_body.add_child(empty)
+
+		var skip_btn := UiKit.primary(I18n.t("perk.continue", {}, "Продолжить бой"), 14)
+		skip_btn.pressed.connect(func(): perk_chosen.emit(player, ""))
+		var skip_wrap := CenterContainer.new()
+		skip_wrap.add_child(skip_btn)
+		_perk_body.add_child(skip_wrap)
+		_grab(skip_btn)
 	var first_card: Control = null
 	var confirm_btn := UiKit.primary(I18n.t("perk.confirm.placeholder", {}, "Подтвердить выбор"), 14)
 	confirm_btn.visible = false
@@ -664,7 +685,7 @@ func _perk_card(player, id: String) -> Control:
 	box.add_child(name_label)
 
 	if has_build:
-		var syn_label := UiKit.label("⚡ " + I18n.dn(builds[0], "name", "build").to_upper(), 9, build_col, true)
+		var syn_label := UiKit.label(I18n.dn(builds[0], "name", "build").to_upper(), 9, build_col, true)
 		syn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		syn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		box.add_child(syn_label)
@@ -717,6 +738,15 @@ func close_gallery() -> void:
 var is_gallery_open: bool:
 	get: return _hub != null and _hub.visible and _hub_active_tab == "gallery"
 
+func open_perks() -> void:
+	open_gallery()
+
+func close_perks() -> void:
+	close_gallery()
+
+var is_perks_open: bool:
+	get: return is_gallery_open
+
 
 func open_garage(focus_id: String = "") -> void:
 	if hub != null:
@@ -741,19 +771,17 @@ var is_cosmetics_open: bool:
 	get: return _hub != null and _hub.visible and _hub_active_tab == "cosmetics"
 
 func open_encyclopedia(focus_id: String = "") -> void:
-	if hub != null:
-		hub.garage_submode = "encyclopedia"
-	_open_hub_tab("garage", focus_id)
+	_open_hub_tab("bestiary", focus_id)
 
 func open_bestiary(focus_id: String = "") -> void:
 	open_encyclopedia(focus_id)
 
 func close_bestiary() -> void:
-	if _hub_active_tab == "garage" and hub != null and hub.garage_submode == "encyclopedia":
+	if _hub_active_tab == "bestiary":
 		close_hub()
 
 var is_bestiary_open: bool:
-	get: return _hub != null and _hub.visible and _hub_active_tab == "garage" and hub != null and hub.garage_submode == "encyclopedia"
+	get: return _hub != null and _hub.visible and _hub_active_tab == "bestiary"
 
 
 func open_stats() -> void:
@@ -820,6 +848,14 @@ func _on_map_editor_battle(map_settings: Dictionary) -> void:
 	close_map_editor()
 	start_requested.emit()
 
+func start_tutorial() -> void:
+	settings["mode"] = "tutorial"
+	settings["game_type"] = "single"
+	settings["difficulty"] = "medium"
+	settings["location"] = "city"
+	settings["level"] = 1
+	start_requested.emit()
+
 func _start_quick_play() -> void:
 	settings["location"] = Locations.ORDER[randi() % Locations.ORDER.size()]
 	var modes := ["ffa", "ctf", "koth", "defense"]
@@ -854,6 +890,62 @@ func open_daily() -> void:
 		_daily_body.remove_child(c)
 		c.queue_free()
 
+	# === КАРТОЧКА ЕЖЕНЕДЕЛЬНОГО ИСПЫТАНИЯ ===
+	var wpr := Prof.get_weekly_progress()
+	var wch: Dictionary = wpr["challenge"]
+	var wcard := PanelContainer.new()
+	var w_border := Cfg.UI_GOLD if bool(wpr["done"]) else Color(Cfg.UI_ACCENT, 0.7)
+	wcard.add_theme_stylebox_override("panel", UiKit.card_style(w_border))
+
+	var w_vbox := UiKit.vbox(5)
+	wcard.add_child(w_vbox)
+
+	var w_top_row := UiKit.hbox(10)
+	w_vbox.add_child(w_top_row)
+	w_top_row.add_child(UiKit.label(String(wch.get("icon", "🌟")), 24))
+
+	var w_info := UiKit.vbox(2)
+	w_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	w_top_row.add_child(w_info)
+
+	var w_title_row := UiKit.hbox(8)
+	w_info.add_child(w_title_row)
+	w_title_row.add_child(UiKit.label("НЕДЕЛЬНОЕ ИСПЫТАНИЕ: " + String(wch.get("name", "")), 11, Cfg.UI_GOLD, true))
+	var until_week := Weekly.time_until_next_week()
+	w_title_row.add_child(UiKit.label("⏳ Осталось: %d дн. %d ч." % [until_week["days"], until_week["hours"]], 9, Cfg.UI_MUTED))
+
+	w_info.add_child(UiKit.label(String(wch.get("desc", "")), 9, Color.WHITE))
+	w_info.add_child(UiKit.label("⚡ Модификатор: " + String(wch.get("mutator_desc", "")), 9, Color("#38bdf8")))
+	w_info.add_child(UiKit.label("%d / %d" % [wpr["current"], wpr["need"]], 9, Cfg.UI_MUTED))
+	w_info.add_child(UiKit.progress_bar(float(wpr["current"]) / float(maxi(1, int(wpr["need"]))), 320, 4, Cfg.UI_GOLD))
+
+	var w_btn_col := UiKit.vbox(4)
+	w_top_row.add_child(w_btn_col)
+
+	if bool(wpr["claimed"]):
+		w_btn_col.add_child(UiKit.label("✔ Награда получена", 10, Cfg.UI_ACCENT, true))
+	else:
+		var wclaim := UiKit.small("Забрать · %d 🪙" % int(wpr["reward"]))
+		wclaim.disabled = not bool(wpr["done"])
+		wclaim.pressed.connect(func():
+			var res := Prof.claim_weekly()
+			if bool(res["ok"]):
+				daily_reward_claimed.emit(int(res["reward"]))
+				open_daily())
+		w_btn_col.add_child(wclaim)
+
+	var lboard_btn := UiKit.small("🏆 Таблица лидеров")
+	lboard_btn.pressed.connect(func(): open_leaderboards("weekly"))
+	w_btn_col.add_child(lboard_btn)
+
+	_daily_body.add_child(wcard)
+
+	var sep := HSeparator.new()
+	sep.modulate.a = 0.35
+	_daily_body.add_child(sep)
+	_daily_body.add_child(UiKit.label("ЕЖЕДНЕВНЫЕ ЗАДАНИЯ", 10, Cfg.UI_MUTED, true))
+
+	# === ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ===
 	for q in quests:
 		var pr := Prof.daily_progress(String(q["id"]))
 		var card := PanelContainer.new()
@@ -879,7 +971,7 @@ func open_daily() -> void:
 		info.add_child(UiKit.progress_bar(float(pr["current"]) / float(pr["need"]), 300, 3, Cfg.UI_WARN))
 
 		if bool(pr["claimed"]):
-			row.add_child(UiKit.label(I18n.t("daily.claimed", {}, "Получено ✓"), 10, Cfg.UI_ACCENT, true))
+			row.add_child(UiKit.label(I18n.t("daily.claimed", {}, "Получено"), 10, Cfg.UI_ACCENT, true))
 		else:
 			var claim := UiKit.small(I18n.t("daily.claim", {"reward": pr["reward"]},
 				"Забрать · %d 🪙" % int(pr["reward"])))
@@ -902,6 +994,110 @@ func close_daily() -> void:
 
 var is_daily_open: bool:
 	get: return _daily != null and _daily.visible
+
+func open_leaderboards(tab: String = "") -> void:
+	if tab != "":
+		_leaderboards_active_tab = tab
+	var was_visible := _leaderboards.visible
+	_leaderboards_sub.text = "[center]Таблица лидеров Steam и локальные рекорды[/center]"
+
+	for c in _leaderboards_body.get_children():
+		_leaderboards_body.remove_child(c)
+		c.queue_free()
+
+	# Переключатели категорий
+	var tabs_row := UiKit.hbox(6)
+	var tabs := [
+		["survival_waves", "Оборона (Волны)"],
+		["survival_score", "Оборона (Очки)"],
+		["weekly", "Недельное испытание"],
+		["ffa", "Дуэли (FFA)"],
+	]
+	for t in tabs:
+		var tab_id: String = t[0]
+		var tab_label: String = t[1]
+		var btn: Button
+		if tab_id == _leaderboards_active_tab:
+			btn = UiKit.primary(tab_label)
+		else:
+			btn = UiKit.secondary(tab_label, 12)
+		btn.pressed.connect(func():
+			_leaderboards_active_tab = tab_id
+			open_leaderboards(tab_id))
+		tabs_row.add_child(btn)
+	_leaderboards_body.add_child(tabs_row)
+
+	# Таблица рекордов
+	var table_card := PanelContainer.new()
+	table_card.add_theme_stylebox_override("panel", UiKit.card_style(Cfg.UI_BORDER))
+	var table_vbox := UiKit.vbox(6)
+	table_card.add_child(table_vbox)
+
+	# Заголовок колонок
+	var hdr_row := UiKit.hbox(8)
+	var h_rank := UiKit.label("РАНГ", 9, Cfg.UI_MUTED, true)
+	h_rank.custom_minimum_size.x = 48
+	hdr_row.add_child(h_rank)
+
+	var h_name := UiKit.label("ИМЯ БОЙЦА", 9, Cfg.UI_MUTED, true)
+	h_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hdr_row.add_child(h_name)
+
+	var h_score := UiKit.label("РЕЗУЛЬТАТ", 9, Cfg.UI_MUTED, true)
+	h_score.custom_minimum_size.x = 90
+	hdr_row.add_child(h_score)
+
+	var h_date := UiKit.label("ДАТА", 9, Cfg.UI_MUTED, true)
+	h_date.custom_minimum_size.x = 80
+	hdr_row.add_child(h_date)
+	table_vbox.add_child(hdr_row)
+
+	var entries: Array = Prof.get_local_leaderboard(_leaderboards_active_tab)
+	for i in entries.size():
+		var entry = entries[i]
+		var rank_str := "%d" % (i + 1)
+		var rank_color := Cfg.UI_MUTED
+		if i == 0:
+			rank_str = "🥇 1"
+			rank_color = Cfg.UI_GOLD
+		elif i == 1:
+			rank_str = "🥈 2"
+			rank_color = Color("#cbd5e1")
+		elif i == 2:
+			rank_str = "🥉 3"
+			rank_color = Color("#d97706")
+
+		var row := UiKit.hbox(8)
+		var r_lbl := UiKit.label(rank_str, 10, rank_color, true)
+		r_lbl.custom_minimum_size.x = 48
+		row.add_child(r_lbl)
+
+		var name_str: String = String(entry.get("name", "Боец"))
+		var n_lbl := UiKit.label(name_str, 10, Color.WHITE, name_str == "Игрок")
+		n_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(n_lbl)
+
+		var s_lbl := UiKit.label(str(entry.get("score", 0)), 10, Cfg.UI_ACCENT, true)
+		s_lbl.custom_minimum_size.x = 90
+		row.add_child(s_lbl)
+
+		var d_lbl := UiKit.label(String(entry.get("date", "-")), 9, Cfg.UI_MUTED)
+		d_lbl.custom_minimum_size.x = 80
+		row.add_child(d_lbl)
+
+		table_vbox.add_child(row)
+
+	_leaderboards_body.add_child(table_card)
+
+	_leaderboards.visible = true
+	if was_visible:
+		_grab(_first_focusable(_leaderboards_body))
+
+func close_leaderboards() -> void:
+	_leaderboards.visible = false
+
+var is_leaderboards_open: bool:
+	get: return _leaderboards != null and _leaderboards.visible
 
 func _build_gameover() -> void:
 	_gameover = _make_overlay(true)
@@ -935,6 +1131,9 @@ func _build_gameover() -> void:
 	replay.pressed.connect(func(): restart_requested.emit())
 	actions.add_child(replay)
 	_gameover_replay_btn = replay
+	var lboard := UiKit.secondary("🏆 Рекорды", 13)
+	lboard.pressed.connect(func(): open_leaderboards())
+	actions.add_child(lboard)
 	var to_menu := UiKit.secondary(I18n.t("go.menu", {}, "В меню"), 13)
 	to_menu.pressed.connect(func(): menu_requested.emit())
 	actions.add_child(to_menu)
@@ -1234,8 +1433,8 @@ func _build_general_tab() -> void:
 	lang_label.custom_minimum_size = Vector2(178, 0)
 	lang_row.add_child(lang_label)
 	var lang_btn := UiKit.secondary(
-		I18n.t("menu.lang.ru", {}, "🌐 English") if I18n.lang == "ru"
-			else I18n.t("menu.lang.en", {}, "🌐 Русский"), 13)
+		I18n.t("menu.lang.ru", {}, "English") if I18n.lang == "ru"
+			else I18n.t("menu.lang.en", {}, "Русский"), 13)
 	lang_btn.pressed.connect(func(): I18n.toggle_lang())
 	lang_row.add_child(lang_btn)
 	_settings_body.add_child(lang_row)

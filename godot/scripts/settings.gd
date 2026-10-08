@@ -86,9 +86,21 @@ func _ensure_input_actions() -> void:
 	if not InputMap.has_action("tab_prev"):
 		InputMap.add_action("tab_prev")
 		_bind_pad("tab_prev", JOY_BUTTON_LEFT_SHOULDER)
+		_bind_key("tab_prev", KEY_Q)
+	else:
+		if not _action_has_pad("tab_prev", JOY_BUTTON_LEFT_SHOULDER):
+			_bind_pad("tab_prev", JOY_BUTTON_LEFT_SHOULDER)
+		if not _action_has_key("tab_prev", KEY_Q):
+			_bind_key("tab_prev", KEY_Q)
 	if not InputMap.has_action("tab_next"):
 		InputMap.add_action("tab_next")
 		_bind_pad("tab_next", JOY_BUTTON_RIGHT_SHOULDER)
+		_bind_key("tab_next", KEY_E)
+	else:
+		if not _action_has_pad("tab_next", JOY_BUTTON_RIGHT_SHOULDER):
+			_bind_pad("tab_next", JOY_BUTTON_RIGHT_SHOULDER)
+		if not _action_has_key("tab_next", KEY_E):
+			_bind_key("tab_next", KEY_E)
 
 func _bind_key(action: StringName, keycode: int) -> void:
 	var e := InputEventKey.new()
@@ -99,6 +111,14 @@ func _bind_pad(action: StringName, button: int) -> void:
 	var e := InputEventJoypadButton.new()
 	e.button_index = button
 	InputMap.action_add_event(action, e)
+
+func _action_has_key(action: StringName, keycode: int) -> bool:
+	if not InputMap.has_action(action):
+		return false
+	for e in InputMap.action_get_events(action):
+		if e is InputEventKey and e.physical_keycode == keycode:
+			return true
+	return false
 
 func _action_has_pad(action: StringName, button: int) -> bool:
 	if not InputMap.has_action(action):

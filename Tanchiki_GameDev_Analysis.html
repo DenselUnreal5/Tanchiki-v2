@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Танчики: Iron Storm — Экспертный геймдев-анализ и аудит играбельности</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 14mm 14mm 14mm;
+  }
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    color: #1e293b;
+    background-color: #ffffff;
+    line-height: 1.5;
+    font-size: 10.5pt;
+    margin: 0;
+    padding: 0;
+  }
+  .header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #1e293b 100%);
+    color: #ffffff;
+    padding: 24px 28px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    border-left: 6px solid #38bdf8;
+  }
+  .header h1 {
+    margin: 0 0 6px 0;
+    font-size: 22pt;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: #ffffff;
+  }
+  .header .subtitle {
+    font-size: 12pt;
+    color: #94a3b8;
+    margin-bottom: 12px;
+  }
+  .meta-pills {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 8.5pt;
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+  .pill.accent {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: #38bdf8;
+    color: #38bdf8;
+  }
+  h2 {
+    font-size: 13.5pt;
+    font-weight: 700;
+    color: #0f172a;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 5px;
+    margin-top: 22px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h2 .num {
+    background: #0284c7;
+    color: #fff;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9.5pt;
+  }
+  h3 {
+    font-size: 11pt;
+    font-weight: 600;
+    color: #1e293b;
+    margin-top: 14px;
+    margin-bottom: 6px;
+  }
+  p {
+    margin: 0 0 8px 0;
+    color: #334155;
+  }
+  ul, ol {
+    margin: 0 0 10px 0;
+    padding-left: 20px;
+  }
+  li {
+    margin-bottom: 5px;
+    color: #334155;
+  }
+  li strong {
+    color: #0f172a;
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .card.highlight {
+    border-color: #bae6fd;
+    background: #f0f9ff;
+  }
+  .card.warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+  .card.danger {
+    border-color: #fecdd3;
+    background: #fff1f2;
+  }
+  .card-title {
+    font-weight: 700;
+    font-size: 10pt;
+    color: #0f172a;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .table-box {
+    width: 100%;
+    margin-bottom: 14px;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+  .table-box th, .table-box td {
+    border: 1px solid #cbd5e1;
+    padding: 7px 10px;
+    text-align: left;
+  }
+  .table-box th {
+    background: #0f172a;
+    color: #ffffff;
+    font-weight: 600;
+  }
+  .table-box tr:nth-child(even) {
+    background: #f8fafc;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 8pt;
+    font-weight: 600;
+  }
+  .badge-success { background: #dcfce7; color: #15803d; }
+  .badge-warning { background: #fef3c7; color: #b45309; }
+  .badge-danger { background: #fee2e2; color: #b91c1c; }
+  .badge-info { background: #e0f2fe; color: #0369a1; }
+  
+  .page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+  .footer {
+    margin-top: 25px;
+    padding-top: 10px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 8pt;
+    color: #64748b;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+  <!-- PAGE 1: ОБЩИЙ ОБЗОР, ИГРАБЕЛЬНОСТЬ И РЫНОК -->
+  <div class="header">
+    <h1>ТАНЧИКИ: IRON STORM</h1>
+    <div class="subtitle">Комплексный экспертный аудит играбельности, рыночного потенциала, UI/UX и геймдева</div>
+    <div class="meta-pills">
+      <span class="pill accent">Движок: Godot Engine 4.7</span>
+      <span class="pill">Версия проекта: 0.9.27</span>
+      <span class="pill">Жанр: Top-Down Arcade Tank Shooter / Roguelite</span>
+      <span class="pill">Аудитор: Senior Game Designer & Systems Architect</span>
+      <span class="pill">Дата: Октябрь 2026</span>
+    </div>
+  </div>
+
+  <h2><span class="num">1</span> Анализ играбельности (Gameplay Loop & Game Feel)</h2>
+  <p><strong>Базовый игровой цикл (Core Loop):</strong> <em>Движение & маневр ➔ Тактическое использование укрытий ➔ Стрельба с учетом баллистики/отдачи ➔ Разрушение геометрии карты ➔ Сбор опыта/перков/монет ➔ Эскалация волны/схватки.</em></p>
+
+  <div class="card-grid">
+    <div class="card highlight">
+      <div class="card-title">🛡️ Сильные стороны (Ключевые преимущества)</div>
+      <ul>
+        <li><strong>Тотальная деструкция поля боя:</strong> Разрушение кирпича, бетона, дерева и камня в реальном времени создает непредсказуемые тактические коридоры. Это одно из главных преимуществ игры перед статичными аренами.</li>
+        <li><strong>Физическая вариативность поверхностей:</strong> Скольжение на льду, замедление в грязи, реакция воды на огонь и кислоту создают яркое физическое взаимодействие.</li>
+        <li><strong>Богатое дерево билдов:</strong> Крио-танки, кислотные минометы, таранные сборки, цепные молнии и синергии (напр., «Повелитель бури») дают высокую глубину кастомизации.</li>
+      </ul>
+    </div>
+    <div class="card warning">
+      <div class="card-title">⚠️ Узкие места в геймплее (Точки трения)</div>
+      <ul>
+        <li><strong>Ощущение танка vs Twin-Stick:</strong> Танковое управление корпусом (A/D поворот, W/S вперед/назад) аутентично, но казуальные игроки часто путаются при отступлении. Необходим опциональный режим «Absolute Directional Move».</li>
+        <li><strong>Рывок на Shift есть в коде, но «слеп» для игрока:</strong> Механика рывка-тарана уже встроена на клавишу <code>Shift</code> (и <code>LB</code> на геймпаде, кд 2 сек). Однако игроки по-прежнему нарезают круги при перегреве, потому что рывок страдает от <em>дефицита обратной связи</em>: на боевом HUD нет индикатора готовности кулдауна, нет сочного звука реактивного форсажа и следа выхлопа, а сам вектор жестко привязан к носу корпуса, а не к направлению движения.</li>
+        <li><strong>Провисание темпа на средних волнах:</strong> В режиме защиты базы (Орда) паузы между спавнами врагов на волнах 4–7 снижают динамику адреналина.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="num">2</span> Актуальность игры на рынке (Рыночная ниша и тренды Steam)</h2>
+  <p>Проект занимает идеальную нишу на стыке ностальгической классики (<em>Battle City / Танчики 1990</em>) и современных трендовых механик (<em>Brotato / 20 Minutes Till Dawn / Alien Shooter / Helldivers</em>).</p>
+
+  <table class="table-box">
+    <thead>
+      <tr>
+        <th>Фактор рынка</th>
+        <th>Текущее состояние в игре</th>
+        <th>Потенциал & Оценка</th>
+        <th>Рекомендация для релиза</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Ностальгический триггер</strong></td>
+        <td>Аркадные танки с защитой штаба/базы орлом.</td>
+        <td><span class="badge badge-success">Высокий (9/10)</span></td>
+        <td>Отлично работает на аудиторию 25–45 лет в СНГ, Европе и Азии.</td>
+      </tr>
+      <tr>
+        <td><strong>Roguelite-прогрессия</strong></td>
+        <td>Случайный выбор перков при повышении уровня.</td>
+        <td><span class="badge badge-success">Высокий (8.5/10)</span></td>
+        <td>Добавить больше визуальных синергий и артефактов на волнах.</td>
+      </tr>
+      <tr>
+        <td><strong>Кооператив & Мультиплеер</strong></td>
+        <td>Общий экран (Shared Screen), LAN, Steam P2P, Dedicated.</td>
+        <td><span class="badge badge-success">Критически важный (9.5/10)</span></td>
+        <td>Сделать упор на Steam Remote Play Together и кооп на двоих.</td>
+      </tr>
+      <tr>
+        <td><strong>Визуальная презентация</strong></td>
+        <td>Процедурный неоново-минималистичный векторный арт.</td>
+        <td><span class="badge badge-warning">Средний (6.5/10)</span></td>
+        <td>Требует «сочности» (Juice): пост-эффекты, Bloom, экранная тряска.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span>Танчики: Iron Storm — Документ геймдев-анализа</span>
+    <span>Страница 1 из 3</span>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- PAGE 2: ЧТО ДОБАВИТЬ / УБРАТЬ И АУДИТ UI/UX -->
+  <h2><span class="num">3</span> Что необходимо добавить (Feature Backlog & Wishlist)</h2>
+
+  <div class="card-grid">
+    <div class="card highlight">
+      <div class="card-title">🚀 1. Апгрейд рывка (Shift / Dash Polish) и боевой Juice</div>
+      <ul>
+        <li><strong>HUD-индикатор готовности рывка:</strong> Вывести круговую шкалу перезарядки рывка (120 тиков / 2 сек) около корпуса танка рядом с HP или отдельный неоновый значок форсажа. Игрок должен четко видеть, когда маневр доступен!</li>
+        <li><strong>Всенаправленный рывок (Omni-Dash):</strong> Сейчас рывок направлен строго по углу носа <code>cos(angle)</code>. Нужно сделать рывок по вектору нажатых клавиш движения (W/S/A/D) — чтобы игрок мог мгновенно отпрыгнуть назад при отступлении!</li>
+        <li><strong>Кадры неуязвимости (I-Frames):</strong> Дать танку 0.25 сек неуязвимости при рывке, чтобы Shift работал как реальный уворот сквозь плотные залпы снарядов.</li>
+        <li><strong>Juice для форсажа:</strong> Звук реактивного турбо-подрыва (SFX), вспышка пламени из выхлопных труб и дымовые следы от пробуксовки гусениц.</li>
+        <li><strong>Hit-Stop и Screen Shake:</strong> Микро-пауза на 2 кадра (30 мс) и контролируемая тряска экрана при уничтожении врага и критических выстрелах.</li>
+        <li><strong>Остаточные следы битвы:</strong> Смятые воронки от взрывов, отлетевшие башни и тлеющие остовы врагов, остающиеся на карте до конца раунда.</li>
+      </ul>
+    </div>
+
+    <div class="card highlight">
+      <div class="card-title">🎮 2. Развитие режимов и мета-геймплей</div>
+      <ul>
+        <li><strong>Элитные модификаторы врагов:</strong> Враги со случайными мутациями («Аура ускорения», «Отражающая броня», «Ядовитый след») для разрушения монотонности.</li>
+        <li><strong>Интерактивные объекты арены:</strong> Бочки с горючим, разрушаемые генераторы электрощитов, союзные ремонтные станции.</li>
+        <li><strong>Бесконечный режим с таблицей лидеров:</strong> Steam Leaderboards для режима выживания с записью рекорда волн.</li>
+        <li><strong>Еженедельные мутации (Weekly Challenges):</strong> Режим с фиксированным сидом и безумными правилами (напр. «Только рикошеты и ледяное поле»).</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="num">4</span> Что нужно убрать или упростить (Kill List)</h2>
+  <ul>
+    <li><strong>Микро-числовые апгрейды (+2% к урону):</strong> Игрок не чувствует прибавку в 2-3%. Рекомендуется сократить количество уровней прокачки модулей с 10 до 5, сделав шаг +10-15% за уровень с заметным визуальным изменением танка.</li>
+    <li><strong>Спам цифр урона от потокового оружия:</strong> Кислотные струи Химеры и огнемет генерируют гигантское число всплывающих нулей и мелких цифр, заслоняя прицел. Необходимо внедрить <em>Damage Batching</em> (суммирование тиков урона за 0.25 сек в одну крупную цифру).</li>
+    <li><strong>Дублирующие кнопки переходов:</strong> Убрать промежуточные кнопки переходов внутри вкладок, так как все 5 разделов теперь вынесены на верхнюю панель навигации.</li>
+  </ul>
+
+  <h2><span class="num">5</span> Аудит пользовательского интерфейса (UI/UX)</h2>
+  <p><strong>Вердикт:</strong> Интерфейс игры обладает стильной современной неоново-индустриальной эстетикой. Последние доработки (перенос Справочника в топ-вкладки, закрепленный 3D-предпросмотр танка и карточки в стиле перков) существенно улучшили юзабилити. Однако есть моменты для полировки:</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">🖥️ Интерфейс главного меню и Хаба</div>
+      <ul>
+        <li><strong>Верхняя панель (5 вкладок):</strong> Соответствует правилу когнитивной емкости Миллера (7±2). Меню не перегружено, иерархия чистая.</li>
+        <li><strong>Вкладка «Косметика»:</strong> Двухколоночный сплит с Pinned Preview работает отлично. Игрок всегда видит результат кастомизации.</li>
+        <li><strong>Рекомендация:</strong> Добавить горячие клавиши <code>Q</code> / <code>E</code> для быстрого переключения верхних вкладок с геймпада и клавиатуры.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚔️ Внутриигровой боевой HUD</div>
+      <ul>
+        <li><strong>Периферийный фокус:</strong> Индикатор здоровья и перегрева около корпуса танка — превосходное решение, игрок не отвлекается на углы экрана.</li>
+        <li><strong>Миникарта:</strong> На небольших аренах миникарта избыточна; на больших — критична. Сделать авто-скрытие на картах меньше 24×24 тайлов.</li>
+        <li><strong>Всплывающее меню Tab (Перки):</strong> Читается отлично, но в одиночной игре желательно ставить бой на микро-паузу (или замедление x0.1 Bullet-time).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>Танчики: Iron Storm — Документ геймдев-анализа</span>
+    <span>Страница 2 из 3</span>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- PAGE 3: ПРОЧИЕ ПРЕЛЕСТИ ГЕЙМДЕВА И ROADMAP -->
+  <h2><span class="num">6</span> Прочие тонкости геймдева (Audio, Онбординг, Код)</h2>
+
+  <div class="card-grid">
+    <div class="card highlight">
+      <div class="card-title">🎵 Звуковой дизайн (Audio & Foley)</div>
+      <ul>
+        <li><strong>Позиционный звук разрушений:</strong> Глухие басовые звуки обрушения кирпича и скрежет разлетающегося металла создают 50% удовольствия от стрельбы.</li>
+        <li><strong>Динамические стемы музыки:</strong> Музыка уже реагирует на интенсивность боя — стоит добавить фильтр низких частот (Low-Pass Filter) при критическом здоровье танка (HP &lt; 20%), создавая эффект контузии.</li>
+      </ul>
+    </div>
+
+    <div class="card highlight">
+      <div class="card-title">🎓 Онбординг и кривая обучения (FTUE)</div>
+      <ul>
+        <li><strong>Обучающий пролог:</strong> Игре жизненно необходима короткая 90-секундная вводная арена: <em>«1. Пробей кирпичную стену ➔ 2. Заморозь врага ➔ 3. Возьми перк ➔ 4. Уничтожь босса»</em>.</li>
+        <li><strong>Подсказки на экранах загрузки:</strong> Тактические советы по уязвимостям боссов (напр. «Таран уязвим с кормы после удара в стену»).</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="num">7</span> Приоритетная дорожная карта до релиза (Roadmap)</h2>
+
+  <table class="table-box">
+    <thead>
+      <tr>
+        <th style="width: 15%;">Этап</th>
+        <th style="width: 45%;">Задачи и нововведения</th>
+        <th style="width: 25%;">Влияние на игру</th>
+        <th style="width: 15%;">Приоритет</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Фаза 1: Апгрейд рывка (Shift Juice)</strong></td>
+        <td>HUD-индикатор отката рывка, всенаправленность по WASD, i-frames (0.25с), звук и след форсажа, Hit-stop и батчинг цифр урона.</td>
+        <td>Устранение ощущения беспомощности при перегреве, максимальный контроль и динамика.</td>
+        <td><span class="badge badge-danger">Критический (P0)</span></td>
+      </tr>
+      <tr>
+        <td><strong>Фаза 2: Онбординг & FTUE</strong></td>
+        <td>Интерактивный туториал на 1.5 минуты, контекстные подсказки при первой встрече с боссами.</td>
+        <td>Снижение оттока новичков в первые 10 минут игры на 40-50%.</td>
+        <td><span class="badge badge-danger">Высокий (P1)</span></td>
+      </tr>
+      <tr>
+        <td><strong>Фаза 3: Интерактив арены</strong></td>
+        <td>Взрывоопасные бочки, энергощиты, сбрасываемые дроп-поды с оружием в режиме Орды.</td>
+        <td>Глубина тактики и нелинейность каждого матча.</td>
+        <td><span class="badge badge-warning">Средний (P2)</span></td>
+      </tr>
+      <tr>
+        <td><strong>Фаза 4: Удержание (Retention)</strong></td>
+        <td>Steam Leaderboards для бесконечной волны, еженедельные испытания с модификаторами.</td>
+        <td>Повторные сессии, обсуждения в сообществе Steam и на стримах.</td>
+        <td><span class="badge badge-info">Релизный (P3)</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="card" style="margin-top: 15px; background: #f0fdf4; border-color: #86efac;">
+    <div class="card-title" style="color: #166534;">🌟 Итоговый вердикт проекта</div>
+    <p style="color: #14532d; margin-bottom: 0;">
+      <strong>Танчики: Iron Storm</strong> обладает великолепным техническим фундаментом: высокая производительность Godot 4, глубокая система разрушаемости, развитый сетевой код и богатая рогаликовая система перков. Игра имеет все шансы стать инди-хитом в сегменте кооперативных аркадных экшенов. Главная точка приложения усилий сейчас — не раздувание контента, а <strong>полировка боевого сока (Game Feel / Dash)</strong> и <strong>простой эффектный онбординг</strong>.
+    </p>
+  </div>
+
+  <div class="footer">
+    <span>Танчики: Iron Storm — Документ геймдев-анализа</span>
+    <span>Страница 3 из 3</span>
+  </div>
+
+</body>
+</html>

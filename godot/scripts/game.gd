@@ -378,9 +378,15 @@ func start_match(net_opts: Dictionary = {}) -> void:
 
 	for p in players:
 		p.reset_for_match()
-		p.upgrade_mods = Prof.upgrade_mods()
-		p.cosmetics = Prof.equipped_cosmetics()
-		p.equipped_cannon = Prof.equipped_cannon
+		if String(s["mode"]) == "tutorial":
+			p.upgrade_mods = {}
+			p.cosmetics = {}
+			p.equipped_cannon = "standard"
+			p.color_key = "p1"
+		else:
+			p.upgrade_mods = Prof.upgrade_mods()
+			p.cosmetics = Prof.equipped_cosmetics()
+			p.equipped_cannon = Prof.equipped_cannon
 	for p in remote_players:
 		p.reset_for_match()
 
@@ -440,6 +446,8 @@ func start_match(net_opts: Dictionary = {}) -> void:
 			start_hint = I18n.t("feed.start.koth", {}, "Царь горы (Битва с боссами): одолейте 3 боссов и выживите на тонущей арене!")
 		"defense":
 			start_hint = I18n.t("feed.start.defense", {}, "Оборона: удерживайте базу от волн врагов")
+		"tutorial":
+			start_hint = I18n.t("feed.start.tutorial", {}, "Курс молодого бойца: следуйте указаниям на экране!")
 		_:
 			start_hint = I18n.t("feed.start.ctf", {}, "Захват флага: везите чужие флаги на свою базу")
 	hud.add_feed(start_hint, Color("#88ff88"))
@@ -453,7 +461,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 
 	state = S_PLAYING
 	Mus.play_combat(String(world.level.get("location", Locations.CITY)))
-	var start_picks := 3 if String(s["mode"]) == "koth" else 1
+	var start_picks := 0 if String(s["mode"]) == "tutorial" else (3 if String(s["mode"]) == "koth" else 1)
 	for p in players:
 		p.pending_level_ups += start_picks
 	_process_perk_queue()
@@ -596,6 +604,14 @@ func _on_finish(result: Dictionary) -> void:
 		Prof.bump_stat("gamesWon", 1)
 	if world.mode == "defense":
 		Prof.bump_stat("defenseWaveReached", world.wave)
+		Prof.bump_weekly("defense_wave", world.wave)
+		var p_name: String = players[0].name if not players.is_empty() else "Игрок"
+		var p_score: int = players[0].score if not players.is_empty() else 0
+		Prof.record_local_leaderboard("survival_waves", p_name, world.wave)
+		Prof.record_local_leaderboard("survival_score", p_name, p_score)
+		SteamStats.push_survival_record(world.wave, p_score)
+	if world.mode == "tutorial":
+		Prof.bump_stat("tutorialCompleted", 1)
 	Prof.bump_daily("games", 1)
 	Prof.check_challenges()
 	Prof.save_profile()
@@ -604,6 +620,8 @@ func _on_finish(result: Dictionary) -> void:
 	for p in players:
 		best = maxi(best, p.score)
 	var board_score := world.wave if world.mode == "defense" else best
+	var leader_name: String = players[0].name if not players.is_empty() else "Игрок"
+	Prof.record_local_leaderboard(world.mode, leader_name, board_score)
 	SteamStats.push_score(board_score, world.mode)
 	hud.hide_hud()
 	ui.refresh_profile()

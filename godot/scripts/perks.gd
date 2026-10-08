@@ -15,6 +15,7 @@ static func base_modifiers() -> Dictionary:
 		"evasionChance": 0.0,
 		"reflectFraction": 0.0,
 		"pickupRadiusMult": 1.0,
+		"pickupHealMult": 1.0,
 		"lifestealFraction": 0.0,
 		"regenPerMinute": 0.0,
 		"buildingDmgMult": 1.0,
@@ -95,8 +96,8 @@ const LIST := [
 	},
 	{
 		"id": "reflect", "name": "Отражение", "icon": "🪞",
-		"desc": "Реактивная защита: возвращает 20% полученного урона обратно атаковавшему вас противнику.", "category": "defense",
-		"mods": {"reflectFraction": 0.2},
+		"desc": "Реактивная защита: возвращает 45% полученного урона обратно атаковавшему вас противнику и оглушает его на 0.8 секунды.", "category": "defense",
+		"mods": {"reflectFraction": 0.45},
 	},
 	{
 		"id": "evasion", "name": "Уклонение", "icon": "💨",
@@ -201,8 +202,9 @@ const LIST := [
 	},
 	{
 		"id": "magnet", "name": "Магнит", "icon": "🧲",
-		"desc": "Встроенный манипулятор удваивает радиус автоматического подбора аптечек и ремонтных наборов.", "category": "challenge",
-		"mods": {"pickupRadiusMult": 2.0},
+		"desc": "Встроенный манипулятор притягивает аптечки и ящики с оружием, удваивает радиус сбора и повышает лечение от аптечек на 20%.", "category": "challenge",
+		"flags": ["magnet"],
+		"mods": {"pickupRadiusMult": 2.0, "pickupHealMult": 1.2},
 		"challenge": {"desc": "Собери 20 аптечек", "stat": "healthPacksCollected", "need": 20},
 	},
 	{
@@ -220,7 +222,7 @@ const LIST := [
 	},
 	{
 		"id": "kamikaze", "name": "Камикадзе", "icon": "💀",
-		"desc": "При уничтожении танка его боеукладка взрывается, разнося всё живое в радиусе 8 метров.", "category": "challenge",
+		"desc": "При уничтожении танка его боеукладка взрывается, нанося 130 сокрушительного урона в радиусе 8 метров.", "category": "challenge",
 		"flags": ["kamikaze"],
 		"challenge": {"desc": "Погибни в бою 10 раз", "stat": "timesDied", "need": 10},
 	},
@@ -239,7 +241,7 @@ const LIST := [
 	},
 	{
 		"id": "vampire", "name": "Вампир", "icon": "🧛",
-		"desc": "Вампиризм: 15% от всего нанесённого врагам урона возвращается в виде ремонта вашего танка.", "category": "challenge",
+		"desc": "Вампиризм: 15% от нанесённого урона (Hard Cap: не более 12 HP в секунду) возвращается в виде ремонта вашего танка.", "category": "challenge",
 		"mods": {"lifestealFraction": 0.15},
 		"challenge": {"desc": "Нанеси 5000 урона за партию", "stat": "damageInGame", "need": 5000},
 	},
@@ -615,7 +617,11 @@ static func compute_modifiers(perk_ids: Array, bot: bool = false) -> Dictionary:
 			var v: float = float(mods[key])
 			match key:
 				"maxHPMult", "speedMult", "fireRateMult", "dmgMult", "bulletSpeedMult", \
-				"damageTakenMult", "ramMult", "pickupRadiusMult", "buildingDmgMult", 				"heatPerShotMult", "heatCoolMult", "roadSpeedMult", 				"woodDmgMult", "brickDmgMult", "concreteDmgMult", "metalDmgMult", 				"hearingMult", "noiseMult", "ambushDmgMult", 				"freezeDurationMult", "iceHeatMult", "acidDmgMult":
+				"damageTakenMult", "ramMult", "pickupRadiusMult", "pickupHealMult", "buildingDmgMult", \
+				"heatPerShotMult", "heatCoolMult", "roadSpeedMult", \
+				"woodDmgMult", "brickDmgMult", "concreteDmgMult", "metalDmgMult", \
+				"hearingMult", "noiseMult", "ambushDmgMult", \
+				"freezeDurationMult", "iceHeatMult", "acidDmgMult":
 					m[key] = float(m[key]) * v
 				"accuracyBonus", "reflectFraction", "lifestealFraction", "regenPerMinute", 				"heatResumeAdd", "softGrip", "scavengeHeal":
 					m[key] = float(m[key]) + v

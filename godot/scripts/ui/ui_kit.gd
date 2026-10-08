@@ -147,6 +147,9 @@ static func primary(text: String, font_size: int = 16) -> Button:
 	b.add_theme_font_override("font", Fonts.bold)
 	return b
 
+static func button(text: String, font_size: int = 12) -> Button:
+	return secondary(text, font_size)
+
 static func secondary(text: String, font_size: int = 12) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -391,7 +394,8 @@ static func dimmer() -> ColorRect:
 	return c
 
 static func plain_tabs(items: Array, active_key: String, on_change: Callable) -> HBoxContainer:
-	var row := hbox(28)
+	var sep := 18 if items.size() >= 5 else 28
+	var row := hbox(sep)
 	for item in items:
 		var key: String = item["key"]
 		var on := key == active_key

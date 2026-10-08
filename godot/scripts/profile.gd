@@ -1,5 +1,7 @@
 extends Node
 
+const Weekly = preload("res://scripts/weekly.gd")
+
 const SAVE_PATH := "user://profile.json"
 const SCHEMA := 6
 
@@ -7,6 +9,7 @@ signal levelup(levels: Array)
 signal unlock(ids: Array, reason: String)
 signal achievement(ids: Array, reward: int)
 signal daily_claimed(id: String, reward: int)
+signal weekly_claimed(id: String, reward: int)
 signal rank_up(ids: Array, reward: int)
 
 const STAT_KEYS := [
@@ -32,9 +35,10 @@ const STAT_KEYS := [
 	"moneyEarned",
 	"globalLevel",
 	"defenseWaveReached",
+	"tutorialCompleted",
 ]
 
-const MAX_STATS := ["rapidKills", "cleanStreak", "damageInGame", "globalLevel", "defenseWaveReached"]
+const MAX_STATS := ["rapidKills", "cleanStreak", "damageInGame", "globalLevel", "defenseWaveReached", "tutorialCompleted"]
 
 const STAT_LABELS := {
 	"ramKills": "Убийства тараном",
@@ -59,6 +63,7 @@ const STAT_LABELS := {
 	"moneyEarned": "Заработано монет",
 	"globalLevel": "Наивысший уровень",
 	"defenseWaveReached": "Лучшая волна в «Обороне»",
+	"tutorialCompleted": "Обучение пройдено",
 }
 
 var global_level := 1
@@ -70,6 +75,8 @@ var upgrades := {}
 var achievements := {}
 var ranks_claimed := {}
 var daily := {"date": "", "progress": {}, "claimed": []}
+var weekly := {"week": "", "progress": {}, "claimed": false}
+var local_leaderboards: Dictionary = {}
 var cosmetic_owned := {}
 var cosmetics := {"skin": "none", "camo": "none", "hull": "none", "track": "none", "turret": "none"}
 var cannon_owned := {}
@@ -82,6 +89,7 @@ func _ready() -> void:
 	_empty_stats()
 	_empty_upgrades()
 	daily = {"date": Daily.today_key(), "progress": {}, "claimed": []}
+	weekly = {"week": Weekly.week_key(), "progress": {}, "claimed": false}
 	load_profile()
 
 func _empty_stats() -> void:
@@ -181,7 +189,18 @@ func _apply(data: Dictionary) -> void:
 		bestiary_kills["boss"] = int(stats.get("bossKills", 0))
 	if int(bestiary_kills.get("grunt", 0)) == 0 and int(stats.get("totalKills", 0)) > 0:
 		bestiary_kills["grunt"] = 1
+	var w = data.get("weekly", null)
+	if w is Dictionary and w.has("week"):
+		weekly = {
+			"week": String(w.get("week", "")),
+			"progress": w.get("progress", {}) if w.get("progress", {}) is Dictionary else {},
+			"claimed": bool(w.get("claimed", false)),
+		}
+	var ll = data.get("localLeaderboards", null)
+	if ll is Dictionary:
+		local_leaderboards = ll.duplicate()
 	_refresh_daily_if_stale()
+	_refresh_weekly_if_stale()
 
 func save_profile() -> void:
 	var data := {
@@ -195,6 +214,8 @@ func save_profile() -> void:
 		"achievements": achievements.keys(),
 		"ranksClaimed": ranks_claimed.keys(),
 		"daily": daily,
+		"weekly": weekly,
+		"localLeaderboards": local_leaderboards,
 		"cosmeticOwned": cosmetic_owned.keys(),
 		"cosmetics": cosmetics,
 		"equippedColor1": equipped_color1,
@@ -372,6 +393,121 @@ func claim_daily(id: String) -> Dictionary:
 	save_profile()
 	daily_claimed.emit(id, int(q["reward"]))
 	return {"ok": true, "reward": int(q["reward"])}
+
+func _refresh_weekly_if_stale() -> void:
+	var cur_week := Weekly.week_key()
+	if String(weekly.get("week", "")) == cur_week:
+		return
+	weekly = {"week": cur_week, "progress": {}, "claimed": false}
+
+func get_weekly_progress() -> Dictionary:
+	_refresh_weekly_if_stale()
+	var ch := Weekly.current_challenge()
+	var progress: Dictionary = weekly.get("progress", {})
+	var current: int = int(progress.get(ch["counter"], 0))
+	var need: int = int(ch["need"])
+	return {
+		"challenge": ch,
+		"current": mini(current, need),
+		"need": need,
+		"done": current >= need,
+		"claimed": bool(weekly.get("claimed", false)),
+		"reward": int(ch["reward"]),
+	}
+
+func bump_weekly(counter: String, amount: int = 1) -> void:
+	if amount <= 0:
+		return
+	_refresh_weekly_if_stale()
+	var progress: Dictionary = weekly.get("progress", {})
+	var prev: int = int(progress.get(counter, 0))
+	progress[counter] = prev + amount
+	weekly["progress"] = progress
+	save_profile()
+	var ch := Weekly.current_challenge()
+	if String(ch.get("counter", "")) == counter:
+		var total: int = prev + amount
+		SteamStats.push_weekly_score(total)
+		record_local_leaderboard("weekly", "Игрок", total)
+
+func claim_weekly() -> Dictionary:
+	_refresh_weekly_if_stale()
+	var ch := Weekly.current_challenge()
+	if ch.is_empty():
+		return {"ok": false, "reason": "unknown"}
+	if bool(weekly.get("claimed", false)):
+		return {"ok": false, "reason": "claimed"}
+	var progress: Dictionary = weekly.get("progress", {})
+	if int(progress.get(ch["counter"], 0)) < int(ch["need"]):
+		return {"ok": false, "reason": "not_done"}
+	weekly["claimed"] = true
+	var rew := int(ch["reward"])
+	money += rew
+	save_profile()
+	weekly_claimed.emit(String(ch["id"]), rew)
+	return {"ok": true, "reward": rew}
+
+func record_local_leaderboard(board_key: String, player_name: String, score: int) -> void:
+	if score <= 0:
+		return
+	if not local_leaderboards.has(board_key):
+		local_leaderboards[board_key] = []
+	var list: Array = local_leaderboards[board_key]
+	var found := false
+	for entry in list:
+		if entry.get("name") == player_name:
+			if score > int(entry.get("score", 0)):
+				entry["score"] = score
+				entry["date"] = Daily.today_key()
+			found = true
+			break
+	if not found:
+		list.append({
+			"name": player_name,
+			"score": score,
+			"date": Daily.today_key()
+		})
+	list.sort_custom(func(a, b): return int(a["score"]) > int(b["score"]))
+	if list.size() > 10:
+		list.resize(10)
+	local_leaderboards[board_key] = list
+	save_profile()
+
+func get_local_leaderboard(board_key: String) -> Array:
+	if not local_leaderboards.has(board_key) or (local_leaderboards[board_key] as Array).is_empty():
+		_init_default_leaderboard(board_key)
+	return local_leaderboards.get(board_key, [])
+
+func _init_default_leaderboard(board_key: String) -> void:
+	var defaults := []
+	match board_key:
+		"survival_waves", "defense":
+			defaults = [
+				{"name": "Генерал Броня", "score": 25, "date": "2026-10-01"},
+				{"name": "Ветеран Цитадели", "score": 18, "date": "2026-10-02"},
+				{"name": "Капитан Шторм", "score": 14, "date": "2026-10-03"},
+				{"name": "Сержант Кремень", "score": 10, "date": "2026-10-04"},
+				{"name": "Танкист-Защитник", "score": 7, "date": "2026-10-05"},
+			]
+		"survival_score":
+			defaults = [
+				{"name": "Ас Артиллерии", "score": 18500, "date": "2026-10-01"},
+				{"name": "Охотник на Боссов", "score": 14200, "date": "2026-10-02"},
+				{"name": "Тяжелый Рейдер", "score": 9800, "date": "2026-10-03"},
+			]
+		"weekly":
+			defaults = [
+				{"name": "Громовержец", "score": 45, "date": "2026-W41"},
+				{"name": "Лидер Испытания", "score": 38, "date": "2026-W41"},
+				{"name": "Стальной Чемпион", "score": 25, "date": "2026-W41"},
+			]
+		_:
+			defaults = [
+				{"name": "Абсолютный Чемпион", "score": 5000, "date": "2026-10-01"},
+				{"name": "Мастер Дуэлей", "score": 3500, "date": "2026-10-02"},
+				{"name": "Гладиатор Арены", "score": 2200, "date": "2026-10-03"},
+			]
+	local_leaderboards[board_key] = defaults
 
 func _cos_key(type: String, id: String) -> String:
 	return "%s:%s" % [type, id]

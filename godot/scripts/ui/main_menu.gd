@@ -134,7 +134,7 @@ func _build_mode_and_start() -> void:
 		_start_btn.pressed.connect(_on_start_pressed)
 
 	_style_button(_quick_btn, UiKit.secondary("", 14))
-	_quick_btn.text = _tr("menu.quick_play", "⚡ БЫСТРЫЙ БОЙ")
+	_quick_btn.text = _tr("menu.quick_play", "БЫСТРЫЙ БОЙ")
 	_quick_btn.custom_minimum_size = Vector2(0, 40)
 	if not _quick_btn.pressed.is_connected(_on_quick_pressed):
 		_quick_btn.pressed.connect(_on_quick_pressed)
@@ -175,9 +175,16 @@ func _style_button(target: Button, donor: Button) -> void:
 
 func refresh_mode_summary() -> void:
 	var caret := "▴" if _settings_panel.visible else "▾"
-	var mode_label := _option_label("mode", settings.get("mode", "ffa"))
-	var type_label := _option_label("game_type", settings.get("game_type", "single"))
-	_mode_btn.text = "%s · %s  %s" % [mode_label, type_label, caret]
+	if settings.get("game_type") == "tutorial" or settings.get("mode") == "tutorial":
+		_mode_btn.text = "%s · %s  %s" % [
+			_option_label("game_type", "tutorial"),
+			_option_label("mode", "tutorial"),
+			caret
+		]
+	else:
+		var mode_label := _option_label("mode", settings.get("mode", "ffa"))
+		var type_label := _option_label("game_type", settings.get("game_type", "single"))
+		_mode_btn.text = "%s · %s  %s" % [mode_label, type_label, caret]
 
 func _option_label(key: String, value) -> String:
 	var opts: Array = _settings_options().get(key, [])
@@ -190,19 +197,19 @@ func _build_nav_grid() -> void:
 	for c in _nav_grid.get_children():
 		c.queue_free()
 	var dest := [
-		["garage", "🔧", _tr("menu.tile.garage", "Гараж")],
-		["daily", "📅", _tr("menu.tile.daily", "Задания")],
-		["achievements", "🏅", _tr("menu.tile.achievements", "Достижения")],
-		["stats", "📊", _tr("menu.stats", "Статистика")],
-		["net", "🌐", _tr("menu.tile.net", "Сетевая игра")],
-		["map_editor", "🗺", _tr("menu.tile.map_editor", "Редактор карт")],
-		["settings", "⚙", _tr("menu.tile.settings", "Настройки")],
-		["quit", "✖", _tr("menu.quit", "Выход")],
+		["garage", _tr("menu.tile.garage", "Гараж")],
+		["daily", _tr("menu.tile.daily", "Задания")],
+		["achievements", _tr("menu.tile.achievements", "Достижения")],
+		["stats", _tr("menu.stats", "Статистика")],
+		["net", _tr("menu.tile.net", "Сетевая игра")],
+		["map_editor", _tr("menu.tile.map_editor", "Редактор карт")],
+		["settings", _tr("menu.tile.settings", "Настройки")],
+		["quit", _tr("menu.quit", "Выход")],
 	]
 	var tiles: Array = []
 	for d in dest:
 		var id: String = d[0]
-		var tile := UiKit.secondary("%s\n%s" % [d[1], d[2]], 11)
+		var tile := UiKit.secondary(d[1], 12)
 		tile.custom_minimum_size = Vector2(0, 40)
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tile.pressed.connect(func(): nav_pressed.emit(id))
@@ -264,12 +271,14 @@ func _settings_options() -> Dictionary:
 		"game_type": [
 			["single", _tr("gametype.single", "1 игрок")],
 			["hotseat", _tr("gametype.hotseat", "Горячий стул")],
+			["tutorial", _tr("gametype.tutorial", "Обучение")],
 		],
 		"mode": [
 			["ffa", _tr("mode.ffa", "Каждый за себя")],
 			["ctf", _tr("mode.ctf", "Захват флага")],
 			["koth", _tr("mode.koth", "Царь горы (Боссы)")],
 			["defense", _tr("mode.defense", "Оборона")],
+			["tutorial", _tr("mode.tutorial", "Обучение")],
 		],
 		"difficulty": [
 			["easy", _tr("diff.easy", "Легко")],
@@ -278,27 +287,27 @@ func _settings_options() -> Dictionary:
 		],
 		"location": [
 			["auto", _tr("loc.auto", "Жребий")],
-			["city", _tr("loc.city", "🏙 Город")],
-			["dust", _tr("loc.dust", "🏜 Пустошь")],
-			["jungle", _tr("loc.jungle", "🌴 Джунгли")],
-			["frost", _tr("loc.frost", "❄ Зима")],
-			["exclusion", _tr("loc.exclusion", "☢ Зона")],
-			["shore", _tr("loc.shore", "🌊 Берег")],
+			["city", _tr("loc.city", "Город")],
+			["dust", _tr("loc.dust", "Пустошь")],
+			["jungle", _tr("loc.jungle", "Джунгли")],
+			["frost", _tr("loc.frost", "Зима")],
+			["exclusion", _tr("loc.exclusion", "Зона")],
+			["shore", _tr("loc.shore", "Берег")],
 		],
 		"weather": [
 			["auto", _tr("wx.auto", "Своя")],
-			["clear", _tr("wx.clear", "☀ Ясно")],
-			["rain", _tr("wx.rain", "🌧 Дождь")],
-			["fog", _tr("wx.fog", "🌫 Туман")],
-			["snow", _tr("wx.snow", "❄ Снег")],
-			["storm", _tr("wx.storm", "⛈ Гроза")],
+			["clear", _tr("wx.clear", "Ясно")],
+			["rain", _tr("wx.rain", "Дождь")],
+			["fog", _tr("wx.fog", "Туман")],
+			["snow", _tr("wx.snow", "Снег")],
+			["storm", _tr("wx.storm", "Гроза")],
 		],
 		"daytime": [
 			["auto", _tr("tod.auto", "Цикл")],
-			["day", _tr("tod.day", "☀ День")],
-			["dusk", _tr("tod.dusk", "🌆 Закат")],
-			["night", _tr("tod.night", "🌙 Ночь")],
-			["midnight", _tr("tod.midnight", "🌑 Полночь")],
+			["day", _tr("tod.day", "День")],
+			["dusk", _tr("tod.dusk", "Закат")],
+			["night", _tr("tod.night", "Ночь")],
+			["midnight", _tr("tod.midnight", "Полночь")],
 		],
 	}
 
@@ -323,8 +332,23 @@ func _build_settings_groups() -> void:
 			_tr(String(_GROUP_LABELS[key]), String(_GROUP_FALLBACKS[key])), key, opts[key]))
 	_wire_settings_nav.call_deferred()
 
+func _sync_group_buttons() -> void:
+	for child in _settings_body.get_children():
+		if not (child is HBoxContainer):
+			continue
+		var key: String = String(child.get_meta("key", ""))
+		if key != "game_type" and key != "mode":
+			continue
+		var flow: Control = child.get_child(1) if child.get_child_count() > 1 else null
+		if flow == null:
+			continue
+		for btn in flow.get_children():
+			if btn is Button:
+				btn.button_pressed = settings.get(key) == btn.get_meta("value")
+
 func _make_group(label_text: String, key: String, options: Array) -> HBoxContainer:
 	var row := UiKit.hbox(10)
+	row.set_meta("key", key)
 	var l := UiKit.label(label_text.to_upper(), 10, Cfg.UI_MUTED)
 	l.custom_minimum_size = Vector2(112, 0)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -342,10 +366,20 @@ func _make_group(label_text: String, key: String, options: Array) -> HBoxContain
 	for opt in options:
 		var value = opt[0]
 		var btn := UiKit.toggle(String(opt[1]))
+		btn.set_meta("value", value)
 		btn.button_group = group
 		btn.button_pressed = settings[key] == value
 		btn.pressed.connect(func():
 			settings[key] = value
+			if key == "game_type" and value == "tutorial":
+				settings["mode"] = "tutorial"
+			elif key == "game_type" and settings.get("mode") == "tutorial" and value != "tutorial":
+				settings["mode"] = "ffa"
+			elif key == "mode" and value == "tutorial":
+				settings["game_type"] = "tutorial"
+			elif key == "mode" and settings.get("game_type") == "tutorial" and value != "tutorial":
+				settings["game_type"] = "single"
+			_sync_group_buttons()
 			refresh_mode_summary())
 		flow.add_child(btn)
 	return row
@@ -404,14 +438,14 @@ func _notification(what: int) -> void:
 
 func refresh_profile() -> void:
 	if Engine.is_editor_hint():
-		_chip_rank.text = "🎖 Рядовой"
+		_chip_rank.text = "Рядовой"
 		_chip_level.text = "Ур. 1  ·  0/100 XP"
 		_chip_coins.text = "0 🪙"
 		_chip_perks.text = "перков 0/0"
 		return
 	var need := Prof.xp_to_next_level()
 	var rank := Ranks.for_level(Prof.global_level)
-	_chip_rank.text = "%s %s" % [String(rank.get("icon", "")), I18n.dn(rank, "name", "rank")]
+	_chip_rank.text = I18n.dn(rank, "name", "rank")
 	_chip_level.text = "%s %d  ·  %d/%d XP" % [
 		_tr("menu.lvl", "Ур."), Prof.global_level, Prof.global_xp, need]
 	_chip_coins.text = "%d 🪙" % Prof.money

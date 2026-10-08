@@ -10,10 +10,15 @@ const LEADERBOARDS := {
 	"ffa": "HighScore_FFA",
 	"ctf": "HighScore_CTF",
 	"koth": "HighScore_KOTH",
-	"defense": "HighScore_Defense",
+	"defense": "HighScore_Defense_Waves",
+	"survival_waves": "HighScore_Defense_Waves",
+	"survival_score": "HighScore_Defense_Score",
+	"weekly": "HighScore_Weekly",
 }
 
 static var _warned := false
+static var _pending_score := 0
+static var _pending_board := ""
 
 static func api_name(id: String) -> String:
 	return "ACH_" + id.to_upper()
@@ -61,16 +66,32 @@ static func push_stats(stats: Dictionary) -> int:
 	return sent
 
 static func push_score(score: int, mode: String) -> bool:
+	return push_leaderboard(mode, score)
+
+static func push_survival_record(waves: int, score: int) -> void:
+	if waves > 0:
+		push_leaderboard("survival_waves", waves)
+	if score > 0:
+		push_leaderboard("survival_score", score)
+
+static func push_weekly_score(score: int) -> void:
+	if score > 0:
+		push_leaderboard("weekly", score)
+
+static func push_leaderboard(board_key: String, score: int) -> bool:
 	if not ready() or score <= 0:
 		return false
-	_steam().findLeaderboard(String(LEADERBOARDS.get(mode, "HighScore")))
+	var board_name: String = String(LEADERBOARDS.get(board_key, "HighScore_" + board_key.to_upper()))
+	_pending_board = board_name
 	_pending_score = score
+	_steam().findLeaderboard(board_name)
 	return true
-
-static var _pending_score := 0
 
 static func on_leaderboard_found(found: bool) -> void:
 	if not found or _pending_score <= 0 or not ready():
+		_pending_score = 0
+		_pending_board = ""
 		return
 	_steam().uploadLeaderboardScore(_pending_score, true)
 	_pending_score = 0
+	_pending_board = ""

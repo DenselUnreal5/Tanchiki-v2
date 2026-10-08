@@ -3,6 +3,22 @@ extends RefCounted
 
 const ENVIRONMENTAL := ["water", "lightning"]
 
+# CC Priority Levels (Иерархия контроля и боевых состояний):
+# 5: CC_DEAD      - Смерть (alive == false)
+# 4: CC_STASIS    - Абсолютный стазис / Заморозка (freeze_ticks > 0)
+# 3: CC_STUN      - Жесткий контроль / Оглушение (stun_ticks > 0, rammer_daze_ticks > 0)
+# 2: CC_FORCED    - Вынужденные спец-действия (dash_range > 0, разгон таранщика, вихрь)
+# 1: CC_SOFT      - Мягкие модификаторы (кислота, вода, зыбучие пески, перегрев)
+# 0: CC_BASE      - Базовое управление
+const CC_NONE := 0
+const CC_SOFT := 1
+const CC_FORCED := 2
+const CC_STUN := 3
+const CC_STASIS := 4
+const CC_DEAD := 5
+
+const INPUT_BUFFER_WINDOW := 10 # ~166 мс предввода при 60 тиках/сек
+
 const BOT_TURRET_SLEW := 0.12
 const BODY_TURN_RATE := 0.15
 
@@ -75,6 +91,15 @@ var ability_timer := 0
 var dash_range := 0.0
 var dash_cooldown := 0
 var dash_stall := 0
+var dash_dir := Vector2.ZERO
+var dash_invuln_ticks := 0
+var stun_ticks := 0
+
+# Буферизация действий игрока (Input Buffer)
+var buffer_fire_ticks := 0
+var buffer_dash_ticks := 0
+var buffer_dash_dir := Vector2.ZERO
+var buffer_ability_ticks := 0
 
 var is_boss := false
 var boss_phase := 1
@@ -84,6 +109,9 @@ var enrage_shield_ticks := 0
 var boss_stat_mult := 1.0
 var telegraph_ticks := 0
 var telegraph_kind := ""
+var sniper_laser_ticks := 0
+var vampire_heal_window_tick := 0
+var vampire_heal_this_sec := 0.0
 
 var is_rammer_boss := false
 var rammer_state := "idle"
@@ -205,6 +233,16 @@ func _init(opts: Dictionary) -> void:
 	recompute()
 	hp = max_hp
 
+func set_chassis(id: String) -> void:
+	chassis_id = id
+	var shape := TankArt.chassis(chassis_id)
+	width = float(shape["w"])
+	height = float(shape["h"])
+	hit_r = TankArt.hit_radius(width, height)
+	muzzle_len = TankArt.muzzle_len(shape)
+	col_w = minf(width, TankArt.MAX_COLLIDE_W)
+	col_h = minf(height, TankArt.MAX_COLLIDE_H)
+
 var is_player_controlled: bool:
 	get: return owner != null
 
@@ -212,7 +250,56 @@ var carrying_flag: bool:
 	get: return flag != null
 
 var can_fire: bool:
-	get: return alive and fire_cooldown <= 0 and not overheated and not is_rammer_boss and not is_chimera_boss and not is_chimera_clone
+	get: return alive and freeze_ticks <= 0 and stun_ticks <= 0 and rammer_daze_ticks <= 0 and fire_cooldown <= 0 and not overheated and not is_rammer_boss and not is_chimera_boss and not is_chimera_clone
+
+func get_cc_level() -> int:
+	if not alive:
+		return CC_DEAD
+	if freeze_ticks > 0:
+		return CC_STASIS
+	if stun_ticks > 0 or rammer_daze_ticks > 0:
+		return CC_STUN
+	if dash_range > 0.0 or (is_rammer_boss and (rammer_state == "charge" or rammer_state == "spin")):
+		return CC_FORCED
+	if acid_stacks > 0 or in_water or quicksand_timer > 0 or overheated:
+		return CC_SOFT
+	return CC_NONE
+
+func can_act(max_cc_allowed: int = CC_SOFT) -> bool:
+	return get_cc_level() <= max_cc_allowed
+
+func interrupt_current_action(target_cc_level: int) -> void:
+	if target_cc_level >= CC_STUN:
+		dash_range = 0.0
+		dash_stall = 0
+		if is_rammer_boss:
+			rammer_state = "idle"
+			rammer_telegraph_ticks = 0
+			rammer_charge_ticks = 0
+			rammer_spin_ticks = 0
+			rammer_charge_hit.clear()
+			rammer_spin_hit.clear()
+		if is_chimera_boss or is_chimera_clone:
+			chimera_stream_active = false
+			chimera_stream_warmup_ticks = 0
+			chimera_stream_timer = 0
+	if target_cc_level >= CC_STASIS:
+		vx = 0.0
+		vy = 0.0
+		if is_rammer_boss:
+			rammer_daze_ticks = Cfg.RAMMER_DAZE_TICKS
+	if target_cc_level >= CC_DEAD:
+		vx = 0.0
+		vy = 0.0
+		heat = 0.0
+		overheated = false
+		turbo_timer = 0
+		shadow_timer = 0
+		ability_timer = 0
+		dash_invuln_ticks = 0
+		buffer_fire_ticks = 0
+		buffer_dash_ticks = 0
+		buffer_ability_ticks = 0
 
 func _update_heat(world) -> void:
 	if owner == null:
@@ -271,7 +358,14 @@ func recompute() -> void:
 	mods = Perks.compute_modifiers(perk_ids, is_bot)
 	flags = Perks.compute_flags(perk_ids, is_bot)
 	var next_ability := Perks.active_ability_of(perk_ids, is_bot)
-	if next_ability != ability_id:
+	if next_ability != "":
+		if next_ability != ability_id:
+			ability_timer = 0
+			ability_id = next_ability
+	elif perk_ids.is_empty() and ability_id != "":
+		# Preserve manually granted active ability (e.g. during tutorial or special mission modes)
+		pass
+	elif next_ability != ability_id:
 		ability_timer = 0
 		ability_id = next_ability
 	if not upgrade_mods.is_empty():
@@ -298,6 +392,8 @@ func completed_builds() -> Array:
 func thrust(dx: float, dy: float) -> void:
 	if dx == 0.0 and dy == 0.0:
 		return
+	if not alive or freeze_ticks > 0 or stun_ticks > 0 or rammer_daze_ticks > 0:
+		return
 	var length := sqrt(dx * dx + dy * dy)
 	dx /= length
 	dy /= length
@@ -312,9 +408,13 @@ func thrust(dx: float, dy: float) -> void:
 	wants_move = true
 
 func aim_at(tx: float, ty: float) -> void:
+	if not alive or freeze_ticks > 0 or stun_ticks > 0:
+		return
 	turret_angle = atan2(ty - y, tx - x)
 
 func slew_turret_to(target: float) -> void:
+	if not alive or freeze_ticks > 0 or stun_ticks > 0:
+		return
 	turret_angle = Rng.rotate_toward(turret_angle, target, BOT_TURRET_SLEW)
 
 func update(world) -> void:
@@ -340,6 +440,8 @@ func update(world) -> void:
 		shadow_timer -= 1
 	if dash_cooldown > 0:
 		dash_cooldown -= 1
+	if dash_invuln_ticks > 0:
+		dash_invuln_ticks -= 1
 	if weapon_timer > 0:
 		weapon_timer -= 1
 		if weapon_timer <= 0:
@@ -350,8 +452,12 @@ func update(world) -> void:
 			_resolve_telegraphed_attack(world)
 	if enrage_shield_ticks > 0:
 		enrage_shield_ticks -= 1
+	if stun_ticks > 0:
+		stun_ticks -= 1
 	if rammer_daze_ticks > 0:
 		rammer_daze_ticks -= 1
+	if world == null:
+		return
 	if freeze_ticks > 0:
 		freeze_ticks -= 1
 		if freeze_ticks % 14 == 0 and world != null and world.particles != null:
@@ -405,6 +511,9 @@ func update(world) -> void:
 		_update_chimera_boss(world)
 
 	if freeze_ticks <= 0:
+		if is_player_controlled:
+			_process_input_buffer(world)
+
 		if is_rammer_boss and (rammer_state == "charge" or rammer_state == "spin" or rammer_state == "telegraph"):
 			pass
 		elif owner != null:
@@ -412,34 +521,40 @@ func update(world) -> void:
 		elif brain != null:
 			brain.update(self, world)
 
-	if not (is_rammer_boss and (rammer_state == "charge" or rammer_state == "spin")):
-		if dash_range > 0.0:
-			var boost := speed * Cfg.DASH_SPEED_MULT
-			vx = cos(angle) * boost
-			vy = sin(angle) * boost
+		if not (is_rammer_boss and (rammer_state == "charge" or rammer_state == "spin")):
+			if dash_range > 0.0:
+				var boost := speed * Cfg.DASH_SPEED_MULT
+				var ddir: Vector2 = dash_dir if dash_dir != Vector2.ZERO else Vector2(cos(angle), sin(angle))
+				vx = ddir.x * boost
+				vy = ddir.y * boost
 
-		var before_x := x
-		var before_y := y
-		_move(world)
-		var moved := Vector2(x - before_x, y - before_y).length()
+			var before_x := x
+			var before_y := y
+			_move(world)
+			var moved := Vector2(x - before_x, y - before_y).length()
 
-		if wants_move and moved < 0.2:
-			stall_ticks += 1
-			worst_stall = maxi(worst_stall, stall_ticks)
-		else:
-			stall_ticks = 0
-
-		if dash_range > 0.0:
-			dash_range -= moved
-			if moved < 0.15:
-				dash_stall += 1
-				if dash_stall >= 3:
-					dash_range = 0.0
+			if wants_move and moved < 0.2:
+				stall_ticks += 1
+				worst_stall = maxi(worst_stall, stall_ticks)
 			else:
-				dash_stall = 0
-			if dash_range <= 0.0:
-				dash_range = 0.0
-				dash_stall = 0
+				stall_ticks = 0
+
+			if dash_range > 0.0:
+				dash_range -= moved
+				if moved < 0.15:
+					dash_stall += 1
+					if dash_stall >= 3:
+						dash_range = 0.0
+				else:
+					dash_stall = 0
+				if dash_range <= 0.0:
+					dash_range = 0.0
+					dash_stall = 0
+	else:
+		vx = 0.0
+		vy = 0.0
+		dash_range = 0.0
+		dash_stall = 0
 	_check_water(world)
 	_try_ram(world)
 
@@ -448,6 +563,24 @@ func update(world) -> void:
 
 	body_angle = Rng.rotate_toward(body_angle, angle,
 		absf(angle - body_angle) * BODY_TURN_RATE + 0.02)
+
+func _process_input_buffer(world) -> void:
+	# Исполнение буферизованных действий в порядке приоритета:
+	# 1. Спасение и маневр (Dash)
+	if buffer_dash_ticks > 0:
+		buffer_dash_ticks -= 1
+		if can_act(CC_SOFT) and dash_cooldown <= 0 and dash_range <= 0.0:
+			dash(buffer_dash_dir)
+	# 2. Способность
+	if buffer_ability_ticks > 0:
+		buffer_ability_ticks -= 1
+		if can_act(CC_SOFT) and ability_cd <= 0 and ability_id != "":
+			use_ability(world)
+	# 3. Выстрел
+	if buffer_fire_ticks > 0:
+		buffer_fire_ticks -= 1
+		if can_fire:
+			shoot(world)
 
 func predict_move(world, cmd: Dictionary) -> void:
 	if not alive:
@@ -584,6 +717,10 @@ func start_rammer_spin(world) -> void:
 	Sfx.play("thunder", x, y)
 
 func _update_rammer_boss(world) -> void:
+	if not alive or freeze_ticks > 0:
+		vx = 0.0
+		vy = 0.0
+		return
 	if rammer_spin_cooldown > 0:
 		rammer_spin_cooldown -= 1
 
@@ -790,7 +927,9 @@ func _update_rammer_boss(world) -> void:
 				rammer_state = "idle"
 
 func _update_chimera_boss(world) -> void:
-	if not alive:
+	if not alive or freeze_ticks > 0:
+		vx = 0.0
+		vy = 0.0
 		return
 
 	if is_chimera_boss:
@@ -1097,6 +1236,8 @@ func _check_water(world) -> void:
 		world.particles.burst(x, y, [Cfg.water_light], 1, 2, 2, 10, 10, world.rng)
 
 func _try_ram(world) -> void:
+	if freeze_ticks > 0:
+		return
 	if is_rammer_boss and rammer_state == "charge":
 		return
 	var spd := sqrt(vx * vx + vy * vy)
@@ -1123,7 +1264,10 @@ func _try_ram(world) -> void:
 
 func shoot(world) -> bool:
 	if not can_fire:
+		if alive and is_player_controlled and ((fire_cooldown > 0 and fire_cooldown <= INPUT_BUFFER_WINDOW) or (freeze_ticks > 0 and freeze_ticks <= INPUT_BUFFER_WINDOW)):
+			buffer_fire_ticks = INPUT_BUFFER_WINDOW
 		return false
+	buffer_fire_ticks = 0
 	fire_cooldown = reload_ticks()
 	_after_shot()
 
@@ -1146,6 +1290,8 @@ func shoot(world) -> bool:
 				float(wp["dmg_scale"]) * scale_v)
 			if bool(wp["explosive"]):
 				b.explosive = true
+				if wp.has("splash_r"):
+					b.splash_r = float(wp["splash_r"])
 			world.bullets.append(b)
 		world.particles.burst(muzzle_x, muzzle_y, [wp["color"], Color.WHITE], 6, 2, 4, 10, 12, world.rng)
 		Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
@@ -1239,7 +1385,7 @@ func _resolve_telegraphed_attack(world) -> void:
 	Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
 
 func place_mine(world) -> bool:
-	if not flags.has("mines") or mine_cooldown > 0:
+	if not alive or freeze_ticks > 0 or stun_ticks > 0 or not flags.has("mines") or mine_cooldown > 0:
 		return false
 	var own := 0
 	for m in world.mines:
@@ -1251,15 +1397,34 @@ func place_mine(world) -> bool:
 	mine_cooldown = Cfg.MINE_COOLDOWN
 	return true
 
-func dash() -> bool:
-	if not alive or dash_cooldown > 0 or dash_range > 0.0:
+func dash(move_dir: Vector2 = Vector2.ZERO) -> bool:
+	if not alive:
 		return false
+	if freeze_ticks > 0 or stun_ticks > 0:
+		if is_player_controlled and freeze_ticks <= INPUT_BUFFER_WINDOW:
+			buffer_dash_ticks = INPUT_BUFFER_WINDOW
+			buffer_dash_dir = move_dir
+		return false
+	if dash_cooldown > 0:
+		if is_player_controlled and dash_cooldown <= INPUT_BUFFER_WINDOW:
+			buffer_dash_ticks = INPUT_BUFFER_WINDOW
+			buffer_dash_dir = move_dir
+		return false
+	if dash_range > 0.0:
+		return false
+	buffer_dash_ticks = 0
 	dash_cooldown = Cfg.DASH_COOLDOWN
 	dash_range = Cfg.DASH_DISTANCE
 	dash_stall = 0
+	dash_invuln_ticks = 15 # 0.25 сек неуязвимости (i-frames) при 60 тиках/сек
+	if move_dir.length_squared() > 0.04:
+		dash_dir = move_dir.normalized()
+	else:
+		dash_dir = Vector2(cos(angle), sin(angle))
 	var boost := speed * Cfg.DASH_SPEED_MULT
-	vx = cos(angle) * boost
-	vy = sin(angle) * boost
+	vx = dash_dir.x * boost
+	vy = dash_dir.y * boost
+	Sfx.play("dash", x, y)
 	return true
 
 func ability_active(id: String) -> bool:
@@ -1276,11 +1441,20 @@ var ability_ready: float:
 		return clampf(1.0 - float(ability_cd) / cd, 0.0, 1.0)
 
 func use_ability(world) -> bool:
-	if not alive or ability_id == "" or ability_cd > 0:
+	if not alive or ability_id == "":
+		return false
+	if freeze_ticks > 0 or stun_ticks > 0:
+		if is_player_controlled and freeze_ticks <= INPUT_BUFFER_WINDOW:
+			buffer_ability_ticks = INPUT_BUFFER_WINDOW
+		return false
+	if ability_cd > 0:
+		if is_player_controlled and ability_cd <= INPUT_BUFFER_WINDOW:
+			buffer_ability_ticks = INPUT_BUFFER_WINDOW
 		return false
 	var ab := Abilities.get_ability(ability_id)
 	if ab.is_empty():
 		return false
+	buffer_ability_ticks = 0
 
 	ability_cd = int(ab["cooldown"])
 	if ability_id == "boss_barrage" and boss_phase >= 3:
@@ -1396,6 +1570,11 @@ func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 		return result
 	if spawn_protect > 0 and not ENVIRONMENTAL.has(source):
 		return result
+	if dash_invuln_ticks > 0 and not ENVIRONMENTAL.has(source):
+		result["evaded"] = true
+		if world != null and "particles" in world and world.particles != null:
+			world.particles.burst(x, y, [Color("#38bdf8"), Color.WHITE], 5, 2, 3, 10, 14, world.rng)
+		return result
 
 	if float(mods["evasionChance"]) > 0.0 and world.rng.nextf() < float(mods["evasionChance"]):
 		result["evaded"] = true
@@ -1447,8 +1626,10 @@ func apply_freeze(world, attacker, ticks: int) -> bool:
 	freeze_max_ticks = freeze_ticks
 	if attacker != null and float(attacker.mods["freezeDashTicks"]) > 0.0:
 		attacker.turbo_timer = maxi(attacker.turbo_timer, int(attacker.mods["freezeDashTicks"]))
-	vx = 0.0
-	vy = 0.0
+
+	# Приоритет CC_STASIS: принудительно прерывает любые действия и форсаж
+	interrupt_current_action(CC_STASIS)
+
 	if world != null and world.particles != null:
 		world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE], 10, 2, 4, 12, 20, world.rng)
 	return true
@@ -1473,13 +1654,8 @@ func apply_acid(world, attacker, dmg_scale_value: float, stacks: int = 1) -> boo
 func on_death(world, killer) -> void:
 	alive = false
 	deaths += 1
-	vx = 0.0
-	vy = 0.0
+	interrupt_current_action(CC_DEAD)
 	shield_hp = 0.0
-	turbo_timer = 0
-	shadow_timer = 0
-	ability_timer = 0
-	dash_range = 0.0
 	telegraph_ticks = 0
 	enrage_shield_ticks = 0
 	freeze_ticks = 0
@@ -1488,17 +1664,9 @@ func on_death(world, killer) -> void:
 	acid_ticks_left = 0
 	acid_tick_timer = 0
 	acid_attacker = null
-	chimera_stream_active = false
-	chimera_stream_timer = 0
-	chimera_stream_warmup_ticks = 0
 	acid_stream_hit_accum = 0.0
-	rammer_state = "idle"
-	rammer_telegraph_ticks = 0
-	rammer_charge_ticks = 0
 	rammer_cooldown_ticks = 0
-	rammer_spin_ticks = 0
 	rammer_spin_cooldown = 0
-	rammer_spin_hit.clear()
 
 	world.particles.burst(x, y, Cfg.explosion, 30, 3, 8, 20, 40, world.rng)
 	Sfx.play("explosion", x, y)

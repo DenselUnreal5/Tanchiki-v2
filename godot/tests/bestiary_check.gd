@@ -98,13 +98,21 @@ func _test_hub_bestiary_ui() -> void:
 	var hub_scene := preload("res://scenes/ui/hub.tscn")
 	var hub: Hub = hub_scene.instantiate()
 	add_child(hub)
-	_check(hub.tab_items().size() == 4, "В хабе ровно 4 основные вкладки (получено %d)" % hub.tab_items().size())
+	_check(hub.tab_items().size() == 5, "В хабе ровно 5 основных вкладок (получено %d)" % hub.tab_items().size())
 	hub.open_encyclopedia()
-	_check(hub.active_tab == "garage" and hub.garage_submode == "encyclopedia", "Hub открывает справочник техники внутри вкладки 'garage'")
+	_check(hub.active_tab == "bestiary", "Hub открывает справочник техники в отдельной верхней вкладке 'bestiary'")
 
 	# Переключаемся по всем 12 танкам в UI
 	for t in Bestiary.all():
 		var tid: String = String(t["id"])
 		hub._select_bestiary_tank(tid)
 	_check(true, "Hub успешно переключает карточки всех 12 танков и обновляет панель описания")
+
+	_log("Тест открытия Гаража...")
+	hub.open_tab("garage")
+	_check(hub.active_tab == "garage", "Hub открывает вкладку 'garage'")
+
+	_log("Тест открытия Достижений...")
+	hub.open_tab("achievements")
+	_check(hub.active_tab == "achievements", "Hub открывает вкладку 'achievements'")
 	hub.queue_free()

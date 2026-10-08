@@ -29,6 +29,21 @@ var _bestiary_selected_id := "player_standard"
 var _bestiary_cards: Dictionary = {}
 var _bestiary_detail_container: VBoxContainer = null
 
+var _cosmetic_preview_tank: Tank = null
+var _cosmetic_preview_view: MenuTankView = null
+var _cosmetic_preview_type: String = "skin"
+var _cosmetic_preview_id: String = ""
+var _cosmetic_title_lbl: Label = null
+var _cosmetic_badge_lbl: RichTextLabel = null
+var _cosmetic_desc_lbl: Label = null
+var _cosmetic_feat_hull: Label = null
+var _cosmetic_feat_turret: Label = null
+var _cosmetic_feat_track: Label = null
+var _cosmetic_status_lbl: Label = null
+var _cosmetic_action_btn: Button = null
+var _cosmetic_reset_btn: Button = null
+var _cosmetic_catalog_scroll: ScrollContainer = null
+
 @onready var _panel: ThemedPanel = %HubPanel
 @onready var _tabs_row: HBoxContainer = %HubTabsRow
 @onready var _sub: RichTextLabel = %HubSub
@@ -63,8 +78,18 @@ func _ready() -> void:
 	set_meta("close_button", _close_btn)
 
 	_rebuild_tabs()
+	if Sets != null and Sets.has_signal("last_input_device_changed"):
+		if not Sets.last_input_device_changed.is_connected(_on_input_device_changed):
+			Sets.last_input_device_changed.connect(_on_input_device_changed)
+	if Sets != null and Sets.has_signal("ui_input_mode_changed"):
+		if not Sets.ui_input_mode_changed.is_connected(_on_input_device_changed):
+			Sets.ui_input_mode_changed.connect(_on_input_device_changed)
 	if Engine.is_editor_hint():
 		_editor_preview_body()
+
+func _on_input_device_changed(_arg = null) -> void:
+	if is_inside_tree() and visible:
+		_rebuild_tabs()
 
 func _on_close_pressed() -> void:
 	close_requested.emit()
@@ -110,32 +135,123 @@ func _grab(ctrl) -> void:
 
 func tab_items() -> Array:
 	return [
-		{"key": "garage", "label": _tr("menu.garage", "🔧 Гараж")},
-		{"key": "cosmetics", "label": _tr("menu.cosmetics", "🎨 Косметика")},
-		{"key": "gallery", "label": _tr("menu.gallery", "✨ Галерея")},
-		{"key": "achievements", "label": _tr("menu.achievements", "🏅 Достижения")},
+		{"key": "garage", "label": _tr("menu.garage", "Гараж")},
+		{"key": "bestiary", "label": _tr("menu.bestiary", "Справочник бронетехники")},
+		{"key": "cosmetics", "label": _tr("menu.cosmetics", "Косметика")},
+		{"key": "gallery", "label": _tr("menu.gallery", "Боевые перки")},
+		{"key": "achievements", "label": _tr("menu.achievements", "Достижения")},
 	]
 
 func _rebuild_tabs() -> void:
 	var idx := _tabs_row.get_index()
 	var parent := _tabs_row.get_parent()
 	var new_row := UiKit.plain_tabs(tab_items(), active_tab, func(key): switch_tab(key))
+
+	var is_pad := Sets != null and (Sets.pad_ui or Sets.last_input_pad)
+	var prev_hint := "[LB] ◀" if is_pad else "[Q] ◀"
+	var next_hint := "▶ [RB]" if is_pad else "▶ [E]"
+
+	var prev_btn := Button.new()
+	prev_btn.text = prev_hint
+	prev_btn.flat = true
+	prev_btn.focus_mode = Control.FOCUS_NONE
+	prev_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	prev_btn.add_theme_font_override("font", Fonts.bold)
+	prev_btn.add_theme_font_size_override("font_size", 12)
+	prev_btn.add_theme_color_override("font_color", Color(0.65, 0.72, 0.82, 0.75))
+	prev_btn.add_theme_color_override("font_hover_color", Cfg.UI_ACCENT)
+	prev_btn.tooltip_text = _tr("hint.tab_prev", "Предыдущая вкладка (Q / LB)")
+	prev_btn.pressed.connect(func(): cycle_tab(-1))
+	new_row.add_child(prev_btn)
+	new_row.move_child(prev_btn, 0)
+
+	var next_btn := Button.new()
+	next_btn.text = next_hint
+	next_btn.flat = true
+	next_btn.focus_mode = Control.FOCUS_NONE
+	next_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	next_btn.add_theme_font_override("font", Fonts.bold)
+	next_btn.add_theme_font_size_override("font_size", 12)
+	next_btn.add_theme_color_override("font_color", Color(0.65, 0.72, 0.82, 0.75))
+	next_btn.add_theme_color_override("font_hover_color", Cfg.UI_ACCENT)
+	next_btn.tooltip_text = _tr("hint.tab_next", "Следующая вкладка (E / RB)")
+	next_btn.pressed.connect(func(): cycle_tab(1))
+	new_row.add_child(next_btn)
+
 	parent.add_child(new_row)
 	parent.move_child(new_row, idx)
 	_tabs_row.queue_free()
 	_tabs_row = new_row
-	UiKit.chain_horizontal(_tabs_row.get_children(), true)
+
+	var tab_btns: Array = []
+	for c in _tabs_row.get_children():
+		if c.has_meta("tab_key"):
+			tab_btns.append(c)
+	UiKit.chain_horizontal(tab_btns, true)
+
+func cycle_tab(direction: int) -> void:
+	var items := tab_items()
+	if items.is_empty():
+		return
+	var idx := 0
+	for i in items.size():
+		if String(items[i]["key"]) == active_tab:
+			idx = i
+			break
+	idx = (idx + direction + items.size()) % items.size()
+	switch_tab(String(items[idx]["key"]))
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_visible_in_tree():
+		return
+	var focus_owner := get_viewport().gui_get_focus_owner()
+	if focus_owner is LineEdit or focus_owner is TextEdit:
+		return
+	var is_next: bool = bool(event.is_action_pressed("tab_next")) \
+		or (event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_E) \
+		or (event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_RIGHT_SHOULDER)
+	var is_prev: bool = bool(event.is_action_pressed("tab_prev")) \
+		or (event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_Q) \
+		or (event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_LEFT_SHOULDER)
+	if is_next:
+		cycle_tab(1)
+		get_viewport().set_input_as_handled()
+	elif is_prev:
+		cycle_tab(-1)
+		get_viewport().set_input_as_handled()
 
 func switch_tab(key: String, focus_id: String = "") -> void:
-	if key == "bestiary" or key == "encyclopedia":
-		garage_submode = "encyclopedia"
-		key = "garage"
+	if key == "encyclopedia":
+		key = "bestiary"
+	elif key == "perks" or key == "perk":
+		key = "gallery"
+	var same_tab: bool = (active_tab == key)
+	var prev_scroll_v: int = _scroll.scroll_vertical if (same_tab and _scroll != null) else 0
+	var prev_catalog_v: int = _cosmetic_catalog_scroll.scroll_vertical if (same_tab and _cosmetic_catalog_scroll != null and is_instance_valid(_cosmetic_catalog_scroll)) else 0
+
 	active_tab = key
 	_rebuild_tabs()
 	_fill_tab(key)
+
+	if same_tab:
+		if prev_scroll_v > 0 and _scroll != null:
+			_scroll.scroll_vertical = prev_scroll_v
+			_scroll.set_deferred("scroll_vertical", prev_scroll_v)
+		if prev_catalog_v > 0 and _cosmetic_catalog_scroll != null and is_instance_valid(_cosmetic_catalog_scroll):
+			_cosmetic_catalog_scroll.scroll_vertical = prev_catalog_v
+			_cosmetic_catalog_scroll.set_deferred("scroll_vertical", prev_catalog_v)
+
 	if focus_id != "":
 		var target := _find_by_meta(_body, "card_id", focus_id)
-		_grab(target if target != null else _first_focusable(_body))
+		if target != null:
+			var act_btn: Control = target.get_node_or_null("%ActionBtn")
+			if act_btn != null and act_btn.visible and act_btn.focus_mode != Control.FOCUS_NONE and not act_btn.disabled:
+				_grab(act_btn)
+			else:
+				var btn := _first_focusable(target)
+				_grab(btn if btn != null else target)
+		else:
+			_grab(_first_focusable(_body))
 	else:
 		_grab(_find_tab_button(key))
 
@@ -145,10 +261,8 @@ func _fill_tab(key: String) -> void:
 		c.queue_free()
 	match key:
 		"garage": _fill_garage_tab()
+		"bestiary": _fill_bestiary_tab()
 		"cosmetics": _fill_cosmetics_tab()
-		"bestiary":
-			garage_submode = "encyclopedia"
-			_fill_garage_tab()
 		"gallery": _fill_gallery_tab()
 		"achievements": _fill_achievements_tab()
 	_resize_scroll()
@@ -158,8 +272,7 @@ func open_tab(key: String, focus_id: String = "") -> void:
 	switch_tab(key, focus_id)
 
 func open_encyclopedia(focus_id: String = "") -> void:
-	garage_submode = "encyclopedia"
-	open_tab("garage", focus_id)
+	open_tab("bestiary", focus_id)
 
 func refresh_language() -> void:
 	_close_btn.text = _tr("btn.close", "Закрыть")
@@ -211,9 +324,9 @@ func _fill_bestiary_view() -> void:
 	list_scroll.add_child(list_vbox)
 
 	var categories: Array[Dictionary] = [
-		{"id": "player", "title": _tr("bestiary.cat.player", "🛡️ ТАНКИ ИГРОКА"), "color": Cfg.UI_ACCENT},
-		{"id": "enemy", "title": _tr("bestiary.cat.enemy", "🪖 БОЕВАЯ ТЕХНИКА ПРОТИВНИКА"), "color": Color("#f59e0b")},
-		{"id": "boss", "title": _tr("bestiary.cat.boss", "👹 БОССЫ И ЭЛИТНЫЕ УГРОЗЫ"), "color": Color("#ef4444")},
+		{"id": "player", "title": _tr("bestiary.cat.player", "ТАНКИ ИГРОКА"), "color": Cfg.UI_ACCENT},
+		{"id": "enemy", "title": _tr("bestiary.cat.enemy", "БОЕВАЯ ТЕХНИКА ПРОТИВНИКА"), "color": Color("#f59e0b")},
+		{"id": "boss", "title": _tr("bestiary.cat.boss", "БОССЫ И ЭЛИТНЫЕ УГРОЗЫ"), "color": Color("#ef4444")},
 	]
 
 	var all_cards: Array = []
@@ -266,7 +379,7 @@ func _fill_bestiary_view() -> void:
 		if top_tab != null:
 			top_tab.focus_neighbor_bottom = all_cards[0].get_path()
 
-	var back_btn := UiKit.secondary(_tr("garage.back_to_upgrades", "⬅ Вернуться к модернизации танка"), 12)
+	var back_btn := UiKit.secondary(_tr("garage.back_to_upgrades", "Вернуться к модернизации танка"), 12)
 	back_btn.custom_minimum_size = Vector2(0, 38)
 	back_btn.pressed.connect(func():
 		garage_submode = "upgrades"
@@ -290,12 +403,6 @@ func _build_bestiary_item_card(item: Dictionary, is_unlocked: bool, kills: int) 
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card_btn.add_child(hbox)
 
-	var icon_str: String = String(item.get("icon", "🛡️")) if is_unlocked else "🔒"
-	var icon_lbl := UiKit.label(icon_str, 18)
-	icon_lbl.custom_minimum_size = Vector2(28, 0)
-	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hbox.add_child(icon_lbl)
-
 	var text_vbox := UiKit.vbox(1)
 	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -317,7 +424,7 @@ func _build_bestiary_item_card(item: Dictionary, is_unlocked: bool, kills: int) 
 		status_lbl.text = _tr("bestiary.badge.player", "ИГРОК")
 		status_lbl.add_theme_color_override("font_color", Cfg.UI_ACCENT)
 	elif is_unlocked:
-		status_lbl.text = "💀 ×%d" % kills
+		status_lbl.text = "×%d" % kills
 		status_lbl.add_theme_color_override("font_color", Cfg.UI_GOLD)
 	else:
 		status_lbl.text = _tr("bestiary.badge.locked", "ЗАКРЫТО")
@@ -383,9 +490,9 @@ func _update_bestiary_detail(tank_id: String) -> void:
 
 	var title_text: String
 	if is_unlocked:
-		title_text = "%s %s" % [String(item.get("icon", "")), String(item.get("name", ""))]
+		title_text = String(item.get("name", ""))
 	else:
-		title_text = "🔒 ??? [ЗАСЕКРЕЧЕННЫЙ ОБРАЗЕЦ]"
+		title_text = "??? [ЗАСЕКРЕЧЕННЫЙ ОБРАЗЕЦ]"
 	var title_lbl := UiKit.label(title_text, 18, Cfg.UI_TEXT if is_unlocked else Cfg.UI_MUTED, true)
 	header_vbox.add_child(title_lbl)
 
@@ -433,19 +540,19 @@ func _update_bestiary_detail(tank_id: String) -> void:
 	if bool(item.get("is_player", false)):
 		status_box.add_theme_stylebox_override("panel",
 			UiKit.flat(Color(0.12, 0.18, 0.10, 0.85), Cfg.RADIUS_SM, 1, Color(Cfg.UI_ACCENT, 0.6)))
-		var st_lbl := UiKit.label("🟢 Доступен для управления в Гараже (Танк Игрока)", 11, Cfg.UI_ACCENT, true)
+		var st_lbl := UiKit.label("Доступен для управления в Гараже (Танк Игрока)", 11, Cfg.UI_ACCENT, true)
 		st_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		status_box.add_child(st_lbl)
 	elif is_unlocked:
 		status_box.add_theme_stylebox_override("panel",
 			UiKit.flat(Color(0.20, 0.18, 0.10, 0.85), Cfg.RADIUS_SM, 1, Color(Cfg.UI_GOLD, 0.6)))
-		var st_lbl := UiKit.label("💀 Уничтожено в боевых действиях: %d раз(а)" % kills, 11, Cfg.UI_GOLD, true)
+		var st_lbl := UiKit.label("Уничтожено в боевых действиях: %d раз(а)" % kills, 11, Cfg.UI_GOLD, true)
 		st_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		status_box.add_child(st_lbl)
 	else:
 		status_box.add_theme_stylebox_override("panel",
 			UiKit.flat(Color(0.22, 0.10, 0.10, 0.85), Cfg.RADIUS_SM, 1, Color(Cfg.UI_DANGER, 0.6)))
-		var st_lbl := UiKit.label("🔒 УСЛОВИЕ РАССЕКРЕЧИВАНИЯ: Уничтожьте этот танк хотя бы 1 раз в бою", 11, Color("#ffaaaa"), true)
+		var st_lbl := UiKit.label("УСЛОВИЕ РАССЕКРЕЧИВАНИЯ: Уничтожьте этот танк хотя бы 1 раз в бою", 11, Color("#ffaaaa"), true)
 		st_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		status_box.add_child(st_lbl)
 	_bestiary_detail_container.add_child(status_box)
@@ -462,13 +569,13 @@ func _update_bestiary_detail(tank_id: String) -> void:
 	stats_box.add_child(stats_vbox)
 
 	if is_unlocked:
-		stats_vbox.add_child(_stat_row("❤️ Прочность корпуса:", int(item.get("hp_rating", 3)), String(item.get("hp_val", ""))))
-		stats_vbox.add_child(_stat_row("⚡ Подвижность / Ход:", int(item.get("speed_rating", 3)), String(item.get("speed_val", ""))))
-		stats_vbox.add_child(_stat_row("💥 Огневая мощь / Урон:", int(item.get("dmg_rating", 3)), String(item.get("dmg_val", ""))))
+		stats_vbox.add_child(_stat_row("Прочность корпуса:", int(item.get("hp_rating", 3)), String(item.get("hp_val", ""))))
+		stats_vbox.add_child(_stat_row("Подвижность / Ход:", int(item.get("speed_rating", 3)), String(item.get("speed_val", ""))))
+		stats_vbox.add_child(_stat_row("Огневая мощь / Урон:", int(item.get("dmg_rating", 3)), String(item.get("dmg_val", ""))))
 	else:
-		stats_vbox.add_child(_stat_row_masked("❤️ Прочность корпуса:"))
-		stats_vbox.add_child(_stat_row_masked("⚡ Подвижность / Ход:"))
-		stats_vbox.add_child(_stat_row_masked("💥 Огневая мощь / Урон:"))
+		stats_vbox.add_child(_stat_row_masked("Прочность корпуса:"))
+		stats_vbox.add_child(_stat_row_masked("Подвижность / Ход:"))
+		stats_vbox.add_child(_stat_row_masked("Огневая мощь / Урон:"))
 
 	# 5. Tactical Profile / Lore
 	_bestiary_detail_container.add_child(UiKit.section(_tr("bestiary.tactics", "ТАКТИЧЕСКИЙ ПРОФИЛЬ И ПРИМЕНЕНИЕ"), Cfg.UI_ACCENT))
@@ -476,7 +583,7 @@ func _update_bestiary_detail(tank_id: String) -> void:
 	if is_unlocked:
 		desc_lbl = UiKit.label(String(item.get("desc", "")), 11, Cfg.UI_TEXT)
 	else:
-		desc_lbl = UiKit.label("⚠️ Тактический профиль заблокирован. Технические спецификации, слабые места и алгоритмы боевого применения будут расшифрованы после первого уничтожения боевой единицы.", 11, Cfg.UI_MUTED)
+		desc_lbl = UiKit.label("Тактический профиль заблокирован. Технические спецификации, слабые места и алгоритмы боевого применения будут расшифрованы после первого уничтожения боевой единицы.", 11, Cfg.UI_MUTED)
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_bestiary_detail_container.add_child(desc_lbl)
 
@@ -494,7 +601,7 @@ func _update_bestiary_detail(tank_id: String) -> void:
 			var ab_vbox := UiKit.vbox(2)
 			ab_panel.add_child(ab_vbox)
 
-			var ab_title := UiKit.label("%s %s" % [String(ab.get("icon", "⚡")), String(ab.get("name", ""))], 11, Cfg.UI_GOLD, true)
+			var ab_title := UiKit.label(String(ab.get("name", "")), 11, Cfg.UI_GOLD, true)
 			ab_vbox.add_child(ab_title)
 
 			var ab_desc := UiKit.label(String(ab.get("desc", "")), 10, Color(Cfg.UI_TEXT, 0.9))
@@ -506,7 +613,7 @@ func _update_bestiary_detail(tank_id: String) -> void:
 		masked_card.add_theme_stylebox_override("panel",
 			UiKit.flat(Color(0.08, 0.08, 0.08, 0.6), Cfg.RADIUS_SM, 1, Color(Cfg.UI_BORDER, 0.2)))
 		_bestiary_detail_container.add_child(masked_card)
-		var m_lbl := UiKit.label("🔒 [СИСТЕМЫ ВООРУЖЕНИЯ И СПОСОБНОСТИ ЗАСЕКРЕЧЕНЫ]", 11, Cfg.UI_MUTED)
+		var m_lbl := UiKit.label("[СИСТЕМЫ ВООРУЖЕНИЯ И СПОСОБНОСТИ ЗАСЕКРЕЧЕНЫ]", 11, Cfg.UI_MUTED)
 		m_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		masked_card.add_child(m_lbl)
 
@@ -689,7 +796,7 @@ func _build_synergy_text(id: String) -> String:
 	var member_names := []
 	for pid in b["perks"]:
 		member_names.append(I18n.dn(Perks.get_perk(String(pid)), "name", "perk"))
-	return "⚡ %s\n%s\n%s" % [
+	return "%s\n%s\n%s" % [
 		I18n.dn(b, "name", "build").to_upper(),
 		" + ".join(member_names),
 		I18n.dn(b, "bonus", "build"),
@@ -761,30 +868,6 @@ func _build_gallery_detail(perk: Dictionary, parent: Node) -> Control:
 	return panel
 
 func _fill_garage_tab() -> void:
-	var sub_tabs := UiKit.hbox(8)
-	sub_tabs.alignment = BoxContainer.ALIGNMENT_CENTER
-	_body.add_child(sub_tabs)
-
-	var upgrades_btn: Button = UiKit.primary(_tr("garage.submode.upgrades", "🔧 Модернизация и орудия"), 13) if garage_submode == "upgrades" else UiKit.secondary(_tr("garage.submode.upgrades", "🔧 Модернизация и орудия"), 13)
-	upgrades_btn.custom_minimum_size = Vector2(230, 36)
-	upgrades_btn.pressed.connect(func():
-		garage_submode = "upgrades"
-		_fill_tab("garage")
-	)
-	sub_tabs.add_child(upgrades_btn)
-
-	var encyclopedia_btn: Button = UiKit.primary(_tr("garage.submode.encyclopedia", "📖 Справочник бронетехники"), 13) if garage_submode == "encyclopedia" else UiKit.secondary(_tr("garage.submode.encyclopedia", "📖 Справочник бронетехники"), 13)
-	encyclopedia_btn.custom_minimum_size = Vector2(230, 36)
-	encyclopedia_btn.pressed.connect(func():
-		garage_submode = "encyclopedia"
-		_fill_tab("garage")
-	)
-	sub_tabs.add_child(encyclopedia_btn)
-
-	if garage_submode == "encyclopedia":
-		_fill_bestiary_view()
-		return
-
 	_sub.text = "[center]" + _tr("garage.sub",
 		"Монеты: [b]%d[/b] 🪙 · Улучшения танка действуют на обоих игроков в партии" % Prof.money,
 		{"money": Prof.money}) + "[/center]"
@@ -812,107 +895,327 @@ func _fill_garage_tab() -> void:
 	for c in Cannons.LIST:
 		_cannon_card(c, cannon_grid)
 
-	var all_entries := Bestiary.all()
-	var unlocked_count := 0
-	for entry in all_entries:
-		if Prof.is_bestiary_unlocked(String(entry["id"])):
-			unlocked_count += 1
-
-	var enc_jump := UiKit.primary(_tr("garage.to_encyclopedia", "📖 Справочник бронетехники (Рассекречено %d из %d) ➜" % [unlocked_count, all_entries.size()]), 13)
-	enc_jump.custom_minimum_size = Vector2(0, 42)
-	enc_jump.pressed.connect(func():
-		garage_submode = "encyclopedia"
-		_fill_tab("garage")
-	)
-	_body.add_child(enc_jump)
-
-	var cos_jump := UiKit.secondary(_tr("garage.to_cosmetics", "🎨 Перейти к расцветке и скинам танка ➜"), 12)
-	cos_jump.custom_minimum_size = Vector2(0, 42)
-	cos_jump.pressed.connect(func(): switch_tab("cosmetics"))
-	_body.add_child(cos_jump)
-
-func _build_tank_preview_box() -> Control:
-	var container := PanelContainer.new()
-	container.custom_minimum_size = Vector2(0, 145)
-	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	container.add_theme_stylebox_override("panel", UiKit.card_style(Color(Cfg.UI_ACCENT, 0.4)))
-
-	var sub_vbox := UiKit.vbox(4)
-	container.add_child(sub_vbox)
-
-	var title_lbl := UiKit.label(_tr("cosmetics.preview", "АНГАР · ПРЕДПРОСМОТР ТАНКА").to_upper(), 10, Cfg.UI_ACCENT, true)
-	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub_vbox.add_child(title_lbl)
-
-	var center_box := CenterContainer.new()
-	center_box.custom_minimum_size = Vector2(0, 80)
-	sub_vbox.add_child(center_box)
-
-	var stub_player := PlayerState.new(0, "", Prof.equipped_color1, null)
-	var prev_tank := Tank.new({
-		"x": 0.0, "y": 0.0, "team": "player", "name": "",
-		"owner": stub_player, "color_key": Prof.equipped_color1,
-		"max_hp": 100.0, "speed": 100.0, "fire_rate": 30,
-	})
-	prev_tank.spawn_protect = 0
-	prev_tank.cosmetics = Prof.equipped_cosmetics()
-	prev_tank.cannon_id = Prof.equipped_cannon
-
-	var tank_view := MenuTankView.new()
-	tank_view.player = stub_player
-	tank_view.display_tank = prev_tank
-	tank_view.center_in_rect = true
-	tank_view.auto_turret = true
-	tank_view.custom_minimum_size = Vector2(130, 80)
-	center_box.add_child(tank_view)
-
-	var skin_info: Dictionary = Cosmetics.get_cosmetic("skin", String(Prof.cosmetics.get("skin", "none")))
-	var camo_info: Dictionary = Cosmetics.get_cosmetic("camo", String(Prof.cosmetics.get("camo", "none")))
-	var hull_info: Dictionary = Cosmetics.get_cosmetic("hull", String(Prof.cosmetics.get("hull", "none")))
-	var s_skin: String = I18n.dn(skin_info, "name", "cos.skin") if not skin_info.is_empty() else "Стандартный"
-	var s_camo: String = I18n.dn(camo_info, "name", "cos.camo") if not camo_info.is_empty() else "Без камуфляжа"
-	var s_hull: String = I18n.dn(hull_info, "name", "cos.hull") if not hull_info.is_empty() else "Без рисунка"
-
-	var desc_lbl := UiKit.label("Скин: %s  ·  Камуфляж: %s  ·  Рисунок: %s" % [s_skin, s_camo, s_hull], 9, Color(Cfg.UI_MUTED, 0.9))
-	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub_vbox.add_child(desc_lbl)
-
-	return container
-
 func _fill_cosmetics_tab() -> void:
 	_sub.text = "[center]" + _tr("cosmetics.sub",
 		"Монеты: [b]%d[/b] 🪙 · Персонализируйте внешний вид вашего танка" % Prof.money,
 		{"money": Prof.money}) + "[/center]"
 
-	_body.add_child(_build_tank_preview_box())
+	var budget := _body_budget()
 
-	_body.add_child(UiKit.section(_tr("garage.colors", "Расцветка корпуса"), Cfg.UI_ACCENT))
-	_body.add_child(_garage_color_row(_tr("menu.color1", "Основной цвет (Игрок 1)"), 0, Prof.equipped_color1, "cosmetics"))
-	_body.add_child(_garage_color_row(_tr("menu.color2", "Второй цвет (Игрок 2)"), 1, Prof.equipped_color2, "cosmetics"))
+	# Two-column container: Left = Pinned Live Tank Preview, Right = Scrollable Catalog
+	var main_row := UiKit.hbox(14)
+	main_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_body.add_child(main_row)
 
-	_body.add_child(UiKit.section(_tr("cos.skin", "💎 Премиальные и Легендарные скины"), Color("#ffd700")))
+	# ============================================================
+	# LEFT PANE: PINNED LIVE TANK PREVIEW (ALWAYS VISIBLE!)
+	# ============================================================
+	var preview_scroll := ScrollContainer.new()
+	preview_scroll.custom_minimum_size = Vector2(310, budget)
+	preview_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	preview_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	main_row.add_child(preview_scroll)
+
+	var preview_panel := PanelContainer.new()
+	preview_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	preview_panel.add_theme_stylebox_override("panel",
+		UiKit.flat(Color(0.06, 0.08, 0.10, 0.95), Cfg.RADIUS_MD, 1.5, Color(Cfg.UI_ACCENT, 0.45)))
+	preview_scroll.add_child(preview_panel)
+
+	var prev_vbox := UiKit.vbox(8)
+	prev_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preview_panel.add_child(prev_vbox)
+
+	var title_lbl := UiKit.label(_tr("cosmetics.preview", "АНГАР · ЖИВОЙ ПРЕДПРОСМОТР").to_upper(), 10, Cfg.UI_ACCENT, true)
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prev_vbox.add_child(title_lbl)
+
+	# Frame for live MenuTankView
+	var center_box := PanelContainer.new()
+	center_box.custom_minimum_size = Vector2(0, 150)
+	center_box.add_theme_stylebox_override("panel",
+		UiKit.flat(Color(0.03, 0.04, 0.05, 0.90), Cfg.RADIUS_SM, 1.0, Color(Cfg.UI_BORDER, 0.5)))
+	prev_vbox.add_child(center_box)
+
+	var stub_player := PlayerState.new(0, "", Prof.equipped_color1, null)
+	_cosmetic_preview_tank = Tank.new({
+		"x": 0.0, "y": 0.0, "team": "player", "name": "",
+		"owner": stub_player, "color_key": Prof.equipped_color1,
+		"max_hp": 100.0, "speed": 100.0, "fire_rate": 30,
+	})
+	_cosmetic_preview_tank.spawn_protect = 0
+	_cosmetic_preview_tank.cosmetics = Prof.equipped_cosmetics()
+	_cosmetic_preview_tank.cannon_id = Prof.equipped_cannon
+
+	_cosmetic_preview_view = MenuTankView.new()
+	_cosmetic_preview_view.player = stub_player
+	_cosmetic_preview_view.display_tank = _cosmetic_preview_tank
+	_cosmetic_preview_view.center_in_rect = true
+	_cosmetic_preview_view.auto_turret = true
+	_cosmetic_preview_view.custom_minimum_size = Vector2(250, 140)
+	center_box.add_child(_cosmetic_preview_view)
+
+	# Info header: Item title and badge
+	var info_box := UiKit.vbox(3)
+	info_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	prev_vbox.add_child(info_box)
+
+	_cosmetic_title_lbl = UiKit.label("Стандартный", 14, Color.WHITE, true)
+	_cosmetic_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info_box.add_child(_cosmetic_title_lbl)
+
+	_cosmetic_badge_lbl = RichTextLabel.new()
+	_cosmetic_badge_lbl.bbcode_enabled = true
+	_cosmetic_badge_lbl.fit_content = true
+	_cosmetic_badge_lbl.scroll_active = false
+	_cosmetic_badge_lbl.add_theme_font_override("normal_font", Fonts.bold)
+	_cosmetic_badge_lbl.add_theme_font_size_override("normal_font_size", 9)
+	_cosmetic_badge_lbl.text = "[center][color=#94a3b8]БАЗОВЫЙ КОМПЛЕКТ[/color][/center]"
+	info_box.add_child(_cosmetic_badge_lbl)
+
+	_cosmetic_desc_lbl = UiKit.label("Базовый заводской комплект брони, башни и гусениц.", 10, Color(Cfg.UI_TEXT, 0.85))
+	_cosmetic_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_cosmetic_desc_lbl.custom_minimum_size = Vector2(280, 42)
+	prev_vbox.add_child(_cosmetic_desc_lbl)
+
+	# Breakdown features box
+	var feats_panel := PanelContainer.new()
+	feats_panel.add_theme_stylebox_override("panel",
+		UiKit.flat(Color(0.04, 0.05, 0.07, 0.80), Cfg.RADIUS_SM, 1.0, Color(Cfg.UI_BORDER, 0.4)))
+	prev_vbox.add_child(feats_panel)
+
+	var feats_vbox := UiKit.vbox(3)
+	feats_panel.add_child(feats_vbox)
+
+	_cosmetic_feat_hull = UiKit.label("Корпус: Заводская броня", 9, Color(Cfg.UI_TEXT, 0.9))
+	_cosmetic_feat_turret = UiKit.label("Башня: Стандартная нарезная", 9, Color(Cfg.UI_TEXT, 0.9))
+	_cosmetic_feat_track = UiKit.label("Гусеницы: Чугунные траки", 9, Color(Cfg.UI_TEXT, 0.9))
+	feats_vbox.add_child(_cosmetic_feat_hull)
+	feats_vbox.add_child(_cosmetic_feat_turret)
+	feats_vbox.add_child(_cosmetic_feat_track)
+
+	# Status and Action Buttons
+	_cosmetic_status_lbl = UiKit.label("ЭКИПИРОВАНО", 11, Cfg.UI_ACCENT, true)
+	_cosmetic_status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prev_vbox.add_child(_cosmetic_status_lbl)
+
+	_cosmetic_action_btn = UiKit.primary("ЭКИПИРОВАНО", 12)
+	_cosmetic_action_btn.custom_minimum_size = Vector2(0, 36)
+	_cosmetic_action_btn.disabled = true
+	prev_vbox.add_child(_cosmetic_action_btn)
+
+	_cosmetic_reset_btn = UiKit.secondary("Сбросить предпросмотр", 10)
+	_cosmetic_reset_btn.custom_minimum_size = Vector2(0, 28)
+	_cosmetic_reset_btn.visible = false
+	_cosmetic_reset_btn.pressed.connect(func(): _reset_cosmetics_preview())
+	prev_vbox.add_child(_cosmetic_reset_btn)
+
+	# ============================================================
+	# RIGHT PANE: SCROLLABLE CATALOG WITH PERK-STYLE CARDS
+	# ============================================================
+	var catalog_scroll := ScrollContainer.new()
+	catalog_scroll.custom_minimum_size = Vector2(550, budget)
+	catalog_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	catalog_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	catalog_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	catalog_scroll.follow_focus = true
+	_cosmetic_catalog_scroll = catalog_scroll
+	main_row.add_child(catalog_scroll)
+
+	var catalog_vbox := UiKit.vbox(10)
+	catalog_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	catalog_scroll.add_child(catalog_vbox)
+
+	# 1. Colors
+	catalog_vbox.add_child(UiKit.section(_tr("garage.colors", "Расцветка корпуса"), Cfg.UI_ACCENT))
+	catalog_vbox.add_child(_garage_color_row(_tr("menu.color1", "Основной цвет (Игрок 1)"), 0, Prof.equipped_color1, "cosmetics"))
+	catalog_vbox.add_child(_garage_color_row(_tr("menu.color2", "Второй цвет (Игрок 2)"), 1, Prof.equipped_color2, "cosmetics"))
+
+	# 2. Premium / Legendary Skins (Complete sets!)
+	catalog_vbox.add_child(UiKit.section(_tr("cos.skin", "Премиальные и Легендарные скины (Корпус + Башня + Гусеницы)"), Color("#ffd700")))
 	var skin_grid := HFlowContainer.new()
 	skin_grid.add_theme_constant_override("h_separation", 10)
 	skin_grid.add_theme_constant_override("v_separation", 10)
-	_body.add_child(skin_grid)
+	catalog_vbox.add_child(skin_grid)
 	for s in Cosmetics.SKINS:
 		_cosmetic_card(s, "skin", skin_grid, "cosmetics")
 
+	# 3. Individual Categories
 	var type_names := {
-		"camo": "🎨 Боевой камуфляж",
-		"hull": "🛡️ Рисунки и декали на корпусе",
-		"track": "⚙️ Гусеницы",
-		"turret": "🎯 Башни"
+		"camo": "Боевой камуфляж",
+		"hull": "Рисунки и декали на корпусе",
+		"track": "Гусеницы",
+		"turret": "Башни"
 	}
 	for type in ["camo", "hull", "track", "turret"]:
 		var section_title := String(type_names.get(type, type))
-		_body.add_child(UiKit.section(_tr("cos." + type, section_title), Cfg.UI_MUTED))
+		catalog_vbox.add_child(UiKit.section(_tr("cos." + type, section_title), Cfg.UI_MUTED))
 		var grid := HFlowContainer.new()
 		grid.add_theme_constant_override("h_separation", 10)
 		grid.add_theme_constant_override("v_separation", 10)
-		_body.add_child(grid)
+		catalog_vbox.add_child(grid)
 		for c in Cosmetics.by_type(type):
 			_cosmetic_card(c, type, grid, "cosmetics")
+
+	# Initialize preview with currently equipped skin
+	_reset_cosmetics_preview()
+
+func _set_cosmetic_preview(type: String, id: String) -> void:
+	if _cosmetic_preview_tank == null:
+		return
+	_cosmetic_preview_type = type
+	_cosmetic_preview_id = id
+
+	var temp_cosmetics := Prof.equipped_cosmetics()
+	if type == "skin":
+		temp_cosmetics["skin"] = id
+		if id != "none":
+			temp_cosmetics["track"] = "none"
+			temp_cosmetics["turret"] = "none"
+	else:
+		temp_cosmetics[type] = id
+	_cosmetic_preview_tank.cosmetics = temp_cosmetics
+
+	var item := Cosmetics.get_cosmetic(type, id)
+	if item.is_empty():
+		return
+
+	var name_str := I18n.dn(item, "name", "cos." + type)
+	var rarity_str := String(item.get("rarity", ""))
+	var desc_str := String(item.get("desc", ""))
+	var price_val := int(item.get("price", 0))
+	var owned := Prof.is_cosmetic_owned(type, id)
+	var equipped := String(Prof.cosmetics.get(type, "none")) == id
+	var can_buy := not owned and Prof.money >= price_val
+
+	if _cosmetic_title_lbl != null:
+		_cosmetic_title_lbl.text = name_str
+
+	if _cosmetic_badge_lbl != null:
+		var badge := ""
+		if type == "skin":
+			if rarity_str == "legendary":
+				badge = "[center][color=#ffd700]ЛЕГЕНДАРНЫЙ · ПОЛНЫЙ КОМПЛЕКТ[/color][/center]"
+			elif rarity_str == "epic":
+				badge = "[center][color=#c084fc]ЭПИЧЕСКИЙ · ПОЛНЫЙ КОМПЛЕКТ[/color][/center]"
+			elif rarity_str == "rare":
+				badge = "[center][color=#60a5fa]РЕДКИЙ · ПОЛНЫЙ КОМПЛЕКТ[/color][/center]"
+			else:
+				badge = "[center][color=#94a3b8]БАЗОВЫЙ КОМПЛЕКТ[/color][/center]"
+		else:
+			if rarity_str == "legendary":
+				badge = "[center][color=#ffd700]ЛЕГЕНДАРНЫЙ[/color][/center]"
+			elif rarity_str == "epic":
+				badge = "[center][color=#c084fc]ЭПИЧЕСКИЙ[/color][/center]"
+			elif rarity_str == "rare":
+				badge = "[center][color=#60a5fa]РЕДКИЙ[/color][/center]"
+			else:
+				match type:
+					"camo": badge = "[center][color=#94a3b8]КАМУФЛЯЖ[/color][/center]"
+					"hull": badge = "[center][color=#94a3b8]ДЕКАЛЬ КОРПУСА[/color][/center]"
+					"track": badge = "[center][color=#94a3b8]ГУСЕНИЦЫ[/color][/center]"
+					"turret": badge = "[center][color=#94a3b8]БАШНЯ[/color][/center]"
+					_: badge = "[center][color=#94a3b8]КОСМЕТИКА[/color][/center]"
+		_cosmetic_badge_lbl.text = badge
+
+	if _cosmetic_desc_lbl != null:
+		_cosmetic_desc_lbl.text = desc_str
+
+	if _cosmetic_feat_hull != null and _cosmetic_feat_turret != null and _cosmetic_feat_track != null:
+		if type == "skin":
+			_cosmetic_feat_hull.visible = true
+			_cosmetic_feat_turret.visible = true
+			_cosmetic_feat_track.visible = true
+			match id:
+				"cyberpunk":
+					_cosmetic_feat_hull.text = "Корпус: неон, микросхемы и сканер"
+					_cosmetic_feat_turret.text = "Башня: кибер-визор и энерго-ствол"
+					_cosmetic_feat_track.text = "Гусеницы: неоновые светящиеся траки"
+				"magma":
+					_cosmetic_feat_hull.text = "Корпус: базальт с огненными разломами"
+					_cosmetic_feat_turret.text = "Башня: вулканическое жерло и лава"
+					_cosmetic_feat_track.text = "Гусеницы: раскаленные огненные траки"
+				"steampunk":
+					_cosmetic_feat_hull.text = "Корпус: кованая латунь и шестерни"
+					_cosmetic_feat_turret.text = "Башня: купол с манометром и нарезка"
+					_cosmetic_feat_track.text = "Гусеницы: тяжелая кованая бронза"
+				"void":
+					_cosmetic_feat_hull.text = "Корпус: темная материя и созвездия"
+					_cosmetic_feat_turret.text = "Башня: сингулярность с аккрецией"
+					_cosmetic_feat_track.text = "Гусеницы: звездная аметистовая пыль"
+				"dragon":
+					_cosmetic_feat_hull.text = "Корпус: изумрудная чешуя и хребет"
+					_cosmetic_feat_turret.text = "Башня: рога дракона и рубиновое око"
+					_cosmetic_feat_track.text = "Гусеницы: когтистые шипы и чешуя"
+				"toxic":
+					_cosmetic_feat_hull.text = "Корпус: биозащита и знак опасности"
+					_cosmetic_feat_turret.text = "Башня: колба бурлящего токсина"
+					_cosmetic_feat_track.text = "Гусеницы: защитные хим-траки"
+				"golden_emperor":
+					_cosmetic_feat_hull.text = "Корпус: зеркальное 24К золото и пурпур"
+					_cosmetic_feat_turret.text = "Башня: царская корона с рубином"
+					_cosmetic_feat_track.text = "Гусеницы: сплошные золотые звенья"
+				"arctic_frost":
+					_cosmetic_feat_hull.text = "Корпус: реликтовый лед и кристаллы"
+					_cosmetic_feat_turret.text = "Башня: морозная звезда и иней"
+					_cosmetic_feat_track.text = "Гусеницы: заснеженная мерзлота"
+				_:
+					_cosmetic_feat_hull.text = "Корпус: заводская бронеплита"
+					_cosmetic_feat_turret.text = "Башня: стандартная нарезная"
+					_cosmetic_feat_track.text = "Гусеницы: стальные траки"
+		else:
+			_cosmetic_feat_hull.visible = type == "hull" or type == "camo"
+			_cosmetic_feat_turret.visible = type == "turret"
+			_cosmetic_feat_track.visible = type == "track"
+			if type == "hull": _cosmetic_feat_hull.text = "Рисунок: " + name_str
+			elif type == "camo": _cosmetic_feat_hull.text = "Камуфляж: " + name_str
+			elif type == "turret": _cosmetic_feat_turret.text = "Башня: " + name_str
+			elif type == "track": _cosmetic_feat_track.text = "Гусеницы: " + name_str
+
+	if _cosmetic_status_lbl != null:
+		if equipped:
+			_cosmetic_status_lbl.text = "ЭКИПИРОВАНО"
+			_cosmetic_status_lbl.add_theme_color_override("font_color", Cfg.UI_ACCENT)
+		elif owned:
+			_cosmetic_status_lbl.text = "В ВАШЕЙ КОЛЛЕКЦИИ"
+			_cosmetic_status_lbl.add_theme_color_override("font_color", Color("#38bdf8"))
+		else:
+			_cosmetic_status_lbl.text = "ЦЕНА: %d 🪙" % price_val
+			_cosmetic_status_lbl.add_theme_color_override("font_color", Cfg.UI_GOLD if can_buy else Cfg.UI_MUTED)
+
+	if _cosmetic_action_btn != null:
+		for conn in _cosmetic_action_btn.pressed.get_connections():
+			_cosmetic_action_btn.pressed.disconnect(conn["callable"])
+
+		if equipped:
+			_cosmetic_action_btn.text = "ЭКИПИРОВАНО"
+			_cosmetic_action_btn.disabled = true
+		elif owned:
+			_cosmetic_action_btn.text = "НАДЕТЬ"
+			_cosmetic_action_btn.disabled = false
+			_cosmetic_action_btn.pressed.connect(func():
+				if Prof.equip_cosmetic(type, id)["ok"]:
+					garage_changed.emit()
+					switch_tab("cosmetics", "cos_%s_%s" % [type, id])
+			)
+		else:
+			_cosmetic_action_btn.text = "КУПИТЬ · %d 🪙" % price_val
+			_cosmetic_action_btn.disabled = not can_buy
+			_cosmetic_action_btn.pressed.connect(func():
+				if Prof.buy_cosmetic(type, id)["ok"]:
+					Prof.equip_cosmetic(type, id)
+					garage_changed.emit()
+					switch_tab("cosmetics", "cos_%s_%s" % [type, id])
+			)
+
+	if _cosmetic_reset_btn != null:
+		_cosmetic_reset_btn.visible = not equipped
+
+func _reset_cosmetics_preview() -> void:
+	var cur_skin: String = String(Prof.cosmetics.get("skin", "none"))
+	_set_cosmetic_preview("skin", cur_skin)
 
 func _upgrade_card(up: Dictionary, parent: Node) -> Control:
 	var id := String(up["id"])
@@ -943,12 +1246,16 @@ func _cosmetic_card(c: Dictionary, type: String, parent: Node, tab_key: String =
 	var state := ""
 	var action_text := ""
 	var action_disabled := false
-	if owned:
-		state = _tr("cos.equipped", "Надето") if equipped else _tr("cos.owned", "Куплено")
-		action_text = _tr("cos.equipped", "Надето") if equipped else _tr("cos.equip", "Надеть")
-		action_disabled = equipped
+	if equipped:
+		state = _tr("cos.equipped", "Надето")
+		action_text = _tr("cos.equipped", "Надето")
+		action_disabled = true
+	elif owned:
+		state = _tr("cos.owned", "В ангаре")
+		action_text = _tr("cos.equip", "Надеть")
+		action_disabled = false
 	else:
-		state = _tr("cos.price", "Цена: %d 🪙" % int(c["price"]), {"price": c["price"]})
+		state = "%d 🪙" % int(c["price"])
 		action_text = _tr("cos.buy", "Купить · %d 🪙" % int(c["price"]), {"price": c["price"]})
 		action_disabled = not can_buy
 
@@ -959,11 +1266,22 @@ func _cosmetic_card(c: Dictionary, type: String, parent: Node, tab_key: String =
 	parent.add_child(card)
 	card.set_data("cos_%s_%s" % [type, id], c.get("color", c.get("a", Cfg.UI_TEXT)),
 		I18n.dn(c, "name", "cos." + type), state, action_text, action_disabled, equipped, can_buy, card_id,
-		rarity, desc_text)
+		rarity, desc_text, type, id)
+	card.preview_requested.connect(func(ptype, pid):
+		_set_cosmetic_preview(ptype, pid)
+	)
 	card.action_pressed.connect(func():
-		var ok: bool = Prof.equip_cosmetic(type, id)["ok"] if owned else Prof.buy_cosmetic(type, id)["ok"]
+		var ok := false
+		if not owned:
+			var buy_res := Prof.buy_cosmetic(type, id)
+			if buy_res.get("ok", false):
+				ok = true
+				Prof.equip_cosmetic(type, id)
+		else:
+			ok = Prof.equip_cosmetic(type, id).get("ok", false)
 		if ok:
 			garage_changed.emit()
+			_set_cosmetic_preview(type, id)
 			switch_tab(tab_key, card_id))
 	return card
 
@@ -991,7 +1309,14 @@ func _cannon_card(c: Dictionary, parent: Node) -> Control:
 	card.set_data(String(c["icon"]), c.get("color", Cfg.UI_TEXT), I18n.dn(c, "name", "cannon"),
 		state, action_text, action_disabled, equipped, can_buy, card_id)
 	card.action_pressed.connect(func():
-		var ok: bool = Prof.equip_cannon(id)["ok"] if owned else Prof.buy_cannon(id)["ok"]
+		var ok := false
+		if not owned:
+			var buy_res := Prof.buy_cannon(id)
+			if buy_res.get("ok", false):
+				ok = true
+				Prof.equip_cannon(id)
+		else:
+			ok = Prof.equip_cannon(id).get("ok", false)
 		if ok:
 			garage_changed.emit()
 			switch_tab("garage", card_id))

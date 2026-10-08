@@ -35,6 +35,7 @@ const LIST := [
 	{"id": "money_5000", "name": "Коммерсант", "desc": "Заработать 5000 монет за всё время", "icon": "🪙", "stat": "moneyEarned", "need": 5000, "reward": 40},
 	{"id": "money_20000", "name": "Магнат", "desc": "Заработать 20 000 монет за всё время", "icon": "💰", "stat": "moneyEarned", "need": 20000, "reward": 150},
 	{"id": "defense_wave_10", "name": "Стойкий рубеж", "desc": "Продержаться 10 волн в «Обороне»", "icon": "🏰", "stat": "defenseWaveReached", "need": 10, "reward": 90},
+	{"id": "tutorial_master", "name": "Курс молодого бойца", "desc": "Пройти обучающий курс", "icon": "🎓", "stat": "tutorialCompleted", "need": 1, "reward": 100},
 ]
 
 static func get_achievement(id: String) -> Dictionary:

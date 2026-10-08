@@ -5,9 +5,9 @@ extends RefCounted
 const LIST := [
 	{
 		"id": "standard", "name": "Стандартная пушка", "icon": "🔫",
-		"desc": "Базовое танковое нарезное орудие с выверенным балансом темпа огня и баллистики.",
+		"desc": "Базовое нарезное орудие. Пассивный бонус: баллистическая стабилизация даёт +15% к скорости полёта снаряда.",
 		"price": 0, "mode": "standard",
-		"dmg_scale": 1.0, "cooldown_mult": 1.0, "heat_mult": 1.0,
+		"dmg_scale": 1.0, "cooldown_mult": 1.0, "heat_mult": 1.0, "bullet_speed_mult": 1.15,
 	},
 	{
 		"id": "ice", "name": "Ледяная пушка", "icon": "❄️",

@@ -37,6 +37,8 @@ const THROTTLE := {
 	"tread_soft": 12,
 	"steam": 20,
 	"thunder": 30,
+	"dash": 6,
+	"siren": 60,
 }
 
 const LEVEL := {
@@ -45,6 +47,7 @@ const LEVEL := {
 	"hit": -11.0,
 	"explosion": 2.0,
 	"airstrike": -8.0,
+	"siren": -4.0,
 	"crack": -10.0,
 	"crumble": -9.0,
 	"clang": -10.0,
@@ -57,6 +60,7 @@ const LEVEL := {
 	"levelup": -8.0,
 	"unlock": -8.0,
 	"flag": -8.0,
+	"dash": -4.0,
 }
 
 const PITCH_VARY := {
@@ -70,6 +74,42 @@ const PITCH_VARY := {
 	"tread_hard": 0.18,
 	"tread_soft": 0.18,
 	"water": 0.10,
+	"dash": 0.08,
+}
+
+# Приоритеты звуковых эффектов (SFX Voice Priority):
+# 30: CRITICAL - Тревоги, боссы, раскол льда, повышение уровня, флаг (никогда не вытесняются фоном)
+# 20: COMBAT   - Выстрелы, попадания, рывки, взрывы, гром
+# 10: DEFAULT  - Разрушения блоков, подбор бонусов
+#  5: FOLEY    - Фоновые шумы, шасси, брызги, пар (вытесняются в первую очередь)
+const PRIORITY_CRITICAL := 30
+const PRIORITY_COMBAT := 20
+const PRIORITY_DEFAULT := 10
+const PRIORITY_FOLEY := 5
+
+const SFX_PRIORITY := {
+	"explosion": PRIORITY_CRITICAL,
+	"levelup": PRIORITY_CRITICAL,
+	"unlock": PRIORITY_CRITICAL,
+	"flag": PRIORITY_CRITICAL,
+	"airstrike": PRIORITY_CRITICAL,
+	"siren": PRIORITY_CRITICAL,
+
+	"shoot": PRIORITY_COMBAT,
+	"shoot_heavy": PRIORITY_COMBAT,
+	"hit": PRIORITY_COMBAT,
+	"dash": PRIORITY_COMBAT,
+	"crack": PRIORITY_COMBAT,
+	"clang": PRIORITY_COMBAT,
+	"thunder": PRIORITY_COMBAT,
+
+	"crumble": PRIORITY_DEFAULT,
+	"pickup": PRIORITY_DEFAULT,
+
+	"tread_hard": PRIORITY_FOLEY,
+	"tread_soft": PRIORITY_FOLEY,
+	"water": PRIORITY_FOLEY,
+	"steam": PRIORITY_FOLEY,
 }
 
 var enabled := true
@@ -78,6 +118,9 @@ var _last_played := {}
 var _streams := {}
 var _players: Array[AudioStreamPlayer] = []
 var _voice_bus: PackedInt32Array = PackedInt32Array()
+var _voice_pri: PackedInt32Array = PackedInt32Array()
+var _voice_dist: PackedFloat32Array = PackedFloat32Array()
+var _voice_start_tick: PackedInt32Array = PackedInt32Array()
 var _next_player := 0
 var _ui_player: AudioStreamPlayer = null
 var _ui_last := 0
@@ -94,7 +137,13 @@ func _ready() -> void:
 	_rng.randomize()
 	_ensure_buses()
 	_task = WorkerThreadPool.add_task(_build_async)
+	_voice_pri.resize(MAX_VOICES)
+	_voice_dist.resize(MAX_VOICES)
+	_voice_start_tick.resize(MAX_VOICES)
 	for i in MAX_VOICES:
+		_voice_pri[i] = 0
+		_voice_dist[i] = INF
+		_voice_start_tick[i] = 0
 		var p := AudioStreamPlayer.new()
 		p.bus = "SfxV%d" % i
 		add_child(p)
@@ -167,6 +216,7 @@ func play(type: String, x: float = INF, y: float = INF) -> void:
 	if gap > 0 and _last_played.has(type) and tick - int(_last_played[type]) < gap:
 		return
 
+	var dist := 0.0
 	var att := 0.0
 	var pan := 0.0
 	var cutoff := 20000.0
@@ -181,6 +231,7 @@ func play(type: String, x: float = INF, y: float = INF) -> void:
 		var reach := HEAR_RANGE * hear_scale
 		if best_d > reach:
 			return
+		dist = best_d
 		att = linear_to_db(1.0 / (1.0 + pow(best_d / NEAR_RANGE, 1.7)))
 		var t: float = clampf(best_d / reach, 0.0, 1.0)
 		cutoff = lerpf(20000.0, FAR_CUTOFF, t * t)
@@ -188,10 +239,56 @@ func play(type: String, x: float = INF, y: float = INF) -> void:
 
 	_last_played[type] = tick
 
-	var i := _next_player
-	_next_player = (_next_player + 1) % _players.size()
-	var player := _players[i]
-	var bus := _voice_bus[i]
+	var req_pri: int = int(SFX_PRIORITY.get(type, PRIORITY_DEFAULT))
+
+	# Выбор голоса с учётом приоритетов (Voice Stealing Hierarchy):
+	# 1. Поиск свободного плеера
+	var chosen_idx := -1
+	for v in range(_players.size()):
+		if not _players[v].playing:
+			chosen_idx = v
+			break
+
+	# 2. Если все заняты — поиск наименее приоритетного голоса для вытеснения
+	if chosen_idx == -1:
+		var lowest_pri := 999999
+		var candidate_idx := -1
+		var candidate_dist := -1.0
+		var oldest_tick := 999999999
+
+		for v in range(_players.size()):
+			var p_pri := _voice_pri[v]
+			if p_pri < lowest_pri:
+				lowest_pri = p_pri
+				candidate_idx = v
+				candidate_dist = _voice_dist[v]
+				oldest_tick = _voice_start_tick[v]
+			elif p_pri == lowest_pri:
+				# При равном приоритете вытесняем тот, что дальше от игрока или старше
+				if _voice_dist[v] > candidate_dist or (absf(_voice_dist[v] - candidate_dist) < 50.0 and _voice_start_tick[v] < oldest_tick):
+					candidate_idx = v
+					candidate_dist = _voice_dist[v]
+					oldest_tick = _voice_start_tick[v]
+
+		# Звук с меньшим приоритетом не может прервать звук с более высоким приоритетом
+		if req_pri < lowest_pri:
+			return
+		# При равном приоритете более далекий звук не вытесняет более близкий
+		if req_pri == lowest_pri and dist > candidate_dist and candidate_dist != INF:
+			return
+
+		chosen_idx = candidate_idx
+
+	if chosen_idx == -1:
+		chosen_idx = _next_player
+		_next_player = (_next_player + 1) % _players.size()
+
+	_voice_pri[chosen_idx] = req_pri
+	_voice_dist[chosen_idx] = dist
+	_voice_start_tick[chosen_idx] = tick
+
+	var player := _players[chosen_idx]
+	var bus := _voice_bus[chosen_idx]
 	var panner: AudioEffectPanner = AudioServer.get_bus_effect(bus, 0)
 	panner.pan = pan
 	var lp: AudioEffectLowPassFilter = AudioServer.get_bus_effect(bus, 1)
@@ -275,6 +372,23 @@ func _build_streams(_streams: Dictionary) -> void:
 	_streams["levelup"] = [_fanfare([523.25, 659.25, 783.99, 1046.5], 0.75)]
 	_streams["unlock"] = [_fanfare([659.25, 830.61, 987.77, 1318.5], 0.85)]
 	_streams["flag"] = [_horn()]
+	_streams["dash"] = [_dash(0), _dash(1)]
+	_streams["siren"] = [_siren()]
+
+func _siren() -> AudioStreamWAV:
+	var b := Synth.buf(1.5)
+	Synth.add_tone(b, 0.0, 1.45, "saw", 880.0, 440.0, 0.35, 1.2, 8.0, 0.05)
+	Synth.add_tone(b, 0.0, 1.45, "sine", 1760.0, 880.0, 0.22, 1.2, 8.0, 0.03)
+	Synth.add_noise(b, 0.0, 1.45, 2400.0, 800.0, 0.12, 1.5, 7700)
+	return Synth.to_stream(b)
+
+func _dash(variant: int) -> AudioStreamWAV:
+	var b := Synth.buf(0.32)
+	var pitch: float = 1.0 if variant == 0 else 1.14
+	Synth.add_noise(b, 0.0, 0.28, 4800.0 * pitch, 550.0, 0.52, 14.0, 4200 + variant * 23)
+	Synth.add_tone(b, 0.0, 0.22, "saw", 360.0 * pitch, 80.0, 0.38, 12.0, 4.0, 0.02)
+	Synth.add_tone(b, 0.0, 0.28, "sine", 160.0 * pitch, 40.0, 0.65, 9.0)
+	return Synth.to_stream(b)
 
 func _hit(variant: int) -> AudioStreamWAV:
 	var pitch: float = [1.0, 1.18, 0.86][variant]

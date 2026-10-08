@@ -36,7 +36,9 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	var loc := Locations.get_location(loc_id)
 
 	var arch := archetype
-	if arch == "auto" or arch == "":
+	if mode == "tutorial":
+		arch = "plaza"
+	elif arch == "auto" or arch == "":
 		var arch_pool := ["avenues", "plaza", "river", "fortress", "labyrinths", "industrial", "radial", "canyon"]
 		arch = arch_pool[int(rng.nextf() * arch_pool.size()) % arch_pool.size()]
 
@@ -45,6 +47,9 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	if mode == "defense":
 		cols = Cfg.COLS / 2
 		rows = Cfg.ROWS / 2
+	elif mode == "tutorial":
+		cols = 28
+		rows = 24
 	elif mode == "ctf":
 		cols = Cfg.CTF_COLS
 		rows = Cfg.CTF_ROWS
@@ -109,6 +114,21 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		var cc := cols / 2
 		_fill_rect(map, cr - 4, cr + 4, cc - 4, cc + 4, Cfg.T_ROAD)
 		homes["player"] = Vector2(cc * Cfg.TILE + Cfg.TILE * 0.5, cr * Cfg.TILE + Cfg.TILE * 0.5)
+	elif mode == "tutorial":
+		var cr := rows / 2
+		var cc := cols / 2
+		_fill_rect(map, 2, rows - 3, 2, cols - 3, Cfg.T_EMPTY)
+		_fill_rect(map, cr - 4, cr + 4, cc - 5, cc + 5, Cfg.T_ROAD)
+		# Тактическое сужение / ворота (choke point) на пути с южной зоны старта
+		var gate_r := rows - 7
+		for c in range(2, cols - 2):
+			if c != cc:
+				map.set_tile(gate_r, c, Cfg.T_BRICK)
+		# Тактические кирпичные укрытия для тренировки рикошетов и разрушения
+		map.set_tile(cr - 2, cc - 4, Cfg.T_BRICK)
+		map.set_tile(cr - 2, cc - 3, Cfg.T_BRICK)
+		map.set_tile(cr - 2, cc + 3, Cfg.T_BRICK)
+		map.set_tile(cr - 2, cc + 4, Cfg.T_BRICK)
 
 	map.ensure_connectivity()
 	RoadNet.repair(map)
@@ -120,10 +140,15 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	elif mode == "defense":
 		areas["player"] = _defense_player_area(cols, rows)
 		areas["enemy"] = _defense_enemy_area(cols, rows)
+	elif mode == "tutorial":
+		areas["player"] = {"r0": rows - 6, "r1": rows - 4, "c0": cols / 2 - 2, "c1": cols / 2 + 2}
+		areas["enemy"] = {"r0": 4, "r1": 7, "c0": cols / 2 - 2, "c1": cols / 2 + 2}
 	else:
 		areas["player"] = _area_any(cols, rows)
 		areas["enemy"] = _area_any(cols, rows)
 	areas["any"] = _area_any(cols, rows)
+
+	var chokes := find_choke_points(map)
 
 	return {
 		"map": map,
@@ -136,6 +161,7 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		"plan": plan,
 		"location": loc_id,
 		"archetype": arch,
+		"choke_points": chokes,
 	}
 
 ## Архетип "radial": кольцевые бульвары + лучевые улицы от центра карты —
@@ -335,3 +361,26 @@ static func _pick_flag_spots(map: GameMap, rng: Rng, count: int, row_from: int, 
 		spots.append(Vector2(c * Cfg.TILE + Cfg.TILE * 0.5, r * Cfg.TILE + Cfg.TILE * 0.5))
 		fallback_col += 4
 	return spots
+
+## Процедурный поиск узких тактических проходов (бутылочных горлышек / choke points)
+static func find_choke_points(map: GameMap) -> Array[Vector2]:
+	var points: Array[Vector2] = []
+	var rows := map.rows
+	var cols := map.cols
+	for r in range(2, rows - 2):
+		for c in range(2, cols - 2):
+			var tile: int = map.get_tile(r, c)
+			if not GameMap.is_drivable_tile(tile) or tile == Cfg.T_WATER:
+				continue
+			var left_blocked := not GameMap.is_drivable_tile(map.get_tile(r, c - 1))
+			var right_blocked := not GameMap.is_drivable_tile(map.get_tile(r, c + 1))
+			var top_blocked := not GameMap.is_drivable_tile(map.get_tile(r - 1, c))
+			var bot_blocked := not GameMap.is_drivable_tile(map.get_tile(r + 1, c))
+
+			var vert_choke := left_blocked and right_blocked and not top_blocked and not bot_blocked
+			var horiz_choke := top_blocked and bot_blocked and not left_blocked and not right_blocked
+
+			if vert_choke or horiz_choke or tile == Cfg.T_BRIDGE:
+				points.append(Vector2(c * Cfg.TILE + Cfg.TILE * 0.5, r * Cfg.TILE + Cfg.TILE * 0.5))
+	return points
+

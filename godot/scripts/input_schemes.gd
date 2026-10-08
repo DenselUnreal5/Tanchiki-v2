@@ -19,18 +19,63 @@ static func empty_command() -> Dictionary:
 static func apply_command(tank: Tank, world, cmd: Dictionary) -> void:
 	if tank == null or not tank.alive or cmd.is_empty():
 		return
-	tank.thrust(float(cmd["mx"]), float(cmd["my"]))
-	tank.aim_at(float(cmd["ax"]), float(cmd["ay"]))
-	if bool(cmd["fire"]):
-		tank.shoot(world)
-	if bool(cmd["mine"]):
-		tank.place_mine(world)
-	if bool(cmd["dash"]):
-		tank.dash()
-	if bool(cmd["airstrike"]):
-		world.trigger_airstrike(tank.owner)
+
+	# 1. Приоритет спасения и выживания (Dash / Shield & Escape Ability)
+	if bool(cmd.get("dash", false)):
+		tank.dash(Vector2(float(cmd.get("mx", 0.0)), float(cmd.get("my", 0.0))))
 	if bool(cmd.get("ability", false)):
 		tank.use_ability(world)
+
+	# 2. Тактический приоритет (Авиаудар, Мины)
+	if bool(cmd.get("airstrike", false)):
+		world.trigger_airstrike(tank.owner)
+	if bool(cmd.get("mine", false)):
+		tank.place_mine(world)
+
+	# 3. Боевой приоритет (Стрельба)
+	if bool(cmd.get("fire", false)):
+		tank.shoot(world)
+
+	# 4. Локомоция (Движение и прицеливание)
+	tank.thrust(float(cmd.get("mx", 0.0)), float(cmd.get("my", 0.0)))
+	tank.aim_at(float(cmd.get("ax", 0.0)), float(cmd.get("ay", 0.0)))
+
+static func is_key_down(key: int) -> bool:
+	if key <= 0:
+		return false
+	if Input.is_physical_key_pressed(key) or Input.is_key_pressed(key):
+		return true
+	# Поддержка русской раскладки клавиатуры (ЙЦУКЕН / Cyrillic keycodes)
+	match key:
+		KEY_Q:
+			return Input.is_key_pressed(1049) or Input.is_key_pressed(1081) or Input.is_physical_key_pressed(1049) or Input.is_physical_key_pressed(1081)
+		KEY_W:
+			return Input.is_key_pressed(1062) or Input.is_key_pressed(1094) or Input.is_physical_key_pressed(1062) or Input.is_physical_key_pressed(1094)
+		KEY_E:
+			return Input.is_key_pressed(1059) or Input.is_key_pressed(1091) or Input.is_physical_key_pressed(1059) or Input.is_physical_key_pressed(1091)
+		KEY_R:
+			return Input.is_key_pressed(1050) or Input.is_key_pressed(1082) or Input.is_physical_key_pressed(1050) or Input.is_physical_key_pressed(1082)
+		KEY_A:
+			return Input.is_key_pressed(1060) or Input.is_key_pressed(1092) or Input.is_physical_key_pressed(1060) or Input.is_physical_key_pressed(1092)
+		KEY_S:
+			return Input.is_key_pressed(1067) or Input.is_key_pressed(1099) or Input.is_physical_key_pressed(1067) or Input.is_physical_key_pressed(1099)
+		KEY_D:
+			return Input.is_key_pressed(1042) or Input.is_key_pressed(1074) or Input.is_physical_key_pressed(1042) or Input.is_physical_key_pressed(1074)
+		KEY_F:
+			return Input.is_key_pressed(1040) or Input.is_key_pressed(1072) or Input.is_physical_key_pressed(1040) or Input.is_physical_key_pressed(1072)
+		1049, 1081:
+			return Input.is_key_pressed(KEY_Q) or Input.is_physical_key_pressed(KEY_Q)
+		1059, 1091:
+			return Input.is_key_pressed(KEY_E) or Input.is_physical_key_pressed(KEY_E)
+		1062, 1094:
+			return Input.is_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_W)
+		1060, 1092:
+			return Input.is_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_A)
+		1067, 1099:
+			return Input.is_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_S)
+		1042, 1074:
+			return Input.is_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_D)
+	return false
 
 static func vibrate(player, weak_magnitude: float, strong_magnitude: float, duration: float) -> void:
 	if player == null or not Sets.pad_vibration or player.scheme == null:
@@ -50,23 +95,23 @@ class MouseAimScheme extends RefCounted:
 			"[W][A][S][D] движение",
 			"[мышь] прицел",
 			"[ЛКМ] / [Space] выстрел",
-			"[E] / [ПКМ] мина",
+			"[E / У] / [ПКМ] мина",
 			"[Shift] рывок-таран",
-			"[Q] способность перка",
-			"[F] авиаудар (Оборона)",
+			"[Q / Й] способность перка",
+			"[F / А] авиаудар (Оборона)",
 		]
 
 	func read_command(player) -> Dictionary:
 		var cmd := Ctl.empty_command()
 		var mx := 0.0
 		var my := 0.0
-		if Input.is_physical_key_pressed(Sets.key_for("p1_up")) or (allow_arrows and Input.is_physical_key_pressed(KEY_UP)):
+		if Ctl.is_key_down(Sets.key_for("p1_up")) or (allow_arrows and (Input.is_physical_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_UP))):
 			my -= 1.0
-		if Input.is_physical_key_pressed(Sets.key_for("p1_down")) or (allow_arrows and Input.is_physical_key_pressed(KEY_DOWN)):
+		if Ctl.is_key_down(Sets.key_for("p1_down")) or (allow_arrows and (Input.is_physical_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_DOWN))):
 			my += 1.0
-		if Input.is_physical_key_pressed(Sets.key_for("p1_left")) or (allow_arrows and Input.is_physical_key_pressed(KEY_LEFT)):
+		if Ctl.is_key_down(Sets.key_for("p1_left")) or (allow_arrows and (Input.is_physical_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_LEFT))):
 			mx -= 1.0
-		if Input.is_physical_key_pressed(Sets.key_for("p1_right")) or (allow_arrows and Input.is_physical_key_pressed(KEY_RIGHT)):
+		if Ctl.is_key_down(Sets.key_for("p1_right")) or (allow_arrows and (Input.is_physical_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_RIGHT))):
 			mx += 1.0
 
 		var w: Vector2 = player.screen_to_world(mouse.x, mouse.y)
@@ -74,11 +119,11 @@ class MouseAimScheme extends RefCounted:
 		cmd["my"] = my
 		cmd["ax"] = w.x
 		cmd["ay"] = w.y
-		cmd["fire"] = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_physical_key_pressed(Sets.key_for("p1_fire"))
-		cmd["mine"] = Input.is_physical_key_pressed(Sets.key_for("p1_mine")) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
-		cmd["dash"] = Input.is_physical_key_pressed(Sets.key_for("p1_dash"))
-		cmd["airstrike"] = Input.is_physical_key_pressed(Sets.key_for("p1_airstrike"))
-		cmd["ability"] = Input.is_physical_key_pressed(Sets.key_for("p1_ability"))
+		cmd["fire"] = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Ctl.is_key_down(Sets.key_for("p1_fire"))
+		cmd["mine"] = Ctl.is_key_down(Sets.key_for("p1_mine")) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+		cmd["dash"] = Ctl.is_key_down(Sets.key_for("p1_dash"))
+		cmd["airstrike"] = Ctl.is_key_down(Sets.key_for("p1_airstrike"))
+		cmd["ability"] = Ctl.is_key_down(Sets.key_for("p1_ability")) or Ctl.is_key_down(KEY_Q)
 		return cmd
 
 	func apply(tank: Tank, player, world) -> void:
@@ -156,14 +201,17 @@ class KeyboardAimScheme extends RefCounted:
 		elif moving and not firing:
 			tank.turret_angle = Rng.rotate_toward(tank.turret_angle, tank.angle, follow_slew)
 
+		# 1. Приоритет спасения и выживания
+		if Ctl.is_key_down(Sets.key_for("p2_dash")) or Input.is_physical_key_pressed(KEY_KP_ADD):
+			tank.dash(Vector2(dx, dy))
+		if Ctl.is_key_down(Sets.key_for("p2_ability")) or Input.is_physical_key_pressed(KEY_KP_SUBTRACT):
+			tank.use_ability(world)
+		# 2. Тактический приоритет
+		if Ctl.is_key_down(Sets.key_for("p2_mine")) or Input.is_physical_key_pressed(KEY_DELETE):
+			tank.place_mine(world)
+		# 3. Боевой приоритет
 		if firing:
 			tank.shoot(world)
-		if Input.is_physical_key_pressed(Sets.key_for("p2_mine")):
-			tank.place_mine(world)
-		if Input.is_physical_key_pressed(Sets.key_for("p2_dash")):
-			tank.dash()
-		if Input.is_physical_key_pressed(Sets.key_for("p2_ability")):
-			tank.use_ability(world)
 
 class GamepadScheme extends RefCounted:
 	var device := 0

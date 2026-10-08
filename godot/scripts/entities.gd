@@ -93,6 +93,7 @@ class Bullet extends RefCounted:
 	var dmg_scale: float
 	var pierce := 0
 	var explosive := false
+	var splash_r: float = Cfg.EXPLOSIVE_R
 	var keep_bricks := false
 	var from_player := false
 	var lobbed := false
@@ -110,6 +111,8 @@ class Bullet extends RefCounted:
 			vy = sin(angle) * sp
 			return
 		var speed: float = Cfg.BULLET_SPEED * float(owner_.mods["bulletSpeedMult"])
+		if owner_.weapon == "" and (owner_.cannon_id == "" or owner_.cannon_id == "standard"):
+			speed *= 1.15
 		vx = cos(angle) * speed
 		vy = sin(angle) * speed
 		team = owner_.team
@@ -134,6 +137,8 @@ class Bullet extends RefCounted:
 			if x < 0.0 or x > world.map.width or y < 0.0 or y > world.map.height:
 				alive = false
 				return
+			if _hit_barrels(world):
+				return
 			_hit_tanks(world)
 			return
 
@@ -145,6 +150,8 @@ class Bullet extends RefCounted:
 			alive = false
 			return
 		if _hit_tiles(world):
+			return
+		if _hit_barrels(world):
 			return
 		_hit_tanks(world)
 
@@ -252,9 +259,27 @@ class Bullet extends RefCounted:
 			return true
 		return false
 
+	func _hit_barrels(world) -> bool:
+		if world == null or not ("barrels" in world) or world.barrels.is_empty():
+			return false
+		for barrel in world.barrels:
+			if not barrel.alive:
+				continue
+			var dx: float = barrel.x - x
+			var dy: float = barrel.y - y
+			var hit_r: float = barrel.radius + 6.0
+			if dx * dx + dy * dy <= hit_r * hit_r:
+				var amount: float = (Cfg.BULLET_DMG_MIN + world.rng.nextf() * (Cfg.BULLET_DMG_MAX - Cfg.BULLET_DMG_MIN)) * dmg_scale
+				barrel.hit(amount, owner, world)
+				alive = false
+				world.particles.burst(x, y, [Color("#ff8833"), Color("#ffee55")], 6, 2, 4, 8, 16, world.rng)
+				return true
+		return false
+
 	func _explode(world, direct_target, base_damage: float) -> void:
-		var r2 := Cfg.EXPLOSIVE_R * Cfg.EXPLOSIVE_R
-		for other in world.tank_grid.query(x, y, Cfg.EXPLOSIVE_R):
+		var r := splash_r
+		var r2 := r * r
+		for other in world.tank_grid.query(x, y, r):
 			if other == direct_target or other == owner or not other.alive:
 				continue
 			if not world.are_hostile(owner, other):
@@ -617,4 +642,231 @@ class AcidPool extends RefCounted:
 		owner = owner_
 		timer = life
 		max_life = life
+
+
+class ExplosiveBarrel extends RefCounted:
+	var x: float
+	var y: float
+	var radius: float = 14.0
+	var hp: float = 20.0
+	var max_hp: float = 20.0
+	var alive: bool = true
+	var flash_timer: int = 0
+	var ignited: bool = false
+	var fuse_timer: int = 0
+	var last_attacker = null
+
+	func _init(x_: float, y_: float) -> void:
+		x = x_
+		y = y_
+		hp = 20.0
+		max_hp = 20.0
+		alive = true
+		flash_timer = 0
+		ignited = false
+		fuse_timer = 0
+		last_attacker = null
+
+	func hit(amount: float, attacker, world) -> void:
+		if not alive:
+			return
+		last_attacker = attacker
+		hp -= amount
+		flash_timer = 5
+		if hp <= 0.0:
+			explode(world)
+
+	func ignite(attacker, world, fuse_ticks: int = 12) -> void:
+		if not alive or ignited:
+			return
+		ignited = true
+		last_attacker = attacker
+		fuse_timer = fuse_ticks
+
+	func update(world) -> void:
+		if not alive:
+			return
+		if flash_timer > 0:
+			flash_timer -= 1
+		if ignited:
+			flash_timer = 3
+			fuse_timer -= 1
+			if world != null:
+				world.particles.spawn(x + (world.rng.nextf() - 0.5) * 8.0, y - 10.0,
+					Color("#f97316"), 2.5, 8.0, world.rng, 0.0, -1.5)
+			if fuse_timer <= 0:
+				explode(world)
+
+	func explode(world) -> void:
+		if not alive:
+			return
+		alive = false
+		if world == null:
+			return
+
+		var exp_r := 120.0
+		var exp_r2 := exp_r * exp_r
+		var base_dmg := 65.0
+
+		# 1. Shockwaves, particles, audio, camera shake, scorches
+		world.spawn_shockwave(x, y, exp_r, "blast", Color("#f97316"), 22)
+		world.spawn_shockwave(x, y, exp_r * 0.5, "blast", Color("#fbbf24"), 16)
+		world.particles.burst(x, y, [Color("#ef4444"), Color("#f97316"), Color("#fbbf24"), Color("#334155"), Color.WHITE], 42, 3, 7, 16, 36, world.rng)
+		Sfx.play("explosion", x, y)
+		world.add_shake(12.0, x, y)
+		world.scorches.append(Vector2(x, y))
+		while world.scorches.size() > Cfg.MAX_SCORCH:
+			world.scorches.pop_front()
+
+		# 2. Damage tanks and impulse knockback
+		for tank in world.tanks:
+			if not tank.alive:
+				continue
+			var dx: float = tank.x - x
+			var dy: float = tank.y - y
+			var d2: float = dx * dx + dy * dy
+			if d2 > exp_r2:
+				continue
+			var dist: float = sqrt(d2)
+			var falloff: float = 1.0 - (dist / exp_r) * 0.65
+			var dmg: float = base_dmg * falloff
+			world.deal_damage(tank, dmg, last_attacker, "barrel_blast")
+			# Knockback impulse
+			var push_mag: float = 3.8 * falloff
+			var nx: float = dx / maxf(1.0, dist)
+			var ny: float = dy / maxf(1.0, dist)
+			tank.vx += nx * push_mag
+			tank.vy += ny * push_mag
+
+		# 3. Destroy nearby walls and trees in 80px radius
+		var map: GameMap = world.map
+		var tr_min: int = maxi(0, map.row_at(y - 80.0))
+		var tr_max: int = mini(map.rows - 1, map.row_at(y + 80.0))
+		var tc_min: int = maxi(0, map.col_at(x - 80.0))
+		var tc_max: int = mini(map.cols - 1, map.col_at(x + 80.0))
+		for r in range(tr_min, tr_max + 1):
+			for c in range(tc_min, tc_max + 1):
+				var tile: int = map.get_tile(r, c)
+				if tile == Cfg.T_BRICK or tile == Cfg.T_TREE:
+					var bx: float = c * Cfg.TILE + Cfg.TILE * 0.5
+					var by: float = r * Cfg.TILE + Cfg.TILE * 0.5
+					if Vector2(x - bx, y - by).length() <= 80.0:
+						world.hit_building(r, c, 100.0, "blast", bx, by, last_attacker)
+
+		# 4. Chain react with other barrels in radius
+		for other_barrel in world.barrels:
+			if other_barrel == self or not other_barrel.alive:
+				continue
+			var bdist: float = Vector2(x - other_barrel.x, y - other_barrel.y).length()
+			if bdist <= exp_r:
+				other_barrel.ignite(last_attacker, world, 4 + int(world.rng.nextf() * 6.0))
+
+
+class PowerGenerator extends RefCounted:
+	var x: float
+	var y: float
+	var radius: float = 24.0
+	var aura_radius: float = 110.0
+	var capture_progress: float = 0.0 # 0.0 .. 1.0
+	var capturing_team: String = ""
+	var captured_team: String = ""
+	var cooldown: int = 0
+	var max_cooldown: int = 1200 # 20 sec cooldown
+	var anim_rot: float = 0.0
+	var pulse_phase: float = 0.0
+
+	func _init(x_: float, y_: float) -> void:
+		x = x_
+		y = y_
+		radius = 24.0
+		aura_radius = 110.0
+		capture_progress = 0.0
+		capturing_team = ""
+		captured_team = ""
+		cooldown = 0
+		max_cooldown = 1200
+		anim_rot = 0.0
+		pulse_phase = 0.0
+
+	func update(world) -> void:
+		anim_rot += 0.03
+		pulse_phase += 0.05
+
+		if cooldown > 0:
+			cooldown -= 1
+			capture_progress = 0.0
+			capturing_team = ""
+			if cooldown % 60 == 0 and world != null:
+				world.particles.spawn(x + (world.rng.nextf() - 0.5) * 16.0, y - 8.0,
+					Color("#94a3b8"), 2.0, 14.0, world.rng, 0.0, -0.8)
+			return
+
+		if world == null:
+			return
+
+		# Detect tanks within aura
+		var r2: float = aura_radius * aura_radius
+		var teams_present := {}
+		for tank in world.tanks:
+			if not tank.alive:
+				continue
+			var dx: float = tank.x - x
+			var dy: float = tank.y - y
+			if dx * dx + dy * dy <= r2:
+				teams_present[tank.team] = true
+
+		if teams_present.size() == 1:
+			var active_team: String = String(teams_present.keys()[0])
+			if capturing_team != active_team:
+				capturing_team = active_team
+				capture_progress = 0.0
+			capture_progress += 1.0 / 180.0 # 3 seconds to fully charge
+			# Spark particles
+			if world.tick % 8 == 0:
+				world.particles.burst(x, y, [Color("#38bdf8"), Color("#818cf8"), Color.WHITE], 3, 1.5, 3.5, 8, 14, world.rng)
+			if capture_progress >= 1.0:
+				discharge(world, active_team)
+		elif teams_present.is_empty():
+			capture_progress = maxf(0.0, capture_progress - 0.005)
+
+	func discharge(world, team: String) -> void:
+		cooldown = max_cooldown
+		captured_team = team
+		capture_progress = 0.0
+		capturing_team = ""
+
+		var emp_r := 230.0
+		var emp_r2 := emp_r * emp_r
+		world.spawn_shockwave(x, y, emp_r, "emp", Color("#38bdf8"), 32)
+		world.spawn_shockwave(x, y, emp_r * 0.6, "emp", Color("#06b6d4"), 22)
+		world.particles.burst(x, y, [Color("#38bdf8"), Color("#818cf8"), Color("#06b6d4"), Color.WHITE], 48, 2.5, 6.0, 20, 38, world.rng)
+		world.add_shake(15.0, x, y)
+		Sfx.play("laser", x, y)
+		Sfx.play("shield")
+
+		world.feed.emit("⚡ Генератор поля разряжен! ЭМИ-волна поразила противников!", Color("#38bdf8"))
+
+		for tank in world.tanks:
+			if not tank.alive:
+				continue
+			var dx: float = tank.x - x
+			var dy: float = tank.y - y
+			if dx * dx + dy * dy > emp_r2:
+				continue
+			var is_foe: bool = (tank.team != team)
+			if is_foe:
+				tank.stun_ticks = maxi(tank.stun_ticks, 150)
+				tank.interrupt_current_action(Tank.CC_STUN)
+				world.deal_damage(tank, 30.0, null, "emp")
+				world.damage_number.emit(tank.x, tank.y - 20, "⚡ EMP STUN!", Color("#38bdf8"))
+				world.particles.burst(tank.x, tank.y, [Color("#38bdf8"), Color.WHITE], 12, 2, 4, 10, 18, world.rng)
+			else:
+				# Ally buff: instant cooldown reset + 50 shield
+				tank.flags["shield"] = true
+				tank.shield_hp = minf(50.0, tank.shield_hp + 50.0)
+				tank.fire_cooldown = 0
+				tank.ability_cd = maxi(0, tank.ability_cd - 300)
+				world.damage_number.emit(tank.x, tank.y - 20, "⚡ SHIELD +50", Color("#34d399"))
+				world.particles.burst(tank.x, tank.y, [Color("#34d399"), Color("#6ee7b7"), Color.WHITE], 10, 2, 4, 10, 18, world.rng)
+
 

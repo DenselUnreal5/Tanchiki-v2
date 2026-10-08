@@ -32,8 +32,9 @@ func _draw() -> void:
 		var center_pt := view_off if center_in_rect else size * 0.5
 		draw_circle(center_pt, 20.0, Color(0.06, 0.08, 0.10, 0.85))
 		draw_arc(center_pt, 20.0, 0.0, TAU, 32, Color(Cfg.UI_BORDER, 0.65), 1.5)
-		if Fonts != null and Fonts.bold != null:
-			draw_string(Fonts.bold, center_pt + Vector2(-9.0, 6.0), "🔒", HORIZONTAL_ALIGNMENT_CENTER, -1, 16)
+		var body_rect := Rect2(center_pt.x - 6.0, center_pt.y - 2.0, 12.0, 10.0)
+		draw_rect(body_rect, Color(Cfg.UI_MUTED, 0.9), true)
+		draw_arc(center_pt + Vector2(0.0, -2.0), 4.5, PI, TAU, 16, Color(Cfg.UI_MUTED, 0.9), 2.0)
 		return
 	_draw_tank(display_tank)
 	if muzzle > 0.0 and glow_tex != null:
