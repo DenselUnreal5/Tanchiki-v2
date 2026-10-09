@@ -137,7 +137,7 @@ var vision_scale: float:
 
 var traction: float:
 	get:
-		return float(TYPES[condition].get("traction", 1.0))
+		return float(TYPES[condition].get("traction", 1.0)) * Mutators.traction_scale()
 
 var noise_scale: float:
 	get:

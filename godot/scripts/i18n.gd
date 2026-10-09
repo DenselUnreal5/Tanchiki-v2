@@ -128,6 +128,32 @@ var EN := {
 	"pause.resume": "Resume",
 	"pause.gallery": "Combat Perks",
 	"pause.menu": "Main Menu",
+	"pause.restart": "Restart match",
+	"pause.restart.confirm": "Really restart?",
+	"pause.controls": "Controls",
+	"controls.title": "Controls",
+	"controls.sub": "Hints for the selected input devices",
+	"controls.common": "General",
+	"controls.pause": "[P] / [Esc] / [Start] pause",
+	"controls.scoreboard": "[Tab] / [Back] scoreboard",
+	"dev.touch": "Touchscreen",
+	"touch.dash": "DASH",
+	"touch.mine": "MINE",
+	"touch.ability": "ABIL.",
+	"touch.air": "AIR",
+	"hint.touch.move": "left half of the screen: drag a finger to move",
+	"hint.touch.aim": "right half: drag to aim, push farther to fire",
+	"hint.touch.buttons": "buttons on the right: dash, mine, ability, airstrike",
+	"hint.move": "move",
+	"hint.mouse": "mouse",
+	"hint.aim": "aim",
+	"hint.lmb": "LMB",
+	"hint.rmb": "RMB",
+	"hint.fire": "fire",
+	"hint.mine": "mine",
+	"hint.dash": "dash-ram",
+	"hint.ability": "perk ability",
+	"hint.airstrike": "airstrike (Defense)",
 
 	"perk.title": "LEVEL UP",
 	"perk.level": "level",
@@ -159,6 +185,36 @@ var EN := {
 	"set.pad.vibration": "Gamepad rumble",
 	"set.pad.aimassist": "Gamepad aim assist",
 	"set.pad.aimassist.hint": "Gently nudges your aim toward the nearest enemy while you aim with the right stick.",
+	"settings.tab.access": "Accessibility",
+	"set.gamesection": "Game",
+	"set.adaptive": "Adaptive difficulty",
+	"set.adaptive.hint": "Enemies get slightly weaker if you keep dying and tougher when you play confidently. Single-player and local matches only.",
+	"set.killcam": "Death replay (killcam)",
+	"set.killcam.hint": "After you die, shows a short replay of the last seconds of the fight. Single-player only.",
+	"killcam.title": "Replay: {name} destroyed you ({src})",
+	"killcam.title.self": "Replay: {src}",
+	"killcam.src.bullet": "shot",
+	"killcam.src.ram": "ram",
+	"killcam.src.mine": "mine",
+	"killcam.src.acid": "acid",
+	"killcam.src.lightning": "lightning",
+	"killcam.src.blast": "explosion",
+	"killcam.src.water": "water",
+	"killcam.src.other": "damage",
+	"set.mutator": "Weekly modifier",
+	"set.mutator.hint": "While the weekly challenge is unfinished, its special rule applies to single-player matches.",
+	"set.access.vision": "Vision",
+	"set.colorblind": "Colorblind mode",
+	"set.colorblind.off": "off",
+	"set.colorblind.rg": "red/green",
+	"set.colorblind.by": "blue/yellow",
+	"set.colorblind.hint": "Changes the colors of friendly and enemy tanks, bullets, flags, bases and the health bar.",
+	"set.contrast": "High-contrast interface",
+	"set.uiscale": "Interface scale",
+	"set.uiscale.hint": "Enlarges menus and the combat panel. The battlefield is not scaled.",
+	"set.access.motion": "Motion and flashes",
+	"set.reduceflash": "Reduce flashes",
+	"set.reduceflash.hint": "Dims lightning flashes and the red damage flash.",
 	"nav.select": "select",
 	"nav.back": "back",
 	"nav.move": "move",
@@ -427,6 +483,267 @@ var EN := {
 	"player2": "Player 2",
 	"feed.start.ffa": "Free For All: be the first to reach the kill cap",
 	"feed.start.koth": "King of the Hill (Boss Battle): defeat the 3 bosses and survive on the sinking arena!",
+	"feed.mutator": "⚡ Weekly modifier: {desc}",
+	"weekly.title": "WEEKLY CHALLENGE: {name}",
+	"weekly.left": "⏳ Left: {d} d {h} h",
+	"weekly.mutator": "⚡ Modifier: {desc}",
+	"weekly.claimed": "✔ Reward claimed",
+	"weekly.leaderboard": "🏆 Leaderboard",
+	"daily.header": "DAILY QUESTS",
+	"lb.sub": "Steam leaderboards and local records",
+	"lb.tab.waves": "Defense (Waves)",
+	"lb.tab.score": "Defense (Score)",
+	"lb.tab.weekly": "Weekly challenge",
+	"lb.tab.ffa": "Duels (FFA)",
+	"lb.h.rank": "RANK",
+	"lb.h.name": "FIGHTER",
+	"lb.h.score": "SCORE",
+	"lb.h.date": "DATE",
+	"go.records": "🏆 Records",
+	"hint.turret": "rotate turret",
+	"hint.pad.lstick": "left stick",
+	"hint.pad.rstick": "right stick",
+	"hint.pad.lock": "hard lock on the nearest target",
+	"hint.pad.assist": "aim assist: nudges aim toward the nearest enemy",
+	"feed.flagSpawned": "⚑ A flag has appeared on the battlefield!",
+	"feed.rammerMeltdown": "⚠️ REACTOR OVERLOAD ON {name}! EXPLOSION IN 1.5 SEC — BACK AWAY!",
+	"feed.start.tutorial": "Rookie course: follow the on-screen instructions!",
+	"perk.continue": "Continue the fight",
+	"set.language": "Interface language",
+	"dev.touch.none": "Touchscreen not detected",
+	"bestiary.player_standard.name": "Universal",
+	"bestiary.player_standard.role": "Universal fighter",
+	"bestiary.player_standard.hp_val": "100 HP (Base)",
+	"bestiary.player_standard.speed_val": "12.5 m/s (Standard)",
+	"bestiary.player_standard.dmg_val": "25 per shot",
+	"bestiary.player_standard.desc": "The main combat vehicle of the armored forces. A perfect balance of mobility, armor and firepower. Compatible with every combat perk and base module.",
+	"bestiary.player_standard.ab0.name": "Rapid-fire rifled gun",
+	"bestiary.player_standard.ab0.desc": "A basic tank cannon with stable ballistics, a moderate rate of fire and moderate barrel heating.",
+	"bestiary.player_standard.ab1.name": "Universal chassis",
+	"bestiary.player_standard.ab1.desc": "Fits any tactical role, from positional defense to lightning assaults.",
+	"bestiary.player_standard.ab2.name": "Modular adaptation",
+	"bestiary.player_standard.ab2.desc": "Is strengthened effectively by any combat stimulants, shields and trophy perks.",
+	"bestiary.player_ice.name": "Cryo Tank",
+	"bestiary.player_ice.role": "Control and ramming",
+	"bestiary.player_ice.hp_val": "100 HP (Base)",
+	"bestiary.player_ice.speed_val": "12.5 m/s (Standard)",
+	"bestiary.player_ice.dmg_val": "0 direct / fatal ram",
+	"bestiary.player_ice.desc": "A specialized cryogenic suppression vehicle. It fires liquid-nitrogen shells that freeze the target solid. Ice-bound armor turns brittle and shatters instantly from a single ram.",
+	"bestiary.player_ice.ab0.name": "Cryogenic salvo",
+	"bestiary.player_ice.ab0.desc": "The shell deals no direct damage but locks the target in ice for 4 seconds, blocking movement and fire.",
+	"bestiary.player_ice.ab1.name": "Crushing ram",
+	"bestiary.player_ice.ab1.desc": "Ramming a frozen tank instantly destroys ordinary targets and deals colossal damage to bosses (up to 30% max HP).",
+	"bestiary.player_ice.ab2.name": "High heat",
+	"bestiary.player_ice.ab2.desc": "The cannon demands overheat control but compensates with absolute control of the fighting distance.",
+	"bestiary.player_acid.name": "Chem Tank",
+	"bestiary.player_acid.role": "Chemical warfare and corrosion",
+	"bestiary.player_acid.hp_val": "100 HP (Base)",
+	"bestiary.player_acid.speed_val": "12.5 m/s (Standard)",
+	"bestiary.player_acid.dmg_val": "25 + chemical burn up to 5 layers",
+	"bestiary.player_acid.desc": "A chemical warfare machine fitted with a corrosive toxic sprayer. Every hit delivers a concentrated chemical that keeps eating the target's armor even after it leaves the line of fire.",
+	"bestiary.player_acid.ab0.name": "Chemical shells",
+	"bestiary.player_acid.ab0.desc": "Deal direct kinetic damage and spray a corrosive agent for 5 seconds.",
+	"bestiary.player_acid.ab1.name": "Layered corrosion",
+	"bestiary.player_acid.ab1.desc": "Every hit deepens the armor decay (up to 5 layers), increasing continuous damage every second.",
+	"bestiary.player_acid.ab2.name": "High feed rate",
+	"bestiary.player_acid.ab2.desc": "Moderate heat output and reliable automation let you quickly push the acid concentration on a target to the maximum.",
+	"bestiary.grunt.name": "Grunt",
+	"bestiary.grunt.role": "Line assault tank",
+	"bestiary.grunt.hp_val": "100 HP (1.0×)",
+	"bestiary.grunt.speed_val": "12.5 m/s (1.0×)",
+	"bestiary.grunt.dmg_val": "25 per shot (1.0×)",
+	"bestiary.grunt.desc": "The most numerous enemy tank. It acts aggressively, chases the player and fires at medium range. Predictable in maneuvering, but dangerous when it outnumbers you.",
+	"bestiary.grunt.ab0.name": "Assault pressure",
+	"bestiary.grunt.ab0.desc": "Keeps a distance of 10-30 meters and constantly shells the target with direct fire.",
+	"bestiary.grunt.ab1.name": "Balanced armament",
+	"bestiary.grunt.ab1.desc": "Classic rate of fire and reliable accuracy with no glaring weak spots.",
+	"bestiary.scout.name": "Scout",
+	"bestiary.scout.role": "Fast interceptor",
+	"bestiary.scout.hp_val": "75 HP (0.75×)",
+	"bestiary.scout.speed_val": "16.3 m/s (1.3×)",
+	"bestiary.scout.dmg_val": "13 per burst shot (0.5×)",
+	"bestiary.scout.desc": "A lightweight reconnaissance vehicle on a fast three-roller chassis. It dashes around the map, circles the target nonstop and fires at double frequency to make up for low damage.",
+	"bestiary.scout.ab0.name": "High mobility",
+	"bestiary.scout.ab0.desc": "Closes in on the target quickly and dodges slow shells and ramming attacks effectively.",
+	"bestiary.scout.ab1.name": "Burst fire",
+	"bestiary.scout.ab1.desc": "Double rate of fire at the cost of reduced damage and some spread.",
+	"bestiary.scout.ab2.name": "Light armor",
+	"bestiary.scout.ab2.desc": "Extremely vulnerable to concentrated fire and rams from heavy vehicles.",
+	"bestiary.heavy.name": "Brute",
+	"bestiary.heavy.role": "Heavy breakthrough tank",
+	"bestiary.heavy.hp_val": "220 HP (2.2×)",
+	"bestiary.heavy.speed_val": "10.0 m/s (0.8×)",
+	"bestiary.heavy.dmg_val": "34 per heavy shell (1.35×)",
+	"bestiary.heavy.desc": "A heavily armored colossus with extra plating and a gun with a powerful muzzle brake. Slow, but with enormous survivability and a devastating single salvo.",
+	"bestiary.heavy.ab0.name": "Multi-layer armor",
+	"bestiary.heavy.ab0.desc": "Durability more than 2.2 times that of a standard tank, letting it soak up fire.",
+	"bestiary.heavy.ab1.name": "Heavy shell",
+	"bestiary.heavy.ab1.desc": "35% higher single-shot damage, able to destroy light vehicles quickly.",
+	"bestiary.heavy.ab2.name": "Mass inertia",
+	"bestiary.heavy.ab2.desc": "Turns and accelerates slowly, vulnerable to maneuvering flanks and rear attacks.",
+	"bestiary.sniper.name": "Sniper",
+	"bestiary.sniper.role": "Support sniper",
+	"bestiary.sniper.hp_val": "90 HP (0.9×)",
+	"bestiary.sniper.speed_val": "12.5 m/s (1.0×)",
+	"bestiary.sniper.dmg_val": "62.5 per shot (2.5×)",
+	"bestiary.sniper.desc": "Equipped with a long-barreled precision gun and an optical suite. Prefers to stay at maximum range behind cover and deliver shots of devastating power.",
+	"bestiary.sniper.ab0.name": "Extreme-range aimed fire",
+	"bestiary.sniper.ab0.desc": "Fires at ranges of up to 60 meters with improved accuracy and ballistic stability.",
+	"bestiary.sniper.ab1.name": "Armor-piercing critical caliber",
+	"bestiary.sniper.ab1.desc": "Deals 250% of base damage; a direct hit takes off half of a tank's durability.",
+	"bestiary.sniper.ab2.name": "Long reload cycle",
+	"bestiary.sniper.ab2.desc": "The long pause between shots leaves the sniper vulnerable to a sudden approach.",
+	"bestiary.mortar.name": "Mortar",
+	"bestiary.mortar.role": "Siege artillery",
+	"bestiary.mortar.hp_val": "110 HP (1.1×)",
+	"bestiary.mortar.speed_val": "10.6 m/s (0.85×)",
+	"bestiary.mortar.dmg_val": "30 per lobbed blast radius (1.2×)",
+	"bestiary.mortar.desc": "A self-propelled gun with a short-barreled mortar. It fires on a high ballistic arc, lobbing heavy shells over any walls, brick barricades and water obstacles.",
+	"bestiary.mortar.ab0.name": "Lobbed ballistics",
+	"bestiary.mortar.ab0.desc": "Shells fly over walls and any obstacle on the line of sight.",
+	"bestiary.mortar.ab1.name": "Fragmentation radius",
+	"bestiary.mortar.ab1.desc": "The detonation on landing covers vehicles in an area with a high-explosive blast wave.",
+	"bestiary.mortar.ab2.name": "Flight time",
+	"bestiary.mortar.ab2.desc": "The high trajectory gives a moving target time to maneuver out of the impact zone.",
+	"bestiary.boss.name": "Armored Monster",
+	"bestiary.boss.role": "Super-heavy dreadnought",
+	"bestiary.boss.hp_val": "500-1500 HP (5.0×)",
+	"bestiary.boss.speed_val": "9.4 m/s (0.75×)",
+	"bestiary.boss.dmg_val": "Twin salvo (2 × 29)",
+	"bestiary.boss.desc": "A gigantic steel dreadnought with a twin large-caliber gun and ultra-tough armor. It leads the final enemy waves. Withstands barrages with ease, sweeping aside vehicles with salvos from both guns.",
+	"bestiary.boss.ab0.name": "Twin battery",
+	"bestiary.boss.ab0.desc": "Fires two large-caliber shells at once with improved grouping.",
+	"bestiary.boss.ab1.name": "Titanic durability",
+	"bestiary.boss.ab1.desc": "Huge reserve of survivability that scales with the wave and chosen difficulty.",
+	"bestiary.boss.ab2.name": "Rich battle trophy",
+	"bestiary.boss.ab2.desc": "On destruction it leaves 3 valuable combat perks and a repair kit on the arena.",
+	"bestiary.boss_rammer.name": "Juggernaut Ram",
+	"bestiary.boss_rammer.role": "Siege crusher",
+	"bestiary.boss_rammer.hp_val": "3400 HP (Base)",
+	"bestiary.boss_rammer.speed_val": "12-30 m/s (while charging)",
+	"bestiary.boss_rammer.dmg_val": "Ram up to 200 + mine whirl",
+	"bestiary.boss_rammer.desc": "A steel siege monster with no gun turret, fitted with a monolithic wedge-shaped blade with sharp spikes. It accelerates to crushing speed and rams vehicles in its path. In close combat it can spin like a top, dealing circular damage and scattering high-explosive mines around itself.",
+	"bestiary.boss_rammer.ab0.name": "Unstoppable charge",
+	"bestiary.boss_rammer.ab0.desc": "Builds colossal speed with minimal delay and sweeps tanks aside, dealing lethal ram damage.",
+	"bestiary.boss_rammer.ab1.name": "Whirlwind spin",
+	"bestiary.boss_rammer.ab1.desc": "Spins its hull on its axis, shredding vehicles like a circular saw and scattering high-explosive mines.",
+	"bestiary.boss_rammer.ab2.name": "Seismic wave",
+	"bestiary.boss_rammer.ab2.desc": "On hitting a wall it creates a radial shock wave that damages everything around.",
+	"bestiary.boss_rammer.ab3.name": "Kinetic deflection",
+	"bestiary.boss_rammer.ab3.desc": "During the charge and the whirl, reflects 35% of incoming damage thanks to its massive armor.",
+	"bestiary.boss_chimera.name": "Phantom Chimera",
+	"bestiary.boss_chimera.role": "Phantom toxicologist",
+	"bestiary.boss_chimera.hp_val": "2000 HP (Base)",
+	"bestiary.boss_chimera.speed_val": "15.6 m/s (1.25×)",
+	"bestiary.boss_chimera.dmg_val": "Acid stream (~60-80/s) + corrosion",
+	"bestiary.boss_chimera.desc": "An experimental tactical boss with an optical illusion generator and a high-pressure acid nozzle. Before attacking it warms up its nozzles, releasing warning clouds of toxic steam. Can dissolve a target in a few seconds of continuous stream.",
+	"bestiary.boss_chimera.ab0.name": "Continuous acid stream",
+	"bestiary.boss_chimera.ab0.desc": "Floods the sector in front with a powerful jet of corrosive reagent that melts metal and applies corrosion.",
+	"bestiary.boss_chimera.ab1.name": "Attack indicator",
+	"bestiary.boss_chimera.ab1.desc": "Before the salvo the nozzle emits green smoke and a distinctive rising pumping hum.",
+	"bestiary.boss_chimera.ab2.name": "Holographic phantoms",
+	"bestiary.boss_chimera.ab2.desc": "Projects up to two synchronized decoy copies that distract attention and repeat the stream attack.",
+	"bestiary.boss_chimera.ab3.name": "Optical camouflage",
+	"bestiary.boss_chimera.ab3.desc": "Periodically dissolves into thin air and swiftly changes position for the next strike.",
+	"bestiary.boss_chimera.ab4.name": "Toxic hotspots",
+	"bestiary.boss_chimera.ab4.desc": "Leaves corrosive chemical puddles on the ground that slow movement and eat at the tracks.",
+	"bestiary.chimera_clone.name": "Holographic Clone",
+	"bestiary.chimera_clone.role": "Holographic projection",
+	"bestiary.chimera_clone.hp_val": "1000 HP (50% of the original)",
+	"bestiary.chimera_clone.speed_val": "15.6 m/s (1.25×)",
+	"bestiary.chimera_clone.dmg_val": "Acid stream (50% power)",
+	"bestiary.chimera_clone.desc": "A high-density optical projection created by the Phantom Chimera's generators. It reproduces the silhouette and habits of the original exactly, charging and firing a reduced-power acid stream in sync. Dissipates instantly when the real boss dies.",
+	"bestiary.chimera_clone.ab0.name": "Synchronous projection",
+	"bestiary.chimera_clone.ab0.desc": "Precisely imitates the charging phases and stream direction of the genuine Chimera.",
+	"bestiary.chimera_clone.ab1.name": "Weakened chemical",
+	"bestiary.chimera_clone.ab1.desc": "Deals half the stream's damage while still eating armor with a chemical burn.",
+	"bestiary.chimera_clone.ab2.name": "Resonant link",
+	"bestiary.chimera_clone.ab2.desc": "Vanishes from the arena instantly once the real command dreadnought is defeated.",
+	"bestiary.classified.title": "??? [CLASSIFIED SPECIMEN]",
+	"bestiary.player_tank": "Available to drive in the Garage (player tank)",
+	"bestiary.condition": "DECLASSIFICATION CONDITION: destroy this tank at least once in battle",
+	"bestiary.stat.hp": "Hull integrity:",
+	"bestiary.stat.speed": "Mobility / Speed:",
+	"bestiary.stat.dmg": "Firepower / Damage:",
+	"bestiary.locked_desc": "Tactical profile locked. Technical specifications, weak points and combat doctrine will be decrypted after the first unit is destroyed.",
+	"bestiary.systems_locked": "[WEAPON SYSTEMS AND ABILITIES CLASSIFIED]",
+	"bestiary.kills": "Destroyed in combat: {n} time(s)",
+	"cos.type.camo": "Battle camouflage",
+	"cos.type.hull": "Hull art and decals",
+	"cos.type.track": "Tracks",
+	"cos.type.turret": "Turrets",
+	"cos.default.name": "Standard",
+	"cos.default.desc": "Basic factory set of armor, turret and tracks.",
+	"cos.default.hull": "Hull: Factory armor",
+	"cos.default.turret": "Turret: Standard rifled",
+	"cos.default.track": "Tracks: Cast-iron links",
+	"cos.badge.base_set": "BASIC SET",
+	"cos.badge.legendary_set": "LEGENDARY · FULL SET",
+	"cos.badge.epic_set": "EPIC · FULL SET",
+	"cos.badge.rare_set": "RARE · FULL SET",
+	"cos.badge.legendary": "LEGENDARY",
+	"cos.badge.epic": "EPIC",
+	"cos.badge.rare": "RARE",
+	"cos.badge.camo": "CAMOUFLAGE",
+	"cos.badge.hull": "HULL DECAL",
+	"cos.badge.track": "TRACKS",
+	"cos.badge.turret": "TURRET",
+	"cos.badge.cosmetic": "COSMETIC",
+	"cos.feat.cyberpunk.hull": "Hull: neon, microchips and a scanner",
+	"cos.feat.cyberpunk.turret": "Turret: cyber visor and energy barrel",
+	"cos.feat.cyberpunk.track": "Tracks: glowing neon links",
+	"cos.feat.magma.hull": "Hull: basalt with fiery fissures",
+	"cos.feat.magma.turret": "Turret: volcanic vent and lava",
+	"cos.feat.magma.track": "Tracks: red-hot fiery links",
+	"cos.feat.steampunk.hull": "Hull: forged brass and gears",
+	"cos.feat.steampunk.turret": "Turret: dome with a pressure gauge and rifling",
+	"cos.feat.steampunk.track": "Tracks: heavy forged bronze",
+	"cos.feat.void.hull": "Hull: dark matter and constellations",
+	"cos.feat.void.turret": "Turret: a singularity with an accretion disk",
+	"cos.feat.void.track": "Tracks: stellar amethyst dust",
+	"cos.feat.dragon.hull": "Hull: emerald scales and a spine",
+	"cos.feat.dragon.turret": "Turret: dragon horns and a ruby eye",
+	"cos.feat.dragon.track": "Tracks: clawed spikes and scales",
+	"cos.feat.toxic.hull": "Hull: biohazard shielding and a warning sign",
+	"cos.feat.toxic.turret": "Turret: a flask of bubbling toxin",
+	"cos.feat.toxic.track": "Tracks: protective chemical links",
+	"cos.feat.golden_emperor.hull": "Hull: mirror-polished 24K gold and purple",
+	"cos.feat.golden_emperor.turret": "Turret: a royal crown with a ruby",
+	"cos.feat.golden_emperor.track": "Tracks: solid gold links",
+	"cos.feat.arctic_frost.hull": "Hull: ancient ice and crystals",
+	"cos.feat.arctic_frost.turret": "Turret: a frost star and rime",
+	"cos.feat.arctic_frost.track": "Tracks: snow-covered permafrost",
+	"cos.feat.default.hull": "Hull: factory armor plate",
+	"cos.feat.default.turret": "Turret: standard rifled",
+	"cos.feat.default.track": "Tracks: steel links",
+	"cos.feat.art": "Art: {name}",
+	"cos.feat.camo": "Camouflage: {name}",
+	"cos.feat.turret": "Turret: {name}",
+	"cos.feat.track": "Tracks: {name}",
+	"cos.status.owned": "IN YOUR COLLECTION",
+	"cos.status.price": "PRICE: {price} 🪙",
+	"cos.action.equip": "EQUIP",
+	"cos.action.buy": "BUY · {price} 🪙",
+	"cos.reset": "Reset preview",
+	"cos.status.equipped": "EQUIPPED",
+	"weekly.w_ice_storm.name": "Ice Storm",
+	"weekly.w_ice_storm.desc": "Destroy 35 tanks in slippery winter conditions",
+	"weekly.w_ice_storm.mutator_desc": "Slippery ground and cryo shots",
+	"weekly.w_explosive_madness.name": "Explosive Frenzy",
+	"weekly.w_explosive_madness.desc": "Blow up 15 explosive barrels and deal damage with explosions",
+	"weekly.w_explosive_madness.mutator_desc": "Twice as many explosive barrels in the arena",
+	"weekly.w_emp_overload.name": "EMP Overload",
+	"weekly.w_emp_overload.desc": "Discharge field generators 8 times and stun your enemies",
+	"weekly.w_emp_overload.mutator_desc": "Field generators charge twice as fast",
+	"weekly.w_iron_ram.name": "Iron Ram",
+	"weekly.w_iron_ram.desc": "Land 12 crushing rams with a heavy machine",
+	"weekly.w_iron_ram.mutator_desc": "Stronger rams and longer dashes",
+	"weekly.w_survival_endurance.name": "Siege of the Citadel",
+	"weekly.w_survival_endurance.desc": "Survive at least 12 waves in Defense mode",
+	"weekly.w_survival_endurance.mutator_desc": "Extra dense armored waves",
+	"weekly.w_sniper_elite.name": "Sniper Duel",
+	"weekly.w_sniper_elite.desc": "Eliminate 20 enemies from long range (50 meters or more)",
+	"weekly.w_sniper_elite.mutator_desc": "Faster shells and sharper enemy aim",
 	"feed.kothBossKilled": "💥 BOSS SLAIN: {name}! 3 epic trophies and medkit on the arena!",
 	"feed.start.defense": "Defense: hold the base against waves of enemies",
 	"feed.start.ctf": "CTF: bring enemy flags back to your base",
@@ -830,25 +1147,92 @@ var EN_BOT_NAMES := [
 	"Thunder", "Storm", "Blade", "Wild", "Captain", "Lynx", "Flint",
 ]
 
+const PACK_DIRS := ["res://lang", "user://lang"]
+const BASE_LANGS := ["ru", "en"]
+const LANG_NAMES := {"ru": "Русский", "en": "English"}
+
+var packs := {}
+
 func _ready() -> void:
+	reload_packs()
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) == OK:
-		lang = String(cfg.get_value("i18n", "lang", "ru"))
+		var saved := String(cfg.get_value("i18n", "lang", "ru"))
+		lang = saved if is_available(saved) else "ru"
+
+func reload_packs() -> void:
+	packs.clear()
+	for dir_path in PACK_DIRS:
+		var dir := DirAccess.open(dir_path)
+		if dir == null:
+			continue
+		for file_name in dir.get_files():
+			if file_name.get_extension().to_lower() != "json":
+				continue
+			var code := file_name.get_basename().to_lower()
+			if BASE_LANGS.has(code):
+				continue
+			_load_pack(code, dir_path.path_join(file_name))
+
+func _load_pack(code: String, path: String) -> void:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return
+	var data = JSON.parse_string(f.get_as_text())
+	f.close()
+	if not (data is Dictionary) or not (data.get("strings", null) is Dictionary):
+		push_warning("[i18n] языковой пакет %s повреждён" % path)
+		return
+	packs[code] = {"name": String(data.get("name", code)), "strings": data["strings"]}
+
+func is_available(code: String) -> bool:
+	return BASE_LANGS.has(code) or packs.has(code)
+
+func is_ru() -> bool:
+	return lang == "ru"
+
+func available_languages() -> Array:
+	var out := []
+	for code in BASE_LANGS:
+		out.append({"code": code, "name": LANG_NAMES[code]})
+	var extra := packs.keys()
+	extra.sort()
+	for code in extra:
+		out.append({"code": code, "name": String(packs[code]["name"])})
+	return out
+
+func lang_name(code: String) -> String:
+	if LANG_NAMES.has(code):
+		return String(LANG_NAMES[code])
+	return String(packs.get(code, {}).get("name", code))
 
 func set_lang(next: String) -> void:
-	lang = "en" if next == "en" else "ru"
+	lang = next if is_available(next) else "ru"
 	var cfg := ConfigFile.new()
 	cfg.set_value("i18n", "lang", lang)
 	cfg.save(SAVE_PATH)
 	language_changed.emit()
 
 func toggle_lang() -> void:
-	set_lang("en" if lang == "ru" else "ru")
+	var codes := []
+	for entry in available_languages():
+		codes.append(String(entry["code"]))
+	var idx := codes.find(lang)
+	set_lang(codes[(idx + 1) % codes.size()])
+
+func lookup(key: String, fallback: String = "") -> String:
+	if lang == "ru":
+		return fallback
+	if lang != "en" and packs.has(lang):
+		var strings: Dictionary = packs[lang]["strings"]
+		if strings.has(key):
+			return String(strings[key])
+	if EN.has(key):
+		return String(EN[key])
+	return fallback
 
 func t(key: String, vars: Dictionary = {}, fallback: String = "") -> String:
-	var s: String = fallback if fallback != "" else key
-	if lang == "en" and EN.has(key):
-		s = String(EN[key])
+	var s: String = lookup(key, fallback if fallback != "" else key)
 	for k in vars.keys():
 		s = s.replace("{" + String(k) + "}", str(vars[k]))
 	return s
@@ -857,13 +1241,12 @@ func dn(obj: Dictionary, field: String, ns: String) -> String:
 	if obj.is_empty():
 		return ""
 	var ru: String = String(obj.get(field, ""))
-	if lang != "en":
+	if lang == "ru":
 		return ru
-	var key := "%s.%s.%s" % [ns, String(obj.get("id", "")), field]
-	return String(EN.get(key, ru))
+	return lookup("%s.%s.%s" % [ns, String(obj.get("id", "")), field], ru)
 
 func plural(n: int, one: String, few: String, many: String) -> String:
-	if lang == "en":
+	if lang != "ru":
 		return one if absi(n) == 1 else many
 	var a := absi(n) % 100
 	if a >= 11 and a <= 14:
@@ -876,4 +1259,4 @@ func plural(n: int, one: String, few: String, many: String) -> String:
 	return many
 
 func bot_names() -> Array:
-	return EN_BOT_NAMES if lang == "en" else []
+	return [] if lang == "ru" else EN_BOT_NAMES

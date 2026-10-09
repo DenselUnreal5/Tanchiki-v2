@@ -11,6 +11,12 @@ const DEFAULT_KEYS := {
 	"p2_dash": KEY_KP_ADD, "p2_ability": KEY_KP_SUBTRACT,
 }
 
+static func key_name(action: String) -> String:
+	var code := Sets.key_for(action)
+	if code <= 0:
+		return "?"
+	return OS.get_keycode_string(code)
+
 static func empty_command() -> Dictionary:
 	return {"mx": 0.0, "my": 0.0, "ax": 0.0, "ay": 0.0,
 		"fire": false, "mine": false, "dash": false, "airstrike": false,
@@ -92,13 +98,16 @@ class MouseAimScheme extends RefCounted:
 
 	func hints() -> Array:
 		return [
-			"[W][A][S][D] движение",
-			"[мышь] прицел",
-			"[ЛКМ] / [Space] выстрел",
-			"[E / У] / [ПКМ] мина",
-			"[Shift] рывок-таран",
-			"[Q / Й] способность перка",
-			"[F / А] авиаудар (Оборона)",
+			"[%s][%s][%s][%s] %s" % [Ctl.key_name("p1_up"), Ctl.key_name("p1_left"),
+				Ctl.key_name("p1_down"), Ctl.key_name("p1_right"), I18n.t("hint.move", {}, "движение")],
+			"[%s] %s" % [I18n.t("hint.mouse", {}, "мышь"), I18n.t("hint.aim", {}, "прицел")],
+			"[%s] / [%s] %s" % [I18n.t("hint.lmb", {}, "ЛКМ"), Ctl.key_name("p1_fire"),
+				I18n.t("hint.fire", {}, "выстрел")],
+			"[%s] / [%s] %s" % [Ctl.key_name("p1_mine"), I18n.t("hint.rmb", {}, "ПКМ"),
+				I18n.t("hint.mine", {}, "мина")],
+			"[%s] %s" % [Ctl.key_name("p1_dash"), I18n.t("hint.dash", {}, "рывок-таран")],
+			"[%s] %s" % [Ctl.key_name("p1_ability"), I18n.t("hint.ability", {}, "способность перка")],
+			"[%s] %s" % [Ctl.key_name("p1_airstrike"), I18n.t("hint.airstrike", {}, "авиаудар (Оборона)")],
 		]
 
 	func read_command(player) -> Dictionary:
@@ -152,12 +161,14 @@ class KeyboardAimScheme extends RefCounted:
 
 	func hints() -> Array:
 		return [
-			"[↑][←][↓][→] движение",
-			"[<][>] поворот башни",
-			"[Правый Shift] / [Num 0] выстрел",
-			"[Num .] / [Правый Ctrl] мина",
-			"[Num +] рывок-таран",
-			"[Num -] способность перка",
+			"[%s][%s][%s][%s] %s" % [Ctl.key_name("p2_up"), Ctl.key_name("p2_left"),
+				Ctl.key_name("p2_down"), Ctl.key_name("p2_right"), I18n.t("hint.move", {}, "движение")],
+			"[%s][%s] %s" % [Ctl.key_name("p2_turret_left"), Ctl.key_name("p2_turret_right"),
+				I18n.t("hint.turret", {}, "поворот башни")],
+			"[%s] %s" % [Ctl.key_name("p2_fire"), I18n.t("hint.fire", {}, "выстрел")],
+			"[%s] %s" % [Ctl.key_name("p2_mine"), I18n.t("hint.mine", {}, "мина")],
+			"[%s] %s" % [Ctl.key_name("p2_dash"), I18n.t("hint.dash", {}, "рывок-таран")],
+			"[%s] %s" % [Ctl.key_name("p2_ability"), I18n.t("hint.ability", {}, "способность перка")],
 		]
 
 	func apply(tank: Tank, player, world) -> void:
@@ -213,6 +224,59 @@ class KeyboardAimScheme extends RefCounted:
 		if firing:
 			tank.shoot(world)
 
+class TouchScheme extends RefCounted:
+	var move := Vector2.ZERO
+	var aim := Vector2.ZERO
+	var mine := false
+	var dash := false
+	var ability := false
+	var airstrike := false
+	var _facing := Vector2.RIGHT
+	var world = null
+
+	const AIM_REACH := 260.0
+	const STICK_DEADZONE := 0.18
+	const FIRE_THRESHOLD := 0.55
+
+	func hints() -> Array:
+		return [
+			I18n.t("hint.touch.move", {}, "левый экран: двигать пальцем — движение"),
+			I18n.t("hint.touch.aim", {}, "правый экран: двигать пальцем — прицел, сильнее — огонь"),
+			I18n.t("hint.touch.buttons", {}, "кнопки справа: рывок, мина, способность, авиаудар"),
+		]
+
+	func release_all() -> void:
+		move = Vector2.ZERO
+		aim = Vector2.ZERO
+		mine = false
+		dash = false
+		ability = false
+		airstrike = false
+
+	func read_command(player) -> Dictionary:
+		var cmd := Ctl.empty_command()
+		var m := move if move.length() > STICK_DEADZONE else Vector2.ZERO
+		cmd["mx"] = m.x
+		cmd["my"] = m.y
+		if aim.length() > STICK_DEADZONE:
+			_facing = aim.normalized()
+		elif m != Vector2.ZERO:
+			_facing = m.normalized()
+		var tank = player.tank
+		if tank != null:
+			cmd["ax"] = tank.x + _facing.x * AIM_REACH
+			cmd["ay"] = tank.y + _facing.y * AIM_REACH
+		cmd["fire"] = aim.length() >= FIRE_THRESHOLD
+		cmd["mine"] = mine
+		cmd["dash"] = dash
+		cmd["ability"] = ability
+		cmd["airstrike"] = airstrike
+		return cmd
+
+	func apply(tank: Tank, player, world_) -> void:
+		world = world_
+		Ctl.apply_command(tank, world_, read_command(player))
+
 class GamepadScheme extends RefCounted:
 	var device := 0
 	var aim := Vector2.ZERO
@@ -236,17 +300,17 @@ class GamepadScheme extends RefCounted:
 
 	func hints() -> Array:
 		var h := [
-			"[левый стик] движение",
-			"[правый стик] прицел",
-			"[RT] / [A] выстрел",
-			"[LT] / [B] мина",
-			"[LB] рывок-таран",
-			"[Y] способность перка",
-			"[RB] авиаудар (Оборона)",
-			"[R3] жёсткий лок на ближайшую цель",
+			"[%s] %s" % [I18n.t("hint.pad.lstick", {}, "левый стик"), I18n.t("hint.move", {}, "движение")],
+			"[%s] %s" % [I18n.t("hint.pad.rstick", {}, "правый стик"), I18n.t("hint.aim", {}, "прицел")],
+			"[RT] / [A] " + I18n.t("hint.fire", {}, "выстрел"),
+			"[LT] / [B] " + I18n.t("hint.mine", {}, "мина"),
+			"[LB] " + I18n.t("hint.dash", {}, "рывок-таран"),
+			"[Y] " + I18n.t("hint.ability", {}, "способность перка"),
+			"[RB] " + I18n.t("hint.airstrike", {}, "авиаудар (Оборона)"),
+			"[R3] " + I18n.t("hint.pad.lock", {}, "жёсткий лок на ближайшую цель"),
 		]
 		if Sets.pad_aim_assist:
-			h.append("автоприцел: доводка к ближайшему врагу")
+			h.append(I18n.t("hint.pad.assist", {}, "автоприцел: доводка к ближайшему врагу"))
 		return h
 
 	func _axis(a: JoyAxis) -> float:

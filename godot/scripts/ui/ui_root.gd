@@ -10,6 +10,7 @@ signal reset_progress_requested
 signal garage_changed
 signal daily_reward_claimed(reward: int)
 signal quit_requested
+signal pause_restart_requested
 
 const PERK_CHOICES := 3
 
@@ -84,6 +85,12 @@ var _focus_stack: Array = []
 var _menu_focus_cache := {}
 var _menu_start_btn: Button
 var _pause_resume_btn: Button
+var _pause_restart_btn: Button
+var _pause_restart_armed := false
+var _controls_ref: Control
+var _controls_body: VBoxContainer
+var _controls_sub: RichTextLabel
+var controls_provider := Callable()
 var _gameover_replay_btn: Button
 var _perk_player = null
 var _perk_pending_id := ""
@@ -112,6 +119,10 @@ func _ready() -> void:
 	_net_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
 	_net_body = _overlay_body(_net, "net.title", "Сетевая игра",
 		_net_sub, func(): close_net(), 620)
+	_controls_ref = _make_overlay(true)
+	_controls_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
+	_controls_body = _overlay_body(_controls_ref, "controls.title", "Управление",
+		_controls_sub, func(): close_controls(), 560)
 
 	_build_settings_shell()
 
@@ -241,6 +252,9 @@ func handle_cancel() -> bool:
 	if _perk != null and _perk.visible:
 		perk_chosen.emit(_perk_player, "")
 		return true
+	if _controls_ref != null and _controls_ref.visible:
+		close_controls()
+		return true
 	if _map_editor != null and _map_editor.visible:
 		close_map_editor()
 		return true
@@ -368,7 +382,7 @@ func _overlay_body(root: Control, title_key: String, title_fallback: String,
 	return body
 
 func _resize_overlays() -> void:
-	var screen := get_viewport_rect().size
+	var screen := UiKit.virtual_screen(self)
 	for root in [_stats, _daily, _net, _gameover]:
 		if root == null or not root.has_meta("scroll"):
 			continue
@@ -436,7 +450,7 @@ func refresh_profile() -> void:
 		main_menu.refresh_profile()
 
 func hide_all_overlays() -> void:
-	for c in [_menu, _pause, _perk, _gameover, _hub, _stats, _daily, _settings, _net, _map_editor]:
+	for c in [_menu, _pause, _perk, _gameover, _hub, _stats, _daily, _settings, _net, _map_editor, _controls_ref]:
 		if c != null:
 			c.visible = false
 
@@ -459,6 +473,16 @@ func _build_pause() -> void:
 	box.add_child(resume)
 	_pause_resume_btn = resume
 
+	_pause_restart_btn = UiKit.secondary(I18n.t("pause.restart", {}, "Перезапустить матч"), 13)
+	_pause_restart_btn.custom_minimum_size = Vector2(0, 38)
+	_pause_restart_btn.pressed.connect(_on_pause_restart_pressed)
+	box.add_child(_pause_restart_btn)
+
+	var controls := UiKit.secondary(I18n.t("pause.controls", {}, "Управление"), 13)
+	controls.custom_minimum_size = Vector2(0, 38)
+	controls.pressed.connect(func(): open_controls())
+	box.add_child(controls)
+
 	var gallery := UiKit.secondary(I18n.t("pause.gallery", {}, "Боевые перки"), 13)
 	gallery.custom_minimum_size = Vector2(0, 38)
 	gallery.pressed.connect(func(): open_gallery())
@@ -478,12 +502,51 @@ func _build_pause() -> void:
 
 func show_pause() -> void:
 	_pause.visible = true
+	_set_pause_restart_armed(false)
+	_pause_restart_btn.visible = not Net.is_online
 	_push_focus()
 	_grab(_pause_resume_btn)
 
 func hide_pause() -> void:
 	_pause.visible = false
+	_set_pause_restart_armed(false)
 	_pop_focus()
+
+func _set_pause_restart_armed(armed: bool) -> void:
+	_pause_restart_armed = armed
+	if _pause_restart_btn == null:
+		return
+	_pause_restart_btn.text = I18n.t("pause.restart.confirm", {}, "Точно перезапустить?") if armed \
+		else I18n.t("pause.restart", {}, "Перезапустить матч")
+
+func _on_pause_restart_pressed() -> void:
+	if not _pause_restart_armed:
+		_set_pause_restart_armed(true)
+		return
+	_set_pause_restart_armed(false)
+	pause_restart_requested.emit()
+
+func open_controls() -> void:
+	for c in _controls_body.get_children():
+		_controls_body.remove_child(c)
+		c.queue_free()
+	_controls_sub.text = "[center]" + I18n.t("controls.sub", {},
+		"Подсказки для выбранных устройств ввода") + "[/center]"
+	var groups: Array = controls_provider.call() if controls_provider.is_valid() else []
+	for g in groups:
+		_controls_body.add_child(UiKit.label(String(g["title"]), 12, Cfg.UI_GOLD, true))
+		for line in g["lines"]:
+			_controls_body.add_child(UiKit.label(String(line), 11, Color.WHITE))
+	_push_focus()
+	_controls_ref.visible = true
+	_grab(_controls_ref.get_meta("close_button"))
+
+func close_controls() -> void:
+	_controls_ref.visible = false
+	_pop_focus()
+
+var is_controls_open: bool:
+	get: return _controls_ref != null and _controls_ref.visible
 
 func _build_perk() -> void:
 	_perk = _make_overlay(true)
@@ -878,7 +941,7 @@ var is_achievements_open: bool:
 
 func open_daily() -> void:
 	var was_visible := _daily.visible
-	var quests := Daily.selection()
+	var quests := Daily.selection(Prof.daily_key())
 	var done := 0
 	for q in quests:
 		if bool(Prof.daily_progress(String(q["id"]))["claimed"]):
@@ -910,12 +973,12 @@ func open_daily() -> void:
 
 	var w_title_row := UiKit.hbox(8)
 	w_info.add_child(w_title_row)
-	w_title_row.add_child(UiKit.label("НЕДЕЛЬНОЕ ИСПЫТАНИЕ: " + String(wch.get("name", "")), 11, Cfg.UI_GOLD, true))
+	w_title_row.add_child(UiKit.label(I18n.t("weekly.title", {"name": I18n.dn(wch, "name", "weekly")}, "НЕДЕЛЬНОЕ ИСПЫТАНИЕ: %s" % I18n.dn(wch, "name", "weekly")), 11, Cfg.UI_GOLD, true))
 	var until_week := Weekly.time_until_next_week()
-	w_title_row.add_child(UiKit.label("⏳ Осталось: %d дн. %d ч." % [until_week["days"], until_week["hours"]], 9, Cfg.UI_MUTED))
+	w_title_row.add_child(UiKit.label(I18n.t("weekly.left", {"d": until_week["days"], "h": until_week["hours"]}, "⏳ Осталось: %d дн. %d ч." % [until_week["days"], until_week["hours"]]), 9, Cfg.UI_MUTED))
 
-	w_info.add_child(UiKit.label(String(wch.get("desc", "")), 9, Color.WHITE))
-	w_info.add_child(UiKit.label("⚡ Модификатор: " + String(wch.get("mutator_desc", "")), 9, Color("#38bdf8")))
+	w_info.add_child(UiKit.label(I18n.dn(wch, "desc", "weekly"), 9, Color.WHITE))
+	w_info.add_child(UiKit.label(I18n.t("weekly.mutator", {"desc": I18n.dn(wch, "mutator_desc", "weekly")}, "⚡ Модификатор: %s" % I18n.dn(wch, "mutator_desc", "weekly")), 9, Color("#38bdf8")))
 	w_info.add_child(UiKit.label("%d / %d" % [wpr["current"], wpr["need"]], 9, Cfg.UI_MUTED))
 	w_info.add_child(UiKit.progress_bar(float(wpr["current"]) / float(maxi(1, int(wpr["need"]))), 320, 4, Cfg.UI_GOLD))
 
@@ -923,9 +986,9 @@ func open_daily() -> void:
 	w_top_row.add_child(w_btn_col)
 
 	if bool(wpr["claimed"]):
-		w_btn_col.add_child(UiKit.label("✔ Награда получена", 10, Cfg.UI_ACCENT, true))
+		w_btn_col.add_child(UiKit.label(I18n.t("weekly.claimed", {}, "✔ Награда получена"), 10, Cfg.UI_ACCENT, true))
 	else:
-		var wclaim := UiKit.small("Забрать · %d 🪙" % int(wpr["reward"]))
+		var wclaim := UiKit.small(I18n.t("daily.claim", {"reward": wpr["reward"]}, "Забрать · %d 🪙" % int(wpr["reward"])))
 		wclaim.disabled = not bool(wpr["done"])
 		wclaim.pressed.connect(func():
 			var res := Prof.claim_weekly()
@@ -934,7 +997,7 @@ func open_daily() -> void:
 				open_daily())
 		w_btn_col.add_child(wclaim)
 
-	var lboard_btn := UiKit.small("🏆 Таблица лидеров")
+	var lboard_btn := UiKit.small(I18n.t("weekly.leaderboard", {}, "🏆 Таблица лидеров"))
 	lboard_btn.pressed.connect(func(): open_leaderboards("weekly"))
 	w_btn_col.add_child(lboard_btn)
 
@@ -943,7 +1006,7 @@ func open_daily() -> void:
 	var sep := HSeparator.new()
 	sep.modulate.a = 0.35
 	_daily_body.add_child(sep)
-	_daily_body.add_child(UiKit.label("ЕЖЕДНЕВНЫЕ ЗАДАНИЯ", 10, Cfg.UI_MUTED, true))
+	_daily_body.add_child(UiKit.label(I18n.t("daily.header", {}, "ЕЖЕДНЕВНЫЕ ЗАДАНИЯ"), 10, Cfg.UI_MUTED, true))
 
 	# === ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ===
 	for q in quests:
@@ -999,7 +1062,7 @@ func open_leaderboards(tab: String = "") -> void:
 	if tab != "":
 		_leaderboards_active_tab = tab
 	var was_visible := _leaderboards.visible
-	_leaderboards_sub.text = "[center]Таблица лидеров Steam и локальные рекорды[/center]"
+	_leaderboards_sub.text = "[center]" + I18n.t("lb.sub", {}, "Таблица лидеров Steam и локальные рекорды") + "[/center]"
 
 	for c in _leaderboards_body.get_children():
 		_leaderboards_body.remove_child(c)
@@ -1008,10 +1071,10 @@ func open_leaderboards(tab: String = "") -> void:
 	# Переключатели категорий
 	var tabs_row := UiKit.hbox(6)
 	var tabs := [
-		["survival_waves", "Оборона (Волны)"],
-		["survival_score", "Оборона (Очки)"],
-		["weekly", "Недельное испытание"],
-		["ffa", "Дуэли (FFA)"],
+		["survival_waves", I18n.t("lb.tab.waves", {}, "Оборона (Волны)")],
+		["survival_score", I18n.t("lb.tab.score", {}, "Оборона (Очки)")],
+		["weekly", I18n.t("lb.tab.weekly", {}, "Недельное испытание")],
+		["ffa", I18n.t("lb.tab.ffa", {}, "Дуэли (FFA)")],
 	]
 	for t in tabs:
 		var tab_id: String = t[0]
@@ -1035,19 +1098,19 @@ func open_leaderboards(tab: String = "") -> void:
 
 	# Заголовок колонок
 	var hdr_row := UiKit.hbox(8)
-	var h_rank := UiKit.label("РАНГ", 9, Cfg.UI_MUTED, true)
+	var h_rank := UiKit.label(I18n.t("lb.h.rank", {}, "РАНГ"), 9, Cfg.UI_MUTED, true)
 	h_rank.custom_minimum_size.x = 48
 	hdr_row.add_child(h_rank)
 
-	var h_name := UiKit.label("ИМЯ БОЙЦА", 9, Cfg.UI_MUTED, true)
+	var h_name := UiKit.label(I18n.t("lb.h.name", {}, "ИМЯ БОЙЦА"), 9, Cfg.UI_MUTED, true)
 	h_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hdr_row.add_child(h_name)
 
-	var h_score := UiKit.label("РЕЗУЛЬТАТ", 9, Cfg.UI_MUTED, true)
+	var h_score := UiKit.label(I18n.t("lb.h.score", {}, "РЕЗУЛЬТАТ"), 9, Cfg.UI_MUTED, true)
 	h_score.custom_minimum_size.x = 90
 	hdr_row.add_child(h_score)
 
-	var h_date := UiKit.label("ДАТА", 9, Cfg.UI_MUTED, true)
+	var h_date := UiKit.label(I18n.t("lb.h.date", {}, "ДАТА"), 9, Cfg.UI_MUTED, true)
 	h_date.custom_minimum_size.x = 80
 	hdr_row.add_child(h_date)
 	table_vbox.add_child(hdr_row)
@@ -1131,7 +1194,7 @@ func _build_gameover() -> void:
 	replay.pressed.connect(func(): restart_requested.emit())
 	actions.add_child(replay)
 	_gameover_replay_btn = replay
-	var lboard := UiKit.secondary("🏆 Рекорды", 13)
+	var lboard := UiKit.secondary(I18n.t("go.records", {}, "🏆 Рекорды"), 13)
 	lboard.pressed.connect(func(): open_leaderboards())
 	actions.add_child(lboard)
 	var to_menu := UiKit.secondary(I18n.t("go.menu", {}, "В меню"), 13)
@@ -1352,6 +1415,7 @@ func _settings_tab_items() -> Array:
 		{"key": "general", "label": I18n.t("settings.tab.general", {}, "Общие")},
 		{"key": "sound", "label": I18n.t("settings.tab.sound", {}, "Звук")},
 		{"key": "graphics", "label": I18n.t("settings.tab.graphics", {}, "Графика")},
+		{"key": "access", "label": I18n.t("settings.tab.access", {}, "Доступность")},
 		{"key": "controls", "label": I18n.t("settings.tab.controls", {}, "Управление")},
 	]
 
@@ -1378,6 +1442,7 @@ func _fill_settings_tab(key: String) -> void:
 		"general": _build_general_tab()
 		"sound": _build_sound_tab()
 		"graphics": _build_graphics_tab()
+		"access": _build_access_tab()
 		"controls": _build_controls_tab()
 
 	UiKit.chain_horizontal(_settings_tabs_row.get_children(), true)
@@ -1394,7 +1459,7 @@ func _resize_settings_scroll() -> void:
 	if _settings == null or not _settings.has_meta("scroll"):
 		return
 	var scroll: ScrollContainer = _settings.get_meta("scroll")
-	var screen := get_viewport_rect().size
+	var screen := UiKit.virtual_screen(self)
 	scroll.custom_minimum_size.y = maxf(minf(screen.y * 0.86, 900.0) - _TABBED_SHELL_HEADER_H, 200.0)
 
 func open_settings() -> void:
@@ -1425,19 +1490,45 @@ func _build_general_tab() -> void:
 		func(v: int):
 			Sets.ui_theme = theme_keys[v]
 			Sets.save()
-			Cfg.apply_theme(Sets.ui_theme)
+			Sets.apply_look()
 			_on_theme_changed()))
 
-	var lang_row := UiKit.hbox(8)
-	var lang_label := UiKit.label(I18n.t("set.lang", {}, "Язык интерфейса"), 12, Cfg.UI_TEXT)
-	lang_label.custom_minimum_size = Vector2(178, 0)
-	lang_row.add_child(lang_label)
-	var lang_btn := UiKit.secondary(
-		I18n.t("menu.lang.ru", {}, "English") if I18n.lang == "ru"
-			else I18n.t("menu.lang.en", {}, "Русский"), 13)
-	lang_btn.pressed.connect(func(): I18n.toggle_lang())
-	lang_row.add_child(lang_btn)
-	_settings_body.add_child(lang_row)
+	var lang_entries: Array = I18n.available_languages()
+	var lang_labels := []
+	var lang_index := 0
+	for i in lang_entries.size():
+		lang_labels.append(String(lang_entries[i]["name"]))
+		if String(lang_entries[i]["code"]) == I18n.lang:
+			lang_index = i
+	_settings_body.add_child(UiKit.choice_row(
+		I18n.t("set.language", {}, "Язык интерфейса"), lang_labels, lang_index,
+		func(v: int): I18n.set_lang(String(lang_entries[v]["code"]))))
+
+	_settings_body.add_child(UiKit.section(I18n.t("set.gamesection", {}, "Игра"), Cfg.UI_MUTED))
+	_settings_body.add_child(UiKit.switch_row(
+		I18n.t("set.adaptive", {}, "Адаптивная сложность"), Sets.adaptive_difficulty,
+		func(v: bool):
+			Sets.adaptive_difficulty = v
+			Sets.save()))
+	_settings_body.add_child(UiKit.label(
+		I18n.t("set.adaptive.hint", {}, "Враги слегка слабеют, если вы часто гибнете, и крепчают, если играете уверенно. Только в одиночной и локальной игре."),
+		9, Cfg.UI_MUTED))
+	_settings_body.add_child(UiKit.switch_row(
+		I18n.t("set.killcam", {}, "Повтор смерти (киллкам)"), Sets.killcam,
+		func(v: bool):
+			Sets.killcam = v
+			Sets.save()))
+	_settings_body.add_child(UiKit.label(
+		I18n.t("set.killcam.hint", {}, "После гибели показывает короткий повтор последних секунд боя. Только в одиночной игре."),
+		9, Cfg.UI_MUTED))
+	_settings_body.add_child(UiKit.switch_row(
+		I18n.t("set.mutator", {}, "Недельный модификатор"), Sets.weekly_mutator,
+		func(v: bool):
+			Sets.weekly_mutator = v
+			Sets.save()))
+	_settings_body.add_child(UiKit.label(
+		I18n.t("set.mutator.hint", {}, "Пока недельное испытание не завершено, в одиночных матчах действует его особое правило."),
+		9, Cfg.UI_MUTED))
 
 	var reset := UiKit.danger(I18n.t("settings.reset", {}, "Сбросить настройки"), 12)
 	reset.pressed.connect(func():
@@ -1455,6 +1546,65 @@ func _build_general_tab() -> void:
 	var progress_wrap := CenterContainer.new()
 	progress_wrap.add_child(reset_progress)
 	_settings_body.add_child(progress_wrap)
+
+const _UI_SCALE_STEPS := [0.8, 0.9, 1.0, 1.15, 1.3, 1.5]
+
+func _build_access_tab() -> void:
+	_settings_body.add_child(UiKit.section(I18n.t("set.access.vision", {}, "Зрение"), Cfg.UI_MUTED))
+	_settings_body.add_child(UiKit.choice_row(
+		I18n.t("set.colorblind", {}, "Режим для дальтоников"),
+		[I18n.t("set.colorblind.off", {}, "выкл"),
+			I18n.t("set.colorblind.rg", {}, "красный/зелёный"),
+			I18n.t("set.colorblind.by", {}, "синий/жёлтый")],
+		Sets.colorblind_mode,
+		func(v: int):
+			Sets.colorblind_mode = v
+			Sets.save()
+			Sets.apply_look()
+			_on_theme_changed()))
+	_settings_body.add_child(UiKit.label(
+		I18n.t("set.colorblind.hint", {}, "Меняет цвета своих и чужих танков, снарядов, флагов, баз и полосы здоровья."),
+		9, Cfg.UI_MUTED))
+	_settings_body.add_child(UiKit.switch_row(
+		I18n.t("set.contrast", {}, "Высокий контраст интерфейса"), Sets.high_contrast,
+		func(v: bool):
+			Sets.high_contrast = v
+			Sets.save()
+			Sets.apply_look()
+			_on_theme_changed()))
+
+	var scale_labels := []
+	var scale_index := 0
+	var best := 99.0
+	for i in _UI_SCALE_STEPS.size():
+		scale_labels.append("%d%%" % int(round(float(_UI_SCALE_STEPS[i]) * 100.0)))
+		var gap := absf(float(_UI_SCALE_STEPS[i]) - Sets.ui_scale)
+		if gap < best:
+			best = gap
+			scale_index = i
+	_settings_body.add_child(UiKit.choice_row(
+		I18n.t("set.uiscale", {}, "Масштаб интерфейса"), scale_labels, scale_index,
+		func(v: int):
+			Sets.ui_scale = float(_UI_SCALE_STEPS[v])
+			Sets.save()))
+	_settings_body.add_child(UiKit.label(
+		I18n.t("set.uiscale.hint", {}, "Увеличивает меню и боевую панель. Поле боя не масштабируется."),
+		9, Cfg.UI_MUTED))
+
+	_settings_body.add_child(UiKit.section(I18n.t("set.access.motion", {}, "Движение и вспышки"), Cfg.UI_MUTED))
+	_settings_body.add_child(UiKit.switch_row(
+		I18n.t("set.reduceflash", {}, "Меньше вспышек"), Sets.reduce_flashes,
+		func(v: bool):
+			Sets.reduce_flashes = v
+			Sets.save()))
+	_settings_body.add_child(UiKit.label(
+		I18n.t("set.reduceflash.hint", {}, "Ослабляет вспышки молний и красную вспышку при уроне."),
+		9, Cfg.UI_MUTED))
+	_settings_body.add_child(UiKit.slider_row(
+		I18n.t("set.shake", {}, "Тряска экрана"), Sets.screen_shake,
+		func(v: float):
+			Sets.screen_shake = v
+			Sets.save()))
 
 func _build_graphics_tab() -> void:
 	_settings_body.add_child(UiKit.section(I18n.t("set.screen", {}, "Экран"), Cfg.UI_MUTED))
@@ -1588,22 +1738,23 @@ func _build_controls_tab() -> void:
 		if not known and String(cur).begins_with("pad"):
 			devices.append([cur, "%s %d: %s" % [I18n.t("dev.pad", {}, "Геймпад"),
 				int(String(cur).substr(3)) + 1, I18n.t("dev.pad.off", {}, "не подключён")]])
-	var labels := []
-	for d in devices:
-		labels.append(String(d[1]))
-
 	for who in [0, 1]:
+		var list := devices.duplicate()
 		var current: String = Sets.p1_device if who == 0 else Sets.p2_device
+		if who == 0 and (DisplayServer.is_touchscreen_available() or current == Sets.DEV_TOUCH):
+			list.append([Sets.DEV_TOUCH, I18n.t("dev.touch", {}, "Сенсорный экран")])
+		var labels := []
 		var idx := 0
-		for i in devices.size():
-			if String(devices[i][0]) == current:
+		for i in list.size():
+			labels.append(String(list[i][1]))
+			if String(list[i][0]) == current:
 				idx = i
 		_settings_body.add_child(UiKit.choice_row(
 			I18n.t("set.dev1", {}, "Игрок 1") if who == 0
 				else I18n.t("set.dev2", {}, "Игрок 2"),
 			labels, idx,
 			func(v: int):
-				var id: String = String(devices[v][0])
+				var id: String = String(list[v][0])
 				if who == 0:
 					Sets.p1_device = id
 				else:

@@ -454,6 +454,20 @@ const LIST: Array[Dictionary] = [
 static func all() -> Array[Dictionary]:
 	return LIST
 
+static func text(entry: Dictionary, field: String) -> String:
+	return I18n.dn(entry, field, "bestiary")
+
+static func category_text(entry: Dictionary) -> String:
+	return I18n.lookup("bestiary.cat.%s" % String(entry.get("category", "")),
+		String(entry.get("category_name", "")))
+
+static func ability_text(entry: Dictionary, index: int, field: String) -> String:
+	var abilities: Array = entry.get("abilities", [])
+	if index < 0 or index >= abilities.size():
+		return ""
+	var ru := String((abilities[index] as Dictionary).get(field, ""))
+	return I18n.lookup("bestiary.%s.ab%d.%s" % [String(entry.get("id", "")), index, field], ru)
+
 static func get_entry(id: String) -> Dictionary:
 	for item in LIST:
 		if String(item.get("id", "")) == id:

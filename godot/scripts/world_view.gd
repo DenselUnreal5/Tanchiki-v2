@@ -118,7 +118,7 @@ func _draw() -> void:
 
 	if player.damage_flash > 0:
 		draw_rect(Rect2(Vector2.ZERO, size),
-			Color(1, 0, 0, (float(player.damage_flash) / 12.0) * 0.28))
+			Color(1, 0, 0, (float(player.damage_flash) / 12.0) * 0.28 * Sets.flash_scale()))
 
 	if player.tank != null and not player.tank.alive:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.45))
@@ -268,8 +268,8 @@ func _draw_weather(size: Vector2) -> void:
 			draw_circle(Vector2(sx, sy), r,
 				Color(1.0, 1.0, 1.0, (0.35 + w.snow * 0.4) * k))
 
-	if w.flash * k > 0.02:
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.86, 0.92, 1.0, w.flash * k * 0.35))
+	if w.flash * k * Sets.flash_scale() > 0.02:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.86, 0.92, 1.0, w.flash * k * Sets.flash_scale() * 0.35))
 
 func _update_tile_cache() -> void:
 	# Кэш сам следит за изменениями карты (журнал GameMap.changes) и

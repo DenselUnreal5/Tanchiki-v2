@@ -2,10 +2,7 @@ class_name Weekly
 extends RefCounted
 
 static func week_key() -> String:
-	var d := Time.get_datetime_dict_from_system(false)
-	var unix := Time.get_unix_time_from_system()
-	var week_num := int(unix / (7 * 86400))
-	return "%04d-W%02d" % [d["year"], (week_num % 52) + 1]
+	return GameClock.week_key()
 
 const CHALLENGES := [
 	{
@@ -66,7 +63,7 @@ const CHALLENGES := [
 	{
 		"id": "w_sniper_elite",
 		"name": "Снайперская дуэль",
-		"desc": "Ликвидировать 20 врагов с дальней дистанции (от 40 метров)",
+		"desc": "Ликвидировать 20 врагов с дальней дистанции (от 50 метров)",
 		"icon": "🎯",
 		"counter": "long_kills",
 		"need": 20,
@@ -76,13 +73,20 @@ const CHALLENGES := [
 	},
 ]
 
-static func current_challenge() -> Dictionary:
-	var key := week_key()
+static func challenge_for(key: String) -> Dictionary:
 	var sum := 0
 	for i in key.length():
 		sum += key.unicode_at(i)
-	var idx := sum % CHALLENGES.size()
-	return CHALLENGES[idx]
+	return CHALLENGES[sum % CHALLENGES.size()]
+
+static func current_challenge() -> Dictionary:
+	return challenge_for(week_key())
+
+static func get_challenge_by_mutator(mutator_id: String) -> Dictionary:
+	for ch in CHALLENGES:
+		if ch["mutator"] == mutator_id:
+			return ch
+	return {}
 
 static func get_challenge(id: String) -> Dictionary:
 	for ch in CHALLENGES:
@@ -91,10 +95,7 @@ static func get_challenge(id: String) -> Dictionary:
 	return {}
 
 static func time_until_next_week() -> Dictionary:
-	var unix := Time.get_unix_time_from_system()
-	var sec_in_week := 7 * 86400
-	var elapsed: int = int(unix) % sec_in_week
-	var remaining := sec_in_week - elapsed
+	var remaining := GameClock.seconds_until_next_week()
 	var days := int(remaining / 86400)
 	var hours := int((remaining % 86400) / 3600)
 	return {"days": days, "hours": hours, "total_seconds": remaining}

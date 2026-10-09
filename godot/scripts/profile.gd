@@ -89,7 +89,7 @@ func _ready() -> void:
 	_empty_stats()
 	_empty_upgrades()
 	daily = {"date": Daily.today_key(), "progress": {}, "claimed": []}
-	weekly = {"week": Weekly.week_key(), "progress": {}, "claimed": false}
+	weekly = {"week": Weekly.week_key(), "progress": {}, "claimed": false, "scheme": GameClock.WEEK_SCHEME}
 	load_profile()
 
 func _empty_stats() -> void:
@@ -190,11 +190,12 @@ func _apply(data: Dictionary) -> void:
 	if int(bestiary_kills.get("grunt", 0)) == 0 and int(stats.get("totalKills", 0)) > 0:
 		bestiary_kills["grunt"] = 1
 	var w = data.get("weekly", null)
-	if w is Dictionary and w.has("week"):
+	if w is Dictionary and w.has("week") and int(w.get("scheme", 1)) >= GameClock.WEEK_SCHEME:
 		weekly = {
 			"week": String(w.get("week", "")),
 			"progress": w.get("progress", {}) if w.get("progress", {}) is Dictionary else {},
 			"claimed": bool(w.get("claimed", false)),
+			"scheme": GameClock.WEEK_SCHEME,
 		}
 	var ll = data.get("localLeaderboards", null)
 	if ll is Dictionary:
@@ -340,9 +341,14 @@ func check_challenges() -> Array:
 
 func _refresh_daily_if_stale() -> void:
 	var today := Daily.today_key()
-	if String(daily.get("date", "")) == today:
+	var saved := String(daily.get("date", ""))
+	if saved != "" and today <= saved:
 		return
 	daily = {"date": today, "progress": {}, "claimed": []}
+
+func daily_key() -> String:
+	_refresh_daily_if_stale()
+	return String(daily.get("date", ""))
 
 func daily_progress(id: String) -> Dictionary:
 	_refresh_daily_if_stale()
@@ -396,13 +402,18 @@ func claim_daily(id: String) -> Dictionary:
 
 func _refresh_weekly_if_stale() -> void:
 	var cur_week := Weekly.week_key()
-	if String(weekly.get("week", "")) == cur_week:
+	var saved := String(weekly.get("week", ""))
+	if saved != "" and cur_week <= saved:
 		return
-	weekly = {"week": cur_week, "progress": {}, "claimed": false}
+	weekly = {"week": cur_week, "progress": {}, "claimed": false, "scheme": GameClock.WEEK_SCHEME}
+
+func weekly_challenge() -> Dictionary:
+	_refresh_weekly_if_stale()
+	return Weekly.challenge_for(String(weekly.get("week", "")))
 
 func get_weekly_progress() -> Dictionary:
 	_refresh_weekly_if_stale()
-	var ch := Weekly.current_challenge()
+	var ch := weekly_challenge()
 	var progress: Dictionary = weekly.get("progress", {})
 	var current: int = int(progress.get(ch["counter"], 0))
 	var need: int = int(ch["need"])
@@ -424,15 +435,36 @@ func bump_weekly(counter: String, amount: int = 1) -> void:
 	progress[counter] = prev + amount
 	weekly["progress"] = progress
 	save_profile()
-	var ch := Weekly.current_challenge()
+	var ch := weekly_challenge()
 	if String(ch.get("counter", "")) == counter:
 		var total: int = prev + amount
 		SteamStats.push_weekly_score(total)
 		record_local_leaderboard("weekly", "Игрок", total)
 
+func bump_weekly_max(counter: String, value: int) -> void:
+	if value <= 0:
+		return
+	_refresh_weekly_if_stale()
+	var progress: Dictionary = weekly.get("progress", {})
+	if value <= int(progress.get(counter, 0)):
+		return
+	progress[counter] = value
+	weekly["progress"] = progress
+	save_profile()
+	var ch := weekly_challenge()
+	if String(ch.get("counter", "")) == counter:
+		SteamStats.push_weekly_score(value)
+		record_local_leaderboard("weekly", "Игрок", value)
+
+func active_mutator() -> String:
+	_refresh_weekly_if_stale()
+	if bool(weekly.get("claimed", false)):
+		return ""
+	return String(weekly_challenge().get("mutator", ""))
+
 func claim_weekly() -> Dictionary:
 	_refresh_weekly_if_stale()
-	var ch := Weekly.current_challenge()
+	var ch := weekly_challenge()
 	if ch.is_empty():
 		return {"ok": false, "reason": "unknown"}
 	if bool(weekly.get("claimed", false)):

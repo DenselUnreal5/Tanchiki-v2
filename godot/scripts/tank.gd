@@ -159,6 +159,11 @@ var weapon_timer := 0
 var cannon_id := "standard"
 
 var freeze_ticks := 0
+var cryo_immunity_ticks := 0
+var director_hp_applied := 1.0
+var director_speed_applied := 1.0
+var director_acc_applied := 0.0
+var director_react_applied := 1.0
 var freeze_max_ticks := 240
 var acid_stacks := 0
 var acid_ticks_left := 0
@@ -370,6 +375,7 @@ func recompute() -> void:
 		ability_id = next_ability
 	if not upgrade_mods.is_empty():
 		mods = _apply_upgrade_mods(mods)
+	Mutators.apply_mods(mods)
 	max_hp = maxf(1.0, round(base_max_hp * float(mods["maxHPMult"])))
 	speed = base_speed * float(mods["speedMult"]) * enrage_speed_mult
 	fire_rate = maxi(4, int(round(float(base_fire_rate) * float(mods["fireRateMult"]) * enrage_fire_rate_mult)))
@@ -458,6 +464,8 @@ func update(world) -> void:
 		rammer_daze_ticks -= 1
 	if world == null:
 		return
+	if cryo_immunity_ticks > 0:
+		cryo_immunity_ticks -= 1
 	if freeze_ticks > 0:
 		freeze_ticks -= 1
 		if freeze_ticks % 14 == 0 and world != null and world.particles != null:
@@ -1414,7 +1422,7 @@ func dash(move_dir: Vector2 = Vector2.ZERO) -> bool:
 		return false
 	buffer_dash_ticks = 0
 	dash_cooldown = Cfg.DASH_COOLDOWN
-	dash_range = Cfg.DASH_DISTANCE
+	dash_range = Mutators.dash_distance(Cfg.DASH_DISTANCE)
 	dash_stall = 0
 	dash_invuln_ticks = 15 # 0.25 сек неуязвимости (i-frames) при 60 тиках/сек
 	if move_dir.length_squared() > 0.04:

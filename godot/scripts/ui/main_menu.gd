@@ -416,7 +416,7 @@ func _panel_y(screen: Vector2, height: float, top: float) -> float:
 func layout() -> void:
 	if _left_panel == null:
 		return
-	var screen := get_viewport_rect().size
+	var screen := UiKit.virtual_screen(self)
 	var top := 50.0
 
 	var left_h: float = _left_panel.get_combined_minimum_size().y

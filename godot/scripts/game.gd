@@ -23,6 +23,8 @@ var net_last_mine := 0
 var net_last_theirs := 0
 var net_stale := false
 var perk_player = null
+var _applied_ui_scale := 1.0
+var _touch: TouchControls
 
 var ui_rng := Rng.new(int(Time.get_ticks_usec()) & 0xFFFFFFFF)
 var match_damage := 0.0
@@ -56,6 +58,10 @@ func _ready() -> void:
 	_root.add_child(hud)
 	hud.hide_hud()
 
+	_touch = TouchControls.new()
+	_root.add_child(_touch)
+	_touch.pause_pressed.connect(pause)
+
 	ui = UiRoot.new()
 	_root.add_child(ui)
 
@@ -69,6 +75,7 @@ func _ready() -> void:
 		return
 
 	get_viewport().size_changed.connect(_on_resize)
+	Sets.changed.connect(_on_settings_changed)
 	_on_resize()
 
 	if get_tree().current_scene == self:
@@ -122,6 +129,8 @@ func _bind_ui() -> void:
 	ui.restart_requested.connect(request_match)
 	ui.menu_requested.connect(to_menu)
 	ui.resume_requested.connect(resume)
+	ui.pause_restart_requested.connect(_on_pause_restart)
+	ui.controls_provider = _controls_groups
 	ui.perk_chosen.connect(_on_perk_chosen)
 	ui.reset_progress_requested.connect(_reset_progress)
 	ui.garage_changed.connect(func(): ui.refresh_profile())
@@ -184,9 +193,23 @@ func _reset_progress() -> void:
 	ui.show_menu()
 
 func _on_resize() -> void:
+	_apply_ui_scale()
 	_layout_viewports()
 	if not players.is_empty():
 		hud.layout(players, world)
+
+func _apply_ui_scale() -> void:
+	var area := _root.size
+	if area.x < 1.0 or area.y < 1.0:
+		area = get_viewport().get_visible_rect().size
+	UiKit.apply_scale(ui, area)
+	UiKit.apply_scale(hud, area)
+	_applied_ui_scale = UiKit.ui_scale()
+
+func _on_settings_changed() -> void:
+	if is_equal_approx(_applied_ui_scale, UiKit.ui_scale()):
+		return
+	_on_resize()
 
 func _layout_viewports() -> void:
 	var size := get_viewport().get_visible_rect().size
@@ -356,7 +379,8 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		players = [PlayerState.new(0, I18n.t("player1", {}, "Игрок 1"),
 			Prof.equipped_color1, _scheme_for(p1_dev, 0, hotseat))]
 		if not hotseat and p1_dev == Sets.DEV_AUTO:
-			players[0].enable_auto_device_switch(players[0].scheme, Ctl.GamepadScheme.new(0))
+			players[0].enable_auto_device_switch(players[0].scheme, Ctl.GamepadScheme.new(0),
+				Ctl.TouchScheme.new() if DisplayServer.is_touchscreen_available() else null)
 		if hotseat and not Net.is_online:
 			players.append(PlayerState.new(1, I18n.t("player2", {}, "Игрок 2"),
 				Prof.equipped_color2, _scheme_for(p2_dev, 1, hotseat)))
@@ -414,6 +438,11 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		"weather": String(s.get("weather", "auto")),
 		"daytime": String(s.get("daytime", "auto")),
 		"rng_seed": seed_override,
+		"mutator": "" if Net.is_online or String(s["mode"]) == "tutorial" or not Sets.weekly_mutator \
+			else Prof.active_mutator(),
+		"adaptive": Sets.adaptive_difficulty and not Net.is_online and String(s["mode"]) != "tutorial",
+		"killcam": Sets.killcam and players.size() == 1 and not Net.is_online \
+			and String(s["mode"]) != "tutorial",
 	})
 	if is_client:
 		for info in net_opts.get("net_roster", []):
@@ -451,6 +480,10 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		_:
 			start_hint = I18n.t("feed.start.ctf", {}, "Захват флага: везите чужие флаги на свою базу")
 	hud.add_feed(start_hint, Color("#88ff88"))
+	if world.mutator != "":
+		var mut_desc := I18n.dn(Prof.weekly_challenge(), "mutator_desc", "weekly")
+		hud.add_feed(I18n.t("feed.mutator", {"desc": mut_desc}, "⚡ Недельный модификатор: %s" % mut_desc),
+			Color("#38bdf8"))
 
 	ui.hide_all_overlays()
 	Input.set_default_cursor_shape(Input.CURSOR_CROSS)
@@ -493,9 +526,33 @@ func pause() -> void:
 	Mus.set_ducked(true)
 	ui.show_pause()
 
+func _on_pause_restart() -> void:
+	if state != S_PAUSED or Net.is_online:
+		return
+	if ui.is_controls_open:
+		ui.close_controls()
+	ui.hide_pause()
+	ui.close_gallery()
+	Mus.set_ducked(false)
+	request_match()
+
+func _controls_groups() -> Array:
+	var out := []
+	for p in players:
+		var lines: Array = p.scheme.hints() if p.scheme.has_method("hints") else []
+		if not lines.is_empty():
+			out.append({"title": p.name, "lines": lines})
+	out.append({"title": I18n.t("controls.common", {}, "Общее"), "lines": [
+		I18n.t("controls.pause", {}, "[P] / [Esc] / [Start] пауза"),
+		I18n.t("controls.scoreboard", {}, "[Tab] / [Back] таблица счёта"),
+	]})
+	return out
+
 func resume() -> void:
 	if state != S_PAUSED:
 		return
+	if ui.is_controls_open:
+		ui.close_controls()
 	ui.hide_pause()
 	ui.close_gallery()
 	Mus.set_ducked(false)
@@ -503,6 +560,9 @@ func resume() -> void:
 	accumulator = 0.0
 
 func _bind_world_events(w: World) -> void:
+	w.killcam_ready.connect(func(clip: Dictionary):
+		hud.play_killcam(clip, w.map, players))
+
 	w.feed.connect(func(text: String, color: Color):
 		hud.add_feed(text, color)
 		if Net.role == "host":
@@ -564,6 +624,15 @@ func _bind_world_events(w: World) -> void:
 		Prof.bump_stat(key, value)
 		if key == "totalKills":
 			Prof.bump_daily("kills", 1)
+			Prof.bump_weekly("kills", 1)
+		if key == "ramKills":
+			Prof.bump_weekly("ram_kills", value)
+		if key == "longKills":
+			Prof.bump_weekly("long_kills", value)
+		if key == "barrelsExploded":
+			Prof.bump_weekly("barrels_exploded", value)
+		if key == "empDischarged":
+			Prof.bump_weekly("emp_discharged", value)
 		if key == "healthPacksCollected":
 			Prof.bump_daily("medkits", 1)
 		if key == "cleanStreak" and mode == "max":
@@ -604,7 +673,7 @@ func _on_finish(result: Dictionary) -> void:
 		Prof.bump_stat("gamesWon", 1)
 	if world.mode == "defense":
 		Prof.bump_stat("defenseWaveReached", world.wave)
-		Prof.bump_weekly("defense_wave", world.wave)
+		Prof.bump_weekly_max("defense_wave", world.wave)
 		var p_name: String = players[0].name if not players.is_empty() else "Игрок"
 		var p_score: int = players[0].score if not players.is_empty() else 0
 		Prof.record_local_leaderboard("survival_waves", p_name, world.wave)
@@ -653,6 +722,8 @@ func _connected_or_auto(device: String) -> String:
 func _scheme_for(device: String, index: int, hotseat: bool):
 	if device.begins_with("pad"):
 		return Ctl.GamepadScheme.new(int(device.substr(3)))
+	if device == Sets.DEV_TOUCH:
+		return Ctl.TouchScheme.new()
 	if device == Sets.DEV_KEYS:
 		return Ctl.KeyboardAimScheme.new()
 	if device == Sets.DEV_KBM:
@@ -715,11 +786,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.toggle_scoreboard(world)
 		get_viewport().set_input_as_handled()
 
+func _update_touch_overlay() -> void:
+	if _touch == null:
+		return
+	if state != S_PLAYING or world == null or players.is_empty():
+		_touch.set_scheme(null, null, false)
+		return
+	_touch.set_scheme(players[0].scheme, players[0], world.mode == "defense")
+
 func _process(delta: float) -> void:
-	if state == S_MENU:
+	if state == S_MENU or world == null:
+		_update_touch_overlay()
 		return
-	if world == null:
-		return
+	_update_touch_overlay()
 
 	var mouse := get_viewport().get_mouse_position()
 	for p in players:

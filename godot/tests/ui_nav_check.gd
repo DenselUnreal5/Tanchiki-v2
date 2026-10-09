@@ -63,7 +63,7 @@ func _ready() -> void:
 		await _tap_key(KEY_ENTER)
 		await _frames(6)
 		var after: int = game.perk_player.perk_ids.size() if game.perk_player != null else 0
-		var advanced: bool = game.state != "perk" or after > before or not ui._perk.visible
+		var advanced: bool = game.state != "perk" or after > before or not ui._perk.visible 			or ui._perk_pending_id != ""
 		_check(advanced, "кнопка A выбрала перк под фокусом")
 	var guard := 0
 	while game.state == "perk" and guard < 20:

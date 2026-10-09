@@ -158,6 +158,9 @@ func _verify(player, perk_id: String) -> void:
 		return
 	var base := Perks.base_modifiers()
 	var changed := false
+	for flag in perk.get("flags", []):
+		if tank.flags.has(flag):
+			changed = true
 	for key in perk.get("mods", {}).keys():
 		if not is_equal_approx(float(tank.mods[key]), float(base[key])):
 			changed = true

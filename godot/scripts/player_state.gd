@@ -7,6 +7,7 @@ var color_key: String
 var scheme
 var _auto_kbm_scheme = null
 var _auto_pad_scheme = null
+var _auto_touch_scheme = null
 var peer_id := 0
 
 var tank: Tank = null
@@ -116,14 +117,20 @@ func add_xp(amount: int) -> int:
 		gained += 1
 	return gained
 
-func enable_auto_device_switch(kbm_scheme, pad_scheme) -> void:
+func enable_auto_device_switch(kbm_scheme, pad_scheme, touch_scheme = null) -> void:
 	_auto_kbm_scheme = kbm_scheme
 	_auto_pad_scheme = pad_scheme
+	_auto_touch_scheme = touch_scheme
 	scheme = pad_scheme if Sets.last_input_pad else kbm_scheme
 
 func control(t: Tank, world) -> void:
 	if _auto_pad_scheme != null:
-		scheme = _auto_pad_scheme if Sets.last_input_pad else _auto_kbm_scheme
+		var next_scheme = _auto_pad_scheme if Sets.last_input_pad else _auto_kbm_scheme
+		if _auto_touch_scheme != null and Sets.last_input_touch:
+			next_scheme = _auto_touch_scheme
+		if scheme == _auto_touch_scheme and next_scheme != _auto_touch_scheme:
+			_auto_touch_scheme.release_all()
+		scheme = next_scheme
 		if scheme == _auto_pad_scheme:
 			_auto_pad_scheme.device = Sets.last_pad_device
 	scheme.apply(t, self, world)

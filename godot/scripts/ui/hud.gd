@@ -116,6 +116,7 @@ func _ready() -> void:
 	add_child(_perk_tooltip)
 
 func build(players: Array, world: World) -> void:
+	stop_killcam()
 	for p in panels.values():
 		p["root"].queue_free()
 	panels.clear()
@@ -258,13 +259,17 @@ func build(players: Array, world: World) -> void:
 		}
 	layout(players, world)
 
+func _virtual_rect(rect: Rect2) -> Rect2:
+	var s := UiKit.ui_scale()
+	return Rect2(rect.position / s, rect.size / s)
+
 func layout(players: Array, world: World = null) -> void:
 	var split := players.size() > 1
 	for player in players:
 		if not panels.has(player.index):
 			continue
 		var panel: Dictionary = panels[player.index]
-		var vp: Rect2 = player.viewport
+		var vp: Rect2 = _virtual_rect(player.viewport)
 		var root: Control = panel["root"]
 		root.position = vp.position
 		root.size = vp.size
@@ -288,7 +293,7 @@ func layout(players: Array, world: World = null) -> void:
 		(panel["hp_fill"] as ColorRect).size.x = hp_w
 		(panel["hp_wrap"] as Control).custom_minimum_size.x = hp_w
 
-	var screen := get_viewport_rect().size
+	var screen := UiKit.virtual_screen(self)
 	var wave_ui := world != null and world.mode == "defense"
 	_wave_box.visible = wave_ui
 	if wave_ui:
@@ -310,7 +315,7 @@ func layout(players: Array, world: World = null) -> void:
 	var feed_y := 10.0 + mm_h + 8.0
 	if not players.is_empty():
 		var p0: PlayerState = players[0]
-		var vp: Rect2 = p0.viewport
+		var vp: Rect2 = _virtual_rect(p0.viewport)
 		feed_x = vp.position.x + vp.size.x - mm_w - 10.0
 		feed_y = vp.position.y + 10.0 + mm_h + 8.0
 	_feed_box.position = Vector2(feed_x, feed_y)
@@ -323,6 +328,28 @@ func layout(players: Array, world: World = null) -> void:
 	_banner.position = Vector2(screen.x * 0.5 - 300.0, screen.y * 0.22)
 	_banner.size = Vector2(600, 40)
 	_scoreboard.position = Vector2(screen.x * 0.5 - 230.0, screen.y * 0.5 - 180.0)
+	_place_killcam(players)
+
+var _killcam: KillCamView = null
+
+func play_killcam(clip: Dictionary, map: GameMap, players: Array) -> void:
+	if _killcam == null:
+		_killcam = KillCamView.new()
+		add_child(_killcam)
+	_place_killcam(players)
+	_killcam.play(clip, map)
+
+func _place_killcam(players: Array) -> void:
+	if _killcam == null or players.is_empty():
+		return
+	var vp := _virtual_rect(players[0].viewport)
+	_killcam.position = Vector2(
+		vp.position.x + (vp.size.x - KillCamView.VIEW_SIZE.x) * 0.5,
+		vp.position.y + vp.size.y - KillCamView.VIEW_SIZE.y - 14.0)
+
+func stop_killcam() -> void:
+	if _killcam != null and _killcam.running:
+		_killcam.stop()
 
 func show_hud() -> void:
 	visible = true
@@ -330,6 +357,7 @@ func show_hud() -> void:
 func hide_hud() -> void:
 	visible = false
 	hide_scoreboard()
+	stop_killcam()
 
 func _update_net(panel: Dictionary) -> void:
 	var label: Label = panel["net"]
@@ -742,12 +770,13 @@ func _show_perk_tooltip(id: String, source_node: Control) -> void:
 	_perk_tooltip.reset_size()
 	var gpos := source_node.global_position
 	var vp_size := get_viewport_rect().size
+	var s := UiKit.ui_scale()
 	var tip_x := gpos.x - 20.0
-	var tip_y := gpos.y - _perk_tooltip.size.y - 10.0
+	var tip_y := gpos.y - _perk_tooltip.size.y * s - 10.0
 	if tip_y < 10.0:
-		tip_y = gpos.y + source_node.size.y + 10.0
-	if tip_x + 280.0 > vp_size.x - 10.0:
-		tip_x = vp_size.x - 280.0 - 10.0
+		tip_y = gpos.y + source_node.size.y * s + 10.0
+	if tip_x + 280.0 * s > vp_size.x - 10.0:
+		tip_x = vp_size.x - 280.0 * s - 10.0
 	if tip_x < 10.0:
 		tip_x = 10.0
 	_perk_tooltip.global_position = Vector2(tip_x, tip_y)

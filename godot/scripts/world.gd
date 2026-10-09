@@ -7,6 +7,7 @@ signal wave_started(n: int)
 signal damage_number(x: float, y: float, text: String, color: Color)
 signal kill(victim, killer, source: String, suicide: bool)
 signal player_died(player)
+signal killcam_ready(clip: Dictionary)
 signal player_damage(player, amount: float)
 signal global_xp(amount: int)
 signal reward(kind: String, amount: int, who: String)
@@ -107,6 +108,9 @@ var tutorial_mine_dummy = null
 var tutorial_ice_dummy = null
 var tutorial_acid_dummy = null
 var tutorial_step_timer := 0
+var mutator := ""
+var director: AdaptiveDifficulty = null
+var killcam: KillCam = null
 
 # Трекеры выполнения действий для пошаговых заданий обучения
 var tut_dist_fwd := 0.0
@@ -139,8 +143,16 @@ func _init(opts: Dictionary) -> void:
 	location = String(level.get("location", Locations.CITY))
 	var loc := Locations.get_location(location)
 	road_kind = String(loc.get("road_kind", "asphalt"))
+	mutator = String(opts.get("mutator", ""))
+	Mutators.activate(mutator)
+	if bool(opts.get("adaptive", false)) and mode != "tutorial":
+		director = AdaptiveDifficulty.new()
+	if bool(opts.get("killcam", false)) and mode != "tutorial":
+		killcam = KillCam.new()
 	var wx_opts := _weather_opts(opts)
 	wx_opts["allowed"] = loc.get("weather", [])
+	if Mutators.is_on(Mutators.ICE_STORM):
+		wx_opts["condition"] = "snow"
 	weather = WeatherSystem.new(int(level["seed"]), wx_opts)
 	_storm_rng = Rng.new((int(level["seed"]) ^ 0x57012) & 0xFFFFFFFF)
 	particles = Ent.ParticleSystem.new()
@@ -674,9 +686,34 @@ func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Ta
 		feed.emit(I18n.t("feed.boss", {"icon": type["icon"], "name": tank.name},
 			"%s %s — БОСС на поле боя!" % [type["icon"], tank.name]), Color("#e74c3c"))
 	tanks.append(tank)
+	_apply_director_to(tank)
 	if Net.role == "host":
 		Net.host_tank_spawned(tank_info(tank))
 	return tank
+
+func _apply_director_to(tank: Tank) -> void:
+	if director == null or not tank.is_bot or tank.is_boss:
+		return
+	var hp_target := director.hp_mult()
+	tank.base_max_hp = round(tank.base_max_hp * hp_target / tank.director_hp_applied)
+	tank.director_hp_applied = hp_target
+	var speed_target := director.speed_mult()
+	tank.base_speed *= speed_target / tank.director_speed_applied
+	tank.director_speed_applied = speed_target
+	if tank.brain != null:
+		var acc_target := director.accuracy_bonus()
+		tank.brain.base_accuracy = clampf(
+			tank.brain.base_accuracy + acc_target - tank.director_acc_applied, 0.1, 0.98)
+		tank.director_acc_applied = acc_target
+		var react_target := director.react_mult()
+		tank.brain.react_time = maxi(1, int(round(
+			float(tank.brain.react_time) * react_target / tank.director_react_applied)))
+		tank.director_react_applied = react_target
+	tank.recompute()
+
+func _refresh_director() -> void:
+	for tank in tanks:
+		_apply_director_to(tank)
 
 func _spawn_pickups() -> void:
 	var count := Cfg.PICKUP_MIN + int(rng.nextf() * float(Cfg.PICKUP_MAX - Cfg.PICKUP_MIN + 1))
@@ -775,6 +812,7 @@ func _spawn_arena_interactives() -> void:
 	var target_barrels: int = 3 + int(rng.nextf() * 3.0)
 	if mode == "defense":
 		target_barrels += 2
+	target_barrels = Mutators.barrel_count(target_barrels)
 
 	var used_spots: Array[Vector2] = []
 	var available_chokes: Array[Vector2] = chokes.duplicate()
@@ -874,7 +912,9 @@ func _setup_wave(n: int) -> void:
 	if Cfg.DEFENSE_PLAYER_LEVEL_BONUS:
 		level_bonus = mini(Cfg.DEFENSE_LEVEL_BONUS_CAP, maxi(0, player_level - 1))
 	var wave_growth := n - 1
-	var size := mini(Cfg.DEFENSE_WAVE_CAP, base_size + level_bonus + wave_growth)
+	var size := Mutators.wave_size(mini(Cfg.DEFENSE_WAVE_CAP, base_size + level_bonus + wave_growth))
+	if director != null:
+		size = mini(Cfg.DEFENSE_WAVE_CAP, director.wave_size(size))
 	defense_wave_size = size
 	ramp = minf(Cfg.RAMP_MAX, 1.0 + float(n - 1) * Cfg.DEFENSE_RAMP_STEP)
 	for i in size:
@@ -1222,7 +1262,18 @@ func _separate_tanks() -> void:
 				continue
 			a.separate_from(b)
 
+func _update_director() -> void:
+	if killcam != null:
+		killcam.record(self)
+	if director == null:
+		return
+	var windows_before := director.windows_done
+	director.tick(tick)
+	if director.windows_done != windows_before:
+		_refresh_director()
+
 func _update_ramp() -> void:
+	_update_director()
 	ramp_timer += 1
 	if ramp_timer < Cfg.RAMP_INTERVAL:
 		return
@@ -1234,7 +1285,7 @@ func _update_ramp() -> void:
 		if not tank.is_bot:
 			continue
 		var hp_mult := float(tank.enemy_type.get("hp_mult", 1.0)) if not tank.enemy_type.is_empty() else 1.0
-		tank.base_max_hp = round(float(difficulty["enemy_hp"]) * hp_mult * ramp * tank.boss_stat_mult)
+		tank.base_max_hp = round(float(difficulty["enemy_hp"]) * hp_mult * ramp * tank.boss_stat_mult * tank.director_hp_applied)
 		tank.recompute()
 	feed.emit(I18n.t("feed.ramp", {}, "Враги стали сильнее!"), Color("#ff8833"))
 
@@ -1290,6 +1341,8 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 	var res: Dictionary = target.take_damage(self, amount, attacker, source)
 	if bool(res["evaded"]) or float(res["applied"]) <= 0.0:
 		return 0.0
+	if director != null and target.owner != null and target.max_hp > 0.0:
+		director.record_damage(float(res["applied"]) / target.max_hp)
 
 	if is_stealth_crit:
 		particles.burst(target.x, target.y, [Color("#10b981"), Color("#34d399"), Color.WHITE], 20, 3, 7, 18, 36, rng)
@@ -1628,6 +1681,8 @@ func _chimera_death_acid(victim: Tank) -> void:
 			deal_damage(t, 9999.0, null, "acid")
 
 func _kill_tank(victim, killer, source: String) -> void:
+	if killcam != null and victim.owner != null:
+		killcam_ready.emit(killcam.capture(self, victim, killer, source))
 	if victim.is_rammer_boss:
 		_start_rammer_meltdown(victim)
 	if victim.is_chimera_boss:
@@ -1677,6 +1732,8 @@ func _kill_tank(victim, killer, source: String) -> void:
 			_maybe_give_bot_perk(killer)
 
 	if victim.owner != null:
+		if director != null:
+			director.record_death()
 		victim.owner.deaths += 1
 		victim.owner.clean_streak = 0
 		if victim.owner.scheme.has_method("release_lock"):
@@ -1686,6 +1743,8 @@ func _kill_tank(victim, killer, source: String) -> void:
 	kill.emit(victim, null if suicide else killer, source, suicide)
 
 func _credit_player_kill(player, victim, source: String) -> void:
+	if director != null:
+		director.record_kill()
 	player.kills += 1
 	player.score += Cfg.SCORE_PER_KILL
 	match_rewards["kills"] += Cfg.REWARD_KILL
@@ -2689,6 +2748,7 @@ func _finish(winner_name: String, winner_player_index: int, winner_team: String,
 	finished.emit(result)
 
 func dispose() -> void:
+	Mutators.activate("")
 	for f in flags:
 		f.carrier = null
 	for t in tanks:

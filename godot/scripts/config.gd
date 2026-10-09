@@ -206,6 +206,78 @@ static func apply_theme(name: String) -> void:
 	UI_TAG = t["tag"]
 	UI_TAG_INK = t["tag_ink"]
 
+const KILLCAM_SAMPLE_EVERY := 2
+const KILLCAM_FRAMES := 150
+const KILLCAM_TANK_STRIDE := 6
+const KILLCAM_PLAY_SECONDS := 4.0
+const KILLCAM_ZOOM := 0.75
+const KILLCAM_HOLD_SECONDS := 1.0
+
+const REDUCED_FLASH_SCALE := 0.2
+const UI_MIN_VIRTUAL := Vector2(960.0, 600.0)
+
+static var _look_base := {}
+
+static func _capture_look_base() -> void:
+	if not _look_base.is_empty():
+		return
+	_look_base = {
+		"enemy": (TEAM_COLORS["enemy"] as Dictionary).duplicate(),
+		"ally": (TEAM_COLORS["ally"] as Dictionary).duplicate(),
+		"bullet": bullet, "bullet_enemy": bullet_enemy,
+		"base_p": base_p, "base_e": base_e,
+		"flag_player": flag_player, "flag_enemy": flag_enemy,
+	}
+
+static func _team_palette(body: String, dark: String, trim: String) -> Dictionary:
+	return {"body": Color(body), "dark": Color(dark), "trim": Color(trim)}
+
+static func apply_look(theme_name: String, colorblind_mode: int, high_contrast: bool) -> void:
+	_capture_look_base()
+	apply_theme(theme_name)
+	TEAM_COLORS["enemy"] = (_look_base["enemy"] as Dictionary).duplicate()
+	TEAM_COLORS["ally"] = (_look_base["ally"] as Dictionary).duplicate()
+	bullet = _look_base["bullet"]
+	bullet_enemy = _look_base["bullet_enemy"]
+	base_p = _look_base["base_p"]
+	base_e = _look_base["base_e"]
+	flag_player = _look_base["flag_player"]
+	flag_enemy = _look_base["flag_enemy"]
+	match colorblind_mode:
+		1:
+			TEAM_COLORS["enemy"] = _team_palette("#d55e00", "#8e3e00", "#f4b183")
+			TEAM_COLORS["ally"] = _team_palette("#0072b2", "#004b73", "#7fc2e8")
+			bullet = Color("#f0e442")
+			bullet_enemy = Color("#cc79a7")
+			base_p = Color("#3fa0e0")
+			base_e = Color("#d55e00")
+			flag_player = Color("#56b4e9")
+			flag_enemy = Color("#e69f00")
+			UI_ACCENT = Color("#56b4e9")
+			UI_WARN = Color("#f0e442")
+			UI_DANGER = Color("#cc79a7")
+		2:
+			TEAM_COLORS["enemy"] = _team_palette("#c62828", "#7f1717", "#ff9a9a")
+			TEAM_COLORS["ally"] = _team_palette("#00897b", "#005a50", "#80cbc4")
+			bullet = Color("#ffffff")
+			bullet_enemy = Color("#ff5252")
+			base_p = Color("#26a69a")
+			base_e = Color("#e53935")
+			flag_player = Color("#26a69a")
+			flag_enemy = Color("#ef5350")
+	if high_contrast:
+		UI_BG = Color.BLACK
+		UI_PANEL = UI_PANEL.darkened(0.55)
+		UI_PANEL_ALPHA = 1.0
+		UI_CARD = UI_CARD.darkened(0.45)
+		UI_BORDER = Color(UI_TEXT.r, UI_TEXT.g, UI_TEXT.b, 1.0)
+		UI_TEXT = Color.WHITE
+		UI_MUTED = Color(0.86, 0.86, 0.86)
+		UI_ACCENT = UI_ACCENT.lightened(0.3)
+		UI_WARN = UI_WARN.lightened(0.25)
+		UI_DANGER = UI_DANGER.lightened(0.3)
+		UI_GOLD = UI_GOLD.lightened(0.25)
+
 static var RADIUS_SM := 6.0
 static var RADIUS_MD := 10.0
 static var RADIUS_LG := 16.0
@@ -467,6 +539,31 @@ const HEAT_RESUME := 0.30
 const AMBUSH_UNAWARE_TICKS := 180
 const SILENCER_AMBUSH_MULT := 1.5
 const REFLECT_STUN_TICKS := 48
+
+const ADAPT_WINDOW_TICKS := 1800
+const ADAPT_STEP_DEATH := 0.2
+const ADAPT_STEP_UP := 0.1
+const ADAPT_STEP_DOWN := 0.05
+const ADAPT_DRIFT := 0.02
+const ADAPT_EASY_DAMAGE := 0.25
+const ADAPT_EASY_KILLS := 2
+const ADAPT_HARD_DAMAGE := 0.9
+const ADAPT_HP := 0.15
+const ADAPT_ACCURACY := 0.08
+const ADAPT_REACT := 0.15
+const ADAPT_SPEED := 0.05
+const ADAPT_WAVE := 0.2
+
+const MUT_ICE_TRACTION := 0.85
+const MUT_CRYO_TICKS := 60
+const MUT_CRYO_IMMUNITY_TICKS := 300
+const MUT_IRON_RAM_MULT := 1.5
+const MUT_IRON_DASH_MULT := 1.4
+const MUT_SNIPER_SPEED_MULT := 1.3
+const MUT_SNIPER_ACCURACY := 0.1
+const MUT_WAVE_SIZE_MULT := 1.5
+const MUT_EMP_SPEED := 2.0
+const MUT_BARREL_MULT := 2
 
 const STEALTH_HUNTER_CRIT_MULT := 2.5
 

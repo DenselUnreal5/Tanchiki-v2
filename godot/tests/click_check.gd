@@ -16,7 +16,7 @@ func _ready() -> void:
 	await _frames(10)
 	await _check_hub_tab("ГАРАЖ", "garage")
 	await _check_hub_tab("ДОСТИЖЕНИЯ", "achievements")
-	await _check_hub_tab("ГАЛЕРЕЯ ПЕРКОВ", "gallery")
+	await _check_hub_tab("БОЕВЫЕ ПЕРКИ", "gallery")
 
 	game.ui.close_hub()
 	await _frames(5)

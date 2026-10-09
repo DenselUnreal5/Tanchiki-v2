@@ -231,6 +231,9 @@ class Bullet extends RefCounted:
 				alive = false
 				world.particles.burst(x, y, [Color("#aaeeff"), Color.WHITE], 8, 2, 4, 10, 20, world.rng)
 				return true
+			if cannon_kind == "" and Mutators.cryo_ticks() > 0 and tank.cryo_immunity_ticks <= 0 and tank.freeze_ticks <= 0:
+				if tank.apply_freeze(world, null, Mutators.cryo_ticks()):
+					tank.cryo_immunity_ticks = Cfg.MUT_CRYO_IMMUNITY_TICKS
 			if cannon_kind == "acid":
 				var stacks := 5 if acid_burst else 1
 				tank.apply_acid(world, owner, dmg_scale, stacks)
@@ -703,6 +706,8 @@ class ExplosiveBarrel extends RefCounted:
 		alive = false
 		if world == null:
 			return
+		if last_attacker != null and last_attacker.owner != null:
+			world.stat.emit("barrelsExploded", 1, "add")
 
 		var exp_r := 120.0
 		var exp_r2 := exp_r * exp_r
@@ -820,7 +825,7 @@ class PowerGenerator extends RefCounted:
 			if capturing_team != active_team:
 				capturing_team = active_team
 				capture_progress = 0.0
-			capture_progress += 1.0 / 180.0 # 3 seconds to fully charge
+			capture_progress += Mutators.emp_charge_scale() / 180.0
 			# Spark particles
 			if world.tick % 8 == 0:
 				world.particles.burst(x, y, [Color("#38bdf8"), Color("#818cf8"), Color.WHITE], 3, 1.5, 3.5, 8, 14, world.rng)
@@ -830,7 +835,11 @@ class PowerGenerator extends RefCounted:
 			capture_progress = maxf(0.0, capture_progress - 0.005)
 
 	func discharge(world, team: String) -> void:
-		cooldown = max_cooldown
+		cooldown = int(float(max_cooldown) / Mutators.emp_charge_scale())
+		for t in world.tanks:
+			if t.owner != null and t.team == team:
+				world.stat.emit("empDischarged", 1, "add")
+				break
 		captured_team = team
 		capture_progress = 0.0
 		capturing_team = ""

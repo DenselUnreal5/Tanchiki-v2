@@ -2,8 +2,7 @@ class_name Daily
 extends RefCounted
 
 static func today_key() -> String:
-	var d := Time.get_datetime_dict_from_system(false)
-	return "%04d-%02d-%02d" % [d["year"], d["month"], d["day"]]
+	return GameClock.date_key()
 
 const LIST := [
 	{"id": "kill_15", "name": "Охота", "desc": "Убить 15 врагов", "icon": "🔫", "counter": "kills", "need": 15, "reward": 50},
@@ -18,8 +17,9 @@ const LIST := [
 
 const PER_DAY := 4
 
-static func selection() -> Array:
-	var key := today_key()
+static func selection(key: String = "") -> Array:
+	if key == "":
+		key = today_key()
 	var sum := 0
 	for i in key.length():
 		sum += key.unicode_at(i)

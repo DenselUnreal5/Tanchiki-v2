@@ -101,6 +101,28 @@ static func _style_button(b: Button, normal: StyleBox, hover: StyleBox,
 	b.add_theme_color_override("font_pressed_color", Color("#eaffea"))
 	b.add_theme_color_override("font_disabled_color", Color(color.r, color.g, color.b, 0.35))
 
+static func ui_scale() -> float:
+	if Engine.is_editor_hint():
+		return 1.0
+	var wanted := clampf(Sets.ui_scale, Sets.UI_SCALE_MIN, Sets.UI_SCALE_MAX)
+	var loop := Engine.get_main_loop()
+	if wanted <= 1.0 or not (loop is SceneTree):
+		return wanted
+	var screen: Vector2 = (loop as SceneTree).root.get_visible_rect().size
+	var fit := minf(screen.x / Cfg.UI_MIN_VIRTUAL.x, screen.y / Cfg.UI_MIN_VIRTUAL.y)
+	return clampf(minf(wanted, fit), 1.0, wanted)
+
+static func virtual_screen(node: Node) -> Vector2:
+	return (node as Control).get_viewport_rect().size / ui_scale()
+
+static func apply_scale(ctrl: Control, parent_size: Vector2) -> void:
+	var s := ui_scale()
+	ctrl.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	ctrl.pivot_offset = Vector2.ZERO
+	ctrl.position = Vector2.ZERO
+	ctrl.scale = Vector2(s, s)
+	ctrl.size = parent_size / s
+
 static func _ui_theme() -> String:
 	return "military" if Engine.is_editor_hint() else Sets.ui_theme
 

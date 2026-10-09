@@ -18,6 +18,7 @@ var wrecks := true
 const DEV_AUTO := "auto"
 const DEV_KBM := "kbm"
 const DEV_KEYS := "keys"
+const DEV_TOUCH := "touch"
 
 var p1_device := DEV_AUTO
 var p2_device := DEV_AUTO
@@ -25,6 +26,21 @@ var p2_device := DEV_AUTO
 var pad_deadzone := 0.22
 var pad_vibration := true
 var pad_aim_assist := true
+
+var adaptive_difficulty := true
+var weekly_mutator := true
+var killcam := true
+
+const COLORBLIND_OFF := 0
+const COLORBLIND_RG := 1
+const COLORBLIND_BY := 2
+const UI_SCALE_MIN := 0.8
+const UI_SCALE_MAX := 1.5
+
+var colorblind_mode := COLORBLIND_OFF
+var ui_scale := 1.0
+var high_contrast := false
+var reduce_flashes := false
 
 var custom_keys: Dictionary = {}
 
@@ -62,10 +78,16 @@ const RESOLUTIONS := [
 	Vector2i(2560, 1440),
 ]
 
+func flash_scale() -> float:
+	return Cfg.REDUCED_FLASH_SCALE if reduce_flashes else 1.0
+
+func apply_look() -> void:
+	Cfg.apply_look(ui_theme, colorblind_mode, high_contrast)
+
 func _ready() -> void:
 	_ensure_input_actions()
 	load_settings()
-	Cfg.apply_theme(ui_theme)
+	apply_look()
 	apply_video.call_deferred()
 	apply_audio()
 
@@ -135,26 +157,38 @@ const _NAV_KEYS := [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_TAB,
 	KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]
 
 var last_input_pad := false
+var last_input_touch := false
 var last_pad_device := 0
 signal last_input_device_changed(pad: bool)
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		last_input_touch = true
+		return
+	if (event is InputEventMouseButton or event is InputEventMouseMotion) \
+			and event.device == InputEvent.DEVICE_ID_EMULATION:
+		return
 	if event is InputEventJoypadButton and event.pressed:
+		last_input_touch = false
 		_set_pad_ui(true)
 		last_pad_device = event.device
 		_set_last_input_pad(true)
 	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.5:
+		last_input_touch = false
 		_set_pad_ui(true)
 		last_pad_device = event.device
 		_set_last_input_pad(true)
 	elif event is InputEventKey and event.pressed:
+		last_input_touch = false
 		_set_last_input_pad(false)
 		if event.keycode in _NAV_KEYS:
 			_set_pad_ui(true)
 	elif event is InputEventMouseButton and event.pressed:
+		last_input_touch = false
 		_set_pad_ui(false)
 		_set_last_input_pad(false)
 	elif event is InputEventMouseMotion and event.relative != Vector2.ZERO:
+		last_input_touch = false
 		_set_pad_ui(false)
 		_set_last_input_pad(false)
 
@@ -201,6 +235,13 @@ func load_settings() -> void:
 	pad_deadzone = clampf(float(cfg.get_value("input", "pad_deadzone", pad_deadzone)), 0.0, 0.6)
 	pad_vibration = bool(cfg.get_value("input", "pad_vibration", pad_vibration))
 	pad_aim_assist = bool(cfg.get_value("input", "pad_aim_assist", pad_aim_assist))
+	adaptive_difficulty = bool(cfg.get_value("gameplay", "adaptive", adaptive_difficulty))
+	weekly_mutator = bool(cfg.get_value("gameplay", "weekly_mutator", weekly_mutator))
+	killcam = bool(cfg.get_value("gameplay", "killcam", killcam))
+	colorblind_mode = clampi(int(cfg.get_value("access", "colorblind", colorblind_mode)), COLORBLIND_OFF, COLORBLIND_BY)
+	ui_scale = clampf(float(cfg.get_value("access", "ui_scale", ui_scale)), UI_SCALE_MIN, UI_SCALE_MAX)
+	high_contrast = bool(cfg.get_value("access", "high_contrast", high_contrast))
+	reduce_flashes = bool(cfg.get_value("access", "reduce_flashes", reduce_flashes))
 	var keys = cfg.get_value("input", "custom_keys", {})
 	custom_keys = keys if keys is Dictionary else {}
 	ui_theme = String(cfg.get_value("ui", "theme", ui_theme))
@@ -226,6 +267,13 @@ func save() -> void:
 	cfg.set_value("input", "pad_deadzone", pad_deadzone)
 	cfg.set_value("input", "pad_vibration", pad_vibration)
 	cfg.set_value("input", "pad_aim_assist", pad_aim_assist)
+	cfg.set_value("gameplay", "adaptive", adaptive_difficulty)
+	cfg.set_value("gameplay", "weekly_mutator", weekly_mutator)
+	cfg.set_value("gameplay", "killcam", killcam)
+	cfg.set_value("access", "colorblind", colorblind_mode)
+	cfg.set_value("access", "ui_scale", ui_scale)
+	cfg.set_value("access", "high_contrast", high_contrast)
+	cfg.set_value("access", "reduce_flashes", reduce_flashes)
 	cfg.set_value("input", "custom_keys", custom_keys)
 	cfg.set_value("ui", "theme", ui_theme)
 	cfg.save(SAVE_PATH)
@@ -246,12 +294,19 @@ func reset() -> void:
 	pad_deadzone = 0.22
 	pad_vibration = true
 	pad_aim_assist = true
+	adaptive_difficulty = true
+	weekly_mutator = true
+	killcam = true
+	colorblind_mode = COLORBLIND_OFF
+	ui_scale = 1.0
+	high_contrast = false
+	reduce_flashes = false
 	custom_keys = {}
 	display_mode = MODE_WINDOWED
 	resolution = Vector2i(1280, 720)
 	vsync = true
 	ui_theme = "military"
-	Cfg.apply_theme(ui_theme)
+	apply_look()
 	apply_audio()
 	apply_video()
 	save()

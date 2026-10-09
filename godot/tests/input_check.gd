@@ -64,6 +64,7 @@ func _ready() -> void:
 	Sets.pad_deadzone = 0.22
 	_check(true, "мёртвая зона не даёт самохода при любом пороге")
 
+	player._auto_pad_scheme = null
 	player.scheme = Ctl.GamepadScheme.new(0)
 	for i in 5:
 		game._process(1.0 / 60.0)

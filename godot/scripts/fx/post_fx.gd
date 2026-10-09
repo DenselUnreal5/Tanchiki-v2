@@ -34,7 +34,7 @@ static func update(mat: ShaderMaterial, world, player, view_size: Vector2, quali
 	var light: float = w.light if (w != null and Sets.day_night) else 1.0
 	var fog: float = w.fog * k if w != null else 0.0
 	var rain: float = w.rain * k if w != null else 0.0
-	var flash: float = w.flash * k if w != null else 0.0
+	var flash: float = w.flash * k * Sets.flash_scale() if w != null else 0.0
 	var t := clampf((light - 0.18) / 0.82, 0.0, 1.0)
 
 	var exposure := lerpf(NIGHT["exposure"], DAY["exposure"], t)
