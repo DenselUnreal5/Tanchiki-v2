@@ -11,6 +11,9 @@ const FROZEN_LEVEL := 5
 
 const IDS := [
 	"",
+	"rapid_fire", "quick_reload", "double_shot", "fan_shot", "explosive", "piercing",
+	"heavy_armor", "regen", "reflect", "evasion", "shield", "sprinter",
+	"siege", "nitro", "overdrive", "bulwark", "shockwave",
 	"heat_sink", "thermal", "quick_vent", "heavy_shell", "light_shell",
 	"road_king", "all_terrain",
 	"lumberjack", "concrete_breaker", "can_opener", "scavenger",

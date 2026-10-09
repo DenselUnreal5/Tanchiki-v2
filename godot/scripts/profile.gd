@@ -122,7 +122,7 @@ func _apply(data: Dictionary) -> void:
 	for p in Perks.all():
 		known_perks[p["id"]] = true
 	for id in data.get("unlocked", []):
-		if known_perks.has(id):
+		if known_perks.has(id) and Perks.unlock_level_of(String(id)) == 0:
 			unlocked[id] = true
 	var st = data.get("stats", {})
 	if st is Dictionary:

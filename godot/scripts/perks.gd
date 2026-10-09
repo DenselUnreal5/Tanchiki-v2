@@ -59,7 +59,7 @@ static var CATEGORIES := [
 const LIST := [
 	{
 		"id": "double_shot", "name": "Двойной выстрел", "icon": "🔫",
-		"desc": "Стреляет залпом из двух параллельных снарядов. Удваивает огневую мощь по прямой линии.", "category": "fire", "flags": ["doubleShot"],
+		"desc": "Стреляет залпом из двух параллельных снарядов по 60% урона каждый (суммарно ×1.2). Выше шанс попасть по прямой линии.", "category": "fire", "flags": ["doubleShot"],
 	},
 	{
 		"id": "fan_shot", "name": "Выстрел веером", "icon": "🌊",
@@ -77,7 +77,7 @@ const LIST := [
 	},
 	{
 		"id": "explosive", "name": "Взрывные пули", "icon": "💥",
-		"desc": "Снаряды детонируют при попадании, нанося урон по площади и мгновенно круша кирпичные стены.", "category": "fire",
+		"desc": "Снаряд, попавший в танк, детонирует и наносит 50% урона по площади соседним целям. Работает только с обычной пушкой.", "category": "fire",
 		"flags": ["explosive"],
 	},
 	{
@@ -101,7 +101,7 @@ const LIST := [
 	},
 	{
 		"id": "evasion", "name": "Уклонение", "icon": "💨",
-		"desc": "Отточенные манёвры дают 15% шанс полностью избежать урона от вражеского снаряда.", "category": "defense",
+		"desc": "Отточенные манёвры дают 15% шанс полностью избежать любого вражеского попадания.", "category": "defense",
 		"flags": ["evasion"],
 		"mods": {"evasionChance": 0.15},
 	},
@@ -118,7 +118,7 @@ const LIST := [
 
 	{
 		"id": "mines", "name": "Миноукладчик", "icon": "💣",
-		"desc": "Позволяет сбрасывать противотанковые мины (до 3 штук на поле). Враги подрываются при наезде.", "category": "special",
+		"desc": "Позволяет закладывать под себя противотанковые мины (до 3 штук на поле, живут 10 секунд). Враги подрываются при наезде.", "category": "special",
 		"flags": ["mines"],
 	},
 	{
@@ -133,7 +133,7 @@ const LIST := [
 	},
 	{
 		"id": "chain_lightning", "name": "Цепная молния", "icon": "🔗",
-		"desc": "Любые удары молнии рикошетят в 3 ближайших вражеских танка, нанося им 50% урона.",
+		"desc": "Удары молнии, которые вызвали вы, рикошетят в 3 ближайших вражеских танка, нанося им 50% урона.",
 		"category": "special", "flags": ["chainLightning"],
 	},
 
@@ -175,7 +175,7 @@ const LIST := [
 
 	{
 		"id": "ram", "name": "Таран", "icon": "🚛",
-		"desc": "Удваивает урон при лобовых столкновениях. Превращает массу танка в сокрушительное оружие.",
+		"desc": "Удваивает урон при столкновениях на скорости. Превращает массу танка в сокрушительное оружие.",
 		"category": "challenge",
 		"flags": ["ram"],
 		"mods": {"ramMult": 2.0},
@@ -196,7 +196,7 @@ const LIST := [
 	},
 	{
 		"id": "forest", "name": "Лесной житель", "icon": "🌲",
-		"desc": "Особая ходовая часть позволяет свободно проезжать сквозь деревья и кустарники, используя лес для засад.", "category": "challenge",
+		"desc": "Особая ходовая часть не ломает деревья и кустарники при проезде: лес остаётся укрытием для засад.", "category": "challenge",
 		"flags": ["forest"],
 		"challenge": {"desc": "Проедь сквозь 5 деревьев", "stat": "treesDriven", "need": 5},
 	},
@@ -363,7 +363,7 @@ const EXTRA_LIST := [
 	},
 	{
 		"id": "quick_vent", "name": "Быстрый сброс", "icon": "💨",
-		"desc": "Форсированная продувка: после перегрева танк готов стрелять снова вдвое быстрее обычного.", "category": "fire",
+		"desc": "Форсированная продувка: после перегрева танк готов стрелять снова примерно на треть быстрее обычного.", "category": "fire",
 		"mods": {"heatResumeAdd": 0.25},
 	},
 	{
@@ -403,7 +403,7 @@ const EXTRA_LIST := [
 	},
 	{
 		"id": "scavenger", "name": "Мародёр", "icon": "🧰",
-		"desc": "Утилизация обломков: разрушение любых построек поблизости восстанавливает танку 3 HP.", "category": "special",
+		"desc": "Утилизация обломков: каждая постройка, разрушенная вашим огнём, восстанавливает танку 3 HP.", "category": "special",
 		"mods": {"scavengeHeal": 3.0},
 	},
 	{
@@ -438,12 +438,12 @@ const EXTRA_ACTIVE := [
 	},
 	{
 		"id": "grip", "name": "Шипы", "icon": "🕸",
-		"desc": "Активация: на 5 секунд даёт идеальное сцепление на льду, в грязи и воде без заносов.", "category": "speed",
+		"desc": "Активация: на 5 секунд шипы дают +12% к скорости на любой поверхности, включая лёд и грязь, без заносов.", "category": "speed",
 		"active": "grip",
 	},
 	{
 		"id": "breaker", "name": "Кумулятив", "icon": "🧨",
-		"desc": "Активация: на 5 секунд снаряды пробивают любые стены насквозь с четырёхкратным уроном.",
+		"desc": "Активация: на 5 секунд снаряды пробивают разрушаемые стены насквозь и наносят постройкам четырёхкратный урон.",
 		"category": "fire", "active": "breaker",
 	},
 	{
@@ -492,7 +492,7 @@ static func is_perk_allowed_in_mode(id: String, mode: String) -> bool:
 	var banned: Array = MODE_BANNED.get(mode, [])
 	return not banned.has(id)
 
-const CANNON_INCOMPATIBLE := ["fan_shot", "double_shot"]
+const CANNON_INCOMPATIBLE := ["fan_shot", "double_shot", "explosive", "piercing", "sky_strike"]
 
 const CANNON_REQUIRED := {
 	"deep_freeze": "ice", "frost_dash": "ice", "chilled_barrel": "ice",
@@ -515,26 +515,25 @@ static func filter_perks_for_mode(ids: Array, mode: String) -> Array:
 
 const UNLOCK_TABLE := {
 	1: ["rapid_fire", "heavy_armor", "sprinter"],
-	2: ["regen", "quick_reload"],
-	3: ["double_shot", "evasion"],
+	2: ["regen", "quick_vent"],
+	3: ["evasion", "scavenger"],
 	4: ["nitro", "shield"],
-	5: ["fan_shot", "road_king"],
-	6: ["reflect", "thermal"],
-	7: ["explosive", "all_terrain"],
-	8: ["overdrive", "quick_vent"],
-	9: ["piercing", "scavenger"],
-	10: ["bulwark", "light_shell"],
-	11: ["mines", "concrete_breaker"],
-	12: ["repair", "heavy_shell"],
-	13: ["siege", "grip"],
-	14: ["coolant", "can_opener"],
-	15: ["lumberjack", "smoke"],
-	16: ["keen_ear", "silencer"],
-	17: ["muffler", "breaker", "predator"],
-	18: ["shockwave", "deep_freeze", "frost_dash", "chilled_barrel"],
-	19: ["heat_sink", "lightning_lord", "sky_strike",
-		"corrosive_acid", "acid_cloud", "corroding_armor"],
-	20: ["overclock", "chain_lightning"],
+	5: ["double_shot", "all_terrain"],
+	6: ["thermal", "lumberjack"],
+	7: ["quick_reload", "concrete_breaker"],
+	8: ["light_shell", "explosive"],
+	9: ["siege", "grip"],
+	10: ["mines", "piercing", "can_opener"],
+	11: ["fan_shot", "smoke"],
+	12: ["reflect", "silencer", "road_king"],
+	13: ["bulwark", "breaker", "chilled_barrel"],
+	14: ["heavy_shell", "keen_ear", "corrosive_acid"],
+	15: ["muffler", "predator", "deep_freeze"],
+	16: ["repair", "coolant", "frost_dash"],
+	17: ["overdrive", "acid_cloud"],
+	18: ["shockwave", "overclock", "corroding_armor"],
+	19: ["heat_sink", "lightning_lord"],
+	20: ["sky_strike", "chain_lightning"],
 }
 
 static func unlock_level_of(perk_id: String) -> int:

@@ -1254,8 +1254,12 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		if attacker.flags.has("predator") and attacker.flags.has("forest") and attacker.flags.has("shadow"):
 			amount *= Cfg.STEALTH_HUNTER_CRIT_MULT
 			is_stealth_crit = true
-		elif float(attacker.mods["ambushDmgMult"]) > 1.0:
-			amount *= float(attacker.mods["ambushDmgMult"])
+		else:
+			var ambush_mult := float(attacker.mods["ambushDmgMult"])
+			if attacker.ability_active("silencer"):
+				ambush_mult = maxf(ambush_mult, Cfg.SILENCER_AMBUSH_MULT)
+			if ambush_mult > 1.0:
+				amount *= ambush_mult
 
 	var is_sniper_crit := false
 	if source == "bullet" and attacker != null and attacker.alive \
@@ -1309,9 +1313,10 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 
 	if float(res["reflected"]) > 0.0 and attacker != null and attacker.alive:
 		deal_damage(attacker, float(res["reflected"]), target, "reflect")
-		attacker.stun_ticks = maxi(attacker.stun_ticks, 48)
-		particles.burst(attacker.x, attacker.y, [Color("#38bdf8"), Color.WHITE], 10, 2, 4, 10, 20, rng)
-		damage_number.emit(attacker.x, attacker.y - 30, "⚡ СТАН 0.8с!", Color("#38bdf8"))
+		if (source == "bullet" or source == "ram") and attacker.stun_ticks <= 0 and not attacker.is_boss:
+			attacker.stun_ticks = Cfg.REFLECT_STUN_TICKS
+			particles.burst(attacker.x, attacker.y, [Color("#38bdf8"), Color.WHITE], 10, 2, 4, 10, 20, rng)
+			damage_number.emit(attacker.x, attacker.y - 30, "⚡ СТАН 0.8с!", Color("#38bdf8"))
 
 	if attacker != null:
 		attacker.damage_dealt += float(res["applied"])
@@ -1402,6 +1407,8 @@ func maybe_freeze_shot_kill(victim, attacker) -> void:
 	if victim == null or not victim.alive or attacker == null or not attacker.alive:
 		return
 	if not (attacker.flags.has("deepFreeze") and attacker.flags.has("frostDash") and attacker.flags.has("chilledBarrel")):
+		return
+	if victim.is_boss:
 		return
 	execute_frozen_kill(victim, attacker)
 
@@ -2164,7 +2171,7 @@ func get_tutorial_task_info() -> Dictionary:
 			info["title"] = "ЗАДАНИЕ 9/12: ЛЕДЯНОЙ ТАНК — КРИО-ЗАМОРОЗКА"
 			info["desc"] = "Криогенные снаряды сковывают врага льдом. Поразите мишень [ЛКМ]!"
 			info["keys"] = "[ЛКМ] Выстрел"
-			var frozen := tutorial_ice_dummy != null and tutorial_ice_dummy.freeze_ticks > 0
+			var frozen: bool = tutorial_ice_dummy != null and tutorial_ice_dummy.freeze_ticks > 0
 			info["progress_text"] = "✔ Цель заморожена!" if frozen else "Поразите учебную цель ледяным снарядом"
 			info["progress"] = 1.0 if frozen else 0.5
 		10:

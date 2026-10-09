@@ -98,8 +98,137 @@ func _ready() -> void:
 	_check(not world.shot_pings.is_empty(),
 		"«Острый слух»: выстрел попал в отметки миникарты (%d)" % world.shot_pings.size())
 
+	_check_unlock_table()
+	_check_cannon_filter()
+	_check_profile_recalc()
+	var foe: Tank = _pick_foe(world, tank)
+	if foe == null:
+		_check(false, "второй танк для проверок урона не найден")
+	else:
+		_check_reflect_stun(world, tank, foe)
+		_check_silencer_ambush(world, tank, foe)
+		_check_ice_build_boss(world, tank, foe)
+
 	print("=== ПРОВЕРКА ПЕРКОВ ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
+
+func _check_unlock_table() -> void:
+	var seen := {}
+	var dupes := []
+	var max_level := 0
+	for lvl in Perks.UNLOCK_TABLE.keys():
+		max_level = maxi(max_level, int(lvl))
+		for id in Perks.UNLOCK_TABLE[lvl]:
+			if seen.has(id):
+				dupes.append(id)
+			seen[id] = int(lvl)
+	_check(dupes.is_empty(), "в таблице уровней нет дублей: %s" % str(dupes))
+	var unknown := []
+	for id in seen.keys():
+		if Perks.get_perk(String(id)).is_empty():
+			unknown.append(id)
+	_check(unknown.is_empty(), "все перки таблицы существуют: %s" % str(unknown))
+	var orphans := []
+	var misplaced := []
+	for p in Perks.all():
+		var in_table: bool = seen.has(p["id"])
+		if p.has("challenge") and in_table:
+			misplaced.append(String(p["id"]))
+		if not p.has("challenge") and not in_table:
+			orphans.append(String(p["id"]))
+	_check(orphans.is_empty(), "каждый нечелленджевый перк открывается по уровню: %s" % str(orphans))
+	_check(misplaced.is_empty(), "челленджевые перки не лежат в таблице: %s" % str(misplaced))
+	_check(max_level <= 20, "последний уровень таблицы: %d (максимум 20)" % max_level)
+	_check(Perks.UNLOCK_TABLE[1].size() >= 3, "на первом уровне открыто не меньше трёх перков")
+	var dependent: Array = Perks.CANNON_REQUIRED.keys() + ["lightning_lord", "sky_strike", "chain_lightning"]
+	var early := []
+	for id in dependent:
+		if int(seen.get(id, 0)) < 10:
+			early.append(id)
+	_check(early.is_empty(), "перки, зависящие от пушки или грозы, не раньше 10-го уровня: %s" % str(early))
+
+func _check_cannon_filter() -> void:
+	for id in ["explosive", "piercing", "sky_strike", "fan_shot", "double_shot"]:
+		_check(not Perks.is_perk_allowed_for_cannon(id, "ice") and not Perks.is_perk_allowed_for_cannon(id, "acid"),
+			"%s не предлагается с ледяной и кислотной пушкой" % id)
+		_check(Perks.is_perk_allowed_for_cannon(id, "standard") and Perks.is_perk_allowed_for_cannon(id, ""),
+			"%s предлагается с обычной пушкой" % id)
+
+func _check_profile_recalc() -> void:
+	var profile = load("res://scripts/profile.gd").new()
+	profile._empty_stats()
+	profile._empty_upgrades()
+	profile._apply({"globalLevel": 5, "unlocked": ["heat_sink", "rapid_fire", "ram"]})
+	_check(not profile.unlocked.has("heat_sink") and not profile.unlocked.has("rapid_fire"),
+		"перки таблицы из старого сейва не переносятся, а пересчитываются по уровню")
+	_check(profile.unlocked.has("ram"), "челленджевый перк из сейва сохраняется")
+	profile.free()
+
+func _pick_foe(world, tank: Tank) -> Tank:
+	for t in world.tanks:
+		if t != tank and t.alive:
+			return t
+	return null
+
+func _prepare_duel(tank: Tank, foe: Tank) -> void:
+	tank.spawn_protect = 0
+	foe.spawn_protect = 0
+	foe.perk_ids = []
+	foe.recompute()
+	foe.hp = foe.max_hp
+	foe.stun_ticks = 0
+	foe.is_boss = false
+	tank.hp = tank.max_hp
+
+func _check_reflect_stun(world, tank: Tank, foe: Tank) -> void:
+	tank.perk_ids = ["reflect"]
+	tank.recompute()
+	_prepare_duel(tank, foe)
+	world.deal_damage(tank, 10.0, foe, "acid")
+	_check(foe.stun_ticks == 0, "«Отражение»: тики кислоты не оглушают атакующего (%d)" % foe.stun_ticks)
+	tank.hp = tank.max_hp
+	world.deal_damage(tank, 10.0, foe, "bullet")
+	_check(foe.stun_ticks == Cfg.REFLECT_STUN_TICKS,
+		"«Отражение»: попадание пули оглушает на %d тиков (%d)" % [Cfg.REFLECT_STUN_TICKS, foe.stun_ticks])
+	foe.stun_ticks = 0
+	foe.is_boss = true
+	tank.hp = tank.max_hp
+	world.deal_damage(tank, 10.0, foe, "bullet")
+	_check(foe.stun_ticks == 0, "«Отражение»: боссов не оглушает")
+	foe.is_boss = false
+	tank.perk_ids = []
+	tank.recompute()
+
+func _check_silencer_ambush(world, tank: Tank, foe: Tank) -> void:
+	tank.perk_ids = ["silencer"]
+	tank.recompute()
+	_prepare_duel(tank, foe)
+	foe.last_attacker = tank
+	foe.last_attacker_tick = world.tick
+	var plain: float = world.deal_damage(foe, 10.0, tank, "bullet")
+	foe.hp = foe.max_hp
+	tank.ability_cd = 0
+	tank.use_ability(world)
+	foe.last_attacker = tank
+	foe.last_attacker_tick = world.tick
+	var silenced: float = world.deal_damage(foe, 10.0, tank, "bullet")
+	_check(plain > 0.0 and absf(silenced / plain - Cfg.SILENCER_AMBUSH_MULT) < 0.01,
+		"«Глушитель»: удар из засады %.1f против обычного %.1f (×%.2f)" % [silenced, plain, Cfg.SILENCER_AMBUSH_MULT])
+	tank.ability_timer = 0
+	tank.perk_ids = []
+	tank.recompute()
+
+func _check_ice_build_boss(world, tank: Tank, foe: Tank) -> void:
+	tank.perk_ids = ["deep_freeze", "frost_dash", "chilled_barrel"]
+	tank.recompute()
+	_prepare_duel(tank, foe)
+	foe.is_boss = true
+	var before := foe.hp
+	world.maybe_freeze_shot_kill(foe, tank)
+	_check(foe.alive and is_equal_approx(foe.hp, before), "«Абсолютный ноль»: босс не гибнет и не теряет прочность от выстрела")
+	foe.is_boss = false
+	tank.perk_ids = []
+	tank.recompute()
 
 func _check_wood_pierce(world, tank: Tank) -> void:
 	var map = world.map
