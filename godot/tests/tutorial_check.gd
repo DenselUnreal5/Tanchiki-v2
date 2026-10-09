@@ -5,7 +5,7 @@ var log_lines := []
 func log_msg(msg: String) -> void:
 	print(msg)
 	log_lines.append(msg)
-	var f := FileAccess.open("C:/Users/Eskaro/Desktop/кто тут попка/neirogame/Tanchiki-v2/godot/test_out.txt", FileAccess.WRITE)
+	var f := FileAccess.open("user://tutorial_check.txt", FileAccess.WRITE)
 	if f != null:
 		f.store_string("\n".join(log_lines))
 		f.flush()

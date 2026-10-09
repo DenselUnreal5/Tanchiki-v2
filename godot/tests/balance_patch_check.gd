@@ -165,7 +165,7 @@ func _ready() -> void:
 			"Таймер перегрузки инициализирован на 90 тиков (1.5 сек) (текущее: %s)" % meltdown["ticks"])
 
 	_log("=== ПРОВЕРКА БАЛАНСНЫХ ПРАВОК И УСТРАНЕНИЯ ФРУСТРАЦИИ ЗАВЕРШЕНА, ошибок: %d ===" % failures)
-	var f := FileAccess.open(ProjectSettings.globalize_path("res://test_report.txt"), FileAccess.WRITE)
+	var f := FileAccess.open("user://balance_patch_check.txt", FileAccess.WRITE)
 	if f != null:
 		for l in log_lines:
 			f.store_line(l)

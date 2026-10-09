@@ -11,7 +11,7 @@ func _ready() -> void:
 	_test_hub_bestiary_ui()
 
 	_log("=== ПРОВЕРКА БЕСТИАРИЯ ЗАВЕРШЕНА, ошибок: %d ===" % failures)
-	var f := FileAccess.open("c:/Users/Eskaro/Desktop/кто тут попка/neirogame/Tanchiki-v2/bestiary_test.txt", FileAccess.WRITE)
+	var f := FileAccess.open("user://bestiary_check.txt", FileAccess.WRITE)
 	if f != null:
 		f.store_string("\n".join(log_lines))
 		f.close()
