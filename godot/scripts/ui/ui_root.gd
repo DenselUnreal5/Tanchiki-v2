@@ -249,6 +249,9 @@ func _cache_focus_off(node: Node) -> void:
 
 
 func handle_cancel() -> bool:
+	if _dev_board != null and _dev_board.visible:
+		_dev_board.close_board()
+		return true
 	if _perk != null and _perk.visible:
 		perk_chosen.emit(_perk_player, "")
 		return true
@@ -288,7 +291,33 @@ func handle_cancel() -> bool:
 		return true
 	return false
 
+var _dev_board: DevBoard = null
+
+func toggle_dev_board() -> void:
+	if _dev_board == null:
+		_dev_board = DevBoard.new()
+		add_child(_dev_board)
+		_dev_board.changed.connect(_on_dev_board_changed)
+	else:
+		move_child(_dev_board, get_child_count() - 1)
+	_dev_board.toggle_board()
+
+func _on_dev_board_changed() -> void:
+	refresh_profile()
+	if _hub != null and _hub.visible and hub != null:
+		hub.switch_tab(_hub_active_tab)
+	garage_changed.emit()
+
+func _dev_board_allowed() -> bool:
+	return (_menu != null and _menu.visible) or (_hub != null and _hub.visible) \
+		or (_dev_board != null and _dev_board.visible)
+
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode == KEY_F10 and _dev_board_allowed():
+		toggle_dev_board()
+		get_viewport().set_input_as_handled()
+		return
 	if not (event.is_action_pressed("tab_next") or event.is_action_pressed("tab_prev")):
 		return
 	var dir := 1 if event.is_action_pressed("tab_next") else -1
@@ -450,7 +479,7 @@ func refresh_profile() -> void:
 		main_menu.refresh_profile()
 
 func hide_all_overlays() -> void:
-	for c in [_menu, _pause, _perk, _gameover, _hub, _stats, _daily, _settings, _net, _map_editor, _controls_ref]:
+	for c in [_menu, _pause, _perk, _gameover, _hub, _stats, _daily, _settings, _net, _map_editor, _controls_ref, _dev_board]:
 		if c != null:
 			c.visible = false
 
