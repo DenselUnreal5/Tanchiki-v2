@@ -90,6 +90,7 @@ const LIST := {
 
 const ORDER := ["grunt", "scout", "heavy", "sniper", "mortar", "pyro", "tesla", "boss", "boss_rammer", "boss_chimera"]
 const SPECIALS := ["pyro", "tesla"]
+const START_ROSTER := ["pyro", "tesla", "heavy", "sniper", "mortar"]
 
 static func get_type(id: String) -> Dictionary:
 	return LIST.get(id, {})
@@ -108,4 +109,14 @@ static func pick(ramp: float, rng: Rng, forced: String = "") -> Dictionary:
 			pool.append(type)
 	if pool.is_empty():
 		return LIST["grunt"]
+	return pool[int(rng.nextf() * pool.size()) % pool.size()]
+
+static func pick_regular(rng: Rng) -> Dictionary:
+	var pool := []
+	for key in ORDER:
+		var type: Dictionary = LIST[key]
+		if bool(type["boss"]):
+			continue
+		for i in int(type["weight"]):
+			pool.append(type)
 	return pool[int(rng.nextf() * pool.size()) % pool.size()]

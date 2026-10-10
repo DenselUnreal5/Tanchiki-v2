@@ -248,6 +248,7 @@ func _self_info() -> Dictionary:
 		"color_key": Prof.equipped_color1,
 		"cosmetics": Prof.equipped_cosmetics(),
 		"cannon_id": Prof.equipped_cannon,
+		"class_id": Prof.equipped_class,
 		"ready": false,
 	}
 

@@ -427,6 +427,7 @@ static func tank_info(t: Tank) -> Dictionary:
 		"max_hp": t.max_hp, "speed": t.speed, "fire_rate": t.fire_rate,
 		"owner_peer": t.owner_peer, "cosmetics": t.cosmetics,
 		"cannon_id": t.cannon_id,
+		"class": t.class_id,
 	}
 
 func roster() -> Array:
@@ -543,8 +544,8 @@ func _spawn_combatants() -> void:
 		var size: int = Cfg.MODES["ctf"]["team_size"]
 		var humans_player := 1
 		var humans_enemy := players.size() - humans_player
-		_spawn_bot_team("player", maxi(0, size - humans_player), "ally")
-		_spawn_bot_team("enemy", maxi(0, size - humans_enemy), "enemy", EnemyTypes.SPECIALS)
+		_spawn_bot_team("player", maxi(0, size - humans_player), "ally", [], true)
+		_spawn_bot_team("enemy", maxi(0, size - humans_enemy), "enemy", EnemyTypes.SPECIALS, true)
 	elif mode == "koth":
 		var total_enemies: int = int(Cfg.MODES["koth"]["enemies"])
 		var bosses: Array = ["boss_rammer", "boss_chimera", "boss"]
@@ -560,24 +561,28 @@ func _spawn_combatants() -> void:
 		pass
 	else:
 		for i in int(difficulty["enemies"]):
-			var forced: String = EnemyTypes.SPECIALS[i] if i < EnemyTypes.SPECIALS.size() else ""
-			_spawn_bot("bot_%d" % i, "enemy", forced)
+			var forced: String = EnemyTypes.START_ROSTER[i] if i < EnemyTypes.START_ROSTER.size() else ""
+			_spawn_bot("bot_%d" % i, "enemy", forced, true)
 
 func _spawn_player_tank(player, team: String) -> Tank:
 	var spot := _free_spot(team)
 	var hp: float = float(difficulty["player_hp"])
 	if mode == "defense":
 		hp = round(hp * Cfg.DEFENSE_PLAYER_HP_MULT)
+	var class_entry := TankClasses.get_entry(
+		TankClasses.DEFAULT if mode == "tutorial" else String(player.equipped_class))
 	var tank := Tank.new({
 		"x": spot.x, "y": spot.y, "team": team, "name": player.name,
-		"owner": player, "max_hp": hp,
-		"speed": Cfg.PLAYER_SPEED, "fire_rate": Cfg.PLAYER_FIRE_RATE,
-		"dmg_scale": Cfg.PLAYER_DMG_MULT,
+		"owner": player, "max_hp": round(hp * float(class_entry["hp_mult"])),
+		"speed": Cfg.PLAYER_SPEED * float(class_entry["speed_mult"]),
+		"fire_rate": maxi(4, int(round(float(Cfg.PLAYER_FIRE_RATE) * float(class_entry["fire_mult"])))),
+		"dmg_scale": Cfg.PLAYER_DMG_MULT * float(class_entry["dmg_mult"]),
+		"class_id": String(class_entry["id"]),
 		"color_key": "p1" if mode == "tutorial" else player.color_key,
 		"upgrade_mods": {} if mode == "tutorial" else player.upgrade_mods,
 		"cosmetics": {} if mode == "tutorial" else player.cosmetics,
 		"cannon_id": "standard" if mode == "tutorial" else player.equipped_cannon,
-		"chassis": "standard",
+		"chassis": String(class_entry["chassis"]),
 	})
 	tank.net_id = Net.next_tank_id()
 	tank.owner_peer = int(player.peer_id)
@@ -587,13 +592,15 @@ func _spawn_player_tank(player, team: String) -> Tank:
 		Net.host_tank_spawned(tank_info(tank))
 	return tank
 
-func _spawn_bot_team(team: String, count: int, color_key: String, forced: Array = []) -> void:
+func _spawn_bot_team(team: String, count: int, color_key: String, forced: Array = [], regular_pool: bool = false) -> void:
 	for i in count:
-		_spawn_bot(team, color_key, String(forced[i]) if i < forced.size() else "")
+		_spawn_bot(team, color_key, String(forced[i]) if i < forced.size() else "", regular_pool)
 
-func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Tank:
+func _spawn_bot(team: String, color_key: String, forced_type: String = "", regular_pool: bool = false) -> Tank:
 	var diff := difficulty
 	var type := EnemyTypes.pick(ramp, rng, forced_type)
+	if regular_pool and forced_type == "":
+		type = EnemyTypes.pick_regular(rng)
 	if bool(type["boss"]) and boss_alive and mode != "koth":
 		type = EnemyTypes.get_type("grunt")
 	var boss_mult := {"hp": 1.0, "dmg": 1.0}

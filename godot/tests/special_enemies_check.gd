@@ -82,11 +82,30 @@ func _check_types() -> void:
 			"players": [player], "player_level": 1, "rng_seed": 4040,
 		})
 		var ids := {}
+		var bosses := 0
 		for t in world.tanks:
+			if t.is_boss:
+				bosses += 1
 			if not t.enemy_type.is_empty() and world.are_hostile(t, player.tank):
 				ids[String(t.enemy_type["id"])] = true
-		_check(ids.has("pyro") and ids.has("tesla"), "%s: на старте среди врагов есть оба спецтанка" % mode)
+		var expected: Array = EnemyTypes.START_ROSTER if mode == "ffa" else EnemyTypes.SPECIALS
+		var missing := []
+		for id in expected:
+			if not ids.has(id):
+				missing.append(id)
+		_check(missing.is_empty(), "%s: на старте среди врагов есть %s (не хватает: %s)" % [mode, ", ".join(expected), str(missing)])
+		_check(bosses == 0, "%s: на старте нет боссов" % mode)
 		world.dispose()
+	var rng2 := Rng.new(11)
+	var regular := {}
+	var boss_picks := 0
+	for i in 3000:
+		var t := EnemyTypes.pick_regular(rng2)
+		if bool(t["boss"]):
+			boss_picks += 1
+		regular[String(t["id"])] = true
+	_check(boss_picks == 0, "обычный набор не выдаёт боссов")
+	_check(regular.has("heavy") and regular.has("sniper") and regular.has("mortar"), "обычный набор на старте включает Громилу, Снайпера и Миномёт")
 
 func _check_tesla() -> void:
 	print("[2/4] Громовержец")

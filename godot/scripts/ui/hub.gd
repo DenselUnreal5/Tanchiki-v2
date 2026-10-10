@@ -557,6 +557,24 @@ func _update_bestiary_detail(tank_id: String) -> void:
 		status_box.add_child(st_lbl)
 	_bestiary_detail_container.add_child(status_box)
 
+	if not bool(item.get("is_player", false)) and TankClasses.has(tank_id) and tank_id != TankClasses.DEFAULT:
+		var pilot_text := ""
+		var pilot_color := Cfg.UI_MUTED
+		if Prof.is_class_owned(tank_id):
+			pilot_text = _tr("bestiary.pilotableOwned", "Можно пилотировать: класс куплен (Гараж)")
+			pilot_color = Cfg.UI_ACCENT
+		elif Prof.is_class_unlocked(tank_id):
+			pilot_text = _tr("bestiary.pilotableBuy", "Можно пилотировать: класс можно купить в Гараже за %d 🪙" % TankClasses.price(tank_id),
+				{"price": TankClasses.price(tank_id)})
+			pilot_color = Cfg.UI_GOLD
+		else:
+			pilot_text = _tr("bestiary.pilotable", "Можно пилотировать: уничтожено %d/%d" % [
+				Prof.get_bestiary_kills(tank_id), TankClasses.kills_needed(tank_id)], {
+				"n": Prof.get_bestiary_kills(tank_id), "need": TankClasses.kills_needed(tank_id)})
+		var pilot_lbl := UiKit.label(pilot_text, 10, pilot_color, true)
+		pilot_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_bestiary_detail_container.add_child(pilot_lbl)
+
 	# 4. Tactical Characteristics (HP, Speed, Damage)
 	_bestiary_detail_container.add_child(UiKit.section(_tr("bestiary.stats", "ТАКТИКО-ТЕХНИЧЕСКИЕ ХАРАКТЕРИСТИКИ"), Cfg.UI_ACCENT))
 	var stats_box := PanelContainer.new()
@@ -895,6 +913,14 @@ func _fill_garage_tab() -> void:
 	for c in Cannons.LIST:
 		_cannon_card(c, cannon_grid)
 
+	_body.add_child(UiKit.section(_tr("garage.classes", "Классы танков"), Cfg.UI_MUTED))
+	var class_grid := HFlowContainer.new()
+	class_grid.add_theme_constant_override("h_separation", 10)
+	class_grid.add_theme_constant_override("v_separation", 10)
+	_body.add_child(class_grid)
+	for entry in TankClasses.LIST:
+		_class_card(entry, class_grid)
+
 func _fill_cosmetics_tab() -> void:
 	_sub.text = "[center]" + _tr("cosmetics.sub",
 		"Монеты: [b]%d[/b] 🪙 · Персонализируйте внешний вид вашего танка" % Prof.money,
@@ -944,6 +970,7 @@ func _fill_cosmetics_tab() -> void:
 		"x": 0.0, "y": 0.0, "team": "player", "name": "",
 		"owner": stub_player, "color_key": Prof.equipped_color1,
 		"max_hp": 100.0, "speed": 100.0, "fire_rate": 30,
+		"chassis": String(TankClasses.get_entry(Prof.equipped_class)["chassis"]),
 	})
 	_cosmetic_preview_tank.spawn_protect = 0
 	_cosmetic_preview_tank.cosmetics = Prof.equipped_cosmetics()
@@ -1321,6 +1348,63 @@ func _cannon_card(c: Dictionary, parent: Node) -> Control:
 			garage_changed.emit()
 			switch_tab("garage", card_id))
 	return card
+
+func _class_card(entry: Dictionary, parent: Node) -> Control:
+	var id := String(entry["id"])
+	var owned := Prof.is_class_owned(id)
+	var unlocked := Prof.is_class_unlocked(id)
+	var equipped := Prof.equipped_class == id
+	var card_id := "class_" + id
+	var need := TankClasses.kills_needed(id)
+	var kills := mini(Prof.get_bestiary_kills(id), need)
+	var price := TankClasses.price(id)
+	var stats := _tr("class.stats", "HP ×%s · Ход ×%s" % [
+		_fmt_mult(float(entry["hp_mult"])), _fmt_mult(float(entry["speed_mult"]))], {
+		"hp": _fmt_mult(float(entry["hp_mult"])), "spd": _fmt_mult(float(entry["speed_mult"]))})
+
+	var state := ""
+	var action_text := ""
+	var action_disabled := false
+	var can_buy := false
+	if owned:
+		state = stats
+		action_text = _tr("cos.equipped", "Надето") if equipped else _tr("cos.equip", "Надеть")
+		action_disabled = equipped
+	elif unlocked:
+		can_buy = Prof.money >= price
+		state = _tr("class.price", "Цена: %d 🪙 · %s" % [price, stats], {"price": price, "stats": stats})
+		action_text = _tr("cos.buy", "Купить · %d 🪙" % price, {"price": price})
+		action_disabled = not can_buy
+	else:
+		state = _tr("class.locked", "Уничтожено: %d/%d" % [kills, need], {"n": kills, "need": need})
+		action_text = _tr("class.lockedBtn", "%d/%d" % [kills, need], {"n": kills, "need": need})
+		action_disabled = true
+
+	var card: CannonCard = CannonCardScene.instantiate()
+	parent.add_child(card)
+	card.set_data(String(entry["icon"]), Cfg.UI_TEXT if unlocked else Cfg.UI_MUTED,
+		TankClasses.display_name(entry), state, action_text, action_disabled, equipped, can_buy, card_id)
+	var tip := I18n.dn(entry, "desc", "class")
+	var trait_line := TankClasses.trait_text(entry)
+	if trait_line != "":
+		tip += "\n" + trait_line
+	if not unlocked:
+		tip += "\n" + _tr("class.lockedTip", "Уничтожьте %d таких танков, чтобы открыть покупку" % need, {"need": need})
+	card.tooltip_text = tip
+	card.action_pressed.connect(func():
+		var ok := false
+		if not owned:
+			if Prof.buy_class(id).get("ok", false):
+				ok = Prof.equip_class(id).get("ok", false)
+		else:
+			ok = Prof.equip_class(id).get("ok", false)
+		if ok:
+			garage_changed.emit()
+			switch_tab("garage", card_id))
+	return card
+
+func _fmt_mult(v: float) -> String:
+	return ("%.2f" % v).rstrip("0").rstrip(".")
 
 func _garage_color_row(label_text: String, slot: int, equipped_key: String, tab_key: String = "cosmetics") -> Control:
 	var box := UiKit.vbox(6)

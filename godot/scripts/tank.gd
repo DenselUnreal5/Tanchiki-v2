@@ -160,6 +160,8 @@ var cannon_id := "standard"
 
 var freeze_ticks := 0
 var cryo_immunity_ticks := 0
+var class_id := "standard"
+var class_lobbed := false
 var director_hp_applied := 1.0
 var director_speed_applied := 1.0
 var director_acc_applied := 0.0
@@ -226,6 +228,8 @@ func _init(opts: Dictionary) -> void:
 	cosmetics = opts.get("cosmetics", {})
 	dmg_scale = float(opts.get("dmg_scale", 1.0))
 	cannon_id = String(opts.get("cannon_id", "standard"))
+	class_id = String(opts.get("class_id", "standard"))
+	class_lobbed = TankClasses.is_lobbed(class_id)
 
 	angle = -PI / 2.0 if owner != null else PI / 2.0
 	body_angle = angle
@@ -445,6 +449,7 @@ func recompute() -> void:
 	if not upgrade_mods.is_empty():
 		mods = _apply_upgrade_mods(mods)
 	Mutators.apply_mods(mods)
+	TankClasses.apply_mods(mods, class_id)
 	max_hp = maxf(1.0, round(base_max_hp * float(mods["maxHPMult"])))
 	speed = base_speed * float(mods["speedMult"]) * enrage_speed_mult
 	fire_rate = maxi(4, int(round(float(base_fire_rate) * float(mods["fireRateMult"]) * enrage_fire_rate_mult)))
@@ -1343,6 +1348,8 @@ func _try_ram(world) -> void:
 		other.vy += sin(push_angle) * Cfg.RAM_PUSH
 
 func shoot(world) -> bool:
+	if class_lobbed and can_fire:
+		return shoot_lobbed(world)
 	if not can_fire:
 		if alive and is_player_controlled and ((fire_cooldown > 0 and fire_cooldown <= INPUT_BUFFER_WINDOW) or (freeze_ticks > 0 and freeze_ticks <= INPUT_BUFFER_WINDOW)):
 			buffer_fire_ticks = INPUT_BUFFER_WINDOW
@@ -1462,6 +1469,8 @@ func shoot_lobbed(world) -> bool:
 
 	world.particles.burst(muzzle_x, muzzle_y, [Color("#ff9933"), Color("#ffcc66")], 6, 2, 4, 10, 12, world.rng)
 	Sfx.play("shoot_heavy", muzzle_x, muzzle_y)
+	if owner != null:
+		world.notify_shot(self)
 	return true
 
 func _resolve_telegraphed_attack(world) -> void:

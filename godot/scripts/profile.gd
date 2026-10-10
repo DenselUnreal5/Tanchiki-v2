@@ -11,6 +11,7 @@ signal achievement(ids: Array, reward: int)
 signal daily_claimed(id: String, reward: int)
 signal weekly_claimed(id: String, reward: int)
 signal rank_up(ids: Array, reward: int)
+signal class_unlocked(ids: Array)
 
 const STAT_KEYS := [
 	"ramKills",
@@ -81,6 +82,8 @@ var cosmetic_owned := {}
 var cosmetics := {"skin": "none", "camo": "none", "hull": "none", "track": "none", "turret": "none"}
 var cannon_owned := {}
 var equipped_cannon := "standard"
+var equipped_class := "standard"
+var class_owned := {}
 var equipped_color1 := "p1"
 var equipped_color2 := "p2"
 var bestiary_kills: Dictionary = {}
@@ -182,6 +185,11 @@ func _apply(data: Dictionary) -> void:
 	var eq_cannon := String(data.get("equippedCannon", "standard"))
 	if is_cannon_owned(eq_cannon):
 		equipped_cannon = eq_cannon
+	for id in data.get("classOwned", []):
+		if TankClasses.has(String(id)) and String(id) != TankClasses.DEFAULT:
+			class_owned[String(id)] = true
+	var eq_class := String(data.get("equippedClass", TankClasses.DEFAULT))
+	equipped_class = eq_class if is_class_owned(eq_class) else TankClasses.DEFAULT
 	var bk = data.get("bestiaryKills", {})
 	if bk is Dictionary:
 		bestiary_kills = bk.duplicate()
@@ -223,6 +231,8 @@ func save_profile() -> void:
 		"equippedColor2": equipped_color2,
 		"cannonOwned": cannon_owned.keys(),
 		"equippedCannon": equipped_cannon,
+		"equippedClass": equipped_class,
+		"classOwned": class_owned.keys(),
 		"bestiaryKills": bestiary_kills,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -246,6 +256,8 @@ func reset() -> void:
 	equipped_color2 = "p2"
 	cannon_owned.clear()
 	equipped_cannon = "standard"
+	equipped_class = TankClasses.DEFAULT
+	class_owned.clear()
 	bestiary_kills.clear()
 	_sync_level_unlocks()
 	save_profile()
@@ -599,6 +611,38 @@ func equip_cannon(id: String) -> Dictionary:
 	save_profile()
 	return {"ok": true}
 
+func is_class_owned(id: String) -> bool:
+	return TankClasses.has(id) and (id == TankClasses.DEFAULT or class_owned.has(id))
+
+func is_class_unlocked(id: String) -> bool:
+	if not TankClasses.has(id):
+		return false
+	return id == TankClasses.DEFAULT or class_owned.has(id) 		or get_bestiary_kills(id) >= TankClasses.kills_needed(id)
+
+func buy_class(id: String) -> Dictionary:
+	if not TankClasses.has(id) or id == TankClasses.DEFAULT:
+		return {"ok": false, "reason": "unknown"}
+	if class_owned.has(id):
+		return {"ok": false, "reason": "owned"}
+	if not is_class_unlocked(id):
+		return {"ok": false, "reason": "locked", "kills": get_bestiary_kills(id), "need": TankClasses.kills_needed(id)}
+	var cost := TankClasses.price(id)
+	if money < cost:
+		return {"ok": false, "reason": "money"}
+	money -= cost
+	class_owned[id] = true
+	save_profile()
+	return {"ok": true}
+
+func equip_class(id: String) -> Dictionary:
+	if not TankClasses.has(id):
+		return {"ok": false, "reason": "unknown"}
+	if not is_class_owned(id):
+		return {"ok": false, "reason": "not_owned"}
+	equipped_class = id
+	save_profile()
+	return {"ok": true}
+
 func is_color_unlocked(key: String) -> bool:
 	for skin in Cfg.PLAYER_SKINS:
 		if String(skin["key"]) == key:
@@ -715,6 +759,8 @@ func record_bestiary_kill(tank_id: String) -> void:
 	var cur: int = int(bestiary_kills.get(tank_id, 0))
 	bestiary_kills[tank_id] = cur + 1
 	save_profile()
+	if TankClasses.has(tank_id) and tank_id != TankClasses.DEFAULT and cur + 1 == TankClasses.kills_needed(tank_id):
+		class_unlocked.emit([tank_id])
 
 func get_bestiary_kills(tank_id: String) -> int:
 	return int(bestiary_kills.get(tank_id, 0))

@@ -122,6 +122,9 @@ func _update_tank() -> void:
 		return
 	_display_tank.color_key = Prof.equipped_color1
 	_display_tank.cosmetics = Prof.equipped_cosmetics()
+	var class_chassis := String(TankClasses.get_entry(Prof.equipped_class)["chassis"])
+	if _display_tank.chassis_id != class_chassis:
+		_display_tank.set_chassis(class_chassis)
 	_display_tank.turret_angle = _turret_angle
 	_tank_view.muzzle = _muzzle
 	var dir := Vector2(cos(_turret_angle), sin(_turret_angle))

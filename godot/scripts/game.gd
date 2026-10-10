@@ -162,6 +162,18 @@ func _bind_profile_events() -> void:
 		Sfx.play("unlock")
 		ui.refresh_profile())
 
+	Prof.class_unlocked.connect(func(ids: Array):
+		var names := []
+		for id in ids:
+			var entry := TankClasses.get_entry(id)
+			names.append("%s %s" % [entry["icon"], TankClasses.display_name(entry)])
+		hud.add_feed(I18n.t("feed.classUnlocked", {"names": ", ".join(names)},
+			"Класс готов к покупке: %s" % ", ".join(names)), Color("#66ddff"))
+		hud.banner(I18n.t("feed.classBanner", {"names": ", ".join(names)},
+			"Класс можно купить в Гараже: %s" % ", ".join(names)), Color("#66ddff"))
+		Sfx.play("unlock")
+		ui.refresh_profile())
+
 	Prof.achievement.connect(func(ids: Array, reward: int):
 		var names := []
 		for id in ids:
@@ -398,6 +410,8 @@ func start_match(net_opts: Dictionary = {}) -> void:
 			rp.peer_id = int(peer_id)
 			rp.cosmetics = info.get("cosmetics", {})
 			rp.equipped_cannon = String(info.get("cannon_id", "standard"))
+			var remote_class := String(info.get("class_id", TankClasses.DEFAULT))
+			rp.equipped_class = remote_class if TankClasses.has(remote_class) else TankClasses.DEFAULT
 			remote_players.append(rp)
 
 	for p in players:
@@ -406,11 +420,13 @@ func start_match(net_opts: Dictionary = {}) -> void:
 			p.upgrade_mods = {}
 			p.cosmetics = {}
 			p.equipped_cannon = "standard"
+			p.equipped_class = TankClasses.DEFAULT
 			p.color_key = "p1"
 		else:
 			p.upgrade_mods = Prof.upgrade_mods()
 			p.cosmetics = Prof.equipped_cosmetics()
 			p.equipped_cannon = Prof.equipped_cannon
+			p.equipped_class = Prof.equipped_class
 	for p in remote_players:
 		p.reset_for_match()
 
@@ -480,6 +496,10 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		_:
 			start_hint = I18n.t("feed.start.ctf", {}, "Захват флага: везите чужие флаги на свою базу")
 	hud.add_feed(start_hint, Color("#88ff88"))
+	if not players.is_empty() and players[0].equipped_class != TankClasses.DEFAULT:
+		var class_entry := TankClasses.get_entry(players[0].equipped_class)
+		hud.add_feed(I18n.t("feed.class", {"name": TankClasses.display_name(class_entry)},
+			"Класс: %s %s" % [class_entry["icon"], TankClasses.display_name(class_entry)]), Color("#66ddff"))
 	if world.mutator != "":
 		var mut_desc := I18n.dn(Prof.weekly_challenge(), "mutator_desc", "weekly")
 		hud.add_feed(I18n.t("feed.mutator", {"desc": mut_desc}, "⚡ Недельный модификатор: %s" % mut_desc),
@@ -1036,6 +1056,7 @@ func net_spawn_puppet(info: Dictionary) -> void:
 	})
 	tank.cosmetics = info.get("cosmetics", {})
 	tank.cannon_id = String(info.get("cannon_id", "standard"))
+	tank.class_id = String(info.get("class", TankClasses.DEFAULT))
 	if int(info["owner_peer"]) == multiplayer.get_unique_id() and not players.is_empty():
 		tank.owner = players[0]
 		players[0].tank = tank

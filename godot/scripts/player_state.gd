@@ -14,6 +14,7 @@ var tank: Tank = null
 
 var upgrade_mods := {}
 var cosmetics := {}
+var equipped_class := "standard"
 var equipped_cannon := "standard"
 
 var perk_ids: Array = []
