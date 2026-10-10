@@ -45,6 +45,7 @@ var bullet_grid := SpatialGrid.new()
 var bullets: Array = []
 var mines: Array = []
 var acid_pools: Array = []
+var fire_patches: Array = []
 var perk_drops: Array = []
 var wrecks: Array = []
 var debris: Array = []
@@ -547,7 +548,7 @@ func _spawn_combatants() -> void:
 	elif mode == "koth":
 		var total_enemies: int = int(Cfg.MODES["koth"]["enemies"])
 		var bosses: Array = ["boss_rammer", "boss_chimera", "boss"]
-		var elite_roster: Array = ["heavy", "sniper", "mortar", "scout", "grunt"]
+		var elite_roster: Array = ["heavy", "sniper", "mortar", "pyro", "tesla", "scout", "grunt"]
 		for i in total_enemies:
 			var forced_type := ""
 			if i < bosses.size():
@@ -1144,6 +1145,7 @@ func step() -> void:
 			live_mines.append(m)
 	mines = live_mines
 	_update_acid_pools()
+	_update_fire_patches()
 
 	for piece in debris:
 		piece.update()
@@ -1531,6 +1533,37 @@ func _rammer_death_explosion(victim) -> void:
 				victim.rammer_base_damage_dealt += applied_death_base_dmg
 				base["hp"] = maxf(0.0, float(base["hp"]) - applied_death_base_dmg)
 				damage_number.emit(base["x"], base["y"] - 30, "-%d БАЗА!" % int(applied_death_base_dmg), Color("#ff4444"))
+
+func spawn_fire_patch(px: float, py: float, owner_tank) -> void:
+	if GameMap.is_solid_tile(map.tile_at_pixel(px, py)) or map.is_water_at(px, py):
+		return
+	if fire_patches.size() >= Cfg.FIRE_PATCH_MAX:
+		fire_patches.pop_front()
+	fire_patches.append(Ent.FirePatch.new(px, py, Cfg.FIRE_PATCH_RADIUS, owner_tank, Cfg.FIRE_PATCH_LIFE))
+
+func _update_fire_patches() -> void:
+	if fire_patches.is_empty():
+		return
+	var live := []
+	for patch in fire_patches:
+		patch.timer -= 1
+		if patch.timer <= 0:
+			continue
+		live.append(patch)
+		var r2: float = patch.radius * patch.radius
+		for tank in tank_grid.query(patch.x, patch.y, patch.radius):
+			if not tank.alive or tank.burn_ticks > Cfg.BURN_TICKS - 20:
+				continue
+			if patch.owner != null and not are_hostile(patch.owner, tank):
+				continue
+			var dx: float = tank.x - patch.x
+			var dy: float = tank.y - patch.y
+			if dx * dx + dy * dy <= r2:
+				tank.ignite(self, patch.owner)
+		if tick % 10 == 0 and rng.nextf() < 0.7:
+			particles.spawn(patch.x + (rng.nextf() - 0.5) * patch.radius, patch.y + (rng.nextf() - 0.5) * patch.radius,
+				Color("#f97316") if rng.nextf() < 0.5 else Color("#fbbf24"), 3.0, 16.0, rng, 0.0, -0.7)
+	fire_patches = live
 
 func spawn_acid_pool(px: float, py: float, r: float, owner_tank, life: int = Cfg.CHIMERA_ACID_POOL_DURATION) -> void:
 	acid_pools.append(Ent.AcidPool.new(px, py, r, owner_tank, life))
@@ -2210,6 +2243,7 @@ func dispose() -> void:
 	bullets.clear()
 	mines.clear()
 	acid_pools.clear()
+	fire_patches.clear()
 	wrecks.clear()
 	debris.clear()
 	flags.clear()

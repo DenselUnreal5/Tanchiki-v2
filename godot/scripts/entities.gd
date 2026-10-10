@@ -100,6 +100,7 @@ class Bullet extends RefCounted:
 	var cannon_kind := ""
 	var sky_strike := false
 	var acid_burst := false
+	var trail_accum := 0.0
 
 	func _init(x_: float, y_: float, angle: float, owner_, dmg_scale_: float = 1.0) -> void:
 		x = x_
@@ -113,6 +114,11 @@ class Bullet extends RefCounted:
 		var speed: float = owner_.bullet_speed()
 		if owner_.is_sniper_chassis():
 			life = int(float(Cfg.BULLET_LIFE) / Cfg.SNIPER_BULLET_SPEED_MULT)
+		match owner_.shot_kind():
+			"fire":
+				life = Cfg.FIRE_BULLET_LIFE
+			"shock":
+				life = int(float(Cfg.BULLET_LIFE) / Cfg.SHOCK_BULLET_SPEED_MULT)
 		vx = cos(angle) * speed
 		vy = sin(angle) * speed
 		team = owner_.team
@@ -149,6 +155,11 @@ class Bullet extends RefCounted:
 		if x < 0.0 or x > world.map.width or y < 0.0 or y > world.map.height:
 			alive = false
 			return
+		if cannon_kind == "fire":
+			trail_accum += sqrt(vx * vx + vy * vy)
+			if trail_accum >= Cfg.FIRE_PATCH_SPACING:
+				trail_accum = 0.0
+				world.spawn_fire_patch(x, y, owner)
 		if _hit_tiles(world):
 			return
 		if _hit_barrels(world):
@@ -225,6 +236,20 @@ class Bullet extends RefCounted:
 			if dx * dx + dy * dy > hit_r2:
 				continue
 
+			if cannon_kind == "shock":
+				if world.deal_damage(tank, Cfg.SHOCK_DMG, owner, "shock") > 0.0:
+					tank.apply_shock(world, owner)
+				alive = false
+				world.particles.burst(x, y, [Color("#facc15"), Color("#bfdbfe"), Color.WHITE], 12, 2, 5, 8, 16, world.rng)
+				world.spawn_shockwave(x, y, 34.0, "emp", Color("#facc15"), 10)
+				return true
+			if cannon_kind == "fire":
+				if tank.ignite(world, owner):
+					tank.add_heat(Cfg.BURN_HIT_HEAT)
+				world.spawn_fire_patch(x, y, owner)
+				alive = false
+				world.particles.burst(x, y, [Color("#f97316"), Color("#fbbf24"), Color("#7c2d12")], 12, 2, 5, 10, 20, world.rng)
+				return true
 			if cannon_kind == "freeze":
 				if tank.apply_freeze(world, owner, Cfg.ICE_FREEZE_TICKS):
 					world.maybe_freeze_shot_kill(tank, owner)
@@ -637,6 +662,23 @@ class AcidPool extends RefCounted:
 	var timer: int
 	var max_life: int
 	var alive := true
+
+	func _init(x_: float, y_: float, r_: float, owner_, life: int) -> void:
+		x = x_
+		y = y_
+		radius = r_
+		owner = owner_
+		timer = life
+		max_life = life
+
+
+class FirePatch extends RefCounted:
+	var x: float
+	var y: float
+	var radius: float
+	var owner
+	var timer: int
+	var max_life: int
 
 	func _init(x_: float, y_: float, r_: float, owner_, life: int) -> void:
 		x = x_

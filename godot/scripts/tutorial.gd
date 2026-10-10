@@ -124,6 +124,7 @@ func _clear_arena() -> void:
 	world.pickups.clear()
 	world.weapon_pickups.clear()
 	world.acid_pools.clear()
+	world.fire_patches.clear()
 	world.wrecks.clear()
 	world.airstrikes.clear()
 	world.rammer_meltdowns.clear()

@@ -96,8 +96,10 @@ static func source_label(source: String) -> String:
 			return I18n.t("killcam.src.mine", {}, "мина")
 		"acid", "acid_stream":
 			return I18n.t("killcam.src.acid", {}, "кислота")
-		"lightning":
+		"lightning", "shock":
 			return I18n.t("killcam.src.lightning", {}, "молния")
+		"fire":
+			return I18n.t("killcam.src.fire", {}, "огонь")
 		"blast", "barrel_blast", "airstrike", "kamikaze":
 			return I18n.t("killcam.src.blast", {}, "взрыв")
 		"water":

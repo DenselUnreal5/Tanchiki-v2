@@ -171,6 +171,11 @@ var acid_tick_timer := 0
 var acid_dmg_scale := 1.0
 var acid_attacker = null
 
+var burn_ticks := 0
+var burn_tick_timer := 0
+var burn_attacker = null
+var stun_guard_ticks := 0
+
 var sky_strike_cooldown := 0
 var sky_strike_ready := false
 
@@ -335,7 +340,12 @@ func _after_shot() -> void:
 	var gain: float = Cfg.HEAT_PER_SHOT * float(mods["heatPerShotMult"]) * heat_mult
 	if ability_active("overclock"):
 		gain = 0.0
-	heat = minf(1.0, heat + gain)
+	add_heat(gain)
+
+func add_heat(amount: float) -> void:
+	if owner == null or amount <= 0.0:
+		return
+	heat = minf(1.0, heat + amount)
 	if heat >= 1.0 and not overheated:
 		overheated = true
 		overheats += 1
@@ -344,13 +354,61 @@ func _after_shot() -> void:
 func is_sniper_chassis() -> bool:
 	return chassis_id == "sniper"
 
+func shot_kind() -> String:
+	return String(enemy_type.get("shot", ""))
+
 func bullet_speed() -> float:
 	var speed: float = Cfg.BULLET_SPEED * float(mods["bulletSpeedMult"])
 	if weapon == "" and (cannon_id == "" or cannon_id == "standard"):
 		speed *= 1.15
 	if is_sniper_chassis():
 		speed *= Cfg.SNIPER_BULLET_SPEED_MULT
+	match shot_kind():
+		"fire":
+			speed *= Cfg.FIRE_BULLET_SPEED_MULT
+		"shock":
+			speed *= Cfg.SHOCK_BULLET_SPEED_MULT
 	return speed
+
+func ignite(world, attacker) -> bool:
+	if not alive or spawn_protect > 0 or dash_invuln_ticks > 0 or in_water:
+		return false
+	if burn_ticks <= 0:
+		burn_tick_timer = Cfg.BURN_TICK_INTERVAL
+	burn_ticks = Cfg.BURN_TICKS
+	burn_attacker = attacker
+	if world != null:
+		world.particles.burst(x, y, [Color("#f97316"), Color("#fbbf24")], 6, 1, 3, 8, 14, world.rng)
+	return true
+
+func apply_shock(world, attacker) -> bool:
+	if not alive or stun_guard_ticks > 0:
+		return false
+	stun_ticks = maxi(stun_ticks, Cfg.SHOCK_STUN_TICKS)
+	stun_guard_ticks = Cfg.SHOCK_STUN_GUARD_TICKS
+	interrupt_current_action(CC_STUN)
+	if world != null:
+		world.particles.burst(x, y, [Color("#facc15"), Color("#bfdbfe"), Color.WHITE], 14, 2, 5, 10, 18, world.rng)
+		world.damage_number.emit(x, y - 26, "⚡ СТАН", Color("#facc15"))
+	return true
+
+func _update_burn(world) -> void:
+	if burn_ticks <= 0:
+		return
+	if in_water:
+		burn_ticks = 0
+		world.particles.burst(x, y, [Color("#cbd5e1"), Color.WHITE], 6, 1, 3, 10, 16, world.rng)
+		return
+	burn_ticks -= 1
+	add_heat(Cfg.BURN_HEAT_PER_TICK)
+	burn_tick_timer -= 1
+	if burn_tick_timer <= 0:
+		burn_tick_timer = Cfg.BURN_TICK_INTERVAL
+		var dmg: float = Cfg.BURN_DPS * float(Cfg.BURN_TICK_INTERVAL) / float(Cfg.TICK_HZ)
+		world.deal_damage(self, dmg, burn_attacker, "fire")
+	if world.tick % 6 == 0:
+		world.particles.spawn(x + (world.rng.nextf() - 0.5) * width * 0.6, y + (world.rng.nextf() - 0.5) * height * 0.6,
+			Color("#f97316") if world.rng.nextf() < 0.6 else Color("#fbbf24"), 3.0, 14.0, world.rng, 0.0, -0.9)
 
 func reload_ticks() -> int:
 	if ability_active("overdrive") or ability_active("overclock"):
@@ -471,6 +529,8 @@ func update(world) -> void:
 		enrage_shield_ticks -= 1
 	if stun_ticks > 0:
 		stun_ticks -= 1
+	if stun_guard_ticks > 0:
+		stun_guard_ticks -= 1
 	if rammer_daze_ticks > 0:
 		rammer_daze_ticks -= 1
 	if world == null:
@@ -575,6 +635,7 @@ func update(world) -> void:
 		dash_range = 0.0
 		dash_stall = 0
 	_check_water(world)
+	_update_burn(world)
 	_try_ram(world)
 
 	vx *= Cfg.FRICTION
@@ -1297,6 +1358,22 @@ func shoot(world) -> bool:
 	if is_chimera_boss or is_chimera_clone:
 		return false
 
+	var special := shot_kind()
+	if special != "":
+		var sb := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, scale_v)
+		sb.cannon_kind = special
+		sb.pierce = 0
+		sb.explosive = false
+		if special == "fire":
+			world.particles.burst(muzzle_x, muzzle_y, [Color("#f97316"), Color("#fbbf24"), Color("#fde68a")], 8, 2, 4, 10, 16, world.rng)
+			Sfx.play("flame", muzzle_x, muzzle_y)
+		else:
+			world.particles.burst(muzzle_x, muzzle_y, [Color("#facc15"), Color("#bfdbfe"), Color.WHITE], 8, 2, 4, 8, 14, world.rng)
+			Sfx.play("zap", muzzle_x, muzzle_y)
+		world.bullets.append(sb)
+		world.notify_shot(self)
+		return true
+
 	var wp := Weapons.get_weapon(weapon) if weapon != "" else {}
 	if not wp.is_empty():
 		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * float(wp["cooldown_mult"]))))
@@ -1683,6 +1760,8 @@ func on_death(world, killer) -> void:
 	acid_ticks_left = 0
 	acid_tick_timer = 0
 	acid_attacker = null
+	burn_ticks = 0
+	burn_attacker = null
 	acid_stream_hit_accum = 0.0
 	rammer_cooldown_ticks = 0
 	rammer_spin_cooldown = 0
@@ -1738,6 +1817,10 @@ func respawn(nx: float, ny: float) -> void:
 	acid_ticks_left = 0
 	acid_tick_timer = 0
 	acid_attacker = null
+	burn_ticks = 0
+	burn_attacker = null
+	stun_ticks = 0
+	stun_guard_ticks = 0
 	last_attacker = null
 	flag = null
 	boss_phase = 1

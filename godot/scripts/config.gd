@@ -115,6 +115,8 @@ static var TEAM_COLORS := {
 	"heavy": {"body": Color("#6a3a8c"), "dark": Color("#4a2864"), "trim": Color("#c79ad8")},
 	"sniper": {"body": Color("#3a8c6a"), "dark": Color("#28644a"), "trim": Color("#9ad8b0")},
 	"mortar": {"body": Color("#8c5a2f"), "dark": Color("#643e20"), "trim": Color("#e0c08f")},
+	"pyro": {"body": Color("#b4441c"), "dark": Color("#6e2408"), "trim": Color("#fbbf24")},
+	"tesla": {"body": Color("#2c4a8c"), "dark": Color("#18295a"), "trim": Color("#facc15")},
 	"boss": {"body": Color("#3a3a3a"), "dark": Color("#1a1a1a"), "trim": Color("#e74c3c")},
 	"boss_rammer": {"body": Color("#3d2e24"), "dark": Color("#1e140d"), "trim": Color("#f97316")},
 	"boss_chimera": {"body": Color("#182b18"), "dark": Color("#0b140b"), "trim": Color("#84cc16")},
@@ -296,6 +298,23 @@ const TANK_BODY_R := 22.0
 const BULLET_SPEED := 3.25
 const BULLET_LIFE := 160
 const SNIPER_BULLET_SPEED_MULT := 3.0
+
+const SHOCK_DMG := 10.0
+const SHOCK_STUN_TICKS := 60
+const SHOCK_STUN_GUARD_TICKS := 150
+const SHOCK_BULLET_SPEED_MULT := 1.6
+
+const FIRE_BULLET_SPEED_MULT := 0.8
+const FIRE_BULLET_LIFE := 90
+const BURN_DPS := 10.0
+const BURN_TICKS := 180
+const BURN_TICK_INTERVAL := 15
+const BURN_HIT_HEAT := 0.25
+const BURN_HEAT_PER_TICK := 0.006
+const FIRE_PATCH_RADIUS := 18.0
+const FIRE_PATCH_LIFE := 180
+const FIRE_PATCH_SPACING := 26.0
+const FIRE_PATCH_MAX := 120
 const BULLET_DMG_MIN := 20.0
 const BULLET_DMG_MAX := 30.0
 

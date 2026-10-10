@@ -20,6 +20,8 @@ const ENGINE_IDLE_PITCH := 0.82
 const ENGINE_MOVE_PITCH := 1.18
 
 const THROTTLE := {
+	"zap": 3,
+	"flame": 6,
 	"shoot": 2,
 	"shoot_heavy": 3,
 	"hit": 2,
@@ -62,6 +64,8 @@ const LEVEL := {
 	"flag": -8.0,
 	"dash": -4.0,
 	"sniper_lock": -8.0,
+	"zap": -9.0,
+	"flame": -11.0,
 }
 
 const PITCH_VARY := {
@@ -104,6 +108,8 @@ const SFX_PRIORITY := {
 	"clang": PRIORITY_COMBAT,
 	"thunder": PRIORITY_COMBAT,
 	"sniper_lock": PRIORITY_COMBAT,
+	"zap": PRIORITY_COMBAT,
+	"flame": PRIORITY_COMBAT,
 
 	"crumble": PRIORITY_DEFAULT,
 	"pickup": PRIORITY_DEFAULT,
@@ -377,6 +383,23 @@ func _build_streams(_streams: Dictionary) -> void:
 	_streams["dash"] = [_dash(0), _dash(1)]
 	_streams["siren"] = [_siren()]
 	_streams["sniper_lock"] = [_sniper_lock()]
+	_streams["zap"] = [_zap(0), _zap(1)]
+	_streams["flame"] = [_flame(0), _flame(1)]
+
+func _zap(variant: int) -> AudioStreamWAV:
+	var b := Synth.buf(0.22)
+	var pitch := 1.0 + float(variant) * 0.08
+	Synth.add_tone(b, 0.0, 0.18, "saw", 1800.0 * pitch, 420.0 * pitch, 0.30, 9.0, 60.0, 0.25)
+	Synth.add_tone(b, 0.0, 0.12, "square", 3200.0 * pitch, 900.0 * pitch, 0.12, 12.0)
+	Synth.add_noise(b, 0.0, 0.16, 9000.0, 2500.0, 0.30, 14.0, 6100 + variant * 17)
+	return Synth.to_stream(b)
+
+func _flame(variant: int) -> AudioStreamWAV:
+	var b := Synth.buf(0.35)
+	Synth.add_noise(b, 0.0, 0.32, 1400.0, 500.0, 0.55, 6.0, 7300 + variant * 29)
+	Synth.add_noise(b, 0.0, 0.10, 5200.0, 1800.0, 0.25, 16.0, 7400 + variant * 31)
+	Synth.add_tone(b, 0.0, 0.30, "sine", 120.0, 70.0, 0.25, 7.0)
+	return Synth.to_stream(b)
 
 func _sniper_lock() -> AudioStreamWAV:
 	var b := Synth.buf(0.5)

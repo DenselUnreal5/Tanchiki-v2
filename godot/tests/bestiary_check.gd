@@ -30,13 +30,13 @@ func _check(ok: bool, what: String) -> void:
 
 func _test_bestiary_data() -> void:
 	var all_tanks: Array[Dictionary] = Bestiary.all()
-	_check(all_tanks.size() == 12, "Всего 12 танков в бестиарии (получено %d)" % all_tanks.size())
+	_check(all_tanks.size() == 14, "Всего 14 танков в бестиарии (получено %d)" % all_tanks.size())
 
 	var player_tanks: Array[Dictionary] = Bestiary.category_list("player")
 	_check(player_tanks.size() == 3, "3 танка игрока (получено %d)" % player_tanks.size())
 
 	var enemy_tanks: Array[Dictionary] = Bestiary.category_list("enemy")
-	_check(enemy_tanks.size() == 5, "5 обычных врагов (получено %d)" % enemy_tanks.size())
+	_check(enemy_tanks.size() == 7, "7 обычных врагов (получено %d)" % enemy_tanks.size())
 
 	var boss_tanks: Array[Dictionary] = Bestiary.category_list("boss")
 	_check(boss_tanks.size() == 4, "4 босса/клона (получено %d)" % boss_tanks.size())

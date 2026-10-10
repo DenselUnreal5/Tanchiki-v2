@@ -92,6 +92,7 @@ func _draw() -> void:
 	_draw_scorches()
 	_draw_ao()
 	_draw_acid_pools()
+	_draw_fire_patches()
 	_draw_pickups()
 	_draw_weapon_pickups()
 	_draw_perk_drops()
@@ -625,6 +626,22 @@ func _draw_acid_pools() -> void:
 			if b_sz > 0.8:
 				draw_circle(b_pos, b_sz, Color(0.64, 0.95, 0.15, 0.85 * a))
 				draw_circle(b_pos - Vector2(0.6, 0.6), maxf(0.5, b_sz * 0.4), Color(0.9, 1.0, 0.6, 0.9 * a))
+
+func _draw_fire_patches() -> void:
+	if world == null or world.fire_patches.is_empty():
+		return
+	for patch in world.fire_patches:
+		if not _in_view(patch.x, patch.y, patch.radius + 10.0):
+			continue
+		var pos := Vector2(patch.x, patch.y)
+		var life_ratio: float = float(patch.timer) / float(maxi(1, patch.max_life))
+		var a: float = clampf(life_ratio * 2.0, 0.0, 1.0)
+		var flick: float = 0.75 + 0.25 * sin(float(world.tick) * 0.35 + patch.x * 0.11 + patch.y * 0.07)
+		var r: float = patch.radius * (0.7 + 0.3 * flick)
+		draw_circle(pos, patch.radius + 2.0, Color(0.10, 0.05, 0.03, 0.45 * a))
+		draw_circle(pos, r, Color(0.85, 0.28, 0.05, 0.55 * a))
+		draw_circle(pos, r * 0.62, Color(0.98, 0.58, 0.12, 0.70 * a * flick))
+		draw_circle(pos, r * 0.28, Color(1.0, 0.88, 0.45, 0.80 * a * flick))
 
 func _draw_acid_streams() -> void:
 	if world == null:
@@ -1626,6 +1643,25 @@ func _draw_bullets() -> void:
 			draw_circle(pos, 4, Color("#ff9933"))
 			draw_circle(pos, 1.8, Color("#ffe8a0"))
 			continue
+		if b.cannon_kind == "fire":
+			var fl: float = 0.8 + 0.2 * sin(float(world.tick) * 0.6 + b.x * 0.1)
+			draw_line(pos - Vector2(b.vx, b.vy) * 4.0, pos, Color(0.98, 0.45, 0.1, 0.45), 6.0)
+			draw_circle(pos, 6.0 * fl, Color(0.92, 0.32, 0.06, 0.85))
+			draw_circle(pos, 3.8 * fl, Color(0.99, 0.66, 0.15))
+			draw_circle(pos, 1.8, Color(1.0, 0.95, 0.7))
+			continue
+		if b.cannon_kind == "shock":
+			var dir := Vector2(b.vx, b.vy).normalized()
+			var side := Vector2(-dir.y, dir.x)
+			var pts := PackedVector2Array()
+			for k in 5:
+				var jitter: float = sin(float(world.tick) * 1.7 + float(k) * 2.3 + b.y * 0.2) * 3.5
+				pts.append(pos - dir * float(k) * 5.0 + side * jitter)
+			draw_polyline(pts, Color(0.98, 0.85, 0.2, 0.9), 2.2)
+			draw_polyline(pts, Color(1.0, 1.0, 1.0, 0.85), 1.0)
+			draw_circle(pos, 3.5, Color(0.75, 0.86, 1.0, 0.9))
+			draw_circle(pos, 1.8, Color.WHITE)
+			continue
 		var cannon_color := Cannons.color_for_mode(b.cannon_kind)
 		var color: Color = cannon_color if cannon_color.a > 0.0 \
 			else (Cfg.bullet if b.from_player else Cfg.bullet_enemy)
@@ -2253,6 +2289,16 @@ func _draw_tank(tank: Tank) -> void:
 		draw_colored_polygon(body, Color(0.52, 0.85, 0.09, acid_alpha))
 		draw_polyline(body, Color(0.68, 0.98, 0.15, 0.85), 1.5)
 
+	if tank.burn_ticks > 0:
+		var burn_flick: float = 0.7 + 0.3 * sin(anim_tick * 0.5)
+		draw_colored_polygon(body, Color(0.95, 0.40, 0.08, 0.30 * burn_flick))
+		draw_polyline(body, Color(1.0, 0.70, 0.20, 0.85 * burn_flick), 1.5)
+
+	if tank.stun_ticks > 0:
+		var zap: float = 0.6 + 0.4 * absf(sin(anim_tick * 0.9))
+		draw_colored_polygon(body, Color(0.98, 0.85, 0.20, 0.22 * zap))
+		draw_polyline(body, Color(0.80, 0.90, 1.0, 0.95 * zap), 1.6)
+
 	# Synergy visual accents on hull
 	if tank.has_method("has_build"):
 		if tank.has_build("juggernaut"):
@@ -2568,6 +2614,24 @@ func _draw_tank(tank: Tank) -> void:
 			_rect(tank.x - bar_w * 0.5, a_y, bar_w * aratio, 2.5, Color("#84cc16"))
 			draw_rect(Rect2(tank.x - bar_w * 0.5, a_y, bar_w, 2.5), Color(0.7, 1.0, 0.3, 0.45), false, 0.8)
 			_text_center("🧪", Vector2(tank.x - bar_w * 0.5 - 6.0, a_y + 1.0), 8, Color("#bef264"))
+
+		if tank.burn_ticks > 0 or tank.stun_ticks > 0:
+			var s_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
+			if tank.freeze_ticks > 0:
+				s_y -= 4.0
+			if tank.acid_stacks > 0:
+				s_y -= 4.0
+			if tank.burn_ticks > 0:
+				var bratio := clampf(float(tank.burn_ticks) / float(Cfg.BURN_TICKS), 0.0, 1.0)
+				_rect(tank.x - bar_w * 0.5, s_y, bar_w, 2.5, Color(0.22, 0.08, 0.02, 0.85))
+				_rect(tank.x - bar_w * 0.5, s_y, bar_w * bratio, 2.5, Color("#f97316"))
+				_text_center("🔥", Vector2(tank.x - bar_w * 0.5 - 6.0, s_y + 1.0), 8, Color("#fdba74"))
+				s_y -= 4.0
+			if tank.stun_ticks > 0:
+				var sratio := clampf(float(tank.stun_ticks) / float(Cfg.SHOCK_STUN_TICKS), 0.0, 1.0)
+				_rect(tank.x - bar_w * 0.5, s_y, bar_w, 2.5, Color(0.18, 0.16, 0.03, 0.85))
+				_rect(tank.x - bar_w * 0.5, s_y, bar_w * sratio, 2.5, Color("#facc15"))
+				_text_center("⚡", Vector2(tank.x - bar_w * 0.5 - 6.0, s_y + 1.0), 8, Color("#fde047"))
 
 		if not is_viewer:
 			var name_color := Color("#88ccff") if is_ally else (Color("#ffee55") if tank.is_player_controlled else Color("#ffaaaa"))

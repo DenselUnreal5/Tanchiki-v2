@@ -42,6 +42,24 @@ const LIST := {
 		"chassis": "mortar", "role": "defender", "color_key": "mortar",
 		"weight": 8, "unlock_ramp": 1.16, "lobbed": true, "boss": false,
 	},
+	"pyro": {
+		"id": "pyro", "name": "Огнемётчик", "icon": "🔥",
+		"hp_mult": 1.4, "speed_mult": 0.95, "fire_rate_mult": 0.6, "dmg_scale": 0.0,
+		"accuracy_bonus": 0.0, "react_mult": 1.0,
+		"fire_range": 250.0, "keep_min": 70.0, "keep_max": 190.0,
+		"chassis": "heavy", "role": "attacker", "color_key": "pyro",
+		"weight": 10, "unlock_ramp": 1.08, "lobbed": false, "boss": false,
+		"shot": "fire",
+	},
+	"tesla": {
+		"id": "tesla", "name": "Громовержец", "icon": "⚡",
+		"hp_mult": 1.0, "speed_mult": 1.05, "fire_rate_mult": 1.8, "dmg_scale": 1.0,
+		"accuracy_bonus": 0.05, "react_mult": 1.0,
+		"fire_range": 420.0, "keep_min": 150.0, "keep_max": 320.0,
+		"chassis": "standard", "role": "attacker", "color_key": "tesla",
+		"weight": 10, "unlock_ramp": 1.12, "lobbed": false, "boss": false,
+		"shot": "shock",
+	},
 	"boss": {
 		"id": "boss", "name": "Бронемонстр", "icon": "👹",
 		"hp_mult": 5.0, "speed_mult": 0.75, "fire_rate_mult": 1.2, "dmg_scale": 1.15,
@@ -70,7 +88,7 @@ const LIST := {
 	},
 }
 
-const ORDER := ["grunt", "scout", "heavy", "sniper", "mortar", "boss", "boss_rammer", "boss_chimera"]
+const ORDER := ["grunt", "scout", "heavy", "sniper", "mortar", "pyro", "tesla", "boss", "boss_rammer", "boss_chimera"]
 
 static func get_type(id: String) -> Dictionary:
 	return LIST.get(id, {})
