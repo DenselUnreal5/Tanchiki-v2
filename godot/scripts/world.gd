@@ -1647,8 +1647,11 @@ func _chimera_death_acid(victim: Tank) -> void:
 func _kill_tank(victim, killer, source: String) -> void:
 	if tutorial != null:
 		tutorial.on_tank_killed(victim, source)
+	var clip_seconds := 0.0
 	if killcam != null and victim.owner != null:
-		killcam_ready.emit(killcam.capture(self, victim, killer, source))
+		var clip := killcam.capture(self, victim, killer, source)
+		clip_seconds = KillCam.play_seconds(clip)
+		killcam_ready.emit(clip)
 	if victim.is_rammer_boss:
 		_start_rammer_meltdown(victim)
 	if victim.is_chimera_boss:
@@ -1658,6 +1661,9 @@ func _kill_tank(victim, killer, source: String) -> void:
 		_juggernaut_shock(killer, victim.x, victim.y)
 	victim.on_death(self, killer)
 	victim.respawn_timer = Cfg.RESPAWN_DELAY
+	if clip_seconds > 0.0:
+		victim.respawn_timer = maxi(Cfg.RESPAWN_DELAY,
+			int(ceil((clip_seconds + Cfg.KILLCAM_RESPAWN_EXTRA_SECONDS) * float(Cfg.TICK_HZ))))
 	if Sets.wrecks:
 		wrecks.append(Ent.Wreck.new(victim, rng))
 

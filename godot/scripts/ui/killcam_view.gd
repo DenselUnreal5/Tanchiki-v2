@@ -31,9 +31,8 @@ func play(clip_: Dictionary, map_: GameMap) -> void:
 	if frames.size() < 2:
 		stop()
 		return
-	_frame_seconds = float(clip["sample_every"]) / float(Cfg.TICK_HZ)
-	var play_frames := int(round(Cfg.KILLCAM_PLAY_SECONDS / _frame_seconds))
-	_start = maxi(0, frames.size() - play_frames)
+	_frame_seconds = KillCam.frame_seconds(clip)
+	_start = KillCam.start_index(clip)
 	_t = 0.0
 	_hold = 0.0
 	_zoom = Cfg.KILLCAM_ZOOM

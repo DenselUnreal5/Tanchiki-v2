@@ -31,6 +31,7 @@ func _check_recorder() -> void:
 	var world := _make_world(true)
 	_check(world.killcam != null, "с флагом рекордер создан")
 	world.killcam_ready.connect(func(clip: Dictionary): clips.append(clip))
+	world.players[0].tank.spawn_protect = 100000
 	for i in 400:
 		world.step()
 	var frames: Array = world.killcam.frames
@@ -60,10 +61,17 @@ func _check_recorder() -> void:
 	_check(not at_death.is_empty() and absf(float(at_death["x"]) - death_x) < 1.0 and absf(float(at_death["y"]) - death_y) < 1.0,
 		"последний кадр содержит жертву на месте гибели")
 	_check(not KillCam.tank_at(last, killer.id).is_empty(), "последний кадр содержит убийцу")
+	var clip_ticks := KillCam.play_seconds(clip) * float(Cfg.TICK_HZ)
+	var expected := int(ceil(clip_ticks + Cfg.KILLCAM_RESPAWN_EXTRA_SECONDS * float(Cfg.TICK_HZ)))
+	_check(ptank.respawn_timer == expected,
+		"возрождение через %.2f с: повтор %.2f с + %.1f с (%d тиков)" % [
+			float(ptank.respawn_timer) / float(Cfg.TICK_HZ), clip_ticks / float(Cfg.TICK_HZ),
+			Cfg.KILLCAM_RESPAWN_EXTRA_SECONDS, ptank.respawn_timer])
 
 	clips.clear()
 	world.deal_damage(killer, 99999.0, ptank, "bullet")
 	_check(clips.is_empty(), "гибель бота клип не создаёт")
+	_check(killer.respawn_timer == Cfg.RESPAWN_DELAY, "у бота время возрождения прежнее (%d тиков)" % killer.respawn_timer)
 	world.dispose()
 
 func _check_match_flow() -> void:
@@ -106,6 +114,12 @@ func _check_match_flow() -> void:
 		await get_tree().process_frame
 		guard_t += get_process_delta_time()
 	_check(not view.running and not view.visible, "повтор сам закрывается по окончании")
+	_check(not ptank.alive, "к концу повтора танк ещё не возродился")
+	var wait := 0.0
+	while not ptank.alive and wait < Cfg.KILLCAM_RESPAWN_EXTRA_SECONDS + 1.0:
+		await get_tree().process_frame
+		wait += get_process_delta_time()
+	_check(ptank.alive, "танк возрождается вскоре после повтора (через %.2f с)" % wait)
 
 	Sets.killcam = false
 	game.start_match()

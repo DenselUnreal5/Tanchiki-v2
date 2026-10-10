@@ -43,6 +43,20 @@ func _remember(tank) -> void:
 		"team": tank.team, "boss": tank.is_boss,
 	}
 
+static func frame_seconds(clip: Dictionary) -> float:
+	return float(clip.get("sample_every", Cfg.KILLCAM_SAMPLE_EVERY)) / float(Cfg.TICK_HZ)
+
+static func start_index(clip: Dictionary) -> int:
+	var frames: Array = clip.get("frames", [])
+	var play_frames := int(round(Cfg.KILLCAM_PLAY_SECONDS / frame_seconds(clip)))
+	return maxi(0, frames.size() - play_frames)
+
+static func play_seconds(clip: Dictionary) -> float:
+	var frames: Array = clip.get("frames", [])
+	if frames.size() < 2:
+		return 0.0
+	return float(frames.size() - 1 - start_index(clip)) * frame_seconds(clip) + Cfg.KILLCAM_HOLD_SECONDS
+
 func capture(world, victim, killer, source: String) -> Dictionary:
 	_remember(victim)
 	if killer != null:
