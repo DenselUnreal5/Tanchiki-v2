@@ -1,5 +1,11 @@
 extends Node
 
+const REQUIRED := {
+	1: {"X": 1}, 2: {"T": 2}, 3: {"E": 1}, 4: {"G": 1}, 5: {"T": 1, "O": 2},
+	6: {"X": 1}, 7: {"M": 1}, 8: {"T": 1}, 9: {"T": 1}, 10: {"E": 1}, 11: {"K": 1},
+}
+
+var failures := 0
 var log_lines := []
 
 func log_msg(msg: String) -> void:
@@ -11,235 +17,234 @@ func log_msg(msg: String) -> void:
 		f.flush()
 		f.close()
 
-func _ready() -> void:
-	log_msg("--- НАЧАЛО ТЕСТА ОНБОРДИНГА И ТУТОРИАЛА (TUTORIAL CHECK) ---")
-	var failures := 0
-
-	# 1. Проверка конфигурации режимов и подсказок загрузки
-	log_msg("[1/5] Проверка Cfg.MODES и MenuTips...")
-	if not Cfg.MODES.has("tutorial"):
-		log_msg("ОШИБКА: Cfg.MODES не содержит режим 'tutorial'")
-		failures += 1
-	if MenuTips.LIST.size() < 12:
-		log_msg("ОШИБКА: Ожидалось минимум 12 подсказок MenuTips, найдено: %d" % MenuTips.LIST.size())
-		failures += 1
-
-	# 2. Проверка генерации карты и поиска узких проходов (choke points)
-	log_msg("[2/5] Проверка LevelGen и choke points...")
-	var level := LevelGen.generate(1, "tutorial", 4242, "city")
-	if level["mode"] != "tutorial":
-		log_msg("ОШИБКА: level['mode'] != 'tutorial'")
-		failures += 1
-	if not level.has("choke_points"):
-		log_msg("ОШИБКА: level не содержит ключ 'choke_points'")
-		failures += 1
+func _check(ok: bool, what: String) -> void:
+	if ok:
+		log_msg("  ок: " + what)
 	else:
-		var chokes: Array[Vector2] = level["choke_points"]
-		log_msg("Обнаружено тактических проходов: %d" % chokes.size())
-		if chokes.is_empty():
-			log_msg("ОШИБКА: На карте не найдено тактических проходов (choke points)")
-			failures += 1
+		log_msg("ОШИБКА: " + what)
+		failures += 1
 
-	# 3. Инициализация World в режиме tutorial
-	log_msg("[3/5] Инициализация World(tutorial)...")
-	var dummy_scheme = Ctl.KeyboardAimScheme.new()
-	var player = PlayerState.new(0, "Новичок", "p1", dummy_scheme)
+func _ready() -> void:
+	log_msg("--- ПРОВЕРКА ОБУЧЕНИЯ ---")
+	_check_layouts()
+	_check_full_run()
+	_check_failures()
+	_check_boss_loss()
+	Prof.check_achievements()
+	_check(Prof.achievements.has("tutorial_master"), "достижение «Курс молодого бойца» открыто")
+	log_msg("=== ПРОВЕРКА ОБУЧЕНИЯ ЗАВЕРШЕНА, ошибок: %d ===" % failures)
+	get_tree().quit(1 if failures > 0 else 0)
+
+func _new_world() -> World:
+	var level := LevelGen.generate(1, "tutorial", 4242, "city")
+	var player = PlayerState.new(0, "Новичок", "p1", Ctl.KeyboardAimScheme.new())
 	player.reset_for_match()
 	player.map = level["map"]
-
-	var world = World.new({
-		"map": level["map"],
-		"level": level,
-		"mode": "tutorial",
-		"difficulty": "medium",
-		"players": [player],
-		"player_level": 1,
-		"weather": "clear",
-		"daytime": "day",
-		"rng_seed": 4242
+	return World.new({
+		"map": level["map"], "level": level, "mode": "tutorial",
+		"difficulty": "medium", "players": [player], "player_level": 1,
+		"weather": "clear", "daytime": "day", "rng_seed": 4242,
 	})
 
-	if world.tutorial_stage != 1:
-		log_msg("ОШИБКА: Начальный этап туториала должен быть 1, получен: %d" % world.tutorial_stage)
-		failures += 1
-	if player.tank == null:
-		log_msg("ОШИБКА: Танк игрока не заспавнен")
-		failures += 1
-		log_msg("FAIL: %d ошибок" % failures)
-		get_tree().quit(1)
-		return
-
-	# 4. Пошаговая симуляция этапов 1-10
-	log_msg("[4/5] Симуляция прохождения заданий туториала (1-10)...")
-	var ptank = player.tank
-
-	# Проверка task_info на Задании 1
-	var tinfo1 := world.get_tutorial_task_info()
-	if tinfo1["stage"] != 1 or tinfo1["total"] != 12:
-		log_msg("ОШИБКА: Некорректные метаданные задания 1: %s" % str(tinfo1))
-		failures += 1
-
-	if ptank.cannon_id != "standard" or ptank.chassis_id != "standard":
-		log_msg("ОШИБКА: Танк на старте должен быть стандартным: cannon=%s, chassis=%s" % [ptank.cannon_id, ptank.chassis_id])
-		failures += 1
-
-	# Задание 1: Движение вперед и назад [W / S]
-	world.tut_dist_fwd = 40.0
-	world.tut_dist_bwd = 30.0
-	world.step()
-	if world.tutorial_stage != 2:
-		log_msg("ОШИБКА: Ожидался Этап 2 после ходовой части, получен: %d" % world.tutorial_stage)
-		failures += 1
-
-	# Задание 2: Маневрирование и контрольная точка
-	ptank.x = world.tutorial_marker.x
-	ptank.y = world.tutorial_marker.y
-	world.step()
-	if world.tutorial_stage != 3:
-		log_msg("ОШИБКА: Ожидался Этап 3 после маркера, получен: %d" % world.tutorial_stage)
-		failures += 1
-	if world.tutorial_targets.size() != 2:
-		log_msg("ОШИБКА: Ожидалось 2 учебные мишени, создано: %d" % world.tutorial_targets.size())
-		failures += 1
-
-	# Задание 3: Прицеливание и стрельба по мишеням
-	for target in world.tutorial_targets:
-		target.alive = false
-	world.step()
-	if world.tutorial_stage != 4:
-		log_msg("ОШИБКА: Ожидался Этап 4 после поражения мишеней, получен: %d" % world.tutorial_stage)
-		failures += 1
-
-	# Задание 4: Разрушение укрытий и рикошеты
-	world.tut_bricks_destroyed = 2
-	world.step()
-	if world.tutorial_stage != 5:
-		log_msg("ОШИБКА: Ожидался Этап 5 после разрушения укрытий, получен: %d" % world.tutorial_stage)
-		failures += 1
-	if world.tutorial_barrels.size() != 2:
-		log_msg("ОШИБКА: Ожидалось 2 взрывные бочки на Этапе 5, создано: %d" % world.tutorial_barrels.size())
-		failures += 1
-	var tinfo5 := world.get_tutorial_task_info()
-	if tinfo5["stage"] != 5 or tinfo5["total"] != 12:
-		log_msg("ОШИБКА: Некорректные метаданные задания 5: %s" % str(tinfo5))
-		failures += 1
-
-	# Задание 5: Взрывные бочки (детонация и AoE цепная реакция)
-	world.tutorial_barrels[0].hit(25.0, ptank, world)
-	for i in 10:
+func _steps(world: World, n: int) -> void:
+	for i in n:
 		world.step()
-	if world.tutorial_stage != 6:
-		log_msg("ОШИБКА: Ожидался Этап 6 после детонации бочек, получен: %d" % world.tutorial_stage)
-		failures += 1
 
-	# Задание 6: Тактический рывок на Shift (i-frames)
-	ptank.dash(Vector2(0, -1))
+func _check_layouts() -> void:
+	log_msg("[1/4] Полигоны")
+	for stage in range(1, Tutorial.TOTAL + 1):
+		var rows: Array = TutorialLayouts.layout(stage)
+		var ok_size := rows.size() == TutorialLayouts.ROWS
+		var counts := {}
+		for r in rows.size():
+			var line: String = rows[r]
+			if line.length() != TutorialLayouts.COLS:
+				ok_size = false
+			for c in line.length():
+				var ch := line[c]
+				counts[ch] = int(counts.get(ch, 0)) + 1
+				var border := r == 0 or r == rows.size() - 1 or c == 0 or c == line.length() - 1
+				if border and ch != "#":
+					ok_size = false
+		_check(ok_size, "задание %d: полигон %dx%d с глухой рамкой" % [stage, TutorialLayouts.COLS, TutorialLayouts.ROWS])
+		_check(int(counts.get("P", 0)) == 1, "задание %d: ровно один старт игрока" % stage)
+		var req: Dictionary = REQUIRED[stage]
+		for ch in req:
+			_check(int(counts.get(ch, 0)) == int(req[ch]), "задание %d: маркеров «%s» — %d" % [stage, ch, int(req[ch])])
+		if req.has("X"):
+			_check(_reachable(rows), "задание %d: от старта можно доехать до контрольной точки" % stage)
+	var tank_pos: Vector2 = TutorialLayouts.markers(5, "T")[0]
+	var barrel_pos: Array = TutorialLayouts.markers(5, "O")
+	_check(barrel_pos[0].distance_to(barrel_pos[1]) > 120.0, "задание 5: бочки не подрывают друг друга цепочкой")
+	var one := _barrel_damage(barrel_pos[0].distance_to(tank_pos))
+	var two := one + _barrel_damage(barrel_pos[1].distance_to(tank_pos))
+	_check(one < 50.0 and two >= 50.0, "задание 5: одной бочки мало (%.0f), двух хватает (%.0f) на 50 HP" % [one, two])
+
+func _barrel_damage(d: float) -> float:
+	if d > 120.0:
+		return 0.0
+	return 65.0 * (1.0 - (d / 120.0) * 0.65)
+
+func _reachable(rows: Array) -> bool:
+	var start := Vector2i(-1, -1)
+	var goal := Vector2i(-1, -1)
+	for r in rows.size():
+		var line: String = rows[r]
+		for c in line.length():
+			if line[c] == "P":
+				start = Vector2i(c, r)
+			elif line[c] == "X":
+				goal = Vector2i(c, r)
+	var seen := {start: true}
+	var queue := [start]
+	while not queue.is_empty():
+		var cur: Vector2i = queue.pop_front()
+		if cur == goal:
+			return true
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = cur + d
+			if n.y < 0 or n.y >= rows.size() or n.x < 0 or n.x >= String(rows[n.y]).length():
+				continue
+			var ch := String(rows[n.y])[n.x]
+			if ch == "#" or ch == "B" or seen.has(n):
+				continue
+			seen[n] = true
+			queue.append(n)
+	return false
+
+func _pass_stage(world: World, expect_next: int) -> void:
+	var tut := world.tutorial
+	var stage := tut.stage
 	world.step()
-	if world.tutorial_stage != 7:
-		log_msg("ОШИБКА: Ожидался Этап 7 после рывка, получен: %d" % world.tutorial_stage)
-		failures += 1
-	if world.tutorial_mine_dummy == null:
-		log_msg("ОШИБКА: Учебная цель для мины не создана")
-		failures += 1
+	_check(tut.state == Tutorial.ST_DONE, "задание %d засчитано" % stage)
+	_steps(world, Tutorial.DONE_PAUSE - 1)
+	_check(tut.stage == stage, "задание %d: пауза перед следующим" % stage)
+	world.step()
+	_check(tut.stage == expect_next and tut.state == Tutorial.ST_PLAY, "после паузы начато задание %d" % expect_next)
 
-	# Задание 7: Тактическая мина [E]
+func _check_full_run() -> void:
+	log_msg("[2/4] Прохождение всех заданий")
+	var world := _new_world()
+	var tut := world.tutorial
+	var ptank: Tank = world.players[0].tank
+	_check(tut != null and tut.stage == 1, "обучение стартует с задания 1")
+	_check(int(world.get_tutorial_task_info().get("total", 0)) == Tutorial.TOTAL, "в подсказке всего %d заданий" % Tutorial.TOTAL)
+
+	ptank.x = tut.checkpoint.x
+	ptank.y = tut.checkpoint.y
+	world.step()
+	_check(tut.state == Tutorial.ST_PLAY, "задание 1: точка без всех клавиш W/A/S/D не засчитана")
+	for k in tut.keys_used:
+		tut.keys_used[k] = true
+	_pass_stage(world, 2)
+
+	for t in tut.targets:
+		world.deal_damage(t, 9999.0, ptank, "bullet")
+	_pass_stage(world, 3)
+
+	ptank.spawn_protect = 0
+	for i in Tutorial.DODGES_NEEDED:
+		if i > 0:
+			_steps(world, Tutorial.DODGE_GAP + 1)
+		ptank.dash_invuln_ticks = 10
+		world.deal_damage(ptank, 10.0, tut.enemy, "bullet")
+	ptank.dash_invuln_ticks = 0
+	_check(tut.dodges >= Tutorial.DODGES_NEEDED, "задание 3: уклонения засчитаны (%d)" % tut.dodges)
+	var turret = tut.enemy
+	_pass_stage(world, 4)
+	_check(turret.brain == null, "задание 3: после выполнения турель отключена")
+
+	tut.generator.discharge(world, ptank.team)
+	_pass_stage(world, 5)
+
+	for b in tut.barrels:
+		b.explode(world)
+	_check(not tut.targets[0].alive, "задание 5: две бочки уничтожили танк в укрытии")
+	_pass_stage(world, 6)
+
+	ptank.x = tut.checkpoint.x
+	ptank.y = tut.checkpoint.y
+	_pass_stage(world, 7)
+
+	ptank.x = tut.perk_drop.x
+	ptank.y = tut.perk_drop.y
+	world.step()
+	_check(ptank.flags.has("mines"), "задание 7: перк «Миноукладчик» подобран")
 	ptank.place_mine(world)
-	world.tutorial_mine_dummy.alive = false
+	_pass_stage(world, 8)
+
+	_check(ptank.cannon_id == "ice" and ptank.chassis_id == "light", "задание 8: танк ледяной")
+	var ice_dummy = tut.targets[0]
+	ice_dummy.apply_freeze(world, ptank, Cfg.ICE_FREEZE_TICKS)
 	world.step()
-	if world.tutorial_stage != 8:
-		log_msg("ОШИБКА: Ожидался Этап 8 после подрыва мины, получен: %d" % world.tutorial_stage)
-		failures += 1
+	world.execute_frozen_kill(ice_dummy, ptank)
+	_pass_stage(world, 9)
 
-	var tinfo8 := world.get_tutorial_task_info()
-	if tinfo8["keys"] != "[Q / Й]":
-		log_msg("ОШИБКА: Ожидались клавиши [Q / Й] в описании задания 8, получено: %s" % tinfo8["keys"])
-		failures += 1
+	_check(ptank.cannon_id == "acid" and ptank.chassis_id == "heavy", "задание 9: танк кислотный")
+	world.deal_damage(tut.targets[0], 9999.0, ptank, "acid")
+	_pass_stage(world, 10)
 
-	# Проверка устойчивости: смерть танка и респавн не должны сбрасывать bulwark
-	ptank.respawn(ptank.x, ptank.y)
+	_check(ptank.cannon_id == "standard" and ptank.chassis_id == "standard", "задание 10: танк снова стандартный")
+	tut.enemy.spawn_protect = 0
+	world.deal_damage(tut.enemy, 99999.0, ptank, "bullet")
+	_pass_stage(world, 11)
+
+	_check(tut.enemy != null and tut.enemy.is_boss, "задание 11: на поле босс")
+	tut.enemy.spawn_protect = 0
+	world.deal_damage(tut.enemy, 999999.0, ptank, "bullet")
 	world.step()
-	if ptank.ability_id != "bulwark":
-		log_msg("ОШИБКА: Способность танка сброшена после respawn(): '%s'" % ptank.ability_id)
-		failures += 1
+	_check(world.finished_flag and bool(world.result.get("victory", false)), "победа над боссом завершает обучение")
+	_check(int(Prof.stats.get("tutorialCompleted", 0)) >= 1, "статистика «обучение пройдено» записана")
+	world.dispose()
 
-	# Задание 8: Боевая спецспособность [Q]
-	ptank.use_ability(world)
-	world.step()
-	if world.tutorial_stage != 9:
-		log_msg("ОШИБКА: Ожидался Этап 9 после способности, получен: %d" % world.tutorial_stage)
-		failures += 1
-	if ptank.cannon_id != "ice" or ptank.chassis_id != "light" or ptank.color_key != "p5":
-		log_msg("ОШИБКА: Танк на этапе 9 должен быть Ледяным (cannon=ice, chassis=light, color=p5), получено: cannon=%s, chassis=%s, color=%s" % [ptank.cannon_id, ptank.chassis_id, ptank.color_key])
-		failures += 1
-	if world.tutorial_ice_dummy == null:
-		log_msg("ОШИБКА: Учебная цель для заморозки не создана на Этапе 9")
-		failures += 1
+func _fail_and_restart(world: World, stage: int, what: String) -> void:
+	var tut := world.tutorial
+	_steps(world, 2)
+	_check(tut.state == Tutorial.ST_FAIL, "задание %d: %s — провал" % [stage, what])
+	_steps(world, Tutorial.FAIL_PAUSE)
+	var ptank: Tank = world.players[0].tank
+	_check(tut.stage == stage and tut.state == Tutorial.ST_PLAY, "задание %d перезапущено" % stage)
+	_check(ptank.alive and is_equal_approx(ptank.hp, ptank.max_hp), "задание %d: игрок жив с полным HP" % stage)
 
-	# Задание 9: Криогенная заморозка врага
-	world.tutorial_ice_dummy.freeze_ticks = 120
-	world.step()
-	if world.tutorial_stage != 10:
-		log_msg("ОШИБКА: Ожидался Этап 10 после заморозки, получен: %d" % world.tutorial_stage)
-		failures += 1
-	if ptank.cannon_id != "acid" or ptank.chassis_id != "heavy" or ptank.color_key != "p12":
-		log_msg("ОШИБКА: Танк на этапе 10 должен быть Кислотным (cannon=acid, chassis=heavy, color=p12), получено: cannon=%s, chassis=%s, color=%s" % [ptank.cannon_id, ptank.chassis_id, ptank.color_key])
-		failures += 1
-	if world.tutorial_acid_dummy == null:
-		log_msg("ОШИБКА: Учебная цель для яда не создана на Этапе 10")
-		failures += 1
+func _check_failures() -> void:
+	log_msg("[3/4] Провал и перезапуск")
+	var world := _new_world()
+	var tut := world.tutorial
+	var ptank: Tank = world.players[0].tank
 
-	# Задание 10: Химический яд и коррозия
-	world.tutorial_acid_dummy.acid_stacks = 2
-	world.tutorial_step_timer = 50
-	world.step()
-	if world.tutorial_stage != 11:
-		log_msg("ОШИБКА: Ожидался Этап 11 после наложения яда, получен: %d" % world.tutorial_stage)
-		failures += 1
-	if ptank.cannon_id != "standard" or ptank.chassis_id != "standard" or ptank.color_key != "p1":
-		log_msg("ОШИБКА: Танк на этапе 11 должен быть возвращен в стандартный строй (color=p1), получено: cannon=%s, chassis=%s, color=%s" % [ptank.cannon_id, ptank.chassis_id, ptank.color_key])
-		failures += 1
-	if world.tutorial_drone == null:
-		log_msg("ОШИБКА: Спарринг-дрон не создан на Этапе 11")
-		failures += 1
+	tut.begin_stage(3)
+	var old_turret = tut.enemy
+	ptank.spawn_protect = 0
+	world.deal_damage(ptank, 99999.0, old_turret, "bullet")
+	_fail_and_restart(world, 3, "танк уничтожен")
+	_check(tut.enemy != null and tut.enemy != old_turret and tut.enemy.alive, "задание 3: турель создана заново")
+	_check(tut.dodges == 0, "задание 3: счётчик уклонений сброшен")
 
-	# Задание 11: Боевой спарринг — уничтожение дрона и опыт
-	world.tutorial_drone.alive = false
-	world.step()
-	if world.tutorial_stage != 12:
-		log_msg("ОШИБКА: Ожидался Этап 12 после победы над дроном, получен: %d" % world.tutorial_stage)
-		failures += 1
-	if player.pending_level_ups <= 0:
-		log_msg("ОШИБКА: Игрок должен был получить повышение уровня для выбора перка")
-		failures += 1
+	tut.begin_stage(5)
+	for b in tut.barrels:
+		b.alive = false
+	_steps(world, Tutorial.BARREL_GRACE + 1)
+	_fail_and_restart(world, 5, "бочки взорваны мимо")
+	_check(tut.barrels.size() == 2 and tut.barrels[0].alive and tut.targets[0].alive, "задание 5: бочки и танк на месте")
 
-	# Задание 12: Выбор первого боевого перка и завершение курса
-	player.equip_perk("double_shot")
-	player.pending_level_ups = 0
-	for i in 50:
-		world.step()
+	tut.begin_stage(8)
+	world.deal_damage(tut.targets[0], 9999.0, ptank, "ram")
+	_fail_and_restart(world, 8, "манекен разбит без заморозки")
 
-	if not world.finished_flag:
-		log_msg("ОШИБКА: Матч обучения должен быть завершен")
-		failures += 1
-	if not bool(world.result.get("victory", false)):
-		log_msg("ОШИБКА: Результат матча должен быть victory == true")
-		failures += 1
-	if Prof.stats.get("tutorialCompleted", 0) != 1:
-		log_msg("ОШИБКА: Статистика tutorialCompleted должна быть равна 1")
-		failures += 1
+	tut.begin_stage(9)
+	world.deal_damage(tut.targets[0], 9999.0, ptank, "ram")
+	_fail_and_restart(world, 9, "манекен уничтожен не ядом")
+	world.dispose()
 
-	# 5. Проверка достижений и наград
-	log_msg("[5/5] Проверка достижений и наград...")
-	Prof.check_achievements()
-	if not Prof.achievements.has("tutorial_master"):
-		log_msg("ОШИБКА: Достижение 'tutorial_master' не открыто")
-		failures += 1
-	else:
-		log_msg("УСПЕХ: Достижение 'tutorial_master' разблокировано, награда выдана!")
-
-	if failures == 0:
-		log_msg("=== ВСЕ ТЕСТЫ ОНБОРДИНГА И ТУТОРИАЛА УСПЕШНО ПРОЙДЕНЫ! ===")
-		get_tree().quit(0)
-	else:
-		log_msg("=== ТЕСТ ЗАВЕРШЕН С ОШИБКАМИ: %d ===" % failures)
-		get_tree().quit(1)
+func _check_boss_loss() -> void:
+	log_msg("[4/4] Поражение от босса")
+	var world := _new_world()
+	var tut := world.tutorial
+	var ptank: Tank = world.players[0].tank
+	tut.begin_stage(11)
+	ptank.spawn_protect = 0
+	world.deal_damage(ptank, 99999.0, null, "bullet")
+	_steps(world, 2)
+	_check(world.finished_flag, "гибель от босса тоже завершает обучение")
+	_check(tut.state == Tutorial.ST_OVER, "обучение помечено завершённым")
+	world.dispose()

@@ -98,26 +98,10 @@ var _tree_cache_tick := -100000
 var _trees_felled := 0
 var _last_ffa_boss_kills: Dictionary = {}
 
-var tutorial_stage := 0
-var tutorial_marker := Vector2.ZERO
-var tutorial_targets: Array = []
-var tutorial_barrels: Array = []
-var tutorial_barrel_targets: Array = []
-var tutorial_drone = null
-var tutorial_mine_dummy = null
-var tutorial_ice_dummy = null
-var tutorial_acid_dummy = null
-var tutorial_step_timer := 0
+var tutorial: Tutorial = null
 var mutator := ""
 var director: AdaptiveDifficulty = null
 var killcam: KillCam = null
-
-# Трекеры выполнения действий для пошаговых заданий обучения
-var tut_dist_fwd := 0.0
-var tut_dist_bwd := 0.0
-var tut_turned_left := false
-var tut_turned_right := false
-var tut_bricks_destroyed := 0
 
 func _init(opts: Dictionary) -> void:
 	map = opts["map"]
@@ -127,10 +111,6 @@ func _init(opts: Dictionary) -> void:
 	difficulty = Cfg.DIFFICULTY.get(difficulty_key, Cfg.DIFFICULTY["medium"])
 	players = opts["players"]
 	player_level = int(opts.get("player_level", 1))
-	if mode == "tutorial":
-		tutorial_stage = 1
-		tutorial_marker = Vector2(float(map.cols * Cfg.TILE) * 0.5, float(map.rows * Cfg.TILE) * 0.5)
-		tutorial_step_timer = 0
 	for p in players:
 		p.map = map
 
@@ -173,6 +153,9 @@ func _init(opts: Dictionary) -> void:
 		_setup_koth()
 	if mode == "defense":
 		_setup_defense_wave_start()
+	if mode == "tutorial":
+		tutorial = Tutorial.new(self)
+		tutorial.start()
 
 const PING_LIFE := 150
 
@@ -553,26 +536,7 @@ func _spawn_combatants() -> void:
 			team = "player"
 		else:
 			team = "human_%d" % i
-		var tank := _spawn_player_tank(player, team)
-		if mode == "tutorial":
-			tank.x = float(map.cols * Cfg.TILE) * 0.5
-			tank.y = float(map.rows - 5) * Cfg.TILE + Cfg.TILE * 0.5
-			tank.angle = -PI * 0.5
-			tank.body_angle = -PI * 0.5
-			tank.turret_angle = -PI * 0.5
-			tank.flags["mines"] = true
-			tank.cannon_id = "standard"
-			tank.set_chassis("standard")
-			tank.color_key = "p1"
-			tank.cosmetics = {}
-			player.equipped_cannon = "standard"
-			player.color_key = "p1"
-			player.cosmetics = {}
-			player.upgrade_mods = {}
-			tank.weapon = ""
-			if tank.ability_id == "":
-				tank.ability_id = "bulwark"
-			tank.ability_cd = 0
+		_spawn_player_tank(player, team)
 
 	if is_ctf:
 		var size: int = Cfg.MODES["ctf"]["team_size"]
@@ -591,10 +555,8 @@ func _spawn_combatants() -> void:
 			else:
 				forced_type = elite_roster[(i - bosses.size()) % elite_roster.size()]
 			_spawn_bot("bot_%d" % i, "enemy", forced_type)
-	elif mode == "defense":
+	elif mode == "defense" or mode == "tutorial":
 		pass
-	elif mode == "tutorial":
-		feed.emit("🎯 ЭТАП 1: Маневрирование [W/A/S/D] — доберитесь до контрольной точки!", Color("#ffd700"))
 	else:
 		for i in int(difficulty["enemies"]):
 			_spawn_bot("bot_%d" % i, "enemy")
@@ -1233,12 +1195,12 @@ func step() -> void:
 		_update_flags()
 	_update_pickups()
 	_update_weapon_pickups()
-	if mode == "koth":
+	if mode == "koth" or mode == "tutorial":
 		_update_perk_drops()
 	if mode == "defense":
 		_update_defense()
-	if mode == "tutorial":
-		_update_tutorial()
+	if tutorial != null:
+		tutorial.update()
 	_update_respawns()
 	_update_ramp()
 
@@ -1339,6 +1301,8 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 			amount = minf(amount, target.max_hp * Cfg.BOSS_HIT_CAP_FRACTION)
 
 	var res: Dictionary = target.take_damage(self, amount, attacker, source)
+	if bool(res["evaded"]) and tutorial != null:
+		tutorial.on_damage_evaded(target, source)
 	if bool(res["evaded"]) or float(res["applied"]) <= 0.0:
 		return 0.0
 	if director != null and target.owner != null and target.max_hp > 0.0:
@@ -1681,6 +1645,8 @@ func _chimera_death_acid(victim: Tank) -> void:
 			deal_damage(t, 9999.0, null, "acid")
 
 func _kill_tank(victim, killer, source: String) -> void:
+	if tutorial != null:
+		tutorial.on_tank_killed(victim, source)
 	if killcam != null and victim.owner != null:
 		killcam_ready.emit(killcam.capture(self, victim, killer, source))
 	if victim.is_rammer_boss:
@@ -1882,8 +1848,6 @@ func hit_building(row: int, col: int, amount: float, source: String,
 		_destroy_building(row, col, mat, owner_tank)
 
 func _destroy_building(row: int, col: int, mat: Dictionary, owner_tank) -> void:
-	if mode == "tutorial":
-		tut_bricks_destroyed += 1
 	var cx := col * Cfg.TILE + Cfg.TILE * 0.5
 	var cy := row * Cfg.TILE + Cfg.TILE * 0.5
 
@@ -2110,7 +2074,7 @@ func _update_respawns() -> void:
 	for tank in tanks:
 		if tank.alive:
 			continue
-		if (mode == "defense" or mode == "tutorial") and tank.is_bot:
+		if mode == "tutorial" or (mode == "defense" and tank.is_bot):
 			continue
 		if mode == "ffa" and tank.is_boss:
 			continue
@@ -2119,28 +2083,6 @@ func _update_respawns() -> void:
 			continue
 		var spot := _free_spot(tank.team)
 		tank.respawn(spot.x, spot.y)
-		if mode == "tutorial" and tank.owner != null:
-			if tutorial_stage == 9:
-				tank.cannon_id = "ice"
-				tank.set_chassis("light")
-				tank.color_key = "p5"
-				tank.owner.color_key = "p5"
-				tank.owner.equipped_cannon = "ice"
-			elif tutorial_stage == 10:
-				tank.cannon_id = "acid"
-				tank.set_chassis("heavy")
-				tank.color_key = "p12"
-				tank.owner.color_key = "p12"
-				tank.owner.equipped_cannon = "acid"
-			else:
-				tank.cannon_id = "standard"
-				tank.set_chassis("standard")
-				tank.color_key = "p1"
-				tank.owner.color_key = "p1"
-				tank.owner.equipped_cannon = "standard"
-				if tutorial_stage == 8:
-					tank.ability_id = "bulwark"
-					tank.ability_cd = 0
 		if not tank.enemy_type.is_empty() and bool(tank.enemy_type.get("boss", false)):
 			boss_alive = true
 		if tank.owner != null:
@@ -2148,518 +2090,9 @@ func _update_respawns() -> void:
 			respawned.emit(tank.owner)
 
 func get_tutorial_task_info() -> Dictionary:
-	var info := {
-		"stage": tutorial_stage,
-		"total": 12,
-		"title": "",
-		"desc": "",
-		"keys": "",
-		"progress_text": "",
-		"progress": 0.0,
-		"done": false
-	}
-	match tutorial_stage:
-		1:
-			info["title"] = "ЗАДАНИЕ 1/12: ХОДОВАЯ ЧАСТЬ"
-			info["desc"] = "Нажмите [W] для движения вперед и [S] для движения назад"
-			info["keys"] = "[W] / [S]"
-			var fwd_ok := tut_dist_fwd >= 35.0
-			var bwd_ok := tut_dist_bwd >= 25.0
-			info["progress_text"] = "Вперед: %s (%d/35 px)   Назад: %s (%d/25 px)" % [
-				"✔" if fwd_ok else "—", int(minf(35.0, tut_dist_fwd)),
-				"✔" if bwd_ok else "—", int(minf(25.0, tut_dist_bwd))
-			]
-			info["progress"] = (minf(35.0, tut_dist_fwd) / 35.0 + minf(25.0, tut_dist_bwd) / 25.0) * 0.5
-		2:
-			info["title"] = "ЗАДАНИЕ 2/12: МАНЕВРИРОВАНИЕ"
-			info["desc"] = "Используйте [A] и [D] для поворота и доберитесь до контрольной точки"
-			info["keys"] = "[A] / [D]"
-			var dist := 0.0
-			if not players.is_empty() and players[0].tank != null:
-				dist = Vector2(players[0].tank.x - tutorial_marker.x, players[0].tank.y - tutorial_marker.y).length()
-			info["progress_text"] = "Дистанция до точки: %d м" % int(dist / 32.0)
-			info["progress"] = clampf(1.0 - (dist / 400.0), 0.1, 1.0)
-		3:
-			info["title"] = "ЗАДАНИЕ 3/12: ПРИЦЕЛИВАНИЕ И СТРЕЛЬБА"
-			info["desc"] = "Наведите башню [Мышь] и уничтожьте учебные мишени [ЛКМ / Пробел]"
-			info["keys"] = "[ЛКМ] / [Space]"
-			var killed := 0
-			var total_t := maxi(1, tutorial_targets.size())
-			for t in tutorial_targets:
-				if not t.alive:
-					killed += 1
-			info["progress_text"] = "Уничтожено мишеней: %d / %d" % [killed, total_t]
-			info["progress"] = float(killed) / float(total_t)
-		4:
-			info["title"] = "ЗАДАНИЕ 4/12: РАЗРУШЕНИЕ УКРЫТИЙ"
-			info["desc"] = "Снаряды разрушают кирпичные стены. Пробейте проход ворот [ЛКМ]!"
-			info["keys"] = "[ЛКМ]"
-			info["progress_text"] = "Разрушено блоков: %d / 2" % [mini(2, tut_bricks_destroyed)]
-			info["progress"] = minf(1.0, float(tut_bricks_destroyed) / 2.0)
-		5:
-			info["title"] = "ЗАДАНИЕ 5/12: ВЗРЫВНЫЕ БОЧКИ"
-			info["desc"] = "Выстрелите по бочке [ЛКМ] или протараньте ее для цепного подрыва целей"
-			info["keys"] = "[ЛКМ] / Таран"
-			var alive_b := 0
-			for b in tutorial_barrels:
-				if b.alive:
-					alive_b += 1
-			var total_b := maxi(1, tutorial_barrels.size())
-			var destroyed_b := total_b - alive_b
-			info["progress_text"] = "Взорвано бочек: %d / %d" % [destroyed_b, total_b]
-			info["progress"] = float(destroyed_b) / float(total_b)
-		6:
-			info["title"] = "ЗАДАНИЕ 6/12: ТАКТИЧЕСКИЙ РЫВОК"
-			info["desc"] = "Нажмите [Shift] во время движения для рывка с неуязвимостью (i-frames)"
-			info["keys"] = "[Shift]"
-			info["progress_text"] = "Совершите тактический рывок через ворота"
-			info["progress"] = 0.5
-		7:
-			info["title"] = "ЗАДАНИЕ 7/12: ТАКТИЧЕСКАЯ МИНА"
-			info["desc"] = "Установите мину [E / ПКМ] на пути приближающейся учебной цели"
-			info["keys"] = "[E] / [ПКМ]"
-			info["progress_text"] = "Подорвите учебный броневик миной"
-			info["progress"] = 0.5
-		8:
-			info["title"] = "ЗАДАНИЕ 8/12: СПОСОБНОСТЬ МАШИНЫ"
-			info["desc"] = "Активируйте боевую способность машины [Q / Й] (энергетический щит)"
-			info["keys"] = "[Q / Й]"
-			info["progress_text"] = "Активируйте способность машины [Q / Й]"
-			info["progress"] = 0.5
-		9:
-			info["title"] = "ЗАДАНИЕ 9/12: ЛЕДЯНОЙ ТАНК — КРИО-ЗАМОРОЗКА"
-			info["desc"] = "Криогенные снаряды сковывают врага льдом. Поразите мишень [ЛКМ]!"
-			info["keys"] = "[ЛКМ] Выстрел"
-			var frozen: bool = tutorial_ice_dummy != null and tutorial_ice_dummy.freeze_ticks > 0
-			info["progress_text"] = "✔ Цель заморожена!" if frozen else "Поразите учебную цель ледяным снарядом"
-			info["progress"] = 1.0 if frozen else 0.5
-		10:
-			info["title"] = "ЗАДАНИЕ 10/12: ХИМ-ТАНК — КИСЛОТНЫЙ ЯД"
-			info["desc"] = "Химический яд разъедает броню коррозией. Обстреляйте тяжелую цель [ЛКМ]!"
-			info["keys"] = "[ЛКМ] Выстрел"
-			var stacks: int = tutorial_acid_dummy.acid_stacks if tutorial_acid_dummy != null else 0
-			info["progress_text"] = "Коррозия: %d/5 слоев яда" % stacks if stacks > 0 else "Наложите слои яда на тяжелую цель"
-			info["progress"] = minf(1.0, float(stacks) / 3.0) if stacks > 0 else 0.5
-		11:
-			info["title"] = "ЗАДАНИЕ 11/12: БОЕВОЙ СПАРРИНГ"
-			info["desc"] = "Танк возвращен в стандартный строй. Уничтожьте боевого дрона с ИИ!"
-			info["keys"] = "БОЙ"
-			var hp: float = tutorial_drone.hp if tutorial_drone != null and tutorial_drone.alive else 0.0
-			var max_hp: float = tutorial_drone.max_hp if tutorial_drone != null else 45.0
-			info["progress_text"] = "Дрон HP: %d / %d" % [int(ceil(hp)), int(max_hp)]
-			info["progress"] = 1.0 - (hp / max_hp)
-		12:
-			info["title"] = "ЗАДАНИЕ 12/12: ВЫБОР БОЕВОГО ПЕРКА"
-			info["desc"] = "Повышение уровня! Выберите боевой перк в окне улучшения"
-			info["keys"] = "[ЛКМ] Выбор"
-			info["progress_text"] = "Выберите перк для завершения курса"
-			info["progress"] = 1.0
-		_:
-			info["title"] = "ОБУЧЕНИЕ ЗАВЕРШЕНО"
-			info["desc"] = "Курс молодого бойца успешно пройден! Награда: +100 монет 🪙"
-			info["keys"] = "ПОБЕДА"
-			info["progress_text"] = "Награда получена (+100 монет)"
-			info["progress"] = 1.0
-			info["done"] = true
-	return info
-
-func _update_tutorial() -> void:
-	if finished_flag or players.is_empty():
-		return
-	var player = players[0]
-	var tank = player.tank
-	if tank == null or not tank.alive:
-		return
-
-	match tutorial_stage:
-		1:
-			if tank.vy < -0.2:
-				tut_dist_fwd += absf(tank.vy)
-			if tank.vy > 0.2:
-				tut_dist_bwd += absf(tank.vy)
-			if tut_dist_fwd >= 35.0 and tut_dist_bwd >= 25.0:
-				Sfx.play("pickup")
-				particles.burst(tank.x, tank.y, [Color("#86efac"), Color.WHITE], 16, 2, 5, 12, 24, rng)
-				spawn_shockwave(tank.x, tank.y, 40.0, "dash", Color("#86efac"), 12)
-				tutorial_stage = 2
-				tutorial_step_timer = 0
-				feed.emit("✔ Задание 1 выполнено! Двигайтесь к контрольной точке [A/D]!", Color("#86efac"))
-
-		2:
-			if tank.vx < -0.2:
-				tut_turned_left = true
-			if tank.vx > 0.2:
-				tut_turned_right = true
-			var dist := Vector2(tank.x - tutorial_marker.x, tank.y - tutorial_marker.y).length()
-			if dist < 50.0:
-				Sfx.play("pickup")
-				particles.burst(tutorial_marker.x, tutorial_marker.y,
-					[Color("#44ff44"), Color("#88ff88"), Color.WHITE], 22, 2, 6, 16, 32, rng)
-				spawn_shockwave(tutorial_marker.x, tutorial_marker.y, 60.0, "dash", Color("#44ff44"), 15)
-				tutorial_stage = 3
-				tutorial_step_timer = 0
-				tutorial_targets.clear()
-
-				var target_offsets := [
-					Vector2(-80.0, -110.0),
-					Vector2(80.0, -110.0)
-				]
-				for off in target_offsets:
-					var dummy := Tank.new({
-						"x": tutorial_marker.x + off.x,
-						"y": tutorial_marker.y + off.y,
-						"team": "target",
-						"name": "Мишень",
-						"owner": null,
-						"max_hp": 25.0,
-						"speed": 0.0,
-						"fire_rate": 99999,
-						"color_key": "target",
-						"chassis": "standard",
-						"dmg_scale": 0.0
-					})
-					dummy.net_id = Net.next_tank_id()
-					dummy.is_bot = true
-					dummy.brain = null
-					tanks.append(dummy)
-					tutorial_targets.append(dummy)
-					particles.burst(dummy.x, dummy.y, [Color("#eab308"), Color.WHITE], 10, 2, 4, 10, 20, rng)
-
-				feed.emit("🎯 ЗАДАНИЕ 3/9: Огонь [ЛКМ / Пробел] — уничтожьте учебные мишени!", Color("#ffd700"))
-
-		3:
-			var remaining := 0
-			for t in tutorial_targets:
-				if t.alive:
-					remaining += 1
-			if remaining == 0:
-				Sfx.play("crack")
-				spawn_shockwave(tank.x, tank.y, 50.0, "ram", Color("#38bdf8"), 14)
-				tutorial_stage = 4
-				tutorial_step_timer = 0
-				feed.emit("🧱 ЗАДАНИЕ 4/9: Разрушение укрытий — расчистите кирпичную стену ворот [ЛКМ]!", Color("#fb923c"))
-
-		4:
-			var gate_r := map.rows - 7
-			var passed_gate: bool = tank.y < float(gate_r * Cfg.TILE)
-			if tut_bricks_destroyed >= 2 or passed_gate:
-				Sfx.play("crack")
-				spawn_shockwave(tank.x, tank.y, 45.0, "dash", Color("#f97316"), 14)
-				tutorial_stage = 5
-				tutorial_step_timer = 0
-				tutorial_barrels.clear()
-				tutorial_barrel_targets.clear()
-
-				var barrel_y := float(gate_r - 2) * Cfg.TILE
-				var b1 := Ent.ExplosiveBarrel.new(tutorial_marker.x - 30.0, barrel_y)
-				var b2 := Ent.ExplosiveBarrel.new(tutorial_marker.x + 30.0, barrel_y)
-				barrels.append(b1)
-				barrels.append(b2)
-				tutorial_barrels.append(b1)
-				tutorial_barrels.append(b2)
-				particles.burst(b1.x, b1.y, [Color("#f97316"), Color.WHITE], 12, 2, 4, 10, 20, rng)
-				particles.burst(b2.x, b2.y, [Color("#f97316"), Color.WHITE], 12, 2, 4, 10, 20, rng)
-
-				var tgt_positions := [
-					Vector2(tutorial_marker.x - 64.0, barrel_y),
-					Vector2(tutorial_marker.x + 64.0, barrel_y)
-				]
-				for p in tgt_positions:
-					var dummy := Tank.new({
-						"x": p.x,
-						"y": p.y,
-						"team": "target",
-						"name": "Мишень укрытия",
-						"owner": null,
-						"max_hp": 25.0,
-						"speed": 0.0,
-						"fire_rate": 99999,
-						"color_key": "target",
-						"chassis": "standard",
-						"dmg_scale": 0.0
-					})
-					dummy.net_id = Net.next_tank_id()
-					dummy.is_bot = true
-					dummy.brain = null
-					tanks.append(dummy)
-					tutorial_barrel_targets.append(dummy)
-					particles.burst(p.x, p.y, [Color("#eab308"), Color.WHITE], 8, 2, 3, 8, 16, rng)
-
-				feed.emit("💥 ЗАДАНИЕ 5/10: Взрывные бочки — уничтожьте бочку [ЛКМ] или тараном для цепного взрыва!", Color("#f97316"))
-
-		5:
-			var all_barrels_gone := true
-			for b in tutorial_barrels:
-				if b.alive:
-					all_barrels_gone = false
-					break
-			var targets_dead := true
-			for t in tutorial_barrel_targets:
-				if t.alive:
-					targets_dead = false
-					break
-			if all_barrels_gone or (targets_dead and tutorial_step_timer > 30):
-				Sfx.play("pickup")
-				spawn_shockwave(tank.x, tank.y, 45.0, "dash", Color("#38bdf8"), 14)
-				tutorial_stage = 6
-				tutorial_step_timer = 0
-				feed.emit("⚡ ЗАДАНИЕ 6/10: Рывок [Shift] — совершите рывок с кадрами неуязвимости (i-frames)!", Color("#38bdf8"))
-			else:
-				tutorial_step_timer += 1
-
-		6:
-			if tank.dash_invuln_ticks > 0 or tank.dash_range > 0.0:
-				Sfx.play("dash")
-				tank.flags["mines"] = true
-				tank.mine_cooldown = 0
-				tutorial_stage = 7
-				tutorial_step_timer = 0
-
-				var dummy_pos := Vector2(tutorial_marker.x, tutorial_marker.y - 70.0)
-				var mine_dummy := Tank.new({
-					"x": dummy_pos.x,
-					"y": dummy_pos.y,
-					"team": "target",
-					"name": "Учебный броневик",
-					"owner": null,
-					"max_hp": 30.0,
-					"speed": 0.5,
-					"fire_rate": 99999,
-					"color_key": "target",
-					"chassis": "standard",
-					"dmg_scale": 0.0
-				})
-				mine_dummy.net_id = Net.next_tank_id()
-				mine_dummy.is_bot = true
-				mine_dummy.brain = null
-				tanks.append(mine_dummy)
-				tutorial_mine_dummy = mine_dummy
-				particles.burst(dummy_pos.x, dummy_pos.y, [Color("#eab308"), Color.WHITE], 10, 2, 4, 10, 20, rng)
-
-				feed.emit("💣 ЗАДАНИЕ 7/10: Тактическая мина — установите мину [E / ПКМ] на пути броневика!", Color("#fbbf24"))
-
-		7:
-			var dummy_dead: bool = tutorial_mine_dummy != null and not tutorial_mine_dummy.alive
-			var mine_placed: bool = tank.mine_cooldown > 0 or not mines.is_empty()
-			if dummy_dead or (mine_placed and tutorial_step_timer > 60):
-				Sfx.play("pickup")
-				tank.ability_id = "bulwark"
-				tank.ability_cd = 0
-				tank.ability_timer = 0
-				tutorial_stage = 8
-				tutorial_step_timer = 0
-				feed.emit("🛡 ЗАДАНИЕ 8/12: Способность машины — активируйте боевой щит [Q / Й]!", Color("#60a5fa"))
-			else:
-				tutorial_step_timer += 1
-				if tutorial_mine_dummy != null and tutorial_mine_dummy.alive:
-					tutorial_mine_dummy.thrust(0, 0.5)
-
-		8:
-			if tank.ability_id != "bulwark":
-				tank.ability_id = "bulwark"
-				if tank.ability_timer <= 0:
-					tank.ability_cd = 0
-
-			var q_input: bool = (
-				Ctl.is_key_down(Sets.key_for("p1_ability")) or
-				Ctl.is_key_down(KEY_Q) or
-				Input.is_joy_button_pressed(0, JOY_BUTTON_Y) or
-				(player.scheme != null and player.scheme.has_method("read_command") and
-				 bool(player.scheme.read_command(player).get("ability", false)))
-			)
-
-			if q_input and tank.ability_timer <= 0 and tank.ability_cd <= 0:
-				tank.use_ability(self)
-
-			if tank.ability_timer > 0 or tank.ability_cd > 0 or q_input:
-				Sfx.play("pickup")
-				tutorial_stage = 9
-				tutorial_step_timer = 0
-				feed.emit("✔ Задание 8 выполнено! Энергетический щит активирован!", Color("#60a5fa"))
-
-				# Трансформация танка игрока в Ледяной крио-танк (p5 бирюзовый, легкое шасси)
-				tank.cannon_id = "ice"
-				tank.set_chassis("light")
-				tank.color_key = "p5"
-				player.color_key = "p5"
-				player.equipped_cannon = "ice"
-				particles.burst(tank.x, tank.y, [Color("#aaeeff"), Color("#7fdfff"), Color.WHITE], 28, 3, 6, 16, 32, rng)
-				spawn_shockwave(tank.x, tank.y, 60.0, "dash", Color("#7fdfff"), 16)
-				Sfx.play("crack", tank.x, tank.y)
-
-				# Спавн учебной цели для крио-заморозки (без неуязвимости)
-				var ice_pos := Vector2(tutorial_marker.x, tutorial_marker.y - 90.0)
-				var ice_dummy := Tank.new({
-					"x": ice_pos.x,
-					"y": ice_pos.y,
-					"team": "target",
-					"name": "Учебный разведчик",
-					"owner": null,
-					"max_hp": 35.0,
-					"speed": 0.8,
-					"fire_rate": 99999,
-					"color_key": "target",
-					"chassis": "light",
-					"dmg_scale": 0.0
-				})
-				ice_dummy.net_id = Net.next_tank_id()
-				ice_dummy.is_bot = true
-				ice_dummy.brain = null
-				ice_dummy.spawn_protect = 0
-				tanks.append(ice_dummy)
-				tutorial_ice_dummy = ice_dummy
-				particles.burst(ice_pos.x, ice_pos.y, [Color("#38bdf8"), Color.WHITE], 14, 2, 4, 10, 20, rng)
-				feed.emit("❄️ ЗАДАНИЕ 9/12: Ледяной танк — поразите цель [ЛКМ] для сковывания брони льдом!", Color("#7fdfff"))
-			else:
-				tutorial_step_timer += 1
-
-		9:
-			# Этап 9: Ледяной танк — Заморозка цели
-			if tank.cannon_id != "ice":
-				tank.cannon_id = "ice"
-				tank.set_chassis("light")
-			if tank.color_key != "p5":
-				tank.color_key = "p5"
-				player.color_key = "p5"
-
-			var ice_frozen: bool = tutorial_ice_dummy != null and (tutorial_ice_dummy.freeze_ticks > 0 or not tutorial_ice_dummy.alive)
-			if ice_frozen:
-				Sfx.play("crack", tank.x, tank.y)
-				spawn_shockwave(tank.x, tank.y, 50.0, "ram", Color("#7fdfff"), 14)
-				tutorial_stage = 10
-				tutorial_step_timer = 0
-				feed.emit("✔ Задание 9 выполнено! Цель скована криогенным льдом!", Color("#7fdfff"))
-
-				if tutorial_ice_dummy != null:
-					tutorial_ice_dummy.alive = false
-
-				# Трансформация танка игрока в Химический кислотный танк (p12 изумрудный, тяжелое шасси)
-				tank.cannon_id = "acid"
-				tank.set_chassis("heavy")
-				tank.color_key = "p12"
-				player.color_key = "p12"
-				player.equipped_cannon = "acid"
-				particles.burst(tank.x, tank.y, [Color("#84cc16"), Color("#a3e635"), Color.WHITE], 32, 3, 6, 16, 32, rng)
-				spawn_shockwave(tank.x, tank.y, 65.0, "acid", Color("#84cc16"), 18)
-				Sfx.play("steam", tank.x, tank.y)
-
-				# Спавн тяжелой учебной цели для химического яда
-				var acid_pos := Vector2(tutorial_marker.x, tutorial_marker.y - 100.0)
-				var acid_dummy := Tank.new({
-					"x": acid_pos.x,
-					"y": acid_pos.y,
-					"team": "target",
-					"name": "Тяжелая мишень",
-					"owner": null,
-					"max_hp": 80.0,
-					"speed": 0.0,
-					"fire_rate": 99999,
-					"color_key": "target",
-					"chassis": "heavy",
-					"dmg_scale": 0.0
-				})
-				acid_dummy.net_id = Net.next_tank_id()
-				acid_dummy.is_bot = true
-				acid_dummy.brain = null
-				acid_dummy.spawn_protect = 0
-				tanks.append(acid_dummy)
-				tutorial_acid_dummy = acid_dummy
-				particles.burst(acid_pos.x, acid_pos.y, [Color("#84cc16"), Color.WHITE], 16, 2, 5, 12, 24, rng)
-				feed.emit("🧪 ЗАДАНИЕ 10/12: Хим-танк — обстреляйте тяжелую цель [ЛКМ], распылив разъедающий яд!", Color("#84cc16"))
-			else:
-				tutorial_step_timer += 1
-				if tutorial_ice_dummy != null and tutorial_ice_dummy.alive and tutorial_ice_dummy.freeze_ticks <= 0:
-					tutorial_ice_dummy.thrust(0.6 * sin(float(tick) * 0.05), -0.3)
-
-		10:
-			# Этап 10: Химический танк — Наложение яда и коррозии
-			if tank.cannon_id != "acid":
-				tank.cannon_id = "acid"
-				tank.set_chassis("heavy")
-			if tank.color_key != "p12":
-				tank.color_key = "p12"
-				player.color_key = "p12"
-
-			var stacks: int = tutorial_acid_dummy.acid_stacks if tutorial_acid_dummy != null else 0
-			var acid_applied: bool = tutorial_acid_dummy != null and (
-				(stacks >= 1 and tutorial_step_timer >= 45) or not tutorial_acid_dummy.alive
-			)
-			if acid_applied:
-				Sfx.play("steam", tank.x, tank.y)
-				spawn_shockwave(tank.x, tank.y, 50.0, "acid", Color("#84cc16"), 14)
-				tutorial_stage = 11
-				tutorial_step_timer = 0
-				feed.emit("✔ Задание 10 выполнено! Броня цели разъедена химической коррозией!", Color("#84cc16"))
-
-				if tutorial_acid_dummy != null:
-					tutorial_acid_dummy.alive = false
-
-				# Возврат танка игрока в Стандартный танк (p1 зеленый, стандартное шасси)
-				tank.cannon_id = "standard"
-				tank.set_chassis("standard")
-				tank.color_key = "p1"
-				player.color_key = "p1"
-				player.equipped_cannon = "standard"
-				particles.burst(tank.x, tank.y, [Color("#ffd700"), Color.WHITE], 24, 2, 5, 14, 28, rng)
-				Sfx.play("pickup")
-
-				# Спавн боевого дрона для спарринга
-				var drone_pos := Vector2(tutorial_marker.x, tutorial_marker.y - 120.0)
-				var drone := Tank.new({
-					"x": drone_pos.x,
-					"y": drone_pos.y,
-					"team": "enemy",
-					"name": "Учебный дрон",
-					"owner": null,
-					"max_hp": 45.0,
-					"speed": 1.3,
-					"fire_rate": 80,
-					"color_key": "enemy",
-					"chassis": "standard",
-					"dmg_scale": 0.35
-				})
-				drone.net_id = Net.next_tank_id()
-				drone.is_bot = true
-				drone.spawn_protect = 0
-				drone.brain = BotBrain.new({
-					"accuracy": 0.45,
-					"react_time": 25,
-					"role": "attacker",
-					"fire_range": 320.0,
-					"keep_min": 70.0,
-					"keep_max": 200.0,
-					"rng": rng,
-				})
-				tanks.append(drone)
-				tutorial_drone = drone
-				particles.burst(drone_pos.x, drone_pos.y, [Color("#f43f5e"), Color.WHITE], 16, 2, 5, 12, 24, rng)
-				feed.emit("⚔️ ЗАДАНИЕ 11/12: Боевой спарринг — танк возвращен в строй. Уничтожьте боевого дрона!", Color("#f43f5e"))
-			else:
-				tutorial_step_timer += 1
-
-		11:
-			# Этап 11: Боевой спарринг
-			if tank.cannon_id != "standard":
-				tank.cannon_id = "standard"
-				tank.set_chassis("standard")
-
-			if tutorial_drone != null and not tutorial_drone.alive:
-				var needed_xp: int = maxi(1, player.xp_to_next_level() - player.session_xp)
-				player.add_xp(needed_xp)
-				Sfx.play("levelup")
-				tutorial_stage = 12
-				tutorial_step_timer = 0
-				feed.emit("🌟 ЗАДАНИЕ 12/12: Повышение уровня! Выберите боевой перк для завершения курса!", Color("#a855f7"))
-
-		12:
-			# Этап 12: Выбор первого перка
-			if player.pending_level_ups == 0 and not player.perk_ids.is_empty():
-				tutorial_step_timer += 1
-				if tutorial_step_timer >= 45:
-					tutorial_stage = 13
-					Prof.bump_stat("tutorialCompleted", 1)
-					feed.emit("🏆 Курс молодого бойца завершен! Награда: +100 монет 🪙", Color("#ffd700"))
-					_finish(player.name, 0, "player", "Курс молодого бойца успешно пройден! Награда: +100 монет")
+	if tutorial == null:
+		return {}
+	return tutorial.task_info()
 
 func _check_victory() -> void:
 	if mode == "defense" or mode == "tutorial":
@@ -2785,13 +2218,7 @@ func dispose() -> void:
 	barrels.clear()
 	power_generators.clear()
 	rammer_meltdowns.clear()
-	tutorial_targets.clear()
-	tutorial_barrels.clear()
-	tutorial_barrel_targets.clear()
-	tutorial_drone = null
-	tutorial_mine_dummy = null
-	tutorial_ice_dummy = null
-	tutorial_acid_dummy = null
+	tutorial = null
 
 func scoreboard() -> Array:
 	var rows := []
@@ -2830,7 +2257,8 @@ func progress_for(player) -> Dictionary:
 		return {"current": _alive_enemy_count(), "target": 0,
 			"total": int(Cfg.MODES["defense"]["waves"]), "wave": wave}
 	if mode == "tutorial":
-		return {"current": mini(tutorial_stage, 12), "target": 12, "total": 12, "task": get_tutorial_task_info()}
+		var stage: int = tutorial.stage if tutorial != null else 0
+		return {"current": stage, "target": Tutorial.TOTAL, "total": Tutorial.TOTAL, "task": get_tutorial_task_info()}
 	if mode == "ffa":
 		return {"current": player.kills, "target": int(Cfg.MODES["ffa"]["frag_limit"])}
 	var team: String = player.tank.team if player.tank != null else "player"

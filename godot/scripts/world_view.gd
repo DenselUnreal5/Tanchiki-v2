@@ -1507,60 +1507,24 @@ func _draw_base() -> void:
 	_rect(bx, by, w * maxf(0.0, ratio), h, bar)
 
 func _draw_tutorial() -> void:
-	if world == null or world.mode != "tutorial":
+	if world == null or world.tutorial == null:
 		return
-	if world.tutorial_stage == 2:
-		var pos := world.tutorial_marker
-		if _in_view(pos.x, pos.y, 80):
-			var pulse := 0.65 + 0.35 * sin(float(world.tick) * 0.1)
+	var pulse := 0.7 + 0.3 * sin(float(world.tick) * 0.15)
+	for h in world.tutorial.highlights():
+		var pos: Vector2 = h["pos"]
+		if not _in_view(pos.x, pos.y, 80):
+			continue
+		var color: Color = h["color"]
+		if bool(h["point"]):
 			var r := 42.0 + 4.0 * pulse
-			draw_circle(pos, r, Color(0.2, 0.8, 1.0, 0.15 * pulse))
-			draw_arc(pos, r, 0, TAU, 36, Color(0.3, 0.9, 1.0, 0.8 * pulse), 2.5)
-			draw_arc(pos, r * 0.5, 0, TAU, 24, Color(0.4, 1.0, 1.0, 0.5 * pulse), 1.5)
-			draw_circle(pos, 8.0, Color(0.4, 1.0, 1.0, 0.85 * pulse))
-			_text_center("КОНТРОЛЬНАЯ ТОЧКА", pos + Vector2(0, -r - 12.0), 12, Color("#38bdf8"), true)
-	elif world.tutorial_stage == 3:
-		for t in world.tutorial_targets:
-			if t.alive and _in_view(t.x, t.y, 60):
-				var p := Vector2(t.x, t.y)
-				var pulse := 0.7 + 0.3 * sin(float(world.tick) * 0.15)
-				draw_arc(p, 28.0, 0, TAU, 24, Color(1.0, 0.85, 0.2, 0.8 * pulse), 2.0)
-				_text_center("МИШЕНЬ", p + Vector2(0, -38.0), 10, Color("#fde047"), true)
-	elif world.tutorial_stage == 5:
-		for b in world.tutorial_barrels:
-			if b.alive and _in_view(b.x, b.y, 60):
-				var p := Vector2(b.x, b.y)
-				var pulse := 0.7 + 0.3 * sin(float(world.tick) * 0.16)
-				draw_arc(p, 26.0, 0, TAU, 24, Color(1.0, 0.45, 0.1, 0.85 * pulse), 2.2)
-				_text_center("ВЗРЫВНАЯ БОЧКА", p + Vector2(0, -32.0), 10, Color("#f97316"), true)
-	elif world.tutorial_stage == 7 and world.tutorial_mine_dummy != null and world.tutorial_mine_dummy.alive:
-		var d = world.tutorial_mine_dummy
-		if _in_view(d.x, d.y, 60):
-			var p := Vector2(d.x, d.y)
-			var pulse := 0.7 + 0.3 * sin(float(world.tick) * 0.15)
-			draw_arc(p, 30.0, 0, TAU, 24, Color(1.0, 0.6, 0.2, 0.85 * pulse), 2.0)
-			_text_center("УЧЕБНАЯ ЦЕЛЬ", p + Vector2(0, -40.0), 10, Color("#fb923c"), true)
-	elif world.tutorial_stage == 9 and world.tutorial_ice_dummy != null and world.tutorial_ice_dummy.alive:
-		var d = world.tutorial_ice_dummy
-		if _in_view(d.x, d.y, 60):
-			var p := Vector2(d.x, d.y)
-			var pulse := 0.7 + 0.3 * sin(float(world.tick) * 0.15)
-			draw_arc(p, 30.0, 0, TAU, 24, Color(0.5, 0.9, 1.0, 0.85 * pulse), 2.0)
-			_text_center("ЦЕЛЬ (ЗАМОРОЗКА)", p + Vector2(0, -40.0), 10, Color("#7fdfff"), true)
-	elif world.tutorial_stage == 10 and world.tutorial_acid_dummy != null and world.tutorial_acid_dummy.alive:
-		var d = world.tutorial_acid_dummy
-		if _in_view(d.x, d.y, 60):
-			var p := Vector2(d.x, d.y)
-			var pulse := 0.7 + 0.3 * sin(float(world.tick) * 0.15)
-			draw_arc(p, 30.0, 0, TAU, 24, Color(0.6, 0.95, 0.2, 0.85 * pulse), 2.0)
-			_text_center("ЦЕЛЬ (КИСЛОТА)", p + Vector2(0, -40.0), 10, Color("#84cc16"), true)
-	elif world.tutorial_stage == 11 and world.tutorial_drone != null and world.tutorial_drone.alive:
-		var d = world.tutorial_drone
-		if _in_view(d.x, d.y, 70):
-			var p := Vector2(d.x, d.y)
-			var pulse := 0.7 + 0.3 * sin(float(world.tick) * 0.18)
-			draw_arc(p, 32.0, 0, TAU, 28, Color(0.95, 0.2, 0.3, 0.9 * pulse), 2.2)
-			_text_center("СПАРРИНГ-ДРОН", p + Vector2(0, -42.0), 11, Color("#f43f5e"), true)
+			draw_circle(pos, r, Color(color, 0.15 * pulse))
+			draw_arc(pos, r, 0, TAU, 36, Color(color, 0.8 * pulse), 2.5)
+			draw_arc(pos, r * 0.5, 0, TAU, 24, Color(color, 0.5 * pulse), 1.5)
+			draw_circle(pos, 8.0, Color(color, 0.85 * pulse))
+			_text_center(String(h["label"]), pos + Vector2(0, -r - 12.0), 12, color, true)
+		else:
+			draw_arc(pos, 30.0, 0, TAU, 24, Color(color, 0.85 * pulse), 2.2)
+			_text_center(String(h["label"]), pos + Vector2(0, -40.0), 10, color, true)
 
 func _draw_barrels() -> void:
 	if world == null or world.barrels.is_empty():
@@ -3330,40 +3294,12 @@ func _draw_offscreen_markers(size: Vector2) -> void:
 		var target_pos := Vector2.ZERO
 		var has_target := false
 		var marker_color := Color("#38bdf8")
-		if world.tutorial_stage == 2:
-			target_pos = world.tutorial_marker
-			has_target = true
-			marker_color = Color("#38bdf8")
-		elif world.tutorial_stage == 3 and not world.tutorial_targets.is_empty():
-			for t in world.tutorial_targets:
-				if t.alive:
-					target_pos = Vector2(t.x, t.y)
-					has_target = true
-					marker_color = Color("#fde047")
-					break
-		elif world.tutorial_stage == 5 and not world.tutorial_barrels.is_empty():
-			for b in world.tutorial_barrels:
-				if b.alive:
-					target_pos = Vector2(b.x, b.y)
-					has_target = true
-					marker_color = Color("#f97316")
-					break
-		elif world.tutorial_stage == 7 and world.tutorial_mine_dummy != null and world.tutorial_mine_dummy.alive:
-			target_pos = Vector2(world.tutorial_mine_dummy.x, world.tutorial_mine_dummy.y)
-			has_target = true
-			marker_color = Color("#fb923c")
-		elif world.tutorial_stage == 9 and world.tutorial_ice_dummy != null and world.tutorial_ice_dummy.alive:
-			target_pos = Vector2(world.tutorial_ice_dummy.x, world.tutorial_ice_dummy.y)
-			has_target = true
-			marker_color = Color("#7fdfff")
-		elif world.tutorial_stage == 10 and world.tutorial_acid_dummy != null and world.tutorial_acid_dummy.alive:
-			target_pos = Vector2(world.tutorial_acid_dummy.x, world.tutorial_acid_dummy.y)
-			has_target = true
-			marker_color = Color("#84cc16")
-		elif world.tutorial_stage == 11 and world.tutorial_drone != null and world.tutorial_drone.alive:
-			target_pos = Vector2(world.tutorial_drone.x, world.tutorial_drone.y)
-			has_target = true
-			marker_color = Color("#f43f5e")
+		if world.tutorial != null:
+			var marks: Array = world.tutorial.highlights()
+			if not marks.is_empty():
+				target_pos = marks[0]["pos"]
+				marker_color = marks[0]["color"]
+				has_target = true
 
 		if has_target:
 			var dx: float = target_pos.x - cam.x
