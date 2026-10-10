@@ -544,7 +544,7 @@ func _spawn_combatants() -> void:
 		var humans_player := 1
 		var humans_enemy := players.size() - humans_player
 		_spawn_bot_team("player", maxi(0, size - humans_player), "ally")
-		_spawn_bot_team("enemy", maxi(0, size - humans_enemy), "enemy")
+		_spawn_bot_team("enemy", maxi(0, size - humans_enemy), "enemy", EnemyTypes.SPECIALS)
 	elif mode == "koth":
 		var total_enemies: int = int(Cfg.MODES["koth"]["enemies"])
 		var bosses: Array = ["boss_rammer", "boss_chimera", "boss"]
@@ -560,7 +560,8 @@ func _spawn_combatants() -> void:
 		pass
 	else:
 		for i in int(difficulty["enemies"]):
-			_spawn_bot("bot_%d" % i, "enemy")
+			var forced: String = EnemyTypes.SPECIALS[i] if i < EnemyTypes.SPECIALS.size() else ""
+			_spawn_bot("bot_%d" % i, "enemy", forced)
 
 func _spawn_player_tank(player, team: String) -> Tank:
 	var spot := _free_spot(team)
@@ -586,9 +587,9 @@ func _spawn_player_tank(player, team: String) -> Tank:
 		Net.host_tank_spawned(tank_info(tank))
 	return tank
 
-func _spawn_bot_team(team: String, count: int, color_key: String) -> void:
+func _spawn_bot_team(team: String, count: int, color_key: String, forced: Array = []) -> void:
 	for i in count:
-		_spawn_bot(team, color_key)
+		_spawn_bot(team, color_key, String(forced[i]) if i < forced.size() else "")
 
 func _spawn_bot(team: String, color_key: String, forced_type: String = "") -> Tank:
 	var diff := difficulty

@@ -71,8 +71,22 @@ func _check_types() -> void:
 	var rng := Rng.new(7)
 	var seen := {}
 	for i in 2000:
-		seen[String(EnemyTypes.pick(2.0, rng)["id"])] = true
-	_check(seen.has("pyro") and seen.has("tesla"), "оба спецтанка выпадают при обычном спавне")
+		seen[String(EnemyTypes.pick(1.0, rng)["id"])] = true
+	_check(seen.has("pyro") and seen.has("tesla"), "оба спецтанка выпадают уже при начальной сложности")
+	for mode in ["ffa", "ctf"]:
+		var player := PlayerState.new(0, "Тест", "p1", Ctl.KeyboardAimScheme.new())
+		player.reset_for_match()
+		var level := LevelGen.generate(1, mode, 4040, "city")
+		var world := World.new({
+			"map": level["map"], "level": level, "mode": mode, "difficulty": "medium",
+			"players": [player], "player_level": 1, "rng_seed": 4040,
+		})
+		var ids := {}
+		for t in world.tanks:
+			if not t.enemy_type.is_empty() and world.are_hostile(t, player.tank):
+				ids[String(t.enemy_type["id"])] = true
+		_check(ids.has("pyro") and ids.has("tesla"), "%s: на старте среди врагов есть оба спецтанка" % mode)
+		world.dispose()
 
 func _check_tesla() -> void:
 	print("[2/4] Громовержец")

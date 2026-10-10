@@ -48,7 +48,7 @@ const LIST := {
 		"accuracy_bonus": 0.0, "react_mult": 1.0,
 		"fire_range": 250.0, "keep_min": 70.0, "keep_max": 190.0,
 		"chassis": "heavy", "role": "attacker", "color_key": "pyro",
-		"weight": 10, "unlock_ramp": 1.08, "lobbed": false, "boss": false,
+		"weight": 10, "unlock_ramp": 1.0, "lobbed": false, "boss": false,
 		"shot": "fire",
 	},
 	"tesla": {
@@ -57,7 +57,7 @@ const LIST := {
 		"accuracy_bonus": 0.05, "react_mult": 1.0,
 		"fire_range": 420.0, "keep_min": 150.0, "keep_max": 320.0,
 		"chassis": "standard", "role": "attacker", "color_key": "tesla",
-		"weight": 10, "unlock_ramp": 1.12, "lobbed": false, "boss": false,
+		"weight": 10, "unlock_ramp": 1.0, "lobbed": false, "boss": false,
 		"shot": "shock",
 	},
 	"boss": {
@@ -89,6 +89,7 @@ const LIST := {
 }
 
 const ORDER := ["grunt", "scout", "heavy", "sniper", "mortar", "pyro", "tesla", "boss", "boss_rammer", "boss_chimera"]
+const SPECIALS := ["pyro", "tesla"]
 
 static func get_type(id: String) -> Dictionary:
 	return LIST.get(id, {})
