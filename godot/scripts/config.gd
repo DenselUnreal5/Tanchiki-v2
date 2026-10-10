@@ -294,6 +294,7 @@ const TANK_BODY_R := 22.0
 
 const BULLET_SPEED := 3.25
 const BULLET_LIFE := 160
+const SNIPER_BULLET_SPEED_MULT := 3.0
 const BULLET_DMG_MIN := 20.0
 const BULLET_DMG_MAX := 30.0
 

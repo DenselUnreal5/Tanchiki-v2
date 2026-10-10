@@ -549,7 +549,7 @@ func _try_fire(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> vo
 	if is_sniper:
 		if tank.sniper_laser_ticks <= 0:
 			tank.sniper_laser_ticks = 27
-			Sfx.play("clang", tank.x, tank.y)
+			Sfx.play("sniper_lock", tank.x, tank.y)
 			return
 		elif tank.sniper_laser_ticks > 1:
 			tank.sniper_laser_ticks -= 1
@@ -878,6 +878,6 @@ static func count_nearby(world, tank: Tank, radius: float, hostile: bool) -> int
 
 static func predict_position(shooter: Tank, target) -> Vector2:
 	var d := Vector2(target.x - shooter.x, target.y - shooter.y).length()
-	var flight_ticks := d / Cfg.BULLET_SPEED
+	var flight_ticks := d / shooter.bullet_speed()
 	var horizon := minf(flight_ticks, 40.0)
 	return Vector2(target.x + target.vx * horizon, target.y + target.vy * horizon)

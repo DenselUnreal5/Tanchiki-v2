@@ -341,6 +341,17 @@ func _after_shot() -> void:
 		overheats += 1
 		Sfx.play("steam", x, y)
 
+func is_sniper_chassis() -> bool:
+	return chassis_id == "sniper"
+
+func bullet_speed() -> float:
+	var speed: float = Cfg.BULLET_SPEED * float(mods["bulletSpeedMult"])
+	if weapon == "" and (cannon_id == "" or cannon_id == "standard"):
+		speed *= 1.15
+	if is_sniper_chassis():
+		speed *= Cfg.SNIPER_BULLET_SPEED_MULT
+	return speed
+
 func reload_ticks() -> int:
 	if ability_active("overdrive") or ability_active("overclock"):
 		return maxi(3, int(round(float(fire_rate) * Cfg.OVERDRIVE_RELOAD_MULT)))

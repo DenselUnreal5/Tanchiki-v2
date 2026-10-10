@@ -61,6 +61,7 @@ const LEVEL := {
 	"unlock": -8.0,
 	"flag": -8.0,
 	"dash": -4.0,
+	"sniper_lock": -8.0,
 }
 
 const PITCH_VARY := {
@@ -102,6 +103,7 @@ const SFX_PRIORITY := {
 	"crack": PRIORITY_COMBAT,
 	"clang": PRIORITY_COMBAT,
 	"thunder": PRIORITY_COMBAT,
+	"sniper_lock": PRIORITY_COMBAT,
 
 	"crumble": PRIORITY_DEFAULT,
 	"pickup": PRIORITY_DEFAULT,
@@ -374,6 +376,15 @@ func _build_streams(_streams: Dictionary) -> void:
 	_streams["flag"] = [_horn()]
 	_streams["dash"] = [_dash(0), _dash(1)]
 	_streams["siren"] = [_siren()]
+	_streams["sniper_lock"] = [_sniper_lock()]
+
+func _sniper_lock() -> AudioStreamWAV:
+	var b := Synth.buf(0.5)
+	Synth.add_tone(b, 0.0, 0.38, "sine", 900.0, 2600.0, 0.30, 0.4, 14.0, 0.015, 0.03)
+	Synth.add_tone(b, 0.0, 0.38, "triangle", 450.0, 1300.0, 0.12, 0.6, 14.0, 0.015, 0.03)
+	Synth.add_tone(b, 0.38, 0.05, "square", 3100.0, 3100.0, 0.16, 3.0)
+	Synth.add_tone(b, 0.44, 0.05, "square", 3100.0, 3100.0, 0.16, 3.0)
+	return Synth.to_stream(b)
 
 func _siren() -> AudioStreamWAV:
 	var b := Synth.buf(1.5)

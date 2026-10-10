@@ -110,9 +110,9 @@ class Bullet extends RefCounted:
 			vx = cos(angle) * sp
 			vy = sin(angle) * sp
 			return
-		var speed: float = Cfg.BULLET_SPEED * float(owner_.mods["bulletSpeedMult"])
-		if owner_.weapon == "" and (owner_.cannon_id == "" or owner_.cannon_id == "standard"):
-			speed *= 1.15
+		var speed: float = owner_.bullet_speed()
+		if owner_.is_sniper_chassis():
+			life = int(float(Cfg.BULLET_LIFE) / Cfg.SNIPER_BULLET_SPEED_MULT)
 		vx = cos(angle) * speed
 		vy = sin(angle) * speed
 		team = owner_.team
