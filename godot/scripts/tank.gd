@@ -1524,6 +1524,9 @@ func place_mine(world) -> bool:
 	mine_cooldown = Cfg.MINE_COOLDOWN
 	return true
 
+func dash_cooldown_max() -> int:
+	return maxi(1, int(round(float(Cfg.DASH_COOLDOWN) * float(mods.get("dashCooldownMult", 1.0)))))
+
 func dash(move_dir: Vector2 = Vector2.ZERO) -> bool:
 	if not alive:
 		return false
@@ -1540,7 +1543,7 @@ func dash(move_dir: Vector2 = Vector2.ZERO) -> bool:
 	if dash_range > 0.0:
 		return false
 	buffer_dash_ticks = 0
-	dash_cooldown = Cfg.DASH_COOLDOWN
+	dash_cooldown = dash_cooldown_max()
 	dash_range = Mutators.dash_distance(Cfg.DASH_DISTANCE)
 	dash_stall = 0
 	dash_invuln_ticks = 15 # 0.25 сек неуязвимости (i-frames) при 60 тиках/сек

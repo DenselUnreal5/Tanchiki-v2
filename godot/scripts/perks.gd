@@ -11,6 +11,7 @@ static func base_modifiers() -> Dictionary:
 		"bulletSpeedMult": 1.0,
 		"damageTakenMult": 1.0,
 		"ramMult": 1.0,
+		"dashCooldownMult": 1.0,
 		"accuracyBonus": 0.0,
 		"evasionChance": 0.0,
 		"reflectFraction": 0.0,
@@ -620,7 +621,7 @@ static func compute_modifiers(perk_ids: Array, bot: bool = false) -> Dictionary:
 				"heatPerShotMult", "heatCoolMult", "roadSpeedMult", \
 				"woodDmgMult", "brickDmgMult", "concreteDmgMult", "metalDmgMult", \
 				"hearingMult", "noiseMult", "ambushDmgMult", \
-				"freezeDurationMult", "iceHeatMult", "acidDmgMult":
+				"freezeDurationMult", "iceHeatMult", "acidDmgMult", "dashCooldownMult":
 					m[key] = float(m[key]) * v
 				"accuracyBonus", "reflectFraction", "lifestealFraction", "regenPerMinute", 				"heatResumeAdd", "softGrip", "scavengeHeal":
 					m[key] = float(m[key]) + v

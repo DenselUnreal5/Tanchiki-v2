@@ -748,6 +748,8 @@ func upgrade_mods() -> Dictionary:
 		"damageTakenMult": 1.0,
 		"ramMult": 1.0,
 		"pickupRadiusMult": 1.0,
+		"dashCooldownMult": 1.0,
+		"heatPerShotMult": 1.0,
 		"regenPerMinute": 0.0,
 	}
 	for up in Upgrades.LIST:
@@ -760,6 +762,9 @@ func upgrade_mods() -> Dictionary:
 			m[key] = float(m[key]) + value
 		else:
 			m[key] = float(m[key]) * value
+		if up.has("extra_key"):
+			var extra_key := String(up["extra_key"])
+			m[extra_key] = float(m[extra_key]) * Upgrades.extra_mult(up, level)
 	return m
 
 func is_unlocked(id: String) -> bool:

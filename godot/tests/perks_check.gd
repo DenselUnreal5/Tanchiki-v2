@@ -8,6 +8,8 @@ func _ready() -> void:
 	var had_file := FileAccess.file_exists(Prof.SAVE_PATH)
 	Prof.equipped_class = TankClasses.DEFAULT
 	Prof.equipped_cannon = "standard"
+	for u in Upgrades.LIST:
+		Prof.upgrades[u["id"]] = 0
 	game = load("res://scenes/main.tscn").instantiate()
 	add_child(game)
 	await get_tree().process_frame

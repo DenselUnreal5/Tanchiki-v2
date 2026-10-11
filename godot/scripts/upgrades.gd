@@ -16,9 +16,10 @@ const LIST := [
 		"cost_base": 60, "cost_step": 25, "mult_step": 0.06, "mult_mode": "add",
 	},
 	{
-		"id": "fire_rate", "name": "Автоускоритель", "icon": "⚡", "desc": "Перезарядка быстрее",
+		"id": "fire_rate", "name": "Автоускоритель", "icon": "⚡", "desc": "Перезарядка быстрее, ствол меньше греется",
 		"category": "fire", "mod_key": "fireRateMult", "max_level": 10,
 		"cost_base": 50, "cost_step": 20, "mult_step": 0.03, "mult_mode": "sub",
+		"extra_key": "heatPerShotMult", "extra_step": 0.025,
 	},
 	{
 		"id": "bullet_speed", "name": "Тяжёлые снаряды", "icon": "🚀", "desc": "Скорость полёта пуль",
@@ -46,6 +47,11 @@ const LIST := [
 		"cost_base": 50, "cost_step": 22, "mult_step": 0.1, "mult_mode": "add",
 	},
 	{
+		"id": "dash_cd", "name": "Манёвровые дюзы", "icon": "💨", "desc": "Откат рывка короче",
+		"category": "speed", "mod_key": "dashCooldownMult", "max_level": 8,
+		"cost_base": 50, "cost_step": 22, "mult_step": 0.06, "mult_mode": "sub",
+	},
+	{
 		"id": "pickup_radius", "name": "Магнитный трал", "icon": "🧲", "desc": "Радиус подбора аптечек",
 		"category": "utility", "mod_key": "pickupRadiusMult", "max_level": 6,
 		"cost_base": 35, "cost_step": 15, "mult_step": 0.15, "mult_mode": "add",
@@ -66,6 +72,9 @@ static func get_upgrade(id: String) -> Dictionary:
 static func cost(up: Dictionary, level: int) -> int:
 	var next_level := level + 1
 	return int(round(float(up["cost_base"]) + float(next_level - 1) * float(up["cost_step"])))
+
+static func extra_mult(up: Dictionary, level: int) -> float:
+	return 1.0 - float(level) * float(up.get("extra_step", 0.0))
 
 static func mult(up: Dictionary, level: int) -> float:
 	var step: float = float(up["mult_step"])

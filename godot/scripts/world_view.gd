@@ -2580,7 +2580,7 @@ func _draw_tank(tank: Tank) -> void:
 			_rect(tank.x - bar_w * 0.5, tank.y - 26, bar_w * minf(1.0, tank.shield_hp / 30.0), 2, Cfg.shield)
 		if is_local_player:
 			var dash_y := tank.y - 17.0
-			var dash_cd_max := float(Cfg.DASH_COOLDOWN)
+			var dash_cd_max := float(tank.dash_cooldown_max())
 			var dash_frac := 1.0 if tank.dash_cooldown <= 0 else clampf(1.0 - float(tank.dash_cooldown) / dash_cd_max, 0.0, 1.0)
 			var dash_ready := tank.dash_cooldown <= 0
 			_rect(tank.x - bar_w * 0.5, dash_y, bar_w, 2.5, Color(0.05, 0.08, 0.12, 0.75))
