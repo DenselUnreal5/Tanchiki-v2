@@ -628,7 +628,7 @@ func update(world) -> void:
 
 			if dash_range > 0.0:
 				dash_range -= moved
-				if moved < 0.15:
+				if moved < maxf(0.15, speed * Cfg.DASH_SPEED_MULT * 0.4):
 					dash_stall += 1
 					if dash_stall >= 3:
 						dash_range = 0.0
@@ -1253,12 +1253,26 @@ func _move(world, crush_trees: bool = true) -> void:
 		hit = true
 	if hit:
 		blocked_ticks += 1
+		if map.is_blocked_rect(x, y, col_w, col_h):
+			_push_out_of_walls(map)
 
 	if crush_trees:
 		_crush_trees(world)
 
 	x = clampf(x, col_w * 0.5 + 2.0, map.width - col_w * 0.5 - 2.0)
 	y = clampf(y, col_h * 0.5 + 2.0, map.height - col_h * 0.5 - 2.0)
+
+func _push_out_of_walls(map: GameMap) -> bool:
+	for dist in range(1, 17):
+		for i in 8:
+			var a := TAU * float(i) / 8.0
+			var px := x + cos(a) * float(dist)
+			var py := y + sin(a) * float(dist)
+			if not map.is_blocked_rect(px, py, col_w, col_h):
+				x = px
+				y = py
+				return true
+	return false
 
 func _crush_trees(world) -> void:
 	var map: GameMap = world.map

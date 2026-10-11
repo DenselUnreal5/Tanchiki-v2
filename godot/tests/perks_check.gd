@@ -44,6 +44,9 @@ func _ready() -> void:
 
 	var map = world.map
 	var spot := _find_tile(map, Cfg.T_GRASS)
+	if spot.x < 0:
+		spot = Vector2i(map.row_at(tank.y), map.col_at(tank.x))
+		map.set_tile(spot.x, spot.y, Cfg.T_GRASS)
 	if spot.x >= 0:
 		tank.x = spot.y * Cfg.TILE + 16.0
 		tank.y = spot.x * Cfg.TILE + 16.0

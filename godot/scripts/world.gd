@@ -516,7 +516,7 @@ func _unique_bot_name(type: Dictionary) -> String:
 		return "«%s»" % name
 	return name
 
-func _free_spot(team: String, w: float = Cfg.TANK_W, h: float = Cfg.TANK_H) -> Vector2:
+func _free_spot(team: String, w: float = TankArt.MAX_COLLIDE_W, h: float = TankArt.MAX_COLLIDE_H) -> Vector2:
 	var spot := map.find_free_spot(rng, area_for(team), w, h)
 	if spot != Vector2.INF:
 		return spot

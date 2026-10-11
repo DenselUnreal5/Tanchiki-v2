@@ -462,7 +462,7 @@ func _try_dash(tank: Tank, world, tgt, target_dist: float, has_shot: bool) -> bo
 	var probe := 34.0
 	var px := tank.x + cos(tank.angle) * probe
 	var py := tank.y + sin(tank.angle) * probe
-	if world.map.is_blocked_rect(px, py, tank.width, tank.height):
+	if world.map.is_blocked_rect(px, py, tank.col_w, tank.col_h):
 		return false
 	tank.dash()
 	dash_timer = 90 + int(rng.nextf() * 60.0)
@@ -680,7 +680,7 @@ func _free_run(map: GameMap, tank: Tank, a: float, max_dist: float, steps: int =
 		dist += step
 		var px := tank.x + cos(a) * dist
 		var py := tank.y + sin(a) * dist
-		if map.is_blocked_rect(px, py, tank.width, tank.height):
+		if map.is_blocked_rect(px, py, tank.col_w, tank.col_h):
 			return dist - step
 	return max_dist
 
