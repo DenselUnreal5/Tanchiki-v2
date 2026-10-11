@@ -66,7 +66,7 @@ const LIST := {
 		"accuracy_bonus": 0.1, "react_mult": 1.0,
 		"fire_range": 420.0, "keep_min": 100.0, "keep_max": 300.0,
 		"chassis": "boss", "role": "attacker", "color_key": "boss",
-		"weight": 3, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
+		"weight": 5, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
 	},
 	"boss_rammer": {
 		"id": "boss_rammer", "name": "Джаггернаут-Таран", "icon": "🦏",
@@ -74,7 +74,7 @@ const LIST := {
 		"accuracy_bonus": 0.0, "react_mult": 1.0,
 		"fire_range": 0.0, "keep_min": 0.0, "keep_max": 200.0,
 		"chassis": "boss_rammer", "role": "rammer", "color_key": "boss_rammer",
-		"weight": 3, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
+		"weight": 2, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
 		"base_hp": Cfg.RAMMER_BOSS_BASE_HP,
 	},
 	"boss_chimera": {
@@ -83,7 +83,7 @@ const LIST := {
 		"accuracy_bonus": 0.15, "react_mult": 0.8,
 		"fire_range": 150.0, "keep_min": 50.0, "keep_max": 130.0,
 		"chassis": "boss_chimera", "role": "phantom", "color_key": "boss_chimera",
-		"weight": 3, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
+		"weight": 2, "unlock_ramp": 1.24, "lobbed": false, "boss": true,
 		"base_hp": Cfg.CHIMERA_BOSS_BASE_HP,
 	},
 }

@@ -97,6 +97,9 @@ class Bullet extends RefCounted:
 	var keep_bricks := false
 	var from_player := false
 	var lobbed := false
+	var has_dest := false
+	var dest_x := 0.0
+	var dest_y := 0.0
 	var cannon_kind := ""
 	var sky_strike := false
 	var acid_burst := false
@@ -136,6 +139,16 @@ class Bullet extends RefCounted:
 
 		if lobbed:
 			life -= 1
+			if has_dest:
+				if x < 0.0 or x > world.map.width or y < 0.0 or y > world.map.height:
+					alive = false
+					return
+				if life <= 0 or (dest_x - x) * vx + (dest_y - y) * vy <= 0.0:
+					x = dest_x
+					y = dest_y
+					_land(world)
+					alive = false
+				return
 			if life <= 0:
 				_explode(world, null, Cfg.BULLET_DMG_MAX * dmg_scale)
 				alive = false
@@ -309,6 +322,33 @@ class Bullet extends RefCounted:
 				world.particles.burst(x, y, [Color("#ff8833"), Color("#ffee55")], 6, 2, 4, 8, 16, world.rng)
 				return true
 		return false
+
+	func _land(world) -> void:
+		var base := (Cfg.BULLET_DMG_MIN + Cfg.BULLET_DMG_MAX) * 0.5 * dmg_scale
+		var direct = null
+		var best := Cfg.LOB_DIRECT_R * Cfg.LOB_DIRECT_R
+		for other in world.tank_grid.query(x, y, Cfg.LOB_DIRECT_R):
+			if other == owner or not other.alive or not world.are_hostile(owner, other):
+				continue
+			var dx: float = other.x - x
+			var dy: float = other.y - y
+			var d2 := dx * dx + dy * dy
+			if d2 <= best:
+				best = d2
+				direct = other
+		if direct != null:
+			world.deal_damage(direct, base, owner, "bullet")
+		if world.barrels != null:
+			for barrel in world.barrels:
+				if not barrel.alive:
+					continue
+				var bx: float = barrel.x - x
+				var by: float = barrel.y - y
+				var br: float = splash_r + barrel.radius
+				if bx * bx + by * by <= br * br:
+					barrel.hit(base, owner, world)
+		_explode(world, direct, base)
+		Sfx.play("explosion", x, y)
 
 	func _explode(world, direct_target, base_damage: float) -> void:
 		var r := splash_r

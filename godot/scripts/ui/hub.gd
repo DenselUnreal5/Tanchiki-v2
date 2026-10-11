@@ -1374,21 +1374,23 @@ func _class_card(entry: Dictionary, parent: Node) -> Control:
 	var need := TankClasses.kills_needed(id)
 	var kills := mini(Prof.get_bestiary_kills(id), need)
 	var price := TankClasses.price(id)
-	var stats := _tr("class.stats", "HP ×%s · Ход ×%s" % [
-		_fmt_mult(float(entry["hp_mult"])), _fmt_mult(float(entry["speed_mult"]))], {
-		"hp": _fmt_mult(float(entry["hp_mult"])), "spd": _fmt_mult(float(entry["speed_mult"]))})
+	var fs := TankClasses.final_stats(id, Prof.upgrade_mods(), float(Cfg.DIFFICULTY["medium"]["player_hp"]))
+	var reload_text := "%.2f" % float(fs["reload"])
+	var details := _tr("class.final", "HP %d · урон %d\nход %d%% · перезарядка %s с" % [
+		fs["hp"], fs["dmg"], fs["speed_pct"], reload_text], {
+		"hp": fs["hp"], "dmg": fs["dmg"], "spd": fs["speed_pct"], "reload": reload_text})
 
 	var state := ""
 	var action_text := ""
 	var action_disabled := false
 	var can_buy := false
 	if owned:
-		state = stats
+		state = _tr("cos.equipped", "Надето") if equipped else _tr("cos.owned", "Куплено")
 		action_text = _tr("cos.equipped", "Надето") if equipped else _tr("cos.equip", "Надеть")
 		action_disabled = equipped
 	elif unlocked:
 		can_buy = Prof.money >= price
-		state = _tr("class.price", "Цена: %d 🪙 · %s" % [price, stats], {"price": price, "stats": stats})
+		state = _tr("cos.price", "Цена: %d 🪙" % price, {"price": price})
 		action_text = _tr("cos.buy", "Купить · %d 🪙" % price, {"price": price})
 		action_disabled = not can_buy
 	else:
@@ -1400,10 +1402,15 @@ func _class_card(entry: Dictionary, parent: Node) -> Control:
 	parent.add_child(card)
 	card.set_data(String(entry["icon"]), Cfg.UI_TEXT if unlocked else Cfg.UI_MUTED,
 		TankClasses.display_name(entry), state, action_text, action_disabled, equipped, can_buy, card_id)
+	card.set_details(details)
 	var tip := I18n.dn(entry, "desc", "class")
 	var trait_line := TankClasses.trait_text(entry)
 	if trait_line != "":
 		tip += "\n" + trait_line
+	tip += "\n\n" + _tr("class.finalTip",
+		"С учётом апгрейдов гаража (средняя сложность, стандартная пушка):\n• Броня: %d HP\n• Урон за попадание: %d\n• Скорость хода: %d%% от базовой\n• Перезарядка: %s с\n• Выстрелов подряд до перегрева: %d" % [
+			fs["hp"], fs["dmg"], fs["speed_pct"], reload_text, fs["overheat_shots"]], {
+		"hp": fs["hp"], "dmg": fs["dmg"], "spd": fs["speed_pct"], "reload": reload_text, "shots": fs["overheat_shots"]})
 	if not unlocked:
 		tip += "\n" + _tr("class.lockedTip", "Уничтожьте %d таких танков, чтобы открыть покупку" % need, {"need": need})
 	card.tooltip_text = tip
@@ -1418,9 +1425,6 @@ func _class_card(entry: Dictionary, parent: Node) -> Control:
 			garage_changed.emit()
 			switch_tab("garage", card_id))
 	return card
-
-func _fmt_mult(v: float) -> String:
-	return ("%.2f" % v).rstrip("0").rstrip(".")
 
 func _garage_color_row(label_text: String, slot: int, equipped_key: String, tab_key: String = "cosmetics") -> Control:
 	var box := UiKit.vbox(6)

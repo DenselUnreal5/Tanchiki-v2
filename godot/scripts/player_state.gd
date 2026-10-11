@@ -107,6 +107,7 @@ func xp_to_next_level() -> int:
 func add_xp(amount: int) -> int:
 	if amount <= 0:
 		return 0
+	amount = maxi(1, int(round(float(amount) * TankClasses.xp_mult(equipped_class))))
 	session_xp += amount
 	var gained := 0
 	var guard := 0

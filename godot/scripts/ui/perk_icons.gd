@@ -839,6 +839,7 @@ static var TEXTURE_PATHS := {
 	"upg_ram": "res://art/upgrades/ram.png",
 	"upg_pickup_radius": "res://art/upgrades/pickup_radius.png",
 	"upg_regen": "res://art/upgrades/regen.png",
+	"upg_dash_cd": "res://art/upgrades/dash_cd.png",
 	"cannon_standard": "res://art/cannons/standard.png",
 	"cannon_ice": "res://art/cannons/ice.png",
 	"cannon_acid": "res://art/cannons/acid.png",

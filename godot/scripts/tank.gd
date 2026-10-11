@@ -162,6 +162,10 @@ var freeze_ticks := 0
 var cryo_immunity_ticks := 0
 var class_id := "standard"
 var class_lobbed := false
+var class_guard := 1.0
+var class_move_evasion := 0.0
+var class_stun_immune := false
+var class_freeze_mult := 1.0
 var director_hp_applied := 1.0
 var director_speed_applied := 1.0
 var director_acc_applied := 0.0
@@ -230,6 +234,10 @@ func _init(opts: Dictionary) -> void:
 	cannon_id = String(opts.get("cannon_id", "standard"))
 	class_id = String(opts.get("class_id", "standard"))
 	class_lobbed = TankClasses.is_lobbed(class_id)
+	class_guard = TankClasses.guard_mult(class_id)
+	class_move_evasion = TankClasses.move_evasion(class_id)
+	class_stun_immune = TankClasses.stun_immune(class_id)
+	class_freeze_mult = TankClasses.freeze_mult(class_id)
 
 	angle = -PI / 2.0 if owner != null else PI / 2.0
 	body_angle = angle
@@ -389,7 +397,7 @@ func ignite(world, attacker) -> bool:
 	return true
 
 func apply_shock(world, attacker) -> bool:
-	if not alive or stun_guard_ticks > 0:
+	if not alive or stun_guard_ticks > 0 or class_stun_immune:
 		return false
 	stun_ticks = maxi(stun_ticks, Cfg.SHOCK_STUN_TICKS)
 	stun_guard_ticks = Cfg.SHOCK_STUN_GUARD_TICKS
@@ -1476,6 +1484,26 @@ func _shoot_special(world, special: String, muzzle_x: float, muzzle_y: float, sc
 	world.notify_shot(self)
 	return true
 
+func _lob_destination(world) -> Vector2:
+	var best := Vector2.INF
+	var best_d := INF
+	for other in world.tanks:
+		if other == self or not other.alive or not world.are_hostile(self, other):
+			continue
+		var to := Vector2(other.x - x, other.y - y)
+		var d := to.length()
+		if d < Cfg.LOB_MIN_RANGE or d > Cfg.LOB_MAX_RANGE:
+			continue
+		if absf(angle_difference(turret_angle, to.angle())) > Cfg.LOB_AIM_CONE:
+			continue
+		if d < best_d:
+			best_d = d
+			var flight := d / (bullet_speed() * Cfg.LOB_SPEED_MULT)
+			best = Vector2(other.x + other.vx * flight * Cfg.LOB_LEAD, other.y + other.vy * flight * Cfg.LOB_LEAD)
+	if best != Vector2.INF:
+		return best
+	return Vector2(x, y) + Vector2(cos(turret_angle), sin(turret_angle)) * Cfg.LOB_DEFAULT_RANGE
+
 func shoot_lobbed(world) -> bool:
 	if not can_fire:
 		return false
@@ -1487,6 +1515,14 @@ func shoot_lobbed(world) -> bool:
 	var b := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, dmg_scale)
 	b.lobbed = true
 	b.explosive = true
+	b.splash_r = Cfg.LOB_SPLASH_R
+	b.vx *= Cfg.LOB_SPEED_MULT
+	b.vy *= Cfg.LOB_SPEED_MULT
+	var dest := _lob_destination(world)
+	b.has_dest = true
+	b.dest_x = dest.x
+	b.dest_y = dest.y
+	b.life = 400
 	world.bullets.append(b)
 
 	world.particles.burst(muzzle_x, muzzle_y, [Color("#ff9933"), Color("#ffcc66")], 6, 2, 4, 10, 12, world.rng)
@@ -1694,6 +1730,12 @@ func _acid_bomb(world) -> void:
 	Sfx.play("steam", x, y)
 	Sfx.play("explosion", x, y)
 
+func evasion_now() -> float:
+	var chance := float(mods["evasionChance"])
+	if class_move_evasion > 0.0 and Vector2(vx, vy).length() > speed * 0.5:
+		chance = 1.0 - (1.0 - chance) * (1.0 - class_move_evasion)
+	return chance
+
 func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 	var result := {"applied": 0.0, "killed": false, "evaded": false, "reflected": 0.0}
 	if not alive:
@@ -1706,12 +1748,15 @@ func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 			world.particles.burst(x, y, [Color("#38bdf8"), Color.WHITE], 5, 2, 3, 10, 14, world.rng)
 		return result
 
-	if float(mods["evasionChance"]) > 0.0 and world.rng.nextf() < float(mods["evasionChance"]):
+	var evasion := evasion_now()
+	if evasion > 0.0 and world.rng.nextf() < evasion:
 		result["evaded"] = true
 		world.particles.burst(x, y, [Color("#00ffff"), Color("#aaffff")], 5, 2, 3, 10, 14, world.rng)
 		return result
 
 	var dmg := amount * float(mods["damageTakenMult"])
+	if class_guard < 1.0 and hp <= max_hp * TankClasses.GUARD_HP_FRACTION:
+		dmg *= class_guard
 	if ability_active("bulwark"):
 		dmg *= Cfg.BULWARK_DAMAGE_MULT
 	if enrage_shield_ticks > 0:
@@ -1747,12 +1792,12 @@ func apply_freeze(world, attacker, ticks: int) -> bool:
 		if world != null and world.particles != null:
 			world.particles.burst(x, y, [Cfg.shield], 5, 2, 4, 12, 12, world.rng)
 		return false
-	if float(mods["evasionChance"]) > 0.0 and world != null and world.rng.nextf() < float(mods["evasionChance"]):
+	if evasion_now() > 0.0 and world != null and world.rng.nextf() < evasion_now():
 		if world.particles != null:
 			world.particles.burst(x, y, [Color("#00ffff"), Color("#aaffff")], 5, 2, 3, 10, 14, world.rng)
 		return false
 	var duration_mult: float = float(attacker.mods["freezeDurationMult"]) if attacker != null else 1.0
-	freeze_ticks = int(round(float(ticks) * duration_mult))
+	freeze_ticks = maxi(1, int(round(float(ticks) * duration_mult * class_freeze_mult)))
 	freeze_max_ticks = freeze_ticks
 	if attacker != null and float(attacker.mods["freezeDashTicks"]) > 0.0:
 		attacker.turbo_timer = maxi(attacker.turbo_timer, int(attacker.mods["freezeDashTicks"]))
@@ -1770,7 +1815,7 @@ func apply_acid(world, attacker, dmg_scale_value: float, stacks: int = 1) -> boo
 	if shield_hp > 0.0:
 		world.particles.burst(x, y, [Cfg.shield], 5, 2, 4, 12, 12, world.rng)
 		return false
-	if float(mods["evasionChance"]) > 0.0 and world.rng.nextf() < float(mods["evasionChance"]):
+	if evasion_now() > 0.0 and world.rng.nextf() < evasion_now():
 		world.particles.burst(x, y, [Color("#00ffff"), Color("#aaffff")], 5, 2, 3, 10, 14, world.rng)
 		return false
 	acid_stacks = mini(Cfg.ACID_STACK_MAX, acid_stacks + stacks)

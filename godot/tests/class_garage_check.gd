@@ -68,6 +68,16 @@ func _run() -> void:
 	_check(heavy_btn.disabled, "Громила закрыт, кнопка неактивна")
 	var heavy_state: Label = cards["heavy"].get_node("%StateLabel")
 	_check(heavy_state.text.find("20") != -1 and heavy_state.text.find("75") != -1, "у закрытого класса показан прогресс 20/75")
+	var details_ok := true
+	for cid in cards.keys():
+		var fs := TankClasses.final_stats(String(cid), Prof.upgrade_mods(), float(Cfg.DIFFICULTY["medium"]["player_hp"]))
+		var details: Label = cards[cid].get_node_or_null("Row/Info/DetailsLabel")
+		if details == null or not details.visible or details.text.find("HP %d" % int(fs["hp"])) == -1 \
+				or details.text.find("%d%%" % int(fs["speed_pct"])) == -1:
+			details_ok = false
+			print("    карточка %s: %s" % [cid, details.text if details != null else "нет строки"])
+	_check(details_ok, "на всех карточках классов итоговые HP и ход с учётом апгрейдов")
+	_check(cards["heavy"].tooltip_text.find("до перегрева") != -1, "в подсказке класса расшифровка характеристик")
 
 	grunt_btn.pressed.emit()
 	await get_tree().process_frame

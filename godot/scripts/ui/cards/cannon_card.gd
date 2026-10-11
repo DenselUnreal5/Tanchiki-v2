@@ -45,6 +45,7 @@ func _ready() -> void:
 	_state_label.add_theme_font_size_override("font_size", 9)
 	_state_label.add_theme_color_override("font_color", Cfg.UI_MUTED)
 
+	_action_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_style_button(_action_btn, UiKit.small(""))
 	if not _action_btn.pressed.is_connected(_on_action_pressed):
 		_action_btn.pressed.connect(_on_action_pressed)
@@ -68,6 +69,18 @@ func _style_button(target: Button, donor: Button) -> void:
 	donor.queue_free()
 
 var _tex_view: PerkIconView
+var _details_label: Label
+
+func set_details(text: String) -> void:
+	if _details_label == null:
+		_details_label = Label.new()
+		_details_label.name = "DetailsLabel"
+		_details_label.add_theme_font_override("font", Fonts.regular)
+		_details_label.add_theme_font_size_override("font_size", 9)
+		_details_label.add_theme_color_override("font_color", Color(Cfg.UI_TEXT, 0.85))
+		_info.add_child(_details_label)
+	_details_label.text = text
+	_details_label.visible = text != ""
 
 func _set_tex_icon(tex_id: String, color: Color) -> void:
 	if tex_id == "":

@@ -47,6 +47,11 @@ func _check_upgrade_entry() -> void:
 	var up := Upgrades.get_upgrade("dash_cd")
 	_check(not up.is_empty() and String(up["category"]) == "speed", "апгрейд есть во вкладке «Скорость»")
 	_check(is_equal_approx(Upgrades.mult(up, int(up["max_level"])), 0.52), "на максимуме откат рывка ×0.52")
+	var missing := []
+	for u in Upgrades.LIST:
+		if PerkIcons.texture_of("upg_" + String(u["id"])) == null:
+			missing.append(String(u["id"]))
+	_check(missing.is_empty(), "у всех апгрейдов есть иконка %s" % ("" if missing.is_empty() else str(missing)))
 
 func _set_upgrades(maxed: bool) -> void:
 	for u in Upgrades.LIST:
@@ -107,6 +112,11 @@ func _check_class(cid: String) -> void:
 	var um := Prof.upgrade_mods()
 	var tank := _start(cid)
 	_check(tank.class_id == cid, "в бою надет класс %s" % cid)
+	var fs := TankClasses.final_stats(cid, um, float(Cfg.DIFFICULTY["medium"]["player_hp"]))
+	_check(int(fs["hp"]) == int(tank.max_hp) and int(fs["fire_rate"]) == tank.fire_rate \
+		and is_equal_approx(float(fs["speed"]), tank.speed),
+		"%s: цифры карточки гаража совпадают с танком в бою (HP %d, перезарядка %d, ход %.2f)" % [
+			cid, fs["hp"], fs["fire_rate"], fs["speed"]])
 	var up := _snap(tank)
 	_compare(cid, plain, up, um, "в начале боя")
 	_check(int(up["shots_to_overheat"]) > int(plain["shots_to_overheat"]),

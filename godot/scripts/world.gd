@@ -569,21 +569,16 @@ func _spawn_player_tank(player, team: String) -> Tank:
 	var hp: float = float(difficulty["player_hp"])
 	if mode == "defense":
 		hp = round(hp * Cfg.DEFENSE_PLAYER_HP_MULT)
-	var class_entry := TankClasses.get_entry(
-		TankClasses.DEFAULT if mode == "tutorial" else String(player.equipped_class))
-	var tank := Tank.new({
-		"x": spot.x, "y": spot.y, "team": team, "name": player.name,
-		"owner": player, "max_hp": round(hp * float(class_entry["hp_mult"])),
-		"speed": Cfg.PLAYER_SPEED * float(class_entry["speed_mult"]),
-		"fire_rate": maxi(4, int(round(float(Cfg.PLAYER_FIRE_RATE) * float(class_entry["fire_mult"])))),
-		"dmg_scale": Cfg.PLAYER_DMG_MULT * float(class_entry["dmg_mult"]),
-		"class_id": String(class_entry["id"]),
+	var opts := TankClasses.player_tank_opts(
+		TankClasses.DEFAULT if mode == "tutorial" else String(player.equipped_class), hp)
+	opts.merge({
+		"x": spot.x, "y": spot.y, "team": team, "name": player.name, "owner": player,
 		"color_key": "p1" if mode == "tutorial" else player.color_key,
 		"upgrade_mods": {} if mode == "tutorial" else player.upgrade_mods,
 		"cosmetics": {} if mode == "tutorial" else player.cosmetics,
 		"cannon_id": "standard" if mode == "tutorial" else player.equipped_cannon,
-		"chassis": String(class_entry["chassis"]),
 	})
+	var tank := Tank.new(opts)
 	tank.net_id = Net.next_tank_id()
 	tank.owner_peer = int(player.peer_id)
 	player.tank = tank
@@ -1281,6 +1276,7 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 			var ambush_mult := float(attacker.mods["ambushDmgMult"])
 			if attacker.ability_active("silencer"):
 				ambush_mult = maxf(ambush_mult, Cfg.SILENCER_AMBUSH_MULT)
+			ambush_mult = minf(ambush_mult, Cfg.AMBUSH_MULT_CAP)
 			if ambush_mult > 1.0:
 				amount *= ambush_mult
 

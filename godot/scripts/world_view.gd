@@ -1639,6 +1639,10 @@ func _draw_bullets() -> void:
 			continue
 		var pos := Vector2(b.x, b.y)
 		if b.lobbed:
+			if b.has_dest:
+				var mark := Vector2(b.dest_x, b.dest_y)
+				draw_arc(mark, Cfg.LOB_SPLASH_R, 0.0, TAU, 28, Color(1.0, 0.45, 0.2, 0.55), 2.0)
+				draw_arc(mark, Cfg.LOB_SPLASH_R * 0.45, 0.0, TAU, 20, Color(1.0, 0.7, 0.3, 0.45), 1.5)
 			draw_line(pos - Vector2(b.vx, b.vy) * 3.0, pos, Color(0.67, 0.67, 0.67, 0.3), 3.0)
 			draw_circle(pos, 4, Color("#ff9933"))
 			draw_circle(pos, 1.8, Color("#ffe8a0"))
