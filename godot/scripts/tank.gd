@@ -164,8 +164,7 @@ var class_id := "standard"
 var class_lobbed := false
 var class_guard := 1.0
 var class_move_evasion := 0.0
-var class_stun_immune := false
-var class_freeze_mult := 1.0
+var class_cc_mult := 1.0
 var director_hp_applied := 1.0
 var director_speed_applied := 1.0
 var director_acc_applied := 0.0
@@ -236,8 +235,7 @@ func _init(opts: Dictionary) -> void:
 	class_lobbed = TankClasses.is_lobbed(class_id)
 	class_guard = TankClasses.guard_mult(class_id)
 	class_move_evasion = TankClasses.move_evasion(class_id)
-	class_stun_immune = TankClasses.stun_immune(class_id)
-	class_freeze_mult = TankClasses.freeze_mult(class_id)
+	class_cc_mult = TankClasses.cc_mult(class_id)
 
 	angle = -PI / 2.0 if owner != null else PI / 2.0
 	body_angle = angle
@@ -397,9 +395,9 @@ func ignite(world, attacker) -> bool:
 	return true
 
 func apply_shock(world, attacker) -> bool:
-	if not alive or stun_guard_ticks > 0 or class_stun_immune:
+	if not alive or stun_guard_ticks > 0:
 		return false
-	stun_ticks = maxi(stun_ticks, Cfg.SHOCK_STUN_TICKS)
+	stun_ticks = maxi(stun_ticks, maxi(1, int(round(float(Cfg.SHOCK_STUN_TICKS) * class_cc_mult))))
 	stun_guard_ticks = Cfg.SHOCK_STUN_GUARD_TICKS
 	interrupt_current_action(CC_STUN)
 	if world != null:
@@ -1797,7 +1795,7 @@ func apply_freeze(world, attacker, ticks: int) -> bool:
 			world.particles.burst(x, y, [Color("#00ffff"), Color("#aaffff")], 5, 2, 3, 10, 14, world.rng)
 		return false
 	var duration_mult: float = float(attacker.mods["freezeDurationMult"]) if attacker != null else 1.0
-	freeze_ticks = maxi(1, int(round(float(ticks) * duration_mult * class_freeze_mult)))
+	freeze_ticks = maxi(1, int(round(float(ticks) * duration_mult * class_cc_mult)))
 	freeze_max_ticks = freeze_ticks
 	if attacker != null and float(attacker.mods["freezeDashTicks"]) > 0.0:
 		attacker.turbo_timer = maxi(attacker.turbo_timer, int(attacker.mods["freezeDashTicks"]))

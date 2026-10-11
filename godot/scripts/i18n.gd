@@ -346,7 +346,7 @@ var EN := {
 	"class.scout.trait": "Ghost step: 15% dodge (+10% while moving), dash recharges 30% faster, ram damage ×1.5, speed boost for 2 s after a kill",
 	"class.heavy.name": "Brute",
 	"class.heavy.desc": "A heavy breakthrough tank: twice as tough, slower, rare powerful shots.",
-	"class.heavy.trait": "Unbreakable: cannot be stunned, freezing lasts half as long, ram damage ×3",
+	"class.heavy.trait": "Unbreakable: stun and freezing last half as long, ram damage ×3",
 	"class.sniper.name": "Sniper",
 	"class.sniper.desc": "Long-range gun: rare double-power shots, very fast projectile.",
 	"class.sniper.trait": "Ambush: the first shot at an unready enemy deals ×1.3, but shots are heard 40% farther",

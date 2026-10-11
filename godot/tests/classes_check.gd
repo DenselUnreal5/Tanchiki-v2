@@ -272,7 +272,7 @@ func _check_passives() -> void:
 
 	var heavy_world := _arena("heavy")
 	var heavy: Tank = heavy_world.players[0].tank
-	_check(not heavy.apply_shock(heavy_world, null) and heavy.stun_ticks == 0, "Громила не оглушается")
+	_check(heavy.apply_shock(heavy_world, null) and heavy.stun_ticks == Cfg.SHOCK_STUN_TICKS / 2, "Громила оглушается, но вдвое короче (%d тиков)" % heavy.stun_ticks)
 	_check(heavy.apply_freeze(heavy_world, null, 60) and heavy.freeze_ticks == 30, "Громила замерзает, но вдвое короче (30 вместо 60 тиков)")
 	_check(std.apply_shock(_arena("standard"), null), "Универсал оглушается")
 

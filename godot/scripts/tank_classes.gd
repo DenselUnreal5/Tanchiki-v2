@@ -33,9 +33,9 @@ const LIST := [
 	{
 		"id": "heavy", "name": "Громила", "icon": "🏋️", "kills": 75, "price": 4000,
 		"desc": "Тяжёлый танк прорыва: вдвое прочнее, медленнее, редкие мощные выстрелы.",
-		"trait": "Несокрушимый: не оглушается, заморозка действует вдвое короче, урон тарана ×3",
+		"trait": "Несокрушимый: оглушение и заморозка действуют вдвое короче, урон тарана ×3",
 		"chassis": "heavy", "hp_mult": 2.0, "speed_mult": 0.8, "fire_mult": 1.4, "dmg_mult": 1.4,
-		"mods": {"ramMult": 3.0, "heatPerShotMult": 1.4}, "lobbed": false, "stun_immune": true, "freeze_mult": 0.5,
+		"mods": {"ramMult": 3.0, "heatPerShotMult": 1.4}, "lobbed": false, "cc_mult": 0.5,
 	},
 	{
 		"id": "sniper", "name": "Снайпер", "icon": "🎯", "kills": 90, "price": 5000,
@@ -92,11 +92,8 @@ static func guard_mult(id: String) -> float:
 static func move_evasion(id: String) -> float:
 	return float(get_entry(id).get("move_evasion", 0.0))
 
-static func stun_immune(id: String) -> bool:
-	return bool(get_entry(id).get("stun_immune", false))
-
-static func freeze_mult(id: String) -> float:
-	return float(get_entry(id).get("freeze_mult", 1.0))
+static func cc_mult(id: String) -> float:
+	return float(get_entry(id).get("cc_mult", 1.0))
 
 static func apply_mods(mods: Dictionary, class_id: String) -> void:
 	var entry := get_entry(class_id)
