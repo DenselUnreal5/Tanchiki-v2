@@ -360,7 +360,7 @@ var EN := {
 	"cannon.acid.name": "Acid Cannon",
 	"cannon.acid.desc": "Sprays corrosive compound eating away armor plating (up to 5 corrosion layers for 3s). Damage increases with each hit.",
 	"cannon.fire.name": "Flamethrower",
-	"cannon.fire.desc": "A blob of flame sets the ground ablaze along its whole path and ignites the target: a burning tank takes 10 damage per second and its barrel overheats faster. Water puts the fire out.",
+	"cannon.fire.desc": "A blob of flame scorches the target and sets it ablaze. Every new hit fans the flames — up to 3 burn levels, each one adding more fire damage. The ground along its path burns too, and a burning tank overheats faster. Water puts the fire out.",
 	"cannon.shock.name": "Thunderer",
 	"cannon.shock.desc": "A swift lightning charge deals 10 damage and stuns the target for 1 second. After a stun the target is briefly protected from another one.",
 	"cannon.fire.challenge": "Destroy 10 Flamethrowers while your tank is on fire",

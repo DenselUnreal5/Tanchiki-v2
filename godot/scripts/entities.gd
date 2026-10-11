@@ -103,6 +103,7 @@ class Bullet extends RefCounted:
 	var cannon_kind := ""
 	var sky_strike := false
 	var acid_burst := false
+	var from_cannon := false
 	var trail_accum := 0.0
 
 	func _init(x_: float, y_: float, angle: float, owner_, dmg_scale_: float = 1.0) -> void:
@@ -266,7 +267,9 @@ class Bullet extends RefCounted:
 				world.spawn_shockwave(x, y, 34.0, "emp", Color("#facc15"), 10)
 				return true
 			if cannon_kind == "fire":
-				if tank.ignite(world, owner):
+				if from_cannon:
+					world.deal_damage(tank, Cfg.FIRE_IMPACT_DMG * dmg_scale, owner, "fire")
+				if tank.ignite(world, owner, from_cannon, dmg_scale if from_cannon else 1.0):
 					tank.add_heat(Cfg.BURN_HIT_HEAT)
 				world.spawn_fire_patch(x, y, owner)
 				alive = false

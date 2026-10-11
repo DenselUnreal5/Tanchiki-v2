@@ -183,6 +183,8 @@ var burn_ticks := 0
 var burn_tick_timer := 0
 var burn_attacker = null
 var burn_dmg_mult := 1.0
+var burn_stacks := 0
+var burn_power := 1.0
 var stun_guard_ticks := 0
 
 var sky_strike_cooldown := 0
@@ -390,11 +392,16 @@ func bullet_speed() -> float:
 			speed *= Cfg.SHOCK_BULLET_SPEED_MULT
 	return speed
 
-func ignite(world, attacker) -> bool:
+func ignite(world, attacker, stack: bool = false, power: float = 1.0) -> bool:
 	if not alive or spawn_protect > 0 or dash_invuln_ticks > 0 or in_water or flags.has("fireproof"):
 		return false
 	if burn_ticks <= 0:
 		burn_tick_timer = Cfg.BURN_TICK_INTERVAL
+		burn_stacks = 0
+		burn_power = power
+	else:
+		burn_power = maxf(burn_power, power)
+	burn_stacks = mini(Cfg.BURN_STACK_MAX, burn_stacks + 1) if stack else maxi(burn_stacks, 1)
 	burn_ticks = maxi(burn_ticks, int(round(float(Cfg.BURN_TICKS) * _attacker_mod(attacker, "burnDurationMult"))))
 	burn_attacker = attacker
 	burn_dmg_mult = _attacker_mod(attacker, "burnDmgMult")
@@ -424,14 +431,17 @@ func _update_burn(world) -> void:
 		return
 	if in_water:
 		burn_ticks = 0
+		burn_stacks = 0
 		world.particles.burst(x, y, [Color("#cbd5e1"), Color.WHITE], 6, 1, 3, 10, 16, world.rng)
 		return
 	burn_ticks -= 1
+	if burn_ticks <= 0:
+		burn_stacks = 0
 	add_heat(Cfg.BURN_HEAT_PER_TICK)
 	burn_tick_timer -= 1
 	if burn_tick_timer <= 0:
 		burn_tick_timer = Cfg.BURN_TICK_INTERVAL
-		var dmg: float = Cfg.BURN_DPS * float(Cfg.BURN_TICK_INTERVAL) / float(Cfg.TICK_HZ) * burn_dmg_mult
+		var dmg: float = Cfg.BURN_DPS * float(Cfg.BURN_TICK_INTERVAL) / float(Cfg.TICK_HZ) * burn_dmg_mult 			* float(maxi(1, burn_stacks)) * burn_power
 		world.deal_damage(self, dmg, burn_attacker, "fire")
 	if world.tick % 6 == 0:
 		world.particles.spawn(x + (world.rng.nextf() - 0.5) * width * 0.6, y + (world.rng.nextf() - 0.5) * height * 0.6,
@@ -1434,7 +1444,7 @@ func shoot(world) -> bool:
 		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * cd_mult / class_fire_scale)))
 		scale_v /= class_dmg_scale
 		if bool(cn.get("special", false)):
-			return _shoot_special(world, String(cn["mode"]), muzzle_x, muzzle_y, scale_v)
+			return _shoot_special(world, String(cn["mode"]), muzzle_x, muzzle_y, scale_v, true)
 		var b := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, float(cn["dmg_scale"]) * scale_v)
 		b.cannon_kind = String(cn["mode"])
 		b.pierce = 0
@@ -1485,9 +1495,10 @@ func shoot(world) -> bool:
 	world.notify_shot(self)
 	return true
 
-func _shoot_special(world, special: String, muzzle_x: float, muzzle_y: float, scale_v: float) -> bool:
+func _shoot_special(world, special: String, muzzle_x: float, muzzle_y: float, scale_v: float, from_cannon: bool = false) -> bool:
 	var sb := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, scale_v)
 	sb.cannon_kind = special
+	sb.from_cannon = from_cannon
 	sb.pierce = 0
 	sb.explosive = false
 	if special == "fire":
@@ -1894,6 +1905,7 @@ func on_death(world, killer) -> void:
 	acid_tick_timer = 0
 	acid_attacker = null
 	burn_ticks = 0
+	burn_stacks = 0
 	burn_attacker = null
 	acid_stream_hit_accum = 0.0
 	rammer_cooldown_ticks = 0
@@ -1951,6 +1963,7 @@ func respawn(nx: float, ny: float) -> void:
 	acid_tick_timer = 0
 	acid_attacker = null
 	burn_ticks = 0
+	burn_stacks = 0
 	burn_attacker = null
 	stun_ticks = 0
 	stun_guard_ticks = 0

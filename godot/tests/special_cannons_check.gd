@@ -119,6 +119,34 @@ func _check_fire() -> void:
 	_fly(world, b)
 	_check(target.burn_ticks > 0, "цель загорелась")
 	_check(not world.fire_patches.is_empty(), "на пути снаряда горит земля")
+	var impact: float = Cfg.FIRE_IMPACT_DMG * b.dmg_scale
+	_check(target.max_hp - target.hp >= impact - 0.5, "попадание обжигает цель на %.1f урона (%.1f)" % [impact, target.max_hp - target.hp])
+	_check(target.burn_stacks == 1 and is_equal_approx(target.burn_power, b.dmg_scale), "первое попадание — 1 уровень горения")
+	for i in Cfg.BURN_STACK_MAX:
+		target.hp = target.max_hp
+		_fly(world, _fire_at(world, ptank, target))
+	_check(target.burn_stacks == Cfg.BURN_STACK_MAX, "повторные попадания раздувают пламя до %d уровней (%d)" % [Cfg.BURN_STACK_MAX, target.burn_stacks])
+	world.fire_patches.clear()
+	target.hp = target.max_hp
+	var hp0: float = target.hp
+	for i in Cfg.TICK_HZ:
+		target._update_burn(world)
+	var stacked_dps := hp0 - target.hp
+	_check(stacked_dps >= Cfg.BURN_DPS * Cfg.BURN_STACK_MAX * b.dmg_scale - 0.5, "на 3 уровнях горит на %.1f урона в секунду" % stacked_dps)
+
+	var pyro := _spawn(world, "pyro", 300.0, 400.0)
+	var victim := ptank
+	victim.x = 300.0
+	victim.y = 520.0
+	victim.burn_ticks = 0
+	victim.burn_stacks = 0
+	victim.hp = victim.max_hp
+	var eb := Ent.Bullet.new(victim.x, victim.y - 60.0, PI / 2.0, pyro, 1.0)
+	eb.cannon_kind = "fire"
+	world.bullets.append(eb)
+	_fly(world, eb)
+	_check(victim.burn_stacks == 1 and victim.hp == victim.max_hp, "Огнемётчик-враг по-прежнему только поджигает")
+	victim.burn_ticks = 0
 	ptank.weapon = "test_weapon"
 	_check(ptank.shot_kind() == "", "с подобранным оружием стреляет оружие, а не пушка")
 	ptank.weapon = ""

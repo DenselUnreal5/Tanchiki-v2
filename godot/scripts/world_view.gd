@@ -2295,7 +2295,7 @@ func _draw_tank(tank: Tank) -> void:
 
 	if tank.burn_ticks > 0:
 		var burn_flick: float = 0.7 + 0.3 * sin(anim_tick * 0.5)
-		draw_colored_polygon(body, Color(0.95, 0.40, 0.08, 0.30 * burn_flick))
+		draw_colored_polygon(body, Color(0.95, 0.40, 0.08, (0.2 + 0.1 * float(maxi(1, tank.burn_stacks))) * burn_flick))
 		draw_polyline(body, Color(1.0, 0.70, 0.20, 0.85 * burn_flick), 1.5)
 
 	if tank.stun_ticks > 0:
@@ -2629,7 +2629,7 @@ func _draw_tank(tank: Tank) -> void:
 				var bratio := clampf(float(tank.burn_ticks) / float(Cfg.BURN_TICKS), 0.0, 1.0)
 				_rect(tank.x - bar_w * 0.5, s_y, bar_w, 2.5, Color(0.22, 0.08, 0.02, 0.85))
 				_rect(tank.x - bar_w * 0.5, s_y, bar_w * bratio, 2.5, Color("#f97316"))
-				_text_center("🔥", Vector2(tank.x - bar_w * 0.5 - 6.0, s_y + 1.0), 8, Color("#fdba74"))
+				_text_center("🔥" if tank.burn_stacks <= 1 else "🔥%d" % tank.burn_stacks, Vector2(tank.x - bar_w * 0.5 - (6.0 if tank.burn_stacks <= 1 else 9.0), s_y + 1.0), 8, Color("#fdba74"))
 				s_y -= 4.0
 			if tank.stun_ticks > 0:
 				var sratio := clampf(float(tank.stun_ticks) / float(Cfg.SHOCK_STUN_TICKS), 0.0, 1.0)
