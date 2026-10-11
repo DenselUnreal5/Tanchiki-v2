@@ -180,6 +180,7 @@ func _check_cryo_shot() -> void:
 		return
 	shooter.spawn_protect = 0
 	target.spawn_protect = 0
+	target.brain = null
 	target.perk_ids = []
 	target.recompute()
 	target.freeze_ticks = 0

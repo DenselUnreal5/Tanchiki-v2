@@ -270,6 +270,8 @@ func _check_passives() -> void:
 	_check(scout.dash_cooldown_max() == int(round(float(Cfg.DASH_COOLDOWN) * 0.7)), "Разведчик: рывок на 30% чаще")
 	_check(float(scout.mods["turboOnKill"]) == 120.0 and absf(float(scout.mods["ramMult"]) - 1.5) < 0.001, "Разведчик: ускорение после убийства и таран ×1.5")
 
+	scout.mods["evasionChance"] = 0.9
+	_check(scout.evasion_now() <= Cfg.EVASION_CAP + 0.0001, "общее уклонение ограничено потолком %.0f%%" % (Cfg.EVASION_CAP * 100.0))
 	var heavy_world := _arena("heavy")
 	var heavy: Tank = heavy_world.players[0].tank
 	_check(heavy.apply_shock(heavy_world, null) and heavy.stun_ticks == Cfg.SHOCK_STUN_TICKS / 2, "Громила оглушается, но вдвое короче (%d тиков)" % heavy.stun_ticks)

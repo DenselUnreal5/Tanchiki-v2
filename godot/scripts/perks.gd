@@ -47,6 +47,13 @@ static func base_modifiers() -> Dictionary:
 		"iceHeatMult": 1.0,
 
 		"acidDmgMult": 1.0,
+
+		"burnDmgMult": 1.0,
+		"burnDurationMult": 1.0,
+		"firePatchRadiusMult": 1.0,
+		"shockDmgMult": 1.0,
+		"stunDurationMult": 1.0,
+		"shockReloadMult": 1.0,
 	}
 
 static var CATEGORIES := [
@@ -172,6 +179,64 @@ const LIST := [
 		"id": "corroding_armor", "name": "Разъедающая броня", "icon": "🦴",
 		"desc": "Химическая деградация сплава: пока обшивка поражена кислотой, машина получает на 40% больше урона из всех источников.", "category": "special",
 		"flags": ["corrodingArmor"],
+	},
+
+	{
+		"id": "napalm", "name": "Напалм", "icon": "🔥",
+		"desc": "Густая горючая смесь: подожжённые «Огнемётом» враги горят на 50% жарче (15 урона в секунду).",
+		"category": "special", "flags": ["napalm"],
+		"mods": {"burnDmgMult": 1.5},
+	},
+	{
+		"id": "slow_burn", "name": "Долгое горение", "icon": "⏳",
+		"desc": "Пламя «Огнемёта» не гаснет: горение врагов и огненные лужи держатся на 60% дольше.",
+		"category": "special", "flags": ["slowBurn"],
+		"mods": {"burnDurationMult": 1.6},
+	},
+	{
+		"id": "fire_wall", "name": "Огненный вал", "icon": "🧱",
+		"desc": "Широкий факел: лужи пламени на пути снарядов «Огнемёта» становятся на 50% шире и перекрывают проходы.",
+		"category": "special", "flags": ["fireWall"],
+		"mods": {"firePatchRadiusMult": 1.5},
+	},
+	{
+		"id": "fireproof", "name": "Огнеупорный корпус", "icon": "🛡",
+		"desc": "Термостойкая обшивка: ваш танк не загорается — ни от вражеского огня, ни от собственных луж пламени.",
+		"category": "special", "flags": ["fireproof"],
+	},
+	{
+		"id": "flashover", "name": "Вспышка", "icon": "💥",
+		"desc": "Горящий враг при гибели взрывается огненным шаром: поджигает танки в радиусе 8 метров и оставляет кольцо пламени.",
+		"category": "special", "flags": ["flashover"],
+	},
+
+	{
+		"id": "high_voltage", "name": "Высокое напряжение", "icon": "⚡",
+		"desc": "Усиленные катушки «Громовержца»: каждый заряд молнии бьёт на 60% сильнее (16 урона).",
+		"category": "special", "flags": ["highVoltage"],
+		"mods": {"shockDmgMult": 1.6},
+	},
+	{
+		"id": "long_stun", "name": "Глубокий разряд", "icon": "💫",
+		"desc": "Разряд «Громовержца» проникает глубже в электронику: оглушение длится на 50% дольше (1.5 секунды).",
+		"category": "special", "flags": ["longStun"],
+		"mods": {"stunDurationMult": 1.5},
+	},
+	{
+		"id": "arc_chain", "name": "Цепной разряд", "icon": "🔗",
+		"desc": "Молния «Громовержца» перескакивает с цели на 2 ближайших врага в радиусе 13 метров (50% урона и оглушение).",
+		"category": "special", "flags": ["arcChain"],
+	},
+	{
+		"id": "capacitor", "name": "Конденсатор", "icon": "🔋",
+		"desc": "Быстрая зарядка батарей: перезарядка «Громовержца» быстрее на 25%.",
+		"category": "special", "flags": ["capacitor"],
+		"mods": {"shockReloadMult": 0.75},
+	},
+	{
+		"id": "overload", "name": "Перегрузка", "icon": "☢",
+		"desc": "Оглушённая техника беззащитна: пока враг оглушён, он получает на 30% больше урона из всех источников.",
+		"category": "special", "flags": ["overload"],
 	},
 
 	{
@@ -498,6 +563,8 @@ const CANNON_INCOMPATIBLE := ["fan_shot", "double_shot", "explosive", "piercing"
 const CANNON_REQUIRED := {
 	"deep_freeze": "ice", "frost_dash": "ice", "chilled_barrel": "ice",
 	"corrosive_acid": "acid", "acid_cloud": "acid", "corroding_armor": "acid",
+	"napalm": "fire", "slow_burn": "fire", "fire_wall": "fire", "fireproof": "fire", "flashover": "fire",
+	"high_voltage": "shock", "long_stun": "shock", "arc_chain": "shock", "capacitor": "shock", "overload": "shock",
 }
 
 static func is_perk_allowed_for_cannon(id: String, cannon_id: String) -> bool:
@@ -530,11 +597,11 @@ const UNLOCK_TABLE := {
 	13: ["bulwark", "breaker", "chilled_barrel"],
 	14: ["heavy_shell", "keen_ear", "corrosive_acid"],
 	15: ["muffler", "predator", "deep_freeze"],
-	16: ["repair", "coolant", "frost_dash"],
-	17: ["overdrive", "acid_cloud"],
-	18: ["shockwave", "overclock", "corroding_armor"],
-	19: ["heat_sink", "lightning_lord"],
-	20: ["sky_strike", "chain_lightning"],
+	16: ["repair", "coolant", "frost_dash", "napalm", "high_voltage"],
+	17: ["overdrive", "acid_cloud", "fireproof", "capacitor"],
+	18: ["shockwave", "overclock", "corroding_armor", "slow_burn", "long_stun"],
+	19: ["heat_sink", "lightning_lord", "fire_wall", "arc_chain"],
+	20: ["sky_strike", "chain_lightning", "flashover", "overload"],
 }
 
 static func unlock_level_of(perk_id: String) -> int:
@@ -563,6 +630,14 @@ const BUILDS := [
 		"perks": ["corrosive_acid", "acid_cloud", "corroding_armor"],
 		"active": "acid_bomb",
 		"bonus": "Дарует способность «Кислотная бомба»: взрывной выброс химического аэрозоля покрывает всю вражескую технику поблизости сразу 3 слоями едкого нагара (перезарядка 10 сек)."},
+	{"id": "fire_hunter", "name": "Инферно", "color": Color("#f97316"),
+		"perks": ["napalm", "slow_burn", "flashover"],
+		"active": "fire_ring",
+		"bonus": "Дарует способность «Огненное кольцо»: танк окружает себя стеной пламени и мгновенно поджигает всех врагов в радиусе 11 метров (перезарядка 10 сек)."},
+	{"id": "shock_hunter", "name": "Громовой молот", "color": Color("#facc15"),
+		"perks": ["high_voltage", "arc_chain", "overload"],
+		"active": "storm_pulse",
+		"bonus": "Дарует способность «Электробуря»: разряд в радиусе 17 метров наносит 15 урона и оглушает всех врагов на 1.5 секунды, пробивая защиту от повторного стана (перезарядка 12 сек)."},
 ]
 
 static func builds_with_perk(perk_id: String) -> Array:
@@ -621,7 +696,9 @@ static func compute_modifiers(perk_ids: Array, bot: bool = false) -> Dictionary:
 				"heatPerShotMult", "heatCoolMult", "roadSpeedMult", \
 				"woodDmgMult", "brickDmgMult", "concreteDmgMult", "metalDmgMult", \
 				"hearingMult", "noiseMult", "ambushDmgMult", \
-				"freezeDurationMult", "iceHeatMult", "acidDmgMult", "dashCooldownMult":
+				"freezeDurationMult", "iceHeatMult", "acidDmgMult", "dashCooldownMult", \
+				"burnDmgMult", "burnDurationMult", "firePatchRadiusMult", \
+				"shockDmgMult", "stunDurationMult", "shockReloadMult":
 					m[key] = float(m[key]) * v
 				"accuracyBonus", "reflectFraction", "lifestealFraction", "regenPerMinute", 				"heatResumeAdd", "softGrip", "scavengeHeal":
 					m[key] = float(m[key]) + v

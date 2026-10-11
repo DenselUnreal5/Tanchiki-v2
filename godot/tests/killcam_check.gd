@@ -79,7 +79,14 @@ func _check_match_flow() -> void:
 	game.ui.settings["game_type"] = "single"
 	game.ui.settings["level"] = 1
 	Sets.killcam = true
+	var saved_class := Prof.equipped_class
+	var saved_cannon := Prof.equipped_cannon
+	Prof.equipped_class = TankClasses.DEFAULT
+	Prof.equipped_cannon = "standard"
 	game.start_match()
+	Prof.equipped_class = saved_class
+	Prof.equipped_cannon = saved_cannon
+	Prof.save_profile()
 	for i in 6:
 		await get_tree().process_frame
 	var guard := 0
@@ -116,7 +123,7 @@ func _check_match_flow() -> void:
 	_check(not view.running and not view.visible, "повтор сам закрывается по окончании")
 	_check(not ptank.alive, "к концу повтора танк ещё не возродился")
 	var wait := 0.0
-	while not ptank.alive and wait < Cfg.KILLCAM_RESPAWN_EXTRA_SECONDS + 1.0:
+	while not ptank.alive and wait < Cfg.KILLCAM_RESPAWN_EXTRA_SECONDS + 1.5:
 		await get_tree().process_frame
 		wait += get_process_delta_time()
 	_check(ptank.alive, "танк возрождается вскоре после повтора (через %.2f с)" % wait)

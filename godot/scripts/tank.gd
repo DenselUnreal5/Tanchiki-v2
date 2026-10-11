@@ -165,6 +165,9 @@ var class_lobbed := false
 var class_guard := 1.0
 var class_move_evasion := 0.0
 var class_cc_mult := 1.0
+var class_fire_scale := 1.0
+var class_dmg_scale := 1.0
+var class_heat_scale := 1.0
 var director_hp_applied := 1.0
 var director_speed_applied := 1.0
 var director_acc_applied := 0.0
@@ -179,6 +182,7 @@ var acid_attacker = null
 var burn_ticks := 0
 var burn_tick_timer := 0
 var burn_attacker = null
+var burn_dmg_mult := 1.0
 var stun_guard_ticks := 0
 
 var sky_strike_cooldown := 0
@@ -236,6 +240,9 @@ func _init(opts: Dictionary) -> void:
 	class_guard = TankClasses.guard_mult(class_id)
 	class_move_evasion = TankClasses.move_evasion(class_id)
 	class_cc_mult = TankClasses.cc_mult(class_id)
+	class_fire_scale = TankClasses.fire_scale(class_id)
+	class_dmg_scale = TankClasses.dmg_scale(class_id)
+	class_heat_scale = TankClasses.heat_scale(class_id)
 
 	angle = -PI / 2.0 if owner != null else PI / 2.0
 	body_angle = angle
@@ -343,8 +350,8 @@ func _after_shot() -> void:
 	var heat_mult := 1.0
 	if weapon != "":
 		heat_mult = float(Weapons.get_weapon(weapon).get("heat_mult", 1.0))
-	elif cannon_id != "" and cannon_id != "standard":
-		heat_mult = float(Cannons.get_cannon(cannon_id).get("heat_mult", 1.0))
+	elif cannon_id != "" and cannon_id != "standard" and not class_lobbed:
+		heat_mult = float(Cannons.get_cannon(cannon_id).get("heat_mult", 1.0)) / class_heat_scale
 		if cannon_id == "ice":
 			heat_mult *= float(mods["iceHeatMult"])
 	var gain: float = Cfg.HEAT_PER_SHOT * float(mods["heatPerShotMult"]) * heat_mult
@@ -384,20 +391,27 @@ func bullet_speed() -> float:
 	return speed
 
 func ignite(world, attacker) -> bool:
-	if not alive or spawn_protect > 0 or dash_invuln_ticks > 0 or in_water:
+	if not alive or spawn_protect > 0 or dash_invuln_ticks > 0 or in_water or flags.has("fireproof"):
 		return false
 	if burn_ticks <= 0:
 		burn_tick_timer = Cfg.BURN_TICK_INTERVAL
-	burn_ticks = Cfg.BURN_TICKS
+	burn_ticks = maxi(burn_ticks, int(round(float(Cfg.BURN_TICKS) * _attacker_mod(attacker, "burnDurationMult"))))
 	burn_attacker = attacker
+	burn_dmg_mult = _attacker_mod(attacker, "burnDmgMult")
 	if world != null:
 		world.particles.burst(x, y, [Color("#f97316"), Color("#fbbf24")], 6, 1, 3, 8, 14, world.rng)
 	return true
 
-func apply_shock(world, attacker) -> bool:
-	if not alive or stun_guard_ticks > 0:
+static func _attacker_mod(attacker, key: String) -> float:
+	if attacker == null or not ("mods" in attacker):
+		return 1.0
+	return float(attacker.mods.get(key, 1.0))
+
+func apply_shock(world, attacker, base_ticks: int = Cfg.SHOCK_STUN_TICKS, ignore_guard: bool = false) -> bool:
+	if not alive or (stun_guard_ticks > 0 and not ignore_guard):
 		return false
-	stun_ticks = maxi(stun_ticks, maxi(1, int(round(float(Cfg.SHOCK_STUN_TICKS) * class_cc_mult))))
+	var ticks := float(base_ticks) * _attacker_mod(attacker, "stunDurationMult") * class_cc_mult
+	stun_ticks = maxi(stun_ticks, maxi(1, int(round(ticks))))
 	stun_guard_ticks = Cfg.SHOCK_STUN_GUARD_TICKS
 	interrupt_current_action(CC_STUN)
 	if world != null:
@@ -417,7 +431,7 @@ func _update_burn(world) -> void:
 	burn_tick_timer -= 1
 	if burn_tick_timer <= 0:
 		burn_tick_timer = Cfg.BURN_TICK_INTERVAL
-		var dmg: float = Cfg.BURN_DPS * float(Cfg.BURN_TICK_INTERVAL) / float(Cfg.TICK_HZ)
+		var dmg: float = Cfg.BURN_DPS * float(Cfg.BURN_TICK_INTERVAL) / float(Cfg.TICK_HZ) * burn_dmg_mult
 		world.deal_damage(self, dmg, burn_attacker, "fire")
 	if world.tick % 6 == 0:
 		world.particles.spawn(x + (world.rng.nextf() - 0.5) * width * 0.6, y + (world.rng.nextf() - 0.5) * height * 0.6,
@@ -1414,7 +1428,11 @@ func shoot(world) -> bool:
 
 	var cn := Cannons.get_cannon(cannon_id) if cannon_id != "" and cannon_id != "standard" else {}
 	if not cn.is_empty():
-		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * float(cn["cooldown_mult"]))))
+		var cd_mult := float(cn["cooldown_mult"])
+		if String(cn["mode"]) == "shock":
+			cd_mult *= float(mods["shockReloadMult"])
+		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * cd_mult / class_fire_scale)))
+		scale_v /= class_dmg_scale
 		if bool(cn.get("special", false)):
 			return _shoot_special(world, String(cn["mode"]), muzzle_x, muzzle_y, scale_v)
 		var b := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, float(cn["dmg_scale"]) * scale_v)
@@ -1649,6 +1667,10 @@ func use_ability(world) -> bool:
 				18, 2, 5, 12, 22, world.rng)
 		"acid_bomb":
 			_acid_bomb(world)
+		"fire_ring":
+			_fire_ring(world)
+		"storm_pulse":
+			_storm_pulse(world)
 		"overclock", "grip", "breaker", "silencer", "smoke":
 			var ab_color: Color = ab.get("color", Color.WHITE)
 			world.particles.burst(x, y, [ab_color, Color.WHITE],
@@ -1660,7 +1682,7 @@ func use_ability(world) -> bool:
 				10, 2, 4, 10, 16, world.rng)
 
 	Sfx.play("thunder" if ability_id == "boss_barrage" \
-		else ("explosion" if ability_id == "shockwave" or ability_id == "acid_bomb" else "pickup"), x, y)
+		else ("explosion" if ability_id in ["shockwave", "acid_bomb", "fire_ring", "storm_pulse"] else "pickup"), x, y)
 	if owner != null:
 		world.stat.emit("abilityUses", 1, "add")
 	return true
@@ -1728,11 +1750,45 @@ func _acid_bomb(world) -> void:
 	Sfx.play("steam", x, y)
 	Sfx.play("explosion", x, y)
 
+func _hostiles_within(world, r: float) -> Array:
+	var out := []
+	for other in world.tanks:
+		if other == self or not other.alive or not world.are_hostile(self, other):
+			continue
+		var dx: float = other.x - x
+		var dy: float = other.y - y
+		if dx * dx + dy * dy <= r * r:
+			out.append(other)
+	return out
+
+func _fire_ring(world) -> void:
+	for i in Cfg.FIRE_RING_PATCHES:
+		var a := TAU * float(i) / float(Cfg.FIRE_RING_PATCHES)
+		world.spawn_fire_patch(x + cos(a) * Cfg.FIRE_RING_R, y + sin(a) * Cfg.FIRE_RING_R, self)
+	for other in _hostiles_within(world, Cfg.FIRE_RING_IGNITE_R):
+		other.ignite(world, self)
+	world.spawn_shockwave(x, y, Cfg.FIRE_RING_IGNITE_R, "shockwave", Color("#f97316"), 24)
+	world.particles.burst(x, y, [Color("#f97316"), Color("#fbbf24"), Color("#7c2d12")], 36, 3, 7, 20, 40, world.rng)
+	world.damage_number.emit(x, y - 32, "🔥 ИНФЕРНО!", Color("#f97316"))
+	world.add_shake(7.0, x, y)
+	Sfx.play("flame", x, y)
+
+func _storm_pulse(world) -> void:
+	for other in _hostiles_within(world, Cfg.STORM_PULSE_R):
+		world.deal_damage(other, Cfg.STORM_PULSE_DMG, self, "shock")
+		if other.alive:
+			other.apply_shock(world, self, Cfg.STORM_PULSE_STUN_TICKS, true)
+	world.spawn_shockwave(x, y, Cfg.STORM_PULSE_R, "emp", Color("#facc15"), 26)
+	world.particles.burst(x, y, [Color("#facc15"), Color("#bfdbfe"), Color.WHITE], 40, 3, 7, 18, 36, world.rng)
+	world.damage_number.emit(x, y - 32, "⚡ ЭЛЕКТРОБУРЯ!", Color("#facc15"))
+	world.add_shake(8.0, x, y)
+	Sfx.play("zap", x, y)
+
 func evasion_now() -> float:
 	var chance := float(mods["evasionChance"])
 	if class_move_evasion > 0.0 and Vector2(vx, vy).length() > speed * 0.5:
 		chance = 1.0 - (1.0 - chance) * (1.0 - class_move_evasion)
-	return chance
+	return minf(chance, Cfg.EVASION_CAP)
 
 func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
 	var result := {"applied": 0.0, "killed": false, "evaded": false, "reflected": 0.0}

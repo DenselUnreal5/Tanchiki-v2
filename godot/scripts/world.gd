@@ -1295,6 +1295,10 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		amount *= Cfg.CORRODING_ARMOR_MULT
 		is_corroded_hit = true
 
+	if target.stun_ticks > 0 and attacker != null and attacker != target and "flags" in attacker \
+			and attacker.flags.has("overload"):
+		amount *= Cfg.OVERLOAD_DMG_MULT
+
 	# Ребаланс урона боссов и защита от ваншота
 	if attacker != null and attacker.alive and attacker.is_boss:
 		if mode == "koth" and target != null and not target.is_player_controlled and not target.is_boss:
@@ -1554,7 +1558,36 @@ func spawn_fire_patch(px: float, py: float, owner_tank) -> void:
 		return
 	if fire_patches.size() >= Cfg.FIRE_PATCH_MAX:
 		fire_patches.pop_front()
-	fire_patches.append(Ent.FirePatch.new(px, py, Cfg.FIRE_PATCH_RADIUS, owner_tank, Cfg.FIRE_PATCH_LIFE))
+	var r: float = Cfg.FIRE_PATCH_RADIUS * Tank._attacker_mod(owner_tank, "firePatchRadiusMult")
+	var life := int(round(float(Cfg.FIRE_PATCH_LIFE) * Tank._attacker_mod(owner_tank, "burnDurationMult")))
+	fire_patches.append(Ent.FirePatch.new(px, py, r, owner_tank, life))
+
+func shock_arc(source_tank, attacker, dmg: float) -> Array:
+	var candidates := []
+	var r2: float = Cfg.ARC_CHAIN_R * Cfg.ARC_CHAIN_R
+	for t in tanks:
+		if t == source_tank or t == attacker or not t.alive or not are_hostile(attacker, t):
+			continue
+		var dx: float = t.x - source_tank.x
+		var dy: float = t.y - source_tank.y
+		var d2 := dx * dx + dy * dy
+		if d2 <= r2:
+			candidates.append([d2, t])
+	candidates.sort_custom(func(a, b): return a[0] < b[0])
+	var hit := []
+	for i in mini(Cfg.ARC_CHAIN_TARGETS, candidates.size()):
+		var t = candidates[i][1]
+		deal_damage(t, dmg, attacker, "shock")
+		if t.alive:
+			t.apply_shock(self, attacker)
+		var steps := 6
+		for s in steps + 1:
+			var f := float(s) / float(steps)
+			var px: float = lerpf(source_tank.x, t.x, f) + (rng.nextf() - 0.5) * 10.0
+			var py: float = lerpf(source_tank.y, t.y, f) + (rng.nextf() - 0.5) * 10.0
+			particles.spawn(px, py, Color("#facc15") if s % 2 == 0 else Color.WHITE, 2.5, 10.0, rng)
+		hit.append(t)
+	return hit
 
 func _update_fire_patches() -> void:
 	if fire_patches.is_empty():
@@ -1692,6 +1725,22 @@ func _chimera_death_acid(victim: Tank) -> void:
 		if t.alive and t.is_chimera_clone and t.chimera_clone_parent == victim:
 			deal_damage(t, 9999.0, null, "acid")
 
+func _flashover(victim, attacker) -> void:
+	var r2: float = Cfg.FLASHOVER_R * Cfg.FLASHOVER_R
+	for t in tanks:
+		if t == victim or not t.alive or not are_hostile(attacker, t):
+			continue
+		var dx: float = t.x - victim.x
+		var dy: float = t.y - victim.y
+		if dx * dx + dy * dy <= r2:
+			t.ignite(self, attacker)
+	for i in Cfg.FLASHOVER_PATCHES:
+		var a := TAU * float(i) / float(Cfg.FLASHOVER_PATCHES)
+		spawn_fire_patch(victim.x + cos(a) * 36.0, victim.y + sin(a) * 36.0, attacker)
+	spawn_shockwave(victim.x, victim.y, Cfg.FLASHOVER_R, "shockwave", Color("#f97316"), 20)
+	particles.burst(victim.x, victim.y, [Color("#f97316"), Color("#fbbf24"), Color.WHITE], 28, 3, 7, 18, 34, rng)
+	Sfx.play("flame", victim.x, victim.y)
+
 func _kill_tank(victim, killer, source: String) -> void:
 	if tutorial != null:
 		tutorial.on_tank_killed(victim, source)
@@ -1707,6 +1756,10 @@ func _kill_tank(victim, killer, source: String) -> void:
 	if source == "ram" and killer != null and killer.alive \
 			and killer.flags.has("ram") and killer.flags.has("thickArmor") and killer.flags.has("kamikaze"):
 		_juggernaut_shock(killer, victim.x, victim.y)
+	var burner = victim.burn_attacker
+	if victim.burn_ticks > 0 and burner != null and burner != victim and "flags" in burner \
+			and burner.flags.has("flashover") and are_hostile(burner, victim):
+		_flashover(victim, burner)
 	victim.on_death(self, killer)
 	victim.respawn_timer = Cfg.RESPAWN_DELAY
 	if clip_seconds > 0.0:

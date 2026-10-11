@@ -256,8 +256,11 @@ class Bullet extends RefCounted:
 				return true
 
 			if cannon_kind == "shock":
-				if world.deal_damage(tank, Cfg.SHOCK_DMG, owner, "shock") > 0.0:
+				var shock_dmg: float = Cfg.SHOCK_DMG * Tank._attacker_mod(owner, "shockDmgMult")
+				if world.deal_damage(tank, shock_dmg, owner, "shock") > 0.0:
 					tank.apply_shock(world, owner)
+				if owner != null and owner.flags.has("arcChain"):
+					world.shock_arc(tank, owner, shock_dmg * Cfg.ARC_CHAIN_DMG_FRACTION)
 				alive = false
 				world.particles.burst(x, y, [Color("#facc15"), Color("#bfdbfe"), Color.WHITE], 12, 2, 5, 8, 16, world.rng)
 				world.spawn_shockwave(x, y, 34.0, "emp", Color("#facc15"), 10)

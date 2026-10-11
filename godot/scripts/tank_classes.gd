@@ -92,6 +92,16 @@ static func guard_mult(id: String) -> float:
 static func move_evasion(id: String) -> float:
 	return float(get_entry(id).get("move_evasion", 0.0))
 
+static func fire_scale(id: String) -> float:
+	var interval := maxi(4, int(round(float(Cfg.PLAYER_FIRE_RATE) * float(get_entry(id)["fire_mult"]))))
+	return float(interval) / float(Cfg.PLAYER_FIRE_RATE)
+
+static func dmg_scale(id: String) -> float:
+	return maxf(0.01, float(get_entry(id)["dmg_mult"]))
+
+static func heat_scale(id: String) -> float:
+	return maxf(0.01, float(get_entry(id)["mods"].get("heatPerShotMult", 1.0)))
+
 static func cc_mult(id: String) -> float:
 	return float(get_entry(id).get("cc_mult", 1.0))
 

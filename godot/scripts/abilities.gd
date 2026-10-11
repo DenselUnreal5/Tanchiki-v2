@@ -64,6 +64,16 @@ static var LIST := [
 		"desc": "Взрыв вокруг: все враги в радиусе получают 3 стака яда",
 		"color": Color("#9dff5c"), "cooldown": Cfg.ACID_BOMB_COOLDOWN, "duration": 0,
 	},
+	{
+		"id": "fire_ring", "name": "Огненное кольцо", "icon": "🔥",
+		"desc": "Стена пламени вокруг танка, все враги рядом загораются",
+		"color": Color("#f97316"), "cooldown": Cfg.FIRE_RING_COOLDOWN, "duration": 0,
+	},
+	{
+		"id": "storm_pulse", "name": "Электробуря", "icon": "⚡",
+		"desc": "Разряд вокруг: урон и оглушение всех врагов поблизости",
+		"color": Color("#facc15"), "cooldown": Cfg.STORM_PULSE_COOLDOWN, "duration": 0,
+	},
 
 	{
 		"id": "boss_barrage", "name": "Шквальный залп", "icon": "💢",
