@@ -4,6 +4,10 @@ var game: Node
 var failures := 0
 
 func _ready() -> void:
+	var backup := FileAccess.get_file_as_bytes(Prof.SAVE_PATH)
+	var had_file := FileAccess.file_exists(Prof.SAVE_PATH)
+	Prof.equipped_class = TankClasses.DEFAULT
+	Prof.equipped_cannon = "standard"
 	game = load("res://scenes/main.tscn").instantiate()
 	add_child(game)
 	await get_tree().process_frame
@@ -109,6 +113,12 @@ func _ready() -> void:
 		_check_silencer_ambush(world, tank, foe)
 		_check_ice_build_boss(world, tank, foe)
 
+	if had_file:
+		var f := FileAccess.open(Prof.SAVE_PATH, FileAccess.WRITE)
+		f.store_buffer(backup)
+		f.close()
+	else:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(Prof.SAVE_PATH))
 	print("=== ПРОВЕРКА ПЕРКОВ ЗАВЕРШЕНА, проблем: %d ===" % failures)
 	get_tree().quit(1 if failures > 0 else 0)
 

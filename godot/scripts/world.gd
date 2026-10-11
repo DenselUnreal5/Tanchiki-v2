@@ -1542,6 +1542,17 @@ func _rammer_death_explosion(victim) -> void:
 				base["hp"] = maxf(0.0, float(base["hp"]) - applied_death_base_dmg)
 				damage_number.emit(base["x"], base["y"] - 30, "-%d БАЗА!" % int(applied_death_base_dmg), Color("#ff4444"))
 
+func register_dodge(tank, bullet) -> void:
+	particles.burst(bullet.x, bullet.y, [Color("#38bdf8"), Color.WHITE], 6, 2, 3, 10, 14, rng)
+	if tank.owner == null:
+		return
+	if tutorial != null:
+		tutorial.on_damage_evaded(tank, "bullet")
+	else:
+		damage_number.emit(tank.x, tank.y - 26, I18n.t("dodge.text", {}, "УКЛОНЕНИЕ"), Color("#38bdf8"))
+	if bullet.cannon_kind == "shock":
+		stat.emit("lightningDodges", 1, "add")
+
 func spawn_fire_patch(px: float, py: float, owner_tank) -> void:
 	if GameMap.is_solid_tile(map.tile_at_pixel(px, py)) or map.is_water_at(px, py):
 		return
@@ -1741,6 +1752,8 @@ func _kill_tank(victim, killer, source: String) -> void:
 		killer.kills += 1
 		if killer.owner != null:
 			_credit_player_kill(killer.owner, victim, source)
+			if killer.burn_ticks > 0 and String(victim.enemy_type.get("id", "")) == "pyro":
+				stat.emit("pyroBurnKills", 1, "add")
 		elif killer.is_bot:
 			_maybe_give_bot_perk(killer)
 

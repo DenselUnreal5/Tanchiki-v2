@@ -333,6 +333,7 @@ const RAM_PUSH := 3.0
 const DASH_DISTANCE := 100.0
 const DASH_SPEED_MULT := 1.5
 const DASH_COOLDOWN := 120
+const DODGE_GRACE_R := 20.0
 
 const MINE_DMG := 40.0
 const MINE_SPLASH_DMG := 20.0

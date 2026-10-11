@@ -359,7 +359,10 @@ func is_sniper_chassis() -> bool:
 	return chassis_id == "sniper"
 
 func shot_kind() -> String:
-	return String(enemy_type.get("shot", ""))
+	var kind := String(enemy_type.get("shot", ""))
+	if kind == "" and weapon == "" and Cannons.is_special(cannon_id):
+		kind = String(Cannons.get_cannon(cannon_id)["mode"])
+	return kind
 
 func bullet_speed() -> float:
 	var speed: float = Cfg.BULLET_SPEED * float(mods["bulletSpeedMult"])
@@ -1365,21 +1368,9 @@ func shoot(world) -> bool:
 	if is_chimera_boss or is_chimera_clone:
 		return false
 
-	var special := shot_kind()
-	if special != "":
-		var sb := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, scale_v)
-		sb.cannon_kind = special
-		sb.pierce = 0
-		sb.explosive = false
-		if special == "fire":
-			world.particles.burst(muzzle_x, muzzle_y, [Color("#f97316"), Color("#fbbf24"), Color("#fde68a")], 8, 2, 4, 10, 16, world.rng)
-			Sfx.play("flame", muzzle_x, muzzle_y)
-		else:
-			world.particles.burst(muzzle_x, muzzle_y, [Color("#facc15"), Color("#bfdbfe"), Color.WHITE], 8, 2, 4, 8, 14, world.rng)
-			Sfx.play("zap", muzzle_x, muzzle_y)
-		world.bullets.append(sb)
-		world.notify_shot(self)
-		return true
+	var enemy_shot := String(enemy_type.get("shot", ""))
+	if enemy_shot != "":
+		return _shoot_special(world, enemy_shot, muzzle_x, muzzle_y, scale_v)
 
 	var wp := Weapons.get_weapon(weapon) if weapon != "" else {}
 	if not wp.is_empty():
@@ -1404,6 +1395,8 @@ func shoot(world) -> bool:
 	var cn := Cannons.get_cannon(cannon_id) if cannon_id != "" and cannon_id != "standard" else {}
 	if not cn.is_empty():
 		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * float(cn["cooldown_mult"]))))
+		if bool(cn.get("special", false)):
+			return _shoot_special(world, String(cn["mode"]), muzzle_x, muzzle_y, scale_v)
 		var b := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, float(cn["dmg_scale"]) * scale_v)
 		b.cannon_kind = String(cn["mode"])
 		b.pierce = 0
@@ -1451,6 +1444,21 @@ func shoot(world) -> bool:
 
 	world.particles.burst(muzzle_x, muzzle_y, [Color("#ffee55"), Color("#ffffaa")], 5, 2, 4, 8, 8, world.rng)
 	Sfx.play("shoot", muzzle_x, muzzle_y)
+	world.notify_shot(self)
+	return true
+
+func _shoot_special(world, special: String, muzzle_x: float, muzzle_y: float, scale_v: float) -> bool:
+	var sb := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, scale_v)
+	sb.cannon_kind = special
+	sb.pierce = 0
+	sb.explosive = false
+	if special == "fire":
+		world.particles.burst(muzzle_x, muzzle_y, [Color("#f97316"), Color("#fbbf24"), Color("#fde68a")], 8, 2, 4, 10, 16, world.rng)
+		Sfx.play("flame", muzzle_x, muzzle_y)
+	else:
+		world.particles.burst(muzzle_x, muzzle_y, [Color("#facc15"), Color("#bfdbfe"), Color.WHITE], 8, 2, 4, 8, 14, world.rng)
+		Sfx.play("zap", muzzle_x, muzzle_y)
+	world.bullets.append(sb)
 	world.notify_shot(self)
 	return true
 

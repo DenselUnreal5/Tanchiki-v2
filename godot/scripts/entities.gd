@@ -225,16 +225,22 @@ class Bullet extends RefCounted:
 	const HIT_QUERY_RADIUS := 40.0
 
 	func _hit_tanks(world) -> bool:
-		for tank in world.tank_grid.query(x, y, HIT_QUERY_RADIUS):
+		for tank in world.tank_grid.query(x, y, HIT_QUERY_RADIUS + Cfg.DODGE_GRACE_R):
 			if tank == owner or not tank.alive:
 				continue
 			if not world.are_hostile(owner, tank):
 				continue
 			var dx: float = tank.x - x
 			var dy: float = tank.y - y
-			var hit_r2: float = tank.hit_r * tank.hit_r
-			if dx * dx + dy * dy > hit_r2:
+			var dodging: bool = tank.dash_invuln_ticks > 0
+			var hit_r: float = tank.hit_r + (Cfg.DODGE_GRACE_R if dodging else 0.0)
+			if dx * dx + dy * dy > hit_r * hit_r:
 				continue
+
+			if dodging:
+				world.register_dodge(tank, self)
+				alive = false
+				return true
 
 			if cannon_kind == "shock":
 				if world.deal_damage(tank, Cfg.SHOCK_DMG, owner, "shock") > 0.0:

@@ -174,6 +174,18 @@ func _bind_profile_events() -> void:
 		Sfx.play("unlock")
 		ui.refresh_profile())
 
+	Prof.cannon_unlocked.connect(func(ids: Array):
+		var names := []
+		for id in ids:
+			var c := Cannons.get_cannon(id)
+			names.append("%s %s" % [c["icon"], I18n.dn(c, "name", "cannon")])
+		hud.add_feed(I18n.t("feed.cannonUnlocked", {"names": ", ".join(names)},
+			"Пушка готова к покупке: %s" % ", ".join(names)), Color("#ffb347"))
+		hud.banner(I18n.t("feed.cannonBanner", {"names": ", ".join(names)},
+			"Пушку можно купить в Гараже: %s" % ", ".join(names)), Color("#ffb347"))
+		Sfx.play("unlock")
+		ui.refresh_profile())
+
 	Prof.achievement.connect(func(ids: Array, reward: int):
 		var names := []
 		for id in ids:

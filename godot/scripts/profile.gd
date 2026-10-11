@@ -12,6 +12,7 @@ signal daily_claimed(id: String, reward: int)
 signal weekly_claimed(id: String, reward: int)
 signal rank_up(ids: Array, reward: int)
 signal class_unlocked(ids: Array)
+signal cannon_unlocked(ids: Array)
 
 const STAT_KEYS := [
 	"ramKills",
@@ -37,6 +38,8 @@ const STAT_KEYS := [
 	"globalLevel",
 	"defenseWaveReached",
 	"tutorialCompleted",
+	"pyroBurnKills",
+	"lightningDodges",
 ]
 
 const MAX_STATS := ["rapidKills", "cleanStreak", "damageInGame", "globalLevel", "defenseWaveReached", "tutorialCompleted"]
@@ -65,6 +68,8 @@ const STAT_LABELS := {
 	"globalLevel": "Наивысший уровень",
 	"defenseWaveReached": "Лучшая волна в «Обороне»",
 	"tutorialCompleted": "Обучение пройдено",
+	"pyroBurnKills": "Огнемётчиков уничтожено в огне",
+	"lightningDodges": "Уклонений от молний",
 }
 
 var global_level := 1
@@ -292,10 +297,12 @@ func add_xp(amount: int) -> void:
 func bump_stat(key: String, delta: int = 1) -> void:
 	if not stats.has(key):
 		return
+	var before := int(stats[key])
 	if MAX_STATS.has(key):
 		stats[key] = maxi(int(stats[key]), delta)
 	else:
 		stats[key] = int(stats[key]) + delta
+	_check_cannon_challenges(key, before)
 	check_challenges()
 	check_achievements()
 
@@ -597,12 +604,44 @@ func buy_cannon(id: String) -> Dictionary:
 		return {"ok": false, "reason": "unknown"}
 	if cannon_owned.has(id):
 		return {"ok": false, "reason": "owned"}
+	if not is_cannon_unlocked(id):
+		return {"ok": false, "reason": "locked"}
 	if money < int(c["price"]):
 		return {"ok": false, "reason": "money"}
 	money -= int(c["price"])
 	cannon_owned[id] = true
 	save_profile()
 	return {"ok": true, "price": int(c["price"])}
+
+func is_cannon_unlocked(id: String) -> bool:
+	if is_cannon_owned(id):
+		return true
+	var ch := Cannons.challenge_of(id)
+	if ch.is_empty():
+		return not Cannons.get_cannon(id).is_empty()
+	return int(stats.get(ch["stat"], 0)) >= int(ch["need"])
+
+func cannon_challenge_progress(id: String) -> Dictionary:
+	var ch := Cannons.challenge_of(id)
+	if ch.is_empty():
+		return {}
+	return {
+		"current": mini(int(stats.get(ch["stat"], 0)), int(ch["need"])),
+		"need": int(ch["need"]),
+		"desc": String(ch["desc"]),
+	}
+
+func _check_cannon_challenges(key: String, before: int) -> void:
+	var newly := []
+	for c in Cannons.LIST:
+		var ch: Dictionary = c.get("challenge", {})
+		if ch.is_empty() or String(ch["stat"]) != key or cannon_owned.has(c["id"]):
+			continue
+		var need := int(ch["need"])
+		if before < need and int(stats[key]) >= need:
+			newly.append(String(c["id"]))
+	if not newly.is_empty():
+		cannon_unlocked.emit(newly)
 
 func equip_cannon(id: String) -> Dictionary:
 	if not is_cannon_owned(id):

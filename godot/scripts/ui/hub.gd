@@ -1315,9 +1315,14 @@ func _cosmetic_card(c: Dictionary, type: String, parent: Node, tab_key: String =
 func _cannon_card(c: Dictionary, parent: Node) -> Control:
 	var id := String(c["id"])
 	var owned := Prof.is_cannon_owned(id)
+	var unlocked := Prof.is_cannon_unlocked(id)
 	var equipped := Prof.equipped_cannon == id
-	var can_buy := not owned and Prof.money >= int(c["price"])
+	var can_buy := not owned and unlocked and Prof.money >= int(c["price"])
 	var card_id := "cannon_" + id
+	var progress := Prof.cannon_challenge_progress(id)
+	var challenge_text := ""
+	if not progress.is_empty():
+		challenge_text = _tr("cannon.%s.challenge" % id, String(progress["desc"]))
 
 	var state := ""
 	var action_text := ""
@@ -1326,15 +1331,26 @@ func _cannon_card(c: Dictionary, parent: Node) -> Control:
 		state = _tr("cos.equipped", "Надето") if equipped else _tr("cos.owned", "Куплено")
 		action_text = _tr("cos.equipped", "Надето") if equipped else _tr("cos.equip", "Надеть")
 		action_disabled = equipped
-	else:
+	elif unlocked:
 		state = _tr("cos.price", "Цена: %d 🪙" % int(c["price"]), {"price": c["price"]})
 		action_text = _tr("cos.buy", "Купить · %d 🪙" % int(c["price"]), {"price": c["price"]})
 		action_disabled = not can_buy
+	else:
+		var n := int(progress["current"])
+		var need := int(progress["need"])
+		state = _tr("cannon.locked", "Испытание: %d/%d" % [n, need], {"n": n, "need": need})
+		action_text = _tr("cannon.lockedBtn", "%d/%d" % [n, need], {"n": n, "need": need})
+		action_disabled = true
 
 	var card: CannonCard = CannonCardScene.instantiate()
 	parent.add_child(card)
-	card.set_data(String(c["icon"]), c.get("color", Cfg.UI_TEXT), I18n.dn(c, "name", "cannon"),
-		state, action_text, action_disabled, equipped, can_buy, card_id)
+	card.set_data(String(c["icon"]), c.get("color", Cfg.UI_TEXT) if unlocked else Cfg.UI_MUTED,
+		I18n.dn(c, "name", "cannon"), state, action_text, action_disabled, equipped, can_buy, card_id)
+	var tip := I18n.dn(c, "desc", "cannon")
+	if not unlocked:
+		tip += "\n" + _tr("cannon.lockedTip", "Выполните испытание, чтобы открыть покупку: %s" % challenge_text,
+			{"desc": challenge_text})
+	card.tooltip_text = tip
 	card.action_pressed.connect(func():
 		var ok := false
 		if not owned:
