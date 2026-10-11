@@ -28,6 +28,7 @@ func _ready() -> void:
 	log_msg("--- ПРОВЕРКА ОБУЧЕНИЯ ---")
 	_check_layouts()
 	_check_full_run()
+	_check_turret_rhythm()
 	_check_failures()
 	_check_boss_loss()
 	Prof.check_achievements()
@@ -112,6 +113,31 @@ func _reachable(rows: Array) -> bool:
 			queue.append(n)
 	return false
 
+func _check_turret_rhythm() -> void:
+	log_msg("[2b/4] Ритм турели в задании 3")
+	var world := _new_world()
+	var tut := world.tutorial
+	tut.begin_stage(3)
+	var ptank: Tank = world.players[0].tank
+	ptank.spawn_protect = 0
+	var turret = tut.enemy
+	var seen := {}
+	var shot_ticks := []
+	for i in 600:
+		ptank.hp = ptank.max_hp
+		world.step()
+		for b in world.bullets:
+			if b.owner == turret and not seen.has(b):
+				seen[b] = true
+				shot_ticks.append(world.tick)
+	var even := true
+	for i in range(1, shot_ticks.size()):
+		if absi(int(shot_ticks[i]) - int(shot_ticks[i - 1]) - Tutorial.TURRET_FIRE_INTERVAL) > 1:
+			even = false
+	_check(shot_ticks.size() >= 6, "задание 3: турель стреляет часто (%d выстрелов за 10 с)" % shot_ticks.size())
+	_check(even, "задание 3: интервалы между выстрелами ровные (%s)" % str(shot_ticks))
+	_check(tut.state == Tutorial.ST_PLAY and tut.stage == 3, "задание 3: игрок жив, задание продолжается")
+
 func _pass_stage(world: World, expect_next: int) -> void:
 	var tut := world.tutorial
 	var stage := tut.stage
@@ -151,8 +177,21 @@ func _check_full_run() -> void:
 	ptank.dash_invuln_ticks = 0
 	_check(tut.dodges >= Tutorial.DODGES_NEEDED, "задание 3: уклонения засчитаны (%d)" % tut.dodges)
 	var turret = tut.enemy
-	_pass_stage(world, 4)
-	_check(turret.brain == null, "задание 3: после выполнения турель отключена")
+	world.step()
+	var seen := {}
+	for b in world.bullets:
+		seen[b] = true
+	var shots_after := 0
+	for i in Tutorial.DONE_PAUSE - 2:
+		world.step()
+		for b in world.bullets:
+			if b.owner == turret and not seen.has(b):
+				seen[b] = true
+				shots_after += 1
+	_check(tut.state == Tutorial.ST_DONE and shots_after == 0, "задание 3: после выполнения турель молчит")
+	world.step()
+	world.step()
+	_check(tut.stage == 4, "после паузы начато задание 4")
 
 	tut.generator.discharge(world, ptank.team)
 	_pass_stage(world, 5)

@@ -7,6 +7,8 @@ const FAIL_PAUSE := 90
 const CHECKPOINT_R := 44.0
 const DODGES_NEEDED := 3
 const DODGE_GAP := 15
+const TURRET_FIRE_INTERVAL := 80
+const TURRET_AIM_TOLERANCE := 0.08
 const BARREL_GRACE := 45
 const MOVE_EPS := 0.3
 
@@ -227,18 +229,28 @@ func _spawn_dummy(pos: Vector2, label: String, hp: float, chassis: String, color
 func _spawn_turret(pos: Vector2) -> Tank:
 	var t := Tank.new({
 		"x": pos.x, "y": pos.y, "team": "enemy", "name": "Учебная турель", "owner": null,
-		"max_hp": 99999.0, "speed": 0.0, "fire_rate": 100,
+		"max_hp": 99999.0, "speed": 0.0, "fire_rate": TURRET_FIRE_INTERVAL,
 		"color_key": "enemy", "chassis": "heavy", "dmg_scale": 0.4,
 	})
 	t.net_id = Net.next_tank_id()
 	t.spawn_protect = 0
-	t.brain = BotBrain.new({
-		"accuracy": 0.9, "react_time": 20, "role": "defender",
-		"fire_range": 560.0, "keep_min": 0.0, "keep_max": 9999.0,
-		"lobbed": false, "rng": world.rng,
-	})
+	t.fire_cooldown = TURRET_FIRE_INTERVAL
+	var tank = player_tank()
+	if tank != null:
+		t.turret_angle = atan2(tank.y - pos.y, tank.x - pos.x)
 	world.tanks.append(t)
 	return t
+
+func _drive_turret(tank) -> void:
+	if enemy == null or not enemy.alive:
+		return
+	var aim: float = atan2(tank.y - enemy.y, tank.x - enemy.x)
+	enemy.slew_turret_to(aim)
+	if not enemy.can_fire or tank.spawn_protect > 0:
+		return
+	if absf(Rng.angle_delta(enemy.turret_angle, aim)) > TURRET_AIM_TOLERANCE:
+		return
+	enemy.shoot(world)
 
 func _spawn_enemy(type_id: String, pos: Vector2) -> Tank:
 	var t: Tank = world._spawn_bot("enemy", "enemy", type_id)
@@ -269,6 +281,8 @@ func update() -> void:
 			_fail("Танк уничтожен")
 		return
 	_track(tank)
+	if stage == 3:
+		_drive_turret(tank)
 	match _verdict(tank):
 		1:
 			if stage == TOTAL:
