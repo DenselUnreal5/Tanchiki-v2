@@ -1,0 +1,63 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="SpriteFrames" path="res://art/fx/acid_shots/acid_shots.tres" id="1"]
+[ext_resource type="Script" path="res://art/fx/acid_shots/preview.gd" id="2"]
+
+[node name="EffectsPreview" type="Node2D"]
+script = ExtResource("2")
+
+[node name="Background" type="Polygon2D" parent="."]
+polygon = PackedVector2Array(0, 0, 1100, 0, 1100, 640, 0, 640)
+color = Color(0.12, 0.16, 0.13, 1)
+
+[node name="muzzle" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+position = Vector2(140, 180)
+sprite_frames = ExtResource("1")
+animation = &"muzzle"
+frame = 2
+
+[node name="Label" type="Label" parent="muzzle"]
+offset_left = -105.0
+offset_top = 130.0
+offset_right = 125.0
+text = "muzzle / 24 fps"
+
+[node name="projectile" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+position = Vector2(400, 180)
+sprite_frames = ExtResource("1")
+animation = &"projectile"
+frame = 2
+
+[node name="Label" type="Label" parent="projectile"]
+offset_left = -105.0
+offset_top = 130.0
+offset_right = 125.0
+text = "projectile / 16 fps"
+
+[node name="impact" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+position = Vector2(660, 180)
+sprite_frames = ExtResource("1")
+animation = &"impact"
+frame = 2
+
+[node name="Label" type="Label" parent="impact"]
+offset_left = -105.0
+offset_top = 130.0
+offset_right = 125.0
+text = "impact / 18 fps"
+
+[node name="acid_cloud" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+position = Vector2(920, 180)
+sprite_frames = ExtResource("1")
+animation = &"acid_cloud"
+frame = 2
+
+[node name="Label" type="Label" parent="acid_cloud"]
+offset_left = -105.0
+offset_top = 130.0
+offset_right = 125.0
+text = "acid_cloud / 12 fps"

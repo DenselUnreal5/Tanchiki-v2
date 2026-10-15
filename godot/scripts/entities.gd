@@ -105,6 +105,7 @@ class Bullet extends RefCounted:
 	var acid_burst := false
 	var from_cannon := false
 	var trail_accum := 0.0
+	var fx_spawn_tick := -1
 
 	func _init(x_: float, y_: float, angle: float, owner_, dmg_scale_: float = 1.0) -> void:
 		x = x_
@@ -357,6 +358,7 @@ class Bullet extends RefCounted:
 		Sfx.play("explosion", x, y)
 
 	func _explode(world, direct_target, base_damage: float) -> void:
+		world.add_shot_effect("standard", "explosion", Vector2(x, y), 0.0, minf(splash_r * 1.5, 110.0))
 		var r := splash_r
 		var r2 := r * r
 		for other in world.tank_grid.query(x, y, r):

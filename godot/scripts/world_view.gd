@@ -7,6 +7,7 @@ var floaters: Array = []
 var view_off := Vector2.ZERO
 var ao: AoLayer = null
 var _view := Rect2()
+var shot_fx: ShotFx = null
 
 ## Чанковый кэш статичных тайлов (см. TileCache). game.gd создаёт один на
 ## матч и раздаёт всем видам; если его не дали — вид заводит свой.
@@ -19,6 +20,10 @@ var bake_snow := -1.0
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	if world != null:
+		shot_fx = ShotFx.new()
+		shot_fx.view = self
+		add_child(shot_fx)
 	# Кэш тайлов заводим сразу, а не в первом _draw: видимые чанки
 	# запекаются уже в первом кадре (он закрыт экраном загрузки).
 	if world != null and tile_cache == null:
@@ -628,6 +633,8 @@ func _draw_acid_pools() -> void:
 				draw_circle(b_pos - Vector2(0.6, 0.6), maxf(0.5, b_sz * 0.4), Color(0.9, 1.0, 0.6, 0.9 * a))
 
 func _draw_fire_patches() -> void:
+	if shot_fx != null:
+		return
 	if world == null or world.fire_patches.is_empty():
 		return
 	for patch in world.fire_patches:
@@ -1635,6 +1642,8 @@ func _draw_power_generators() -> void:
 
 func _draw_bullets() -> void:
 	for b in world.bullets:
+		if shot_fx != null and not b.lobbed:
+			continue
 		if not b.alive or not _in_view(b.x, b.y, 10):
 			continue
 		var pos := Vector2(b.x, b.y)
@@ -2570,7 +2579,8 @@ func _draw_tank(tank: Tank) -> void:
 				Vector2(0, -26), Vector2(-5, -34), Vector2(5, -34)]), palette["trim"])
 
 		if tank.freeze_ticks > 0:
-			_draw_tank_freeze_ice(tank, pos, hw, hh, anim_tick)
+			if shot_fx == null:
+				_draw_tank_freeze_ice(tank, pos, hw, hh, anim_tick)
 
 		draw_set_transform(view_off)
 		var bar_w := 26.0

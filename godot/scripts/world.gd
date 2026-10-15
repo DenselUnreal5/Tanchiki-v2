@@ -43,6 +43,18 @@ var tanks: Array = []
 var tank_grid := SpatialGrid.new()
 var bullet_grid := SpatialGrid.new()
 var bullets: Array = []
+var shot_effects: Array = []
+
+func add_shot_effect(kind: String, anim: String, pos: Vector2, angle: float = 0.0, size: float = 40.0) -> void:
+	shot_effects.append({"kind": kind, "anim": anim, "pos": pos,
+		"angle": angle, "size": size, "tick": tick})
+	if shot_effects.size() > 160:
+		shot_effects.pop_front()
+
+func _expire_shot_effects() -> void:
+	while not shot_effects.is_empty() and tick - int(shot_effects[0].tick) > 60:
+		shot_effects.pop_front()
+
 var mines: Array = []
 var acid_pools: Array = []
 var fire_patches: Array = []
@@ -438,6 +450,7 @@ func roster() -> Array:
 
 func step_cosmetic() -> void:
 	tick += 1
+	_expire_shot_effects()
 	Sfx.advance()
 	weather.update()
 	particles.update()
@@ -1114,6 +1127,7 @@ func step() -> void:
 	if finished_flag:
 		return
 	tick += 1
+	_expire_shot_effects()
 	Sfx.advance()
 	weather.update()
 	if mode == "koth":
@@ -1130,7 +1144,12 @@ func step() -> void:
 	_separate_tanks()
 
 	for b in bullets:
+		if b.fx_spawn_tick < 0:
+			b.fx_spawn_tick = tick
+			add_shot_effect(b.cannon_kind, "muzzle", Vector2(b.x, b.y), atan2(b.vy, b.vx), 38.0)
 		b.update(self)
+		if not b.alive and b.life > 0 and b.x >= 0 and b.y >= 0 and b.x <= map.width and b.y <= map.height:
+			add_shot_effect(b.cannon_kind, "impact", Vector2(b.x, b.y), 0.0, 44.0)
 	var live_bullets := []
 	for b in bullets:
 		if b.alive:
