@@ -2222,6 +2222,303 @@ func _draw_tank(tank: Tank) -> void:
 	draw_set_transform(view_off + pos)
 	_draw_ellipse(Vector2(2, 4), hw * 1.05, hh / 1.2, Color(0, 0, 0, 0.25))
 
+	var sprite_hull := TankSprites.hull_class(tank)
+	if sprite_hull != "":
+		_draw_tank_sprite(tank, sprite_hull, palette, pos, hw, hh, anim_tick)
+	else:
+		_draw_tank_shape(tank, palette, shape, pos, hw, hh, anim_tick)
+
+	draw_set_transform(view_off + pos)
+
+	if world != null:
+		if tank.ability_timer > 0:
+			_draw_ability_state(tank)
+
+		if tank.spawn_protect > 0:
+			draw_arc(Vector2.ZERO, 20, 0, TAU, 32,
+				Color(1, 1, 1, 0.4 + 0.3 * sin(anim_tick * 0.3)), 2.0)
+		if tank.shield_hp > 0.0:
+			var sh := Cfg.shield
+			sh.a = 0.55
+			draw_arc(Vector2.ZERO, 18, 0, TAU, 32, sh, 2.0)
+		if tank.turbo_timer > 0:
+			for k in 3:
+				var a := tank.body_angle + PI + (k - 1) * 0.3
+				draw_circle(Vector2(cos(a) * 20.0, sin(a) * 20.0), 3, Color(1, 0.67, 0.2, 0.5))
+
+		if tank.dash_invuln_ticks > 0:
+			var invuln_alpha := clampf(float(tank.dash_invuln_ticks) / 15.0, 0.25, 1.0)
+			# Protective afterimage ring and distortion aura during dash i-frames
+			draw_arc(Vector2.ZERO, maxf(hw, hh) + 4.0, 0, TAU, 28, Color(0.3, 0.85, 1.0, 0.7 * invuln_alpha), 2.5)
+			draw_arc(Vector2.ZERO, maxf(hw, hh) + 8.0, 0, TAU, 28, Color(1.0, 1.0, 1.0, 0.45 * invuln_alpha), 1.2)
+			# Afterburner / jet boost flare pointing opposite to dash_dir
+			var bdir := -tank.dash_dir if tank.dash_dir.length_squared() > 0.01 else Vector2(-cos(tank.angle), -sin(tank.angle))
+			for jt in 4:
+				var jdist := (float(jt) + 1.0) * 7.0
+				var jcol := Color(0.25, 0.88, 1.0, 0.55 * invuln_alpha * (1.0 - float(jt) * 0.2))
+				draw_circle(bdir * jdist, 3.5 - float(jt) * 0.6, jcol)
+
+		if tank.weapon != "" and tank.weapon_timer > 0:
+			var weapon := Weapons.get_weapon(tank.weapon)
+			if not weapon.is_empty():
+				var frac := maxf(0.0, float(tank.weapon_timer) / float(weapon["duration"]))
+				draw_circle(Vector2(0, -20), 10, Color(0.06, 0.08, 0.10, 0.9))
+				draw_arc(Vector2(0, -20), 10, 0, TAU, 24, weapon["color"], 1.5)
+				var ring: Color = weapon["color"]
+				ring.a = 0.8
+				draw_arc(Vector2(0, -20), 13, -PI / 2.0, -PI / 2.0 + frac * TAU, 32, ring, 2.0)
+				_draw_icon_or_text("weapon_" + String(tank.weapon), String(weapon["icon"]), Vector2(0, -20), 16.0, Color.WHITE)
+
+		if is_viewer:
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(0, -26), Vector2(-5, -34), Vector2(5, -34)]), palette["trim"])
+
+		if tank.freeze_ticks > 0:
+			if shot_fx == null:
+				_draw_tank_freeze_ice(tank, pos, hw, hh, anim_tick)
+
+		draw_set_transform(view_off)
+		var bar_w := 26.0
+		var ratio := maxf(0.0, tank.hp / tank.max_hp)
+		var is_local_player := is_viewer or tank.is_player_controlled
+		if ratio < 1.0 or not is_viewer or is_local_player:
+			_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w, 4, Color(0, 0, 0, 0.6))
+			var bar := Color("#44cc44") if ratio > 0.5 else (Color("#cccc44") if ratio > 0.25 else Color("#cc4444"))
+			_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w * ratio, 4, bar)
+		if tank.shield_hp > 0.0:
+			_rect(tank.x - bar_w * 0.5, tank.y - 26, bar_w * minf(1.0, tank.shield_hp / 30.0), 2, Cfg.shield)
+		if is_local_player:
+			var dash_y := tank.y - 17.0
+			var dash_cd_max := float(tank.dash_cooldown_max())
+			var dash_frac := 1.0 if tank.dash_cooldown <= 0 else clampf(1.0 - float(tank.dash_cooldown) / dash_cd_max, 0.0, 1.0)
+			var dash_ready := tank.dash_cooldown <= 0
+			_rect(tank.x - bar_w * 0.5, dash_y, bar_w, 2.5, Color(0.05, 0.08, 0.12, 0.75))
+			var dash_color: Color
+			if tank.dash_invuln_ticks > 0:
+				dash_color = Color("#ffffff")
+			elif dash_ready:
+				var pulse := 0.85 + 0.15 * sin(anim_tick * 0.4)
+				dash_color = Color(0.15, 0.85, 1.0, pulse)
+			else:
+				dash_color = Color(0.3, 0.6, 0.85, 0.65)
+			_rect(tank.x - bar_w * 0.5, dash_y, bar_w * dash_frac, 2.5, dash_color)
+			draw_rect(Rect2(tank.x - bar_w * 0.5, dash_y, bar_w, 2.5), Color(0.4, 0.7, 1.0, 0.35 if not dash_ready else 0.7), false, 0.7)
+			var icon_c := Color("#38bdf8") if dash_ready else Color(0.5, 0.6, 0.7, 0.5)
+			_text_center("⚡", Vector2(tank.x - bar_w * 0.5 - 5.5, dash_y + 1.2), 7, icon_c)
+		if tank.freeze_ticks > 0:
+			var freeze_max: float = float(tank.freeze_max_ticks) if "freeze_max_ticks" in tank and tank.freeze_max_ticks > 0 else float(Cfg.ICE_FREEZE_TICKS)
+			var fratio := clampf(float(tank.freeze_ticks) / freeze_max, 0.0, 1.0)
+			var f_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
+			_rect(tank.x - bar_w * 0.5, f_y, bar_w, 2.5, Color(0.04, 0.12, 0.20, 0.85))
+			_rect(tank.x - bar_w * 0.5, f_y, bar_w * fratio, 2.5, Color("#38bdf8"))
+			draw_rect(Rect2(tank.x - bar_w * 0.5, f_y, bar_w, 2.5), Color(0.8, 0.95, 1.0, 0.45), false, 0.8)
+			_text_center("❄", Vector2(tank.x - bar_w * 0.5 - 6.0, f_y + 1.0), 8, Color("#a5f3fc"))
+
+		if tank.acid_stacks > 0:
+			var a_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
+			if tank.freeze_ticks > 0:
+				a_y -= 4.0
+			var aratio := clampf(float(tank.acid_stacks) / float(Cfg.ACID_STACK_MAX), 0.0, 1.0)
+			_rect(tank.x - bar_w * 0.5, a_y, bar_w, 2.5, Color(0.10, 0.20, 0.05, 0.85))
+			_rect(tank.x - bar_w * 0.5, a_y, bar_w * aratio, 2.5, Color("#84cc16"))
+			draw_rect(Rect2(tank.x - bar_w * 0.5, a_y, bar_w, 2.5), Color(0.7, 1.0, 0.3, 0.45), false, 0.8)
+			_text_center("🧪", Vector2(tank.x - bar_w * 0.5 - 6.0, a_y + 1.0), 8, Color("#bef264"))
+
+		if tank.burn_ticks > 0 or tank.stun_ticks > 0:
+			var s_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
+			if tank.freeze_ticks > 0:
+				s_y -= 4.0
+			if tank.acid_stacks > 0:
+				s_y -= 4.0
+			if tank.burn_ticks > 0:
+				var bratio := clampf(float(tank.burn_ticks) / float(Cfg.BURN_TICKS), 0.0, 1.0)
+				_rect(tank.x - bar_w * 0.5, s_y, bar_w, 2.5, Color(0.22, 0.08, 0.02, 0.85))
+				_rect(tank.x - bar_w * 0.5, s_y, bar_w * bratio, 2.5, Color("#f97316"))
+				_text_center("🔥" if tank.burn_stacks <= 1 else "🔥%d" % tank.burn_stacks, Vector2(tank.x - bar_w * 0.5 - (6.0 if tank.burn_stacks <= 1 else 9.0), s_y + 1.0), 8, Color("#fdba74"))
+				s_y -= 4.0
+			if tank.stun_ticks > 0:
+				var sratio := clampf(float(tank.stun_ticks) / float(Cfg.SHOCK_STUN_TICKS), 0.0, 1.0)
+				_rect(tank.x - bar_w * 0.5, s_y, bar_w, 2.5, Color(0.18, 0.16, 0.03, 0.85))
+				_rect(tank.x - bar_w * 0.5, s_y, bar_w * sratio, 2.5, Color("#facc15"))
+				_text_center("⚡", Vector2(tank.x - bar_w * 0.5 - 6.0, s_y + 1.0), 8, Color("#fde047"))
+
+		if not is_viewer:
+			var name_color := Color("#88ccff") if is_ally else (Color("#ffee55") if tank.is_player_controlled else Color("#ffaaaa"))
+			_text_center(tank.name, Vector2(tank.x, tank.y - 32), 10, name_color)
+			if not tank.perk_ids.is_empty():
+				var n: int = tank.perk_ids.size()
+				var step := 16.0
+				for i in n:
+					_draw_perk_icon(String(tank.perk_ids[i]),
+						Vector2(tank.x + (i - (n - 1) * 0.5) * step, tank.y - 45), 14.0, Color("#ffcc66"))
+
+		if tank.carrying_flag:
+			_text_center("⚑", Vector2(tank.x + 16, tank.y - 16), 14, Color("#ffee55"))
+
+		if tank.is_chimera_clone:
+			var holo_pulse := 0.65 + 0.35 * sin(float(world.tick) * 0.4)
+			var scanline_c := Color(0.2, 0.9, 1.0, 0.35 * holo_pulse)
+			for sl in 5:
+				var s_y: float = tank.y - hh + float(sl) * (tank.height / 4.0) + fmod(float(world.tick) * 1.5, tank.height / 4.0)
+				draw_line(Vector2(tank.x - hw - 2.0, s_y), Vector2(tank.x + hw + 2.0, s_y), scanline_c, 1.0)
+			draw_arc(Vector2(tank.x + sin(float(world.tick) * 0.5) * 2.5, tank.y), hw * 1.1, 0, TAU, 16, Color(1.0, 0.2, 0.8, 0.3 * holo_pulse), 1.5)
+
+		if tank.shadow_timer > 0:
+			var shim_pulse := 0.45 + 0.35 * sin(float(world.tick) * 0.3)
+			var shim_col := Color(0.4, 0.9, 0.3, 0.40 * shim_pulse)
+			draw_arc(Vector2(tank.x, tank.y), hw * 1.25, 0, TAU, 20, shim_col, 2.0)
+			for sh in 3:
+				var a_sh := float(world.tick) * 0.08 + float(sh) * 2.1
+				draw_line(Vector2(tank.x - cos(a_sh) * hw, tank.y - sin(a_sh) * hh),
+					Vector2(tank.x + cos(a_sh) * hw, tank.y + sin(a_sh) * hh),
+					Color(0.8, 1.0, 0.5, 0.25 * shim_pulse), 1.5)
+
+const SKIN_BODY := {
+	"cyberpunk": Color("#090d16"), "magma": Color("#16110f"), "steampunk": Color("#78350f"),
+	"void": Color("#090614"), "dragon": Color("#064e3b"), "toxic": Color("#18181b"),
+	"golden_emperor": Color("#d4af37"), "arctic_frost": Color("#0284c7"),
+}
+const SKIN_TURRET := {
+	"cyberpunk": Color("#090d16"), "magma": Color("#16110f"), "steampunk": Color("#b45309"),
+	"void": Color("#090614"), "dragon": Color("#064e3b"), "toxic": Color("#18181b"),
+	"golden_emperor": Color("#d4af37"), "arctic_frost": Color("#0284c7"),
+}
+const SKIN_GLOW := {
+	"cyberpunk": Color("#00f0ff"), "magma": Color("#ff4500"), "void": Color("#a855f7"),
+	"dragon": Color("#fbbf24"), "toxic": Color("#84cc16"), "arctic_frost": Color("#38bdf8"),
+}
+
+var _sprite_camo_cache: Dictionary = {}
+
+func _status_tints(tank: Tank, anim_tick: float) -> Array:
+	var tints := []
+	if tank.freeze_ticks > 0:
+		tints.append(Color(0.35, 0.75, 1.0, 0.38))
+	if tank.acid_stacks > 0:
+		tints.append(Color(0.52, 0.85, 0.09, clampf(float(tank.acid_stacks) * 0.10 + 0.15, 0.15, 0.55)))
+	if tank.burn_ticks > 0:
+		var burn_flick: float = 0.7 + 0.3 * sin(anim_tick * 0.5)
+		tints.append(Color(0.95, 0.40, 0.08, (0.2 + 0.1 * float(maxi(1, tank.burn_stacks))) * burn_flick))
+	if tank.stun_ticks > 0:
+		var zap: float = 0.6 + 0.4 * absf(sin(anim_tick * 0.9))
+		tints.append(Color(0.98, 0.85, 0.20, 0.22 * zap))
+	return tints
+
+func _draw_tank_sprite(tank: Tank, hull_cls: String, palette: Dictionary, pos: Vector2, hw: float, hh: float, anim_tick: float) -> void:
+	var hull := TankSprites.part(hull_cls, "hull")
+	var turret := TankSprites.part(TankSprites.turret_class(tank, hull_cls), "turret")
+	if hull.is_empty() or turret.is_empty():
+		_draw_tank_shape(tank, palette, TankArt.chassis(tank.chassis_id), pos, hw, hh, anim_tick)
+		return
+	var rect: Rect2i = hull["rect"]
+	var center: Vector2 = hull["center"]
+	var k := tank.height / float(rect.size.y)
+	var body_rot := tank.body_angle + PI / 2.0
+	var silhouette := tank.color_key == "silhouette"
+	var skin_id := String(tank.cosmetics.get("skin", "none"))
+	var body_color: Color = SKIN_BODY.get(skin_id, palette["body"])
+	var turret_id := String(tank.cosmetics.get("turret", "none"))
+	var turret_color: Color = SKIN_TURRET.get(skin_id, body_color)
+	if turret_id != "" and turret_id != "none":
+		turret_color = Cosmetics.color_of("turret", turret_id, body_color)
+	if silhouette:
+		body_color = palette["body"]
+		turret_color = palette["body"]
+	var wear := 1.0 - clampf(tank.hp / tank.max_hp, 0.0, 1.0)
+	var grime := 1.0 - maxf(0.0, wear - 0.35) * 0.6
+	var detail_mod := Color(0.10, 0.11, 0.13) if silhouette else Color(grime, grime, grime)
+	var tints := [] if silhouette else _status_tints(tank, anim_tick)
+
+	draw_set_transform(view_off + pos, body_rot, Vector2(k, k))
+	draw_texture(hull["tex"], -center, detail_mod)
+	draw_texture(hull["paint"], -center, TankSprites.paint_modulate(body_color * grime))
+	if not silhouette:
+		var camo := _sprite_camo(hull_cls, hull, String(tank.cosmetics.get("camo", "none")))
+		if camo != null:
+			draw_texture(camo, -center, Color(TankSprites.PAINT_GAIN * grime, TankSprites.PAINT_GAIN * grime, TankSprites.PAINT_GAIN * grime))
+		if SKIN_GLOW.has(skin_id):
+			var glow: Color = SKIN_GLOW[skin_id]
+			glow.a = 0.18 + 0.10 * sin(anim_tick * 0.12)
+			draw_texture(hull["mask"], -center, glow)
+	for tint in tints:
+		draw_texture(hull["mask"], -center, tint)
+
+	draw_set_transform(view_off + pos, body_rot)
+	if not silhouette:
+		_draw_hull_pattern(tank, hw * 0.75, hh * 0.75)
+		_draw_build_accents(tank, hw, hh, anim_tick)
+
+	var mount := pos + ((TankSprites.PIVOT - center) * k).rotated(body_rot)
+	var turret_rot := tank.turret_angle + PI / 2.0
+	draw_set_transform(view_off + mount, turret_rot, Vector2(k, k))
+	draw_texture(turret["tex"], -TankSprites.PIVOT, detail_mod)
+	draw_texture(turret["paint"], -TankSprites.PIVOT, TankSprites.paint_modulate(turret_color * grime))
+	for tint in tints:
+		draw_texture(turret["mask"], -TankSprites.PIVOT, tint)
+	if silhouette:
+		draw_set_transform(view_off + pos)
+		return
+	var tip_y := float((turret["rect"] as Rect2i).position.y) - TankSprites.PIVOT.y
+	if tank.cannon_id != "" and tank.cannon_id != "standard" and not TankSprites.BY_CANNON.has(tank.cannon_id):
+		var cn := Cannons.get_cannon(tank.cannon_id)
+		if cn.has("color"):
+			draw_rect(Rect2(-3.5, tip_y + 5.0, 7.0, 4.0), cn["color"])
+	if tank.heat > 0.25:
+		var heat_glow := Color(1.0, 0.35, 0.1, minf(0.85, (tank.heat - 0.25) * 1.1))
+		if tank.overheated:
+			heat_glow = Color(1.0, 0.75, 0.45, 0.75 + 0.2 * sin(anim_tick * 0.4))
+		draw_rect(Rect2(-3.5, tip_y, 7.0, 11.0), heat_glow)
+	draw_set_transform(view_off + pos)
+
+func _sprite_camo(hull_cls: String, hull: Dictionary, camo_id: String) -> Texture2D:
+	if camo_id == "" or camo_id == "none":
+		return null
+	var key := hull_cls + ":" + camo_id
+	if _sprite_camo_cache.has(key):
+		return _sprite_camo_cache[key]
+	var camo := Cosmetics.get_cosmetic("camo", camo_id)
+	var tex: Texture2D = null
+	if not camo.is_empty() and camo.has("a"):
+		var paint_img: Image = (hull["paint"] as Texture2D).get_image()
+		if paint_img == null or paint_img.is_empty():
+			_sprite_camo_cache[key] = null
+			return null
+		if paint_img.is_compressed():
+			paint_img.decompress()
+		var rect: Rect2i = hull["rect"]
+		var center: Vector2 = hull["center"]
+		var geo := _build_camo_geometry(camo_id, float(rect.size.x) * 0.5, float(rect.size.y) * 0.5)
+		var slots := [Color(camo["a"]), Color(camo["b"])]
+		var img := Image.create(paint_img.get_width(), paint_img.get_height(), false, Image.FORMAT_RGBA8)
+		for y in paint_img.get_height():
+			for x in paint_img.get_width():
+				var px := paint_img.get_pixel(x, y)
+				if px.a <= 0.0:
+					continue
+				var pt := Vector2(float(x) + 0.5, float(y) + 0.5) - center
+				var slot := -1
+				for shape in geo:
+					if _camo_shape_has(shape, pt):
+						slot = int(shape["slot"])
+				if slot < 0:
+					continue
+				var col: Color = slots[slot]
+				img.set_pixel(x, y, Color(col.r * px.r, col.g * px.r, col.b * px.r, px.a))
+		tex = ImageTexture.create_from_image(img)
+	_sprite_camo_cache[key] = tex
+	return tex
+
+func _camo_shape_has(shape: Dictionary, pt: Vector2) -> bool:
+	match int(shape["t"]):
+		0:
+			return Rect2(shape["x"], shape["y"], shape["w"], shape["h"]).has_point(pt)
+		1:
+			return Geometry2D.is_point_in_polygon(pt, shape["pts"])
+		2:
+			return pt.distance_to(Vector2(shape["x"], shape["y"])) <= float(shape["r"])
+	return false
+
+func _draw_tank_shape(tank: Tank, palette: Dictionary, shape: Dictionary, pos: Vector2, hw: float, hh: float, anim_tick: float) -> void:
 	draw_set_transform(view_off + pos, tank.body_angle + PI / 2.0)
 	var skin_id := String(tank.cosmetics.get("skin", "none"))
 	var has_skin := skin_id != "" and skin_id != "none"
@@ -2370,25 +2667,8 @@ func _draw_tank(tank: Tank) -> void:
 		draw_colored_polygon(body, Color(0.98, 0.85, 0.20, 0.22 * zap))
 		draw_polyline(body, Color(0.80, 0.90, 1.0, 0.95 * zap), 1.6)
 
-	# Synergy visual accents on hull
 	if tank.has_method("has_build"):
-		if tank.has_build("juggernaut"):
-			var ram_c := Color("#ef4444", 0.95)
-			var pulse := 0.75 + 0.25 * sin(anim_tick * 0.2)
-			draw_line(Vector2(-hw * 0.95, -hh - 2), Vector2(0, -hh - 7), ram_c, 3.0)
-			draw_line(Vector2(0, -hh - 7), Vector2(hw * 0.95, -hh - 2), ram_c, 3.0)
-			draw_circle(Vector2(0, -hh - 7), 2.5 * pulse, Color("#fbbf24"))
-		if tank.has_build("stealth_hunter"):
-			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#10b981", 0.85))
-		if tank.has_build("lightning"):
-			var spark_a := 0.5 + 0.5 * sin(anim_tick * 0.3)
-			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#f59e0b", spark_a))
-		if tank.has_build("ice_hunter"):
-			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#06b6d4", 0.9))
-		if tank.has_build("acid_hunter"):
-			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#84cc16", 0.9))
-		if tank.has_build("ghost_sniper"):
-			draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#a855f7", 0.9))
+		_draw_build_accents(tank, hw, hh, anim_tick)
 		if bool(shape.get("plow", false)):
 			var plow_dark := Color("#1c1d1f")
 			var plow_steel := Color("#52525b")
@@ -2404,7 +2684,6 @@ func _draw_tank(tank: Tank) -> void:
 			draw_colored_polygon(plow_pts, plow_dark)
 			draw_polyline(plow_pts, plow_steel, 2.0)
 
-			# 5 Sharp triangular steel spikes
 			for spk_x in [-hw * 0.75, -hw * 0.35, 0.0, hw * 0.35, hw * 0.75]:
 				var tip_y := -hh - 14.0 if absf(spk_x) < 2.0 else -hh - 10.0
 				var spike_pts := PackedVector2Array([
@@ -2415,13 +2694,11 @@ func _draw_tank(tank: Tank) -> void:
 				draw_colored_polygon(spike_pts, Color("#e4e4e7"))
 				draw_line(Vector2(spk_x, tip_y), Vector2(spk_x + 2.5, -hh - 5.0), Color(1, 1, 1, 0.75), 1.0)
 
-			# Warning hazard stripes along plow
 			for i in 4:
 				var sx := -hw + 4.0 + float(i) * (hw * 2.0 - 8.0) / 4.0
 				draw_line(Vector2(sx, -hh + 4.0), Vector2(sx + 4.0, -hh - 3.0), Color("#f59e0b", 0.9), 2.0)
 
 		if bool(shape.get("chimera", false)):
-			# Stealth-faceted angular armor plates & twin glowing acid canisters
 			var pulse := 0.75 + 0.25 * sin(anim_tick * 0.25)
 			for c_side in [-1.0, 1.0]:
 				var cx: float = c_side * (hw - 4.5)
@@ -2591,150 +2868,24 @@ func _draw_tank(tank: Tank) -> void:
 		draw_line(Vector2(hw - 5.0, hh - 4.0), Vector2(hw - 7.0, hh - 14.0),
 			Color(0.1, 0.1, 0.1, 0.85), 1.0)
 
-	draw_set_transform(view_off + pos)
-
-	if world != null:
-		if tank.ability_timer > 0:
-			_draw_ability_state(tank)
-
-		if tank.spawn_protect > 0:
-			draw_arc(Vector2.ZERO, 20, 0, TAU, 32,
-				Color(1, 1, 1, 0.4 + 0.3 * sin(anim_tick * 0.3)), 2.0)
-		if tank.shield_hp > 0.0:
-			var sh := Cfg.shield
-			sh.a = 0.55
-			draw_arc(Vector2.ZERO, 18, 0, TAU, 32, sh, 2.0)
-		if tank.turbo_timer > 0:
-			for k in 3:
-				var a := tank.body_angle + PI + (k - 1) * 0.3
-				draw_circle(Vector2(cos(a) * 20.0, sin(a) * 20.0), 3, Color(1, 0.67, 0.2, 0.5))
-
-		if tank.dash_invuln_ticks > 0:
-			var invuln_alpha := clampf(float(tank.dash_invuln_ticks) / 15.0, 0.25, 1.0)
-			# Protective afterimage ring and distortion aura during dash i-frames
-			draw_arc(Vector2.ZERO, maxf(hw, hh) + 4.0, 0, TAU, 28, Color(0.3, 0.85, 1.0, 0.7 * invuln_alpha), 2.5)
-			draw_arc(Vector2.ZERO, maxf(hw, hh) + 8.0, 0, TAU, 28, Color(1.0, 1.0, 1.0, 0.45 * invuln_alpha), 1.2)
-			# Afterburner / jet boost flare pointing opposite to dash_dir
-			var bdir := -tank.dash_dir if tank.dash_dir.length_squared() > 0.01 else Vector2(-cos(tank.angle), -sin(tank.angle))
-			for jt in 4:
-				var jdist := (float(jt) + 1.0) * 7.0
-				var jcol := Color(0.25, 0.88, 1.0, 0.55 * invuln_alpha * (1.0 - float(jt) * 0.2))
-				draw_circle(bdir * jdist, 3.5 - float(jt) * 0.6, jcol)
-
-		if tank.weapon != "" and tank.weapon_timer > 0:
-			var weapon := Weapons.get_weapon(tank.weapon)
-			if not weapon.is_empty():
-				var frac := maxf(0.0, float(tank.weapon_timer) / float(weapon["duration"]))
-				draw_circle(Vector2(0, -20), 10, Color(0.06, 0.08, 0.10, 0.9))
-				draw_arc(Vector2(0, -20), 10, 0, TAU, 24, weapon["color"], 1.5)
-				var ring: Color = weapon["color"]
-				ring.a = 0.8
-				draw_arc(Vector2(0, -20), 13, -PI / 2.0, -PI / 2.0 + frac * TAU, 32, ring, 2.0)
-				_draw_icon_or_text("weapon_" + String(tank.weapon), String(weapon["icon"]), Vector2(0, -20), 16.0, Color.WHITE)
-
-		if is_viewer:
-			draw_colored_polygon(PackedVector2Array([
-				Vector2(0, -26), Vector2(-5, -34), Vector2(5, -34)]), palette["trim"])
-
-		if tank.freeze_ticks > 0:
-			if shot_fx == null:
-				_draw_tank_freeze_ice(tank, pos, hw, hh, anim_tick)
-
-		draw_set_transform(view_off)
-		var bar_w := 26.0
-		var ratio := maxf(0.0, tank.hp / tank.max_hp)
-		var is_local_player := is_viewer or tank.is_player_controlled
-		if ratio < 1.0 or not is_viewer or is_local_player:
-			_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w, 4, Color(0, 0, 0, 0.6))
-			var bar := Color("#44cc44") if ratio > 0.5 else (Color("#cccc44") if ratio > 0.25 else Color("#cc4444"))
-			_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w * ratio, 4, bar)
-		if tank.shield_hp > 0.0:
-			_rect(tank.x - bar_w * 0.5, tank.y - 26, bar_w * minf(1.0, tank.shield_hp / 30.0), 2, Cfg.shield)
-		if is_local_player:
-			var dash_y := tank.y - 17.0
-			var dash_cd_max := float(tank.dash_cooldown_max())
-			var dash_frac := 1.0 if tank.dash_cooldown <= 0 else clampf(1.0 - float(tank.dash_cooldown) / dash_cd_max, 0.0, 1.0)
-			var dash_ready := tank.dash_cooldown <= 0
-			_rect(tank.x - bar_w * 0.5, dash_y, bar_w, 2.5, Color(0.05, 0.08, 0.12, 0.75))
-			var dash_color: Color
-			if tank.dash_invuln_ticks > 0:
-				dash_color = Color("#ffffff")
-			elif dash_ready:
-				var pulse := 0.85 + 0.15 * sin(anim_tick * 0.4)
-				dash_color = Color(0.15, 0.85, 1.0, pulse)
-			else:
-				dash_color = Color(0.3, 0.6, 0.85, 0.65)
-			_rect(tank.x - bar_w * 0.5, dash_y, bar_w * dash_frac, 2.5, dash_color)
-			draw_rect(Rect2(tank.x - bar_w * 0.5, dash_y, bar_w, 2.5), Color(0.4, 0.7, 1.0, 0.35 if not dash_ready else 0.7), false, 0.7)
-			var icon_c := Color("#38bdf8") if dash_ready else Color(0.5, 0.6, 0.7, 0.5)
-			_text_center("⚡", Vector2(tank.x - bar_w * 0.5 - 5.5, dash_y + 1.2), 7, icon_c)
-		if tank.freeze_ticks > 0:
-			var freeze_max: float = float(tank.freeze_max_ticks) if "freeze_max_ticks" in tank and tank.freeze_max_ticks > 0 else float(Cfg.ICE_FREEZE_TICKS)
-			var fratio := clampf(float(tank.freeze_ticks) / freeze_max, 0.0, 1.0)
-			var f_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
-			_rect(tank.x - bar_w * 0.5, f_y, bar_w, 2.5, Color(0.04, 0.12, 0.20, 0.85))
-			_rect(tank.x - bar_w * 0.5, f_y, bar_w * fratio, 2.5, Color("#38bdf8"))
-			draw_rect(Rect2(tank.x - bar_w * 0.5, f_y, bar_w, 2.5), Color(0.8, 0.95, 1.0, 0.45), false, 0.8)
-			_text_center("❄", Vector2(tank.x - bar_w * 0.5 - 6.0, f_y + 1.0), 8, Color("#a5f3fc"))
-
-		if tank.acid_stacks > 0:
-			var a_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
-			if tank.freeze_ticks > 0:
-				a_y -= 4.0
-			var aratio := clampf(float(tank.acid_stacks) / float(Cfg.ACID_STACK_MAX), 0.0, 1.0)
-			_rect(tank.x - bar_w * 0.5, a_y, bar_w, 2.5, Color(0.10, 0.20, 0.05, 0.85))
-			_rect(tank.x - bar_w * 0.5, a_y, bar_w * aratio, 2.5, Color("#84cc16"))
-			draw_rect(Rect2(tank.x - bar_w * 0.5, a_y, bar_w, 2.5), Color(0.7, 1.0, 0.3, 0.45), false, 0.8)
-			_text_center("🧪", Vector2(tank.x - bar_w * 0.5 - 6.0, a_y + 1.0), 8, Color("#bef264"))
-
-		if tank.burn_ticks > 0 or tank.stun_ticks > 0:
-			var s_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
-			if tank.freeze_ticks > 0:
-				s_y -= 4.0
-			if tank.acid_stacks > 0:
-				s_y -= 4.0
-			if tank.burn_ticks > 0:
-				var bratio := clampf(float(tank.burn_ticks) / float(Cfg.BURN_TICKS), 0.0, 1.0)
-				_rect(tank.x - bar_w * 0.5, s_y, bar_w, 2.5, Color(0.22, 0.08, 0.02, 0.85))
-				_rect(tank.x - bar_w * 0.5, s_y, bar_w * bratio, 2.5, Color("#f97316"))
-				_text_center("🔥" if tank.burn_stacks <= 1 else "🔥%d" % tank.burn_stacks, Vector2(tank.x - bar_w * 0.5 - (6.0 if tank.burn_stacks <= 1 else 9.0), s_y + 1.0), 8, Color("#fdba74"))
-				s_y -= 4.0
-			if tank.stun_ticks > 0:
-				var sratio := clampf(float(tank.stun_ticks) / float(Cfg.SHOCK_STUN_TICKS), 0.0, 1.0)
-				_rect(tank.x - bar_w * 0.5, s_y, bar_w, 2.5, Color(0.18, 0.16, 0.03, 0.85))
-				_rect(tank.x - bar_w * 0.5, s_y, bar_w * sratio, 2.5, Color("#facc15"))
-				_text_center("⚡", Vector2(tank.x - bar_w * 0.5 - 6.0, s_y + 1.0), 8, Color("#fde047"))
-
-		if not is_viewer:
-			var name_color := Color("#88ccff") if is_ally else (Color("#ffee55") if tank.is_player_controlled else Color("#ffaaaa"))
-			_text_center(tank.name, Vector2(tank.x, tank.y - 32), 10, name_color)
-			if not tank.perk_ids.is_empty():
-				var n: int = tank.perk_ids.size()
-				var step := 16.0
-				for i in n:
-					_draw_perk_icon(String(tank.perk_ids[i]),
-						Vector2(tank.x + (i - (n - 1) * 0.5) * step, tank.y - 45), 14.0, Color("#ffcc66"))
-
-		if tank.carrying_flag:
-			_text_center("⚑", Vector2(tank.x + 16, tank.y - 16), 14, Color("#ffee55"))
-
-		if tank.is_chimera_clone:
-			var holo_pulse := 0.65 + 0.35 * sin(float(world.tick) * 0.4)
-			var scanline_c := Color(0.2, 0.9, 1.0, 0.35 * holo_pulse)
-			for sl in 5:
-				var s_y: float = tank.y - hh + float(sl) * (tank.height / 4.0) + fmod(float(world.tick) * 1.5, tank.height / 4.0)
-				draw_line(Vector2(tank.x - hw - 2.0, s_y), Vector2(tank.x + hw + 2.0, s_y), scanline_c, 1.0)
-			draw_arc(Vector2(tank.x + sin(float(world.tick) * 0.5) * 2.5, tank.y), hw * 1.1, 0, TAU, 16, Color(1.0, 0.2, 0.8, 0.3 * holo_pulse), 1.5)
-
-		if tank.shadow_timer > 0:
-			var shim_pulse := 0.45 + 0.35 * sin(float(world.tick) * 0.3)
-			var shim_col := Color(0.4, 0.9, 0.3, 0.40 * shim_pulse)
-			draw_arc(Vector2(tank.x, tank.y), hw * 1.25, 0, TAU, 20, shim_col, 2.0)
-			for sh in 3:
-				var a_sh := float(world.tick) * 0.08 + float(sh) * 2.1
-				draw_line(Vector2(tank.x - cos(a_sh) * hw, tank.y - sin(a_sh) * hh),
-					Vector2(tank.x + cos(a_sh) * hw, tank.y + sin(a_sh) * hh),
-					Color(0.8, 1.0, 0.5, 0.25 * shim_pulse), 1.5)
+func _draw_build_accents(tank: Tank, hw: float, hh: float, anim_tick: float) -> void:
+	if tank.has_build("juggernaut"):
+		var ram_c := Color("#ef4444", 0.95)
+		var pulse := 0.75 + 0.25 * sin(anim_tick * 0.2)
+		draw_line(Vector2(-hw * 0.95, -hh - 2), Vector2(0, -hh - 7), ram_c, 3.0)
+		draw_line(Vector2(0, -hh - 7), Vector2(hw * 0.95, -hh - 2), ram_c, 3.0)
+		draw_circle(Vector2(0, -hh - 7), 2.5 * pulse, Color("#fbbf24"))
+	if tank.has_build("stealth_hunter"):
+		draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#10b981", 0.85))
+	if tank.has_build("lightning"):
+		var spark_a := 0.5 + 0.5 * sin(anim_tick * 0.3)
+		draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#f59e0b", spark_a))
+	if tank.has_build("ice_hunter"):
+		draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#06b6d4", 0.9))
+	if tank.has_build("acid_hunter"):
+		draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#84cc16", 0.9))
+	if tank.has_build("ghost_sniper"):
+		draw_circle(Vector2(0, hh * 0.35), 2.5, Color("#a855f7", 0.9))
 
 func _draw_ice_glint(pt: Vector2, sz: float, pulse: float) -> void:
 	if pulse <= 0.08:
