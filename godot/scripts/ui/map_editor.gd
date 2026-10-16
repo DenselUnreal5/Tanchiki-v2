@@ -803,7 +803,7 @@ class _MapCanvas extends Control:
 					Cfg.T_BRICK, Cfg.T_ADOBE:
 						if use_textures:
 							var variant := Materials.variant_at(r, c)
-							var bldg := TerrainTextures.building(variant == 3, loc_id)
+							var bldg := TerrainTextures.building_at(loc_id, variant, TerrainTextures.prop_hash(r, c))
 							if bldg != null:
 								draw_texture_rect(bldg, rect, false)
 							else:
@@ -814,7 +814,7 @@ class _MapCanvas extends Control:
 						if use_textures:
 							if grass_tex != null:
 								draw_texture_rect(grass_tex, rect, false)
-							var ttex := TerrainTextures.tree(loc_id)
+							var ttex := TerrainTextures.tree_at(loc_id, TerrainTextures.prop_hash(r, c))
 							if ttex != null:
 								draw_texture_rect(ttex, rect, false)
 							else:

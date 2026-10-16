@@ -37,6 +37,44 @@ static func grass(loc: String = "city") -> Texture2D:
 static func tree(loc: String = "city") -> Texture2D:
 	return _load_cached(loc, "tree1.png")
 
+static func prop_hash(r: int, c: int) -> float:
+	return Rng.hash01(r * 92821 + c * 68917, 4242)
+
+static func tree_at(loc: String, h: float) -> Texture2D:
+	match loc:
+		"city":
+			if h < 0.5:
+				return tree(loc)
+			return _load_cached(loc, "tree_broadleaf.png" if h < 0.8 else "tree_pine.png")
+		"dust":
+			if h < 0.5:
+				return tree(loc)
+			if h < 0.7:
+				return _load_cached(loc, "cactus_saguaro.png")
+			return _load_cached(loc, "cactus_barrel.png" if h < 0.85 else "cactus_cluster.png")
+	return tree(loc)
+
+static func building_at(loc: String, variant: int, h: float) -> Texture2D:
+	match loc:
+		"city":
+			match variant:
+				1:
+					return _load_cached(loc, "house_apartment.png")
+				2:
+					return _load_cached(loc, "house_warehouse.png")
+				3:
+					if h < 0.5:
+						return _load_cached(loc, "house_cottage.png")
+				4:
+					return _load_cached(loc, "house_concrete.png")
+		"dust":
+			if variant == 2:
+				return _load_cached(loc, "oil_pumpjack.png" if h < 0.5 else "oil_derrick.png")
+	return building(variant == 3, loc)
+
+static func citadel(loc: String) -> Texture2D:
+	return _load_cached(loc, "citadel.png")
+
 static func bush(loc: String = "city") -> Texture2D:
 	return _load_cached(loc, "bush1.png")
 

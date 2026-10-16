@@ -122,7 +122,8 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	var flag_spots := {"player": [], "enemy": []}
 	if mode == "ctf":
 		_build_ctf(map, rng, cols, rows, homes, flag_spots)
-	if mode == "defense":
+	var citadel := mode == "defense" and tiled
+	if mode == "defense" and not citadel:
 		var cr := rows / 2
 		var cc := cols / 2
 		_fill_rect(map, cr - 4, cr + 4, cc - 4, cc + 4, Cfg.T_ROAD)
@@ -145,8 +146,12 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 
 	map.ensure_connectivity()
 	RoadNet.repair(map)
+	var citadel_rect := Rect2i()
+	if citadel:
+		citadel_rect = _build_citadel(map, cols, rows, homes)
+		_citadel_ring(map, citadel_rect)
 	if tiled:
-		TileCityGen.tidy(map)
+		TileCityGen.tidy(map, citadel_rect)
 		var ground := int(loc.get("ground_tile", Cfg.T_GRASS))
 		if ground != Cfg.T_GRASS:
 			for r in rows:
@@ -184,7 +189,77 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		"location": loc_id,
 		"archetype": arch,
 		"choke_points": chokes,
+		"citadel": citadel_rect,
 	}
+
+const CITADEL := 16
+
+static func _build_citadel(map: GameMap, cols: int, rows: int, homes: Dictionary) -> Rect2i:
+	var r0 := rows / 2 - CITADEL / 2
+	var c0 := cols / 2 - CITADEL / 2
+	var last := CITADEL - 1
+	for dr in CITADEL:
+		for dc in CITADEL:
+			var tile := Cfg.T_EMPTY
+			var ring := mini(mini(dr, dc), mini(last - dr, last - dc))
+			var gate := (dc == 7 or dc == 8) and (dr <= 2 or dr >= last - 2) 				or (dr == 7 or dr == 8) and (dc <= 2 or dc >= last - 2)
+			if ring == 0:
+				tile = Cfg.T_GRASS
+			elif gate:
+				tile = Cfg.T_EMPTY
+			elif ring == 1:
+				tile = Cfg.T_WATER
+			elif ring == 2:
+				tile = Cfg.T_WALL
+			map.set_tile(r0 + dr, c0 + dc, tile)
+	for p in [Vector2i(3, 3), Vector2i(3, 12), Vector2i(12, 3), Vector2i(12, 12),
+			Vector2i(6, 6), Vector2i(6, 9), Vector2i(9, 6), Vector2i(9, 9)]:
+		map.set_tile(r0 + p.x, c0 + p.y, Cfg.T_WALL)
+	homes["player"] = Vector2((c0 + 8) * Cfg.TILE, (r0 + 7.6) * Cfg.TILE)
+	return Rect2i(c0, r0, CITADEL, CITADEL)
+
+static func _ring_cells(rect: Rect2i, d: int) -> Array:
+	var out := []
+	var r0 := rect.position.y - d
+	var r1 := rect.end.y - 1 + d
+	var c0 := rect.position.x - d
+	var c1 := rect.end.x - 1 + d
+	for c in range(c0, c1 + 1):
+		out.append([Vector2i(c, r0), Vector2i(0, -1)])
+		out.append([Vector2i(c, r1), Vector2i(0, 1)])
+	for r in range(r0 + 1, r1):
+		out.append([Vector2i(c0, r), Vector2i(-1, 0)])
+		out.append([Vector2i(c1, r), Vector2i(1, 0)])
+	return out
+
+static func _paved(map: GameMap, p: Vector2i) -> bool:
+	var t := map.get_tile(p.y, p.x)
+	return t == Cfg.T_ROAD or t == Cfg.T_BRIDGE
+
+static func _citadel_ring(map: GameMap, rect: Rect2i) -> void:
+	for item in _ring_cells(rect, 1):
+		var p: Vector2i = item[0]
+		if p.x < 2 or p.y < 2 or p.x > map.cols - 3 or p.y > map.rows - 3:
+			continue
+		map.set_tile(p.y, p.x, Cfg.T_ROAD)
+	var r0 := rect.position.y - 2
+	var r1 := rect.end.y + 1
+	var c0 := rect.position.x - 2
+	var c1 := rect.end.x + 1
+	for item in _ring_cells(rect, 2):
+		var p: Vector2i = item[0]
+		if not _paved(map, p):
+			continue
+		var outs := [item[1]]
+		if (p.x == c0 or p.x == c1) and (p.y == r0 or p.y == r1):
+			outs = [Vector2i(-1 if p.x == c0 else 1, 0), Vector2i(0, -1 if p.y == r0 else 1)]
+		var keep := false
+		for n in outs:
+			if _paved(map, p + n):
+				keep = true
+		if not keep:
+			var was_bridge := map.get_tile(p.y, p.x) == Cfg.T_BRIDGE
+			map.set_tile(p.y, p.x, Cfg.T_WATER if was_bridge else Cfg.T_GRASS)
 
 ## Архетип "radial": кольцевые бульвары + лучевые улицы от центра карты —
 ## та же точка, что уже использует "ядерный" seed района в

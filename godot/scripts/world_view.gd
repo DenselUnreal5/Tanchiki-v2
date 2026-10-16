@@ -339,10 +339,15 @@ func _draw_tile_range(r0: int, r1: int, c0: int, c1: int) -> void:
 	var map := world.map
 	var water_phase := float(world.tick % 120) / 120.0
 
+	if not _loc_ready:
+		_read_location()
+	var has_citadel := _citadel.has_area()
 	for r in range(r0, r1 + 1):
 		for c in range(c0, c1 + 1):
 			var tile := map.get_tile(r, c)
 			if tile == Cfg.T_EMPTY:
+				continue
+			if has_citadel and _citadel.has_point(Vector2i(c, r)):
 				continue
 			var x := float(c * Cfg.TILE)
 			var y := float(r * Cfg.TILE)
@@ -381,13 +386,18 @@ func _draw_tile_range(r0: int, r1: int, c0: int, c1: int) -> void:
 					_draw_base_tile(x, y, true)
 				Cfg.T_BASE_E:
 					_draw_base_tile(x, y, false)
+	if has_citadel and _citadel.intersects(Rect2i(c0, r0, c1 - c0 + 1, r1 - r0 + 1)):
+		var tex := TerrainTextures.citadel(_loc_id)
+		if tex != null:
+			draw_texture_rect(tex, Rect2(_citadel.position.x * Cfg.TILE, _citadel.position.y * Cfg.TILE,
+				_citadel.size.x * Cfg.TILE, _citadel.size.y * Cfg.TILE), false)
 
 func _draw_roof_tile(x: float, y: float, r: int, c: int) -> void:
 	if not _loc_ready:
 		_read_location()
 	var variant := Materials.variant_at(r, c)
 	if TerrainTextures.has_textures(_loc_id):
-		draw_texture_rect(TerrainTextures.building(variant == 3, _loc_id),
+		draw_texture_rect(TerrainTextures.building_at(_loc_id, variant, TerrainTextures.prop_hash(r, c)),
 			Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		var dmg := world.map.damage_ratio(r, c)
 		if dmg > 0.06:
@@ -816,6 +826,7 @@ var _loc_road_kind := "asphalt"
 var _loc_fog := Color(0.86, 0.89, 0.94)
 var _loc_id := Locations.CITY
 var _loc_tiles := false
+var _citadel := Rect2i()
 var _loc_ready := false
 
 func _read_location() -> void:
@@ -826,6 +837,8 @@ func _read_location() -> void:
 	_loc_road_kind = String(loc.get("road_kind", "asphalt"))
 	_loc_fog = loc.get("fog_tint", Color(0.86, 0.89, 0.94))
 	_loc_tiles = String(loc.get("terrain", "grid")) == "tiles"
+	var cit = world.level.get("citadel", Rect2i())
+	_citadel = cit if cit is Rect2i else Rect2i()
 	_loc_ready = true
 
 func _ground_at(x: float, y: float, r: int, c: int) -> Color:
@@ -1436,7 +1449,7 @@ func _draw_tree_tile(x: float, y: float, r: int, c: int) -> void:
 		_read_location()
 	if TerrainTextures.has_textures(_loc_id):
 		draw_texture_rect(TerrainTextures.grass(_loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
-		draw_texture_rect(TerrainTextures.tree(_loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+		draw_texture_rect(TerrainTextures.tree_at(_loc_id, TerrainTextures.prop_hash(r, c)), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		return
 	draw_circle(Vector2(x + 16, y + 18), 13, Cfg.tree_dark)
 	var ox := float((r * 7 + c * 13) % 5) - 2.0

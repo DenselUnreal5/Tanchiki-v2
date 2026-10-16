@@ -62,7 +62,7 @@ static func build(map: GameMap, rng: Rng, cols: int, rows: int, arch: String, wa
 
 	return {"v": [], "h": [], "blocks": [], "circles": [], "seeds": [], "links": links}
 
-static func tidy(map: GameMap) -> void:
+static func tidy(map: GameMap, skip: Rect2i = Rect2i()) -> void:
 	var changed := true
 	var guard := 0
 	while changed and guard < 64:
@@ -70,6 +70,8 @@ static func tidy(map: GameMap) -> void:
 		changed = false
 		for r in range(2, map.rows - 2):
 			for c in range(2, map.cols - 2):
+				if skip.has_point(Vector2i(c, r)):
+					continue
 				var t := map.get_tile(r, c)
 				if t == Cfg.T_ROAD and _degree(map, r, c, true) <= 1:
 					map.set_tile(r, c, Cfg.T_GRASS)
