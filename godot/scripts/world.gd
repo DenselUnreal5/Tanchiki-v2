@@ -1713,6 +1713,7 @@ func _chimera_death_acid(victim: Tank) -> void:
 	var exp_r := 180.0
 	spawn_shockwave(victim.x, victim.y, exp_r, "acid", Color("#84cc16"), 40)
 	spawn_shockwave(victim.x, victim.y, exp_r * 0.5, "blast", Color("#a3e635"), 26)
+	add_shot_effect("acid", "acid_cloud", Vector2(victim.x, victim.y), 0.0, 170.0)
 
 	particles.burst(victim.x, victim.y, [Color("#84cc16"), Color("#a3e635"), Color("#4d7c0f"), Color.WHITE, Color("#182b18")], 56, 4, 9, 24, 55, rng)
 	add_shake(18.0, victim.x, victim.y)
@@ -1726,6 +1727,7 @@ func _chimera_death_acid(victim: Tank) -> void:
 		var a := float(i) / 6.0 * TAU + (rng.nextf() - 0.5) * 0.4
 		var d := 24.0 + rng.nextf() * 45.0
 		spawn_acid_pool(victim.x + cos(a) * d, victim.y + sin(a) * d, Cfg.CHIMERA_ACID_POOL_RADIUS, victim, Cfg.CHIMERA_ACID_POOL_DURATION)
+		add_shot_effect("acid", "impact", Vector2(victim.x + cos(a) * d, victim.y + sin(a) * d), 0.0, 56.0)
 
 	for other in tanks:
 		if other == victim or not other.alive or not are_hostile(victim, other):

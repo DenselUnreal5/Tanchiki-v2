@@ -10,6 +10,7 @@ var damage: PackedByteArray
 ## дельты), чтобы A* и проверки проходимости не пересчитывали тип клетки
 ## на каждом шаге. Тайлы напрямую в tiles[] не писать — только через них.
 var passable: PackedByteArray
+var reachable := PackedByteArray()
 var version := 0
 
 ## Журнал изменённых клеток для инкрементальных подписчиков (кэш тайлов,
@@ -311,6 +312,8 @@ func find_free_spot(rng: Rng, area: Dictionary, w: float, h: float,
 			continue
 		if avoid_water and is_water_at(x, y):
 			continue
+		if not is_reachable_at(x, y):
+			continue
 		return Vector2(x, y)
 
 	for r in range(r0, r1 + 1):
@@ -322,6 +325,8 @@ func find_free_spot(rng: Rng, area: Dictionary, w: float, h: float,
 			if is_blocked_rect(x, y, w, h):
 				continue
 			if avoid_water and is_water_at(x, y):
+				continue
+			if not is_reachable_at(x, y):
 				continue
 			return Vector2(x, y)
 	return Vector2.INF
@@ -364,6 +369,28 @@ func label_regions() -> Array:
 					tail += 1
 			regions.append(cells)
 	return regions
+
+func mark_reachable() -> void:
+	var regions := label_regions()
+	reachable = PackedByteArray()
+	if regions.is_empty():
+		return
+	var biggest := 0
+	for i in range(1, regions.size()):
+		if regions[i].size() > regions[biggest].size():
+			biggest = i
+	reachable.resize(cols * rows)
+	for cell in regions[biggest]:
+		reachable[cell] = 1
+
+func is_reachable_at(x: float, y: float) -> bool:
+	if reachable.is_empty():
+		return true
+	var c := int(x / Cfg.TILE)
+	var r := int(y / Cfg.TILE)
+	if not in_bounds(r, c):
+		return false
+	return reachable[r * cols + c] == 1
 
 func ensure_connectivity() -> int:
 	var regions := label_regions()

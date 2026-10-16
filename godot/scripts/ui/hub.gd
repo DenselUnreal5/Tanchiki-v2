@@ -44,6 +44,16 @@ var _cosmetic_action_btn: Button = null
 var _cosmetic_reset_btn: Button = null
 var _cosmetic_catalog_scroll: ScrollContainer = null
 
+const TIP_W_MIN := 150.0
+const TIP_W_MAX := 280.0
+const TIP_PAD := 12.0
+
+var _tip: PanelContainer = null
+var _tip_title: Label = null
+var _tip_body: Label = null
+var _tip_owner = null
+var _tip_serial := 0
+
 @onready var _panel: ThemedPanel = %HubPanel
 @onready var _tabs_row: HBoxContainer = %HubTabsRow
 @onready var _sub: RichTextLabel = %HubSub
@@ -77,6 +87,10 @@ func _ready() -> void:
 		_close_btn.pressed.connect(_on_close_pressed)
 	set_meta("close_button", _close_btn)
 
+	_build_tip()
+	visibility_changed.connect(func():
+		if not visible:
+			_hide_tip())
 	_rebuild_tabs()
 	if Sets != null and Sets.has_signal("last_input_device_changed"):
 		if not Sets.last_input_device_changed.is_connected(_on_input_device_changed):
@@ -86,6 +100,94 @@ func _ready() -> void:
 			Sets.ui_input_mode_changed.connect(_on_input_device_changed)
 	if Engine.is_editor_hint():
 		_editor_preview_body()
+
+func _build_tip() -> void:
+	_tip = PanelContainer.new()
+	_tip.visible = false
+	_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tip.z_index = 200
+	var st := UiKit.flat(Color(0.06, 0.08, 0.12, 0.97), Cfg.RADIUS_SM, 1.0, Color(Cfg.UI_GOLD, 0.7))
+	st.content_margin_left = TIP_PAD
+	st.content_margin_right = TIP_PAD
+	st.content_margin_top = 10
+	st.content_margin_bottom = 10
+	_tip.add_theme_stylebox_override("panel", st)
+
+	var box := UiKit.vbox(5)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tip.add_child(box)
+
+	_tip_title = UiKit.label("", 12, Cfg.UI_GOLD, true)
+	_tip_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tip_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(_tip_title)
+
+	_tip_body = UiKit.label("", 10, Cfg.UI_TEXT)
+	_tip_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tip_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(_tip_body)
+
+	add_child(_tip)
+
+func _attach_tip(ctrl: Control, title: String, body: String) -> void:
+	if body == "" and title == "":
+		return
+	ctrl.tooltip_text = ""
+	ctrl.mouse_entered.connect(_show_tip.bind(ctrl, title, body))
+	ctrl.mouse_exited.connect(_hide_tip.bind(ctrl))
+	ctrl.tree_exiting.connect(_hide_tip.bind(ctrl))
+
+func _show_tip(ctrl: Control, title: String, body: String) -> void:
+	if _tip == null or not is_instance_valid(ctrl):
+		return
+	_tip_owner = ctrl
+	_tip_serial += 1
+	var serial := _tip_serial
+	_tip_title.text = title
+	_tip_title.visible = title != ""
+	_tip_body.text = body
+	_tip_body.visible = body != ""
+	var chars := float(title.length() + body.length())
+	var w := clampf(sqrt(chars * 78.0) * 1.3 + TIP_PAD * 2.0, TIP_W_MIN, TIP_W_MAX)
+	_tip_title.custom_minimum_size.x = w - TIP_PAD * 2.0
+	_tip_body.custom_minimum_size.x = w - TIP_PAD * 2.0
+	_tip.modulate.a = 0.0
+	_tip.visible = true
+	_tip.reset_size()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if serial != _tip_serial or not is_instance_valid(ctrl) or not visible:
+		return
+	_tip.reset_size()
+	_place_tip(ctrl)
+	_tip.modulate.a = 1.0
+
+func _hide_tip(source = null) -> void:
+	if _tip == null:
+		return
+	if source != null and source != _tip_owner:
+		return
+	_tip_serial += 1
+	_tip_owner = null
+	_tip.visible = false
+
+func _place_tip(ctrl: Control) -> void:
+	var rel := get_global_transform().affine_inverse() * ctrl.get_global_transform()
+	var top_left: Vector2 = rel * Vector2.ZERO
+	var bottom_right: Vector2 = rel * ctrl.size
+	var tip_size := _tip.size
+	var gap := 8.0
+	var margin := 8.0
+	var pos := Vector2(top_left.x, bottom_right.y + gap)
+	if pos.y + tip_size.y > size.y - margin:
+		pos.y = top_left.y - tip_size.y - gap
+	if pos.y < margin:
+		pos.y = clampf(top_left.y, margin, maxf(margin, size.y - tip_size.y - margin))
+		pos.x = bottom_right.x + gap
+		if pos.x + tip_size.x > size.x - margin:
+			pos.x = top_left.x - tip_size.x - gap
+	pos.x = clampf(pos.x, margin, maxf(margin, size.x - tip_size.x - margin))
+	_tip.position = pos
 
 func _on_input_device_changed(_arg = null) -> void:
 	if is_inside_tree() and visible:
@@ -256,6 +358,7 @@ func switch_tab(key: String, focus_id: String = "") -> void:
 		_grab(_find_tab_button(key))
 
 func _fill_tab(key: String) -> void:
+	_hide_tip()
 	for c in _body.get_children():
 		_body.remove_child(c)
 		c.queue_free()
@@ -1244,6 +1347,28 @@ func _reset_cosmetics_preview() -> void:
 	var cur_skin: String = String(Prof.cosmetics.get("skin", "none"))
 	_set_cosmetic_preview("skin", cur_skin)
 
+func _upgrade_effect(up: Dictionary, level: int) -> String:
+	var val := Upgrades.mult(up, level)
+	match String(up["mult_mode"]):
+		"add":
+			return "+%d%%" % int(round((val - 1.0) * 100.0))
+		"sub":
+			return "-%d%%" % int(round((1.0 - val) * 100.0))
+	return "+%d" % int(round(val))
+
+func _upgrade_tip(up: Dictionary, level: int, maxed: bool, cost: int) -> String:
+	var max_level := int(up["max_level"])
+	var now_text := _upgrade_effect(up, level)
+	var head := I18n.dn(up, "desc", "upg") + "\n\n"
+	if maxed:
+		return head + _tr("tip.upg.maxed",
+			"Уровень: %d / %d\nСейчас: %s\nДостигнут максимальный уровень" % [level, max_level, now_text],
+			{"lvl": level, "max": max_level, "now": now_text})
+	var next_text := _upgrade_effect(up, level + 1)
+	return head + _tr("tip.upg.state",
+		"Уровень: %d / %d\nСейчас: %s\nСледующий уровень: %s · %d 🪙" % [level, max_level, now_text, next_text, cost],
+		{"lvl": level, "max": max_level, "now": now_text, "next": next_text, "price": cost})
+
 func _upgrade_card(up: Dictionary, parent: Node) -> Control:
 	var id := String(up["id"])
 	var level := Prof.upgrade_level(id)
@@ -1257,6 +1382,7 @@ func _upgrade_card(up: Dictionary, parent: Node) -> Control:
 	card.set_data("upg_" + id, I18n.dn(up, "name", "upg"), I18n.dn(up, "desc", "upg"),
 		level, int(up["max_level"]),
 		_tr("upg.buy", "Улучшить · %d 🪙" % cost, {"price": cost}), _tr("upg.max", "МАКС"), maxed, can_buy, card_id)
+	_attach_tip(card, I18n.dn(up, "name", "upg"), _upgrade_tip(up, level, maxed, cost))
 	card.buy_pressed.connect(func():
 		if Prof.buy_upgrade(id)["ok"]:
 			garage_changed.emit()
@@ -1294,6 +1420,7 @@ func _cosmetic_card(c: Dictionary, type: String, parent: Node, tab_key: String =
 	card.set_data("cos_%s_%s" % [type, id], c.get("color", c.get("a", Cfg.UI_TEXT)),
 		I18n.dn(c, "name", "cos." + type), state, action_text, action_disabled, equipped, can_buy, card_id,
 		rarity, desc_text, type, id)
+	_attach_tip(card, I18n.dn(c, "name", "cos." + type), desc_text)
 	card.preview_requested.connect(func(ptype, pid):
 		_set_cosmetic_preview(ptype, pid)
 	)
@@ -1350,7 +1477,7 @@ func _cannon_card(c: Dictionary, parent: Node) -> Control:
 	if not unlocked:
 		tip += "\n" + _tr("cannon.lockedTip", "Выполните испытание, чтобы открыть покупку: %s" % challenge_text,
 			{"desc": challenge_text})
-	card.tooltip_text = tip
+	_attach_tip(card, I18n.dn(c, "name", "cannon"), tip)
 	card.action_pressed.connect(func():
 		var ok := false
 		if not owned:
@@ -1413,7 +1540,7 @@ func _class_card(entry: Dictionary, parent: Node) -> Control:
 		"hp": fs["hp"], "dmg": fs["dmg"], "spd": fs["speed_pct"], "reload": reload_text, "shots": fs["overheat_shots"]})
 	if not unlocked:
 		tip += "\n" + _tr("class.lockedTip", "Уничтожьте %d таких танков, чтобы открыть покупку" % need, {"need": need})
-	card.tooltip_text = tip
+	_attach_tip(card, TankClasses.display_name(entry), tip)
 	card.action_pressed.connect(func():
 		var ok := false
 		if not owned:
@@ -1439,8 +1566,9 @@ func _garage_color_row(label_text: String, slot: int, equipped_key: String, tab_
 		var unlocked := Prof.is_color_unlocked(key)
 		var lvl := int(skin.get("level", 1))
 		var btn := UiKit.toggle(String(key).to_upper() if unlocked else str(lvl))
-		btn.tooltip_text = _tr("skin." + key, String(skin["name"])) if unlocked \
+		var swatch_tip := _tr("skin." + key, String(skin["name"])) if unlocked \
 			else _tr("gallery.unlockAt", "Откроется на уровне профиля %d" % lvl, {"lvl": lvl})
+		_attach_tip(btn, "", swatch_tip)
 		btn.button_group = group
 		btn.button_pressed = equipped_key == key
 		btn.disabled = not unlocked

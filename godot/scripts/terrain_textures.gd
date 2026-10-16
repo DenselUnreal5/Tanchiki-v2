@@ -4,7 +4,7 @@ extends RefCounted
 static var _cache := {}
 
 static func has_textures(loc: String) -> bool:
-	return loc == "city" or loc == "grassland"
+	return loc == "city" or loc == "grassland" or loc == "jungle" or loc == "dust"
 
 static func _load_cached(loc: String, file: String) -> Texture2D:
 	var effective_loc := loc if has_textures(loc) else "city"
@@ -27,7 +27,6 @@ static func _load_cached(loc: String, file: String) -> Texture2D:
 			_cache[key] = tex
 			return tex
 
-	# Fallback to city
 	if effective_loc != "city":
 		return _load_cached("city", file)
 	return null
@@ -51,6 +50,14 @@ static func road(index: int, loc: String = "city") -> Texture2D:
 	if index == 7:
 		return _load_cached(loc, "road16.png")
 	return _load_cached(loc, "road%d.png" % index)
+
+static func cross_arcs(loc: String) -> Texture2D:
+	if not has_textures(loc) or loc == "city":
+		return null
+	var path := "res://art/terrain/%s/road7.png" % loc
+	if not ResourceLoader.exists(path):
+		return null
+	return _load_cached(loc, "road7.png")
 
 static func river(index: int, loc: String = "city") -> Texture2D:
 	return _load_cached(loc, "river%d.png" % index)

@@ -28,7 +28,7 @@ const MODES := [
 var current_location: String = "city"
 var current_mode: String = "ctf"
 var current_archetype: String = "auto"
-var current_level: int = 1
+var current_level: int = 0
 var current_seed: int = 12345
 
 var level_data: Dictionary = {}
@@ -88,11 +88,12 @@ func open_with_settings(settings: Dictionary) -> void:
 	var arch = String(settings.get("archetype", "auto"))
 	current_archetype = arch
 
-	var lvl = int(settings.get("level", 1))
-	current_level = clampi(lvl if lvl > 0 else 1, 1, 5)
-
+	var lvl := int(settings.get("level", -1))
 	if int(settings.get("seed", -1)) >= 0:
 		current_seed = int(settings["seed"])
+		current_level = LevelGen.level_of_seed(current_seed)
+	elif lvl >= 1 and lvl <= LevelGen.LEVEL_COUNT:
+		select_level(lvl)
 	else:
 		randomize_seed()
 
@@ -102,12 +103,24 @@ func open_with_settings(settings: Dictionary) -> void:
 		_canvas.reset_view.call_deferred()
 
 func randomize_seed() -> void:
-	current_seed = randi() & 0x7FFFFFFF
+	set_seed(randi() & 0x7FFFFFFF)
+
+func set_seed(value: int) -> void:
+	current_seed = value
+	current_level = LevelGen.level_of_seed(value)
 	if _seed_input != null:
 		_seed_input.text = str(current_seed)
+	_sync_level_buttons()
+
+func select_level(lvl: int) -> void:
+	set_seed(LevelGen.level_seed(lvl))
+
+func _sync_level_buttons() -> void:
+	for i in _level_buttons.size():
+		_level_buttons[i].set_pressed_no_signal(i + 1 == current_level)
 
 func generate_map() -> void:
-	level_data = LevelGen.generate(current_level, current_mode, current_seed,
+	level_data = LevelGen.generate(current_level if current_level > 0 else -1, current_mode, current_seed,
 		current_location, current_archetype)
 	current_map = level_data.get("map", null)
 	_update_stats()
@@ -132,7 +145,8 @@ func _update_header() -> void:
 		if a["id"] == current_archetype:
 			arch_name = a["name"]
 			break
-	_title_sub.text = "%s · %s · %s (Сид: %d)" % [loc_name, mode_name, arch_name, current_seed]
+	var level_text := (" · Уровень %d" % current_level) if current_level > 0 else ""
+	_title_sub.text = "%s · %s · %s%s (Сид: %d)" % [loc_name, mode_name, arch_name, level_text, current_seed]
 
 func _update_stats() -> void:
 	if current_map == null:
@@ -187,9 +201,7 @@ func _sync_ui_state() -> void:
 		_mode_buttons[current_mode].button_pressed = true
 	if _arch_buttons.has(current_archetype):
 		_arch_buttons[current_archetype].button_pressed = true
-	for i in _level_buttons.size():
-		if i + 1 == current_level:
-			_level_buttons[i].button_pressed = true
+	_sync_level_buttons()
 	if _seed_input != null:
 		_seed_input.text = str(current_seed)
 
@@ -449,7 +461,7 @@ func _build_control_panel(parent: Control) -> void:
 	_seed_input.add_theme_font_size_override("font_size", 11)
 	_seed_input.text_submitted.connect(func(text: String):
 		if text.is_valid_int():
-			current_seed = text.to_int()
+			set_seed(text.to_int())
 			generate_map())
 	seed_input_row.add_child(_seed_input)
 
@@ -469,13 +481,15 @@ func _build_control_panel(parent: Control) -> void:
 	lvl_col.add_child(lvl_row)
 
 	_level_buttons.clear()
-	for l in range(1, 6):
+	_level_btn_group.allow_unpress = true
+	for l in range(1, LevelGen.LEVEL_COUNT + 1):
 		var lb := UiKit.toggle(str(l), 10)
 		lb.custom_minimum_size = Vector2(22, 22)
 		lb.button_group = _level_btn_group
 		lb.button_pressed = (l == current_level)
+		lb.tooltip_text = "Постоянная карта уровня %d (сид %d)" % [l, LevelGen.level_seed(l)]
 		lb.pressed.connect(func():
-			current_level = l
+			select_level(l)
 			generate_map())
 		lvl_row.add_child(lb)
 		_level_buttons.append(lb)
@@ -552,7 +566,7 @@ func _on_battle_pressed() -> void:
 		"location": current_location,
 		"mode": current_mode,
 		"archetype": current_archetype,
-		"level": current_level,
+		"level": current_level if current_level > 0 else -1,
 		"seed": current_seed,
 	}
 	battle_requested.emit(match_settings)
@@ -960,9 +974,8 @@ class _MapCanvas extends Control:
 		var homes: Dictionary = level_data.get("homes", {})
 		var flag_spots: Dictionary = level_data.get("flag_spots", {})
 
-		# Home Bases Glow & Ring
 		for team in ["player", "enemy"]:
-			if homes.has(team):
+			if homes.get(team) is Vector2:
 				var hp: Vector2 = homes[team]
 				var world_to_map := Vector2(hp.x / float(Cfg.TILE), hp.y / float(Cfg.TILE))
 				var p := pan_offset + world_to_map * tile_sz

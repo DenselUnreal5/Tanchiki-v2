@@ -22,6 +22,17 @@ static func _defense_player_area(cols: int, rows: int) -> Dictionary:
 static func _defense_enemy_area(cols: int, rows: int) -> Dictionary:
 	return {"r0": 2, "r1": rows - 3, "c0": 2, "c1": cols - 3, "edge": true}
 
+const LEVEL_COUNT := 5
+
+static func level_seed(level_num: int) -> int:
+	return ((level_num - 1) * 7777 + 42) & 0xFFFFFFFF
+
+static func level_of_seed(seed_value: int) -> int:
+	for n in range(1, LEVEL_COUNT + 1):
+		if level_seed(n) == seed_value:
+			return n
+	return 0
+
 static func generate(level_num: int, mode: String, seed_override: int = -1,
 		location: String = Locations.CITY, archetype: String = "auto") -> Dictionary:
 	var seed_value := 0
@@ -30,7 +41,7 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	elif level_num < 0:
 		seed_value = randi() & 0xFFFFFFFF
 	else:
-		seed_value = ((level_num - 1) * 7777 + 42) & 0xFFFFFFFF
+		seed_value = level_seed(level_num)
 	var rng := Rng.new(seed_value)
 	var loc_id := Locations.resolve(location, rng)
 	var loc := Locations.get_location(loc_id)
@@ -64,13 +75,20 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		map.set_tile(rows - 1, c, Cfg.T_WALL)
 
 	var plan: Dictionary
-	if String(loc.get("terrain", "grid")) == "organic":
-		# Полная замена уличной сетки клеточным автоматом (скальные гряды/
-		# заросли между полянами и тропами) — см. OrganicGen. plan остаётся
-		# валидным пустым словарём для потребителей вроде
-		# world_view.gd::_build_road_class() (дорог тут просто нет).
+	var terrain := String(loc.get("terrain", "grid"))
+	var river_weight: float = float(loc["river"])
+	if arch == "river" and river_weight < 0.8:
+		river_weight = 1.0
+	var want_river := (mode == "ffa" or mode == "koth" or arch == "river") and river_weight > 0.0
+	var tiled := terrain == "tiles" and mode != "tutorial"
+	var tile_style: Dictionary = loc.get("tile_style", {})
+	if tiled and bool(tile_style.get("river_always", false)):
+		want_river = true
+	if terrain == "organic":
 		plan = {"v": [], "h": [], "blocks": [], "circles": [], "seeds": [], "links": []}
 		OrganicGen.build(map, rng, cols, rows, loc)
+	elif tiled:
+		plan = TileCityGen.build(map, rng, cols, rows, arch, want_river, tile_style)
 	else:
 		plan = MapPlan.build(rng, cols, rows, loc)
 		RoadNet.paint(map, plan)
@@ -79,31 +97,26 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 		RoadNet.restripe_streets(map, plan)
 		RoadNet.paint_links(map, plan)
 
-	# Применение архитектурного стиля карты
-	if arch == "radial" and mode in ["ffa", "koth", "defense"] and bool(loc.get("arterials", true)):
+	if tiled:
+		pass
+	elif arch == "radial" and mode in ["ffa", "koth", "defense"] and bool(loc.get("arterials", true)):
 		_build_radial(map, rng, cols, rows, loc)
 	elif arch == "avenues" and mode in ["ffa", "koth", "defense"] and bool(loc.get("arterials", true)):
 		_build_avenues(map, rng, cols, rows, loc)
 	else:
 		Archetypes.apply(map, rng, arch, cols, rows, mode, loc)
 
-	var river_weight: float = float(loc["river"])
-	if arch == "river" and river_weight < 0.8:
-		river_weight = 1.0
-
 	if loc_id == "shore":
-		# Архипелаг вместо реки через центр — залив на одной стороне карты
-		# + острова с мостами (см. WaterGen.carve_archipelago). Заменяет
-		# обычную реку для этой локации целиком, во всех режимах.
 		WaterGen.carve_archipelago(map, rng, cols, rows, loc)
-	elif (mode == "ffa" or mode == "koth" or arch == "river") and river_weight > 0.0:
+	elif want_river and not tiled:
 		if loc_id == "city":
 			WaterGen.carve_city_canals(map, rng, cols, rows, plan["h"])
 		else:
 			WaterGen.carve(map, rng, cols, rows, plan["h"], river_weight)
 
-	Locations.overgrow(map, rng, loc)
-	Locations.carve_oases(map, rng, loc)
+	if not tiled:
+		Locations.overgrow(map, rng, loc)
+		Locations.carve_oases(map, rng, loc)
 
 	var homes := {"player": null, "enemy": null}
 	var flag_spots := {"player": [], "enemy": []}
@@ -132,6 +145,15 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 
 	map.ensure_connectivity()
 	RoadNet.repair(map)
+	if tiled:
+		TileCityGen.tidy(map)
+		var ground := int(loc.get("ground_tile", Cfg.T_GRASS))
+		if ground != Cfg.T_GRASS:
+			for r in rows:
+				for c in cols:
+					if map.get_tile(r, c) == Cfg.T_GRASS:
+						map.set_tile(r, c, ground)
+	map.mark_reachable()
 
 	var areas := {}
 	if mode == "ctf":

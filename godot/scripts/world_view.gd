@@ -651,7 +651,7 @@ func _draw_fire_patches() -> void:
 		draw_circle(pos, r * 0.28, Color(1.0, 0.88, 0.45, 0.80 * a * flick))
 
 func _draw_acid_streams() -> void:
-	if world == null:
+	if world == null or shot_fx != null:
 		return
 	for tank in world.tanks:
 		if not tank.alive or not tank.chimera_stream_active or tank.chimera_stream_timer <= 0:
@@ -815,6 +815,7 @@ var _loc_ground_alt := Cfg.ground_alt
 var _loc_road_kind := "asphalt"
 var _loc_fog := Color(0.86, 0.89, 0.94)
 var _loc_id := Locations.CITY
+var _loc_tiles := false
 var _loc_ready := false
 
 func _read_location() -> void:
@@ -824,6 +825,7 @@ func _read_location() -> void:
 	_loc_ground_alt = loc["ground_alt"]
 	_loc_road_kind = String(loc.get("road_kind", "asphalt"))
 	_loc_fog = loc.get("fog_tint", Color(0.86, 0.89, 0.94))
+	_loc_tiles = String(loc.get("terrain", "grid")) == "tiles"
 	_loc_ready = true
 
 func _ground_at(x: float, y: float, r: int, c: int) -> Color:
@@ -1116,10 +1118,34 @@ func _draw_parking_bay(x: float, y: float, r: int, c: int) -> void:
 		_rect(x + Cfg.TILE - 7.0, y + 2.0, 1.0, Cfg.TILE - 4.0,
 			Color(0.85, 0.85, 0.85, 0.30))
 
+const CROSS_ARC := 9.0
+
+func _draw_cross_arcs(x: float, y: float, r: int, c: int) -> void:
+	var tex := TerrainTextures.cross_arcs(_loc_id)
+	if tex == null:
+		return
+	var far := Cfg.TILE - CROSS_ARC
+	for d in [Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(1, 1)]:
+		if _is_paved(r + d.y, c + d.x):
+			continue
+		var ox := 0.0 if d.x < 0 else far
+		var oy := 0.0 if d.y < 0 else far
+		draw_texture_rect_region(tex, Rect2(x + ox, y + oy, CROSS_ARC, CROSS_ARC),
+			Rect2(ox, oy, CROSS_ARC, CROSS_ARC))
+
+func _is_crossing(r: int, c: int) -> bool:
+	if not _loc_tiles:
+		return _road_class_at(r, c) == RC_JUNCTION
+	return _is_paved(r - 1, c) and _is_paved(r + 1, c) and _is_paved(r, c - 1) and _is_paved(r, c + 1) \
+		and not (_is_paved(r - 1, c - 1) and _is_paved(r - 1, c + 1) and _is_paved(r + 1, c - 1) and _is_paved(r + 1, c + 1))
+
 func _city_road_index(r: int, c: int, up: bool, down: bool, left: bool, right: bool) -> int:
 	var lane := _city_lane_info(r, c)
 	if lane.x >= 0 and lane.z >= 2:
 		return _city_wide_lane_sprite(lane.x, lane.y, lane.z)
+	if _loc_tiles and up and down and left and right and _is_paved(r - 1, c - 1) \
+			and _is_paved(r - 1, c + 1) and _is_paved(r + 1, c - 1) and _is_paved(r + 1, c + 1):
+		return 18
 	if up and down and left and right:
 		return 16
 	if down and left and right and not up:
@@ -1139,15 +1165,15 @@ func _city_road_index(r: int, c: int, up: bool, down: bool, left: bool, right: b
 	if up and left and not down and not right:
 		return 15
 	if left and right and not up and not down:
-		if _road_class_at(r, c + 1) == RC_JUNCTION:
+		if _is_crossing(r, c + 1):
 			return 3
-		if _road_class_at(r, c - 1) == RC_JUNCTION:
+		if _is_crossing(r, c - 1):
 			return 4
 		return 1
 	if up and down and not left and not right:
-		if _road_class_at(r + 1, c) == RC_JUNCTION:
+		if _is_crossing(r + 1, c):
 			return 5
-		if _road_class_at(r - 1, c) == RC_JUNCTION:
+		if _is_crossing(r - 1, c):
 			return 6
 		return 2
 	if up or down:
@@ -1168,8 +1194,10 @@ func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
 		var down2 := _is_paved(r + 1, c)
 		var left2 := _is_paved(r, c - 1)
 		var right2 := _is_paved(r, c + 1)
-		draw_texture_rect(TerrainTextures.road(_city_road_index(r, c, up2, down2, left2, right2), _loc_id),
-			Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+		var idx := _city_road_index(r, c, up2, down2, left2, right2)
+		draw_texture_rect(TerrainTextures.road(idx, _loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+		if idx == 16:
+			_draw_cross_arcs(x, y, r, c)
 		if _road_class_at(r, c) == RC_SQUARE:
 			_draw_parking_bay(x, y, r, c)
 		return
@@ -1330,6 +1358,11 @@ func _draw_bush(x: float, y: float, r: int, c: int) -> void:
 		Rect2(x + (Cfg.TILE - bs) * 0.5 + jx, y + by, bs, bs), false)
 
 func _draw_sand_tile(x: float, y: float, r: int, c: int) -> void:
+	if not _loc_ready:
+		_read_location()
+	if TerrainTextures.has_textures(_loc_id):
+		_draw_grass_tile(x, y, r, c)
+		return
 	var t := _terrain_shade(r, c)
 	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.sand_dark.lerp(Cfg.sand_light, 0.3 + t * 0.7))
 	var fleck: Color = Cfg.sand_dark
@@ -1367,16 +1400,26 @@ func _city_river_index(up: bool, down: bool, left: bool, right: bool) -> int:
 		return 1
 	if left and right and not up and not down:
 		return 2
+	var wet_h := not left or not right
+	var wet_v := not up or not down
+	if wet_h and not wet_v:
+		return 1
+	if wet_v and not wet_h:
+		return 2
 	return 3
+
+func _is_wet(r: int, c: int) -> bool:
+	var t := world.map.get_tile(r, c)
+	return t == Cfg.T_WATER or t == Cfg.T_BRIDGE
 
 func _draw_water_tile(x: float, y: float, r: int, c: int, phase: float) -> void:
 	if not _loc_ready:
 		_read_location()
 	if TerrainTextures.has_textures(_loc_id):
-		var up := world.map.get_tile(r - 1, c) != Cfg.T_WATER
-		var down := world.map.get_tile(r + 1, c) != Cfg.T_WATER
-		var left := world.map.get_tile(r, c - 1) != Cfg.T_WATER
-		var right := world.map.get_tile(r, c + 1) != Cfg.T_WATER
+		var up := not _is_wet(r - 1, c)
+		var down := not _is_wet(r + 1, c)
+		var left := not _is_wet(r, c - 1)
+		var right := not _is_wet(r, c + 1)
 		draw_texture_rect(TerrainTextures.river(_city_river_index(up, down, left, right), _loc_id),
 			Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		return
@@ -1998,46 +2041,52 @@ func _draw_chimera_telegraph(tank: Tank) -> void:
 	draw_arc(end_p, ret_r, 0, TAU, 16, ret_color, 2.0)
 	draw_circle(end_p, 3.5 * pulse, Color(1.0, 0.4, 0.1, 0.85))
 
-func _draw_sniper_laser(tank: Tank) -> void:
-	if tank == null or not tank.alive or tank.sniper_laser_ticks <= 0:
-		return
-	var mx: float = tank.x + cos(tank.turret_angle) * tank.muzzle_len
-	var my: float = tank.y + sin(tank.turret_angle) * tank.muzzle_len
-	var start_p := Vector2(mx, my)
-	var dir := Vector2(cos(tank.turret_angle), sin(tank.turret_angle))
-	var max_dist: float = Cfg.BOT_SIGHT * 1.3
+func _laser_end(tank: Tank, start_p: Vector2, dir: Vector2, max_dist: float,
+		hostile_only: bool) -> Dictionary:
 	var cur_dist := 0.0
 	var step_dist := 12.0
 	var end_p := start_p
-
 	while cur_dist < max_dist:
-		cur_dist += step_dist
+		cur_dist = minf(cur_dist + step_dist, max_dist)
 		var check_p := start_p + dir * cur_dist
-		if world != null and world.map != null:
-			var tile := world.map.tile_at_pixel(check_p.x, check_p.y)
-			if GameMap.is_solid_tile(tile):
-				end_p = check_p
-				break
-		if world != null and not world.barrels.is_empty():
-			var hit_barrel := false
-			for barrel in world.barrels:
-				if barrel.alive and check_p.distance_to(Vector2(barrel.x, barrel.y)) <= barrel.radius:
-					end_p = check_p
-					hit_barrel = true
-					break
-			if hit_barrel:
-				break
-		if world != null and not world.tanks.is_empty():
-			var hit_target := false
-			for other in world.tanks:
-				if other != tank and other.alive and world.are_hostile(tank, other):
-					if check_p.distance_to(Vector2(other.x, other.y)) <= other.hit_r:
-						end_p = check_p
-						hit_target = true
-						break
-			if hit_target:
-				break
 		end_p = check_p
+		if world.map != null and GameMap.is_solid_tile(world.map.tile_at_pixel(check_p.x, check_p.y)):
+			return {"end": end_p, "tank": null}
+		for barrel in world.barrels:
+			if barrel.alive and check_p.distance_to(Vector2(barrel.x, barrel.y)) <= barrel.radius:
+				return {"end": end_p, "tank": null}
+		for other in world.tanks:
+			if other == tank or not other.alive:
+				continue
+			if hostile_only and not world.are_hostile(tank, other):
+				continue
+			if check_p.distance_to(Vector2(other.x, other.y)) <= other.hit_r:
+				return {"end": end_p, "tank": other}
+	return {"end": end_p, "tank": null}
+
+func _draw_aim_laser(tank: Tank) -> void:
+	var dir := Vector2(cos(tank.turret_angle), sin(tank.turret_angle))
+	var start_p := Vector2(tank.x, tank.y) + dir * tank.muzzle_len
+	var hit := _laser_end(tank, start_p, dir, tank.bullet_range(), false)
+	var end_p: Vector2 = hit["end"]
+	if start_p.distance_to(end_p) < 4.0:
+		return
+	var a := 0.6 if tank.can_fire else 0.22
+	var on_enemy: bool = hit["tank"] != null and world.are_hostile(tank, hit["tank"])
+	draw_line(start_p, end_p, Color(1.0, 0.12, 0.08, a * 0.35), 3.0)
+	draw_line(start_p, end_p, Color(1.0, 0.28, 0.18, a), 1.0)
+	draw_circle(start_p, 1.6, Color(1.0, 0.4, 0.3, minf(1.0, a + 0.3)))
+	if on_enemy:
+		draw_arc(end_p, 6.0, 0, TAU, 14, Color(1.0, 0.25, 0.15, minf(1.0, a + 0.3)), 1.5)
+	draw_circle(end_p, 2.6, Color(1.0, 0.22, 0.12, minf(1.0, a + 0.25)))
+	draw_circle(end_p, 1.1, Color(1.0, 0.95, 0.85, minf(1.0, a + 0.4)))
+
+func _draw_sniper_laser(tank: Tank) -> void:
+	if tank == null or not tank.alive or tank.sniper_laser_ticks <= 0:
+		return
+	var dir := Vector2(cos(tank.turret_angle), sin(tank.turret_angle))
+	var start_p := Vector2(tank.x, tank.y) + dir * tank.muzzle_len
+	var end_p: Vector2 = _laser_end(tank, start_p, dir, Cfg.BOT_SIGHT * 1.3, true)["end"]
 
 	var total_len := start_p.distance_to(end_p)
 	if total_len < 4.0:
@@ -2046,26 +2095,20 @@ func _draw_sniper_laser(tank: Tank) -> void:
 	var progress: float = clampf(1.0 - (float(tank.sniper_laser_ticks) / 27.0), 0.0, 1.0)
 	var pulse: float = 0.70 + 0.30 * sin(float(world.tick) * (0.8 + progress * 0.8))
 
-	# 1. Broad outer faint laser haze / bloom
 	draw_line(start_p, end_p, Color(1.0, 0.15, 0.1, (0.15 + 0.25 * progress) * pulse), 5.0)
 
-	# 2. Main red laser beam (narrows and intensifies as it charges)
 	var beam_w: float = lerpf(3.0, 1.8, progress)
 	draw_line(start_p, end_p, Color(1.0, 0.25, 0.15, (0.70 + 0.30 * progress) * pulse), beam_w)
 
-	# 3. Hot core thread (bright white-red)
 	draw_line(start_p, end_p, Color(1.0, 0.9, 0.85, (0.60 + 0.40 * progress) * pulse), 1.0)
 
-	# 4. Muzzle flash / laser emitter diode
 	draw_circle(start_p, 3.5 + 2.5 * progress, Color(1.0, 0.2, 0.1, 0.65 * pulse))
 	draw_circle(start_p, 1.8, Color(1.0, 0.95, 0.9, 0.95))
 
-	# 5. Warning reticle / crosshair at impact point
 	var ret_r: float = 8.0 - 3.5 * progress + 1.2 * sin(float(world.tick) * 1.2)
 	draw_arc(end_p, ret_r, 0, TAU, 16, Color(1.0, 0.2, 0.15, (0.75 + 0.25 * progress) * pulse), 1.8)
 	draw_circle(end_p, 2.4, Color(1.0, 0.95, 0.3, 0.95))
 
-	# 4 crosshair tics
 	var tic_len := 4.0
 	draw_line(end_p + Vector2(0, -ret_r - tic_len), end_p + Vector2(0, -ret_r + 2.0), Color(1.0, 0.3, 0.2, 0.9), 1.5)
 	draw_line(end_p + Vector2(0, ret_r - 2.0), end_p + Vector2(0, ret_r + tic_len), Color(1.0, 0.3, 0.2, 0.9), 1.5)
@@ -2118,6 +2161,8 @@ func _draw_tanks() -> void:
 			_draw_chimera_telegraph(tank)
 			if tank.sniper_laser_ticks > 0:
 				_draw_sniper_laser(tank)
+			elif not tank.is_bot and tank.is_sniper_chassis() and not _is_stealth_hidden(tank):
+				_draw_aim_laser(tank)
 	for tank in world.tanks:
 		if not tank.alive or not _in_view(tank.x, tank.y, 40):
 			continue

@@ -11,6 +11,13 @@ const SHEETS := {
 }
 const TRAVEL := {"standard": "projectile", "acid": "projectile",
 	"fire": "flame_stream", "shock": "projectile", "freeze": "ice_shards"}
+const STREAM_SPACING := 13.0
+const STREAM_FLOW := 5.0
+const STREAM_GROW := 20.0
+const TRAIL_ANCHOR := 0.87
+const TRAIL_MIN := 12.0
+const TRAIL_LEAD := 8.0
+const UNDER_TANK_ALPHA := 0.3
 var view: WorldView
 
 func _ready() -> void:
@@ -43,13 +50,50 @@ func _sprite(kind: String, anim: String, age: int, pos: Vector2,
 		rect.position.x = -(1.0 - anchor.x) * size.x
 	draw_texture_rect(frames.get_frame_texture(anim, frame), rect, false, Color(1, 1, 1, opacity))
 
+func _under_tank_fade(w: World, px: float, py: float, radius: float) -> float:
+	var fade := 1.0
+	for t in w.tanks:
+		if not t.alive:
+			continue
+		var reach: float = radius + t.hit_r
+		var dx: float = t.x - px
+		var dy: float = t.y - py
+		var d2 := dx * dx + dy * dy
+		if d2 >= reach * reach:
+			continue
+		var k := sqrt(d2) / reach
+		fade = minf(fade, lerpf(UNDER_TANK_ALPHA, 1.0, k * k))
+	return fade
+
+func _draw_acid_stream(w: World, t: Tank) -> void:
+	var start := Vector2(t.x + cos(t.turret_angle) * t.muzzle_len, t.y + sin(t.turret_angle) * t.muzzle_len)
+	var end_p: Vector2 = t.chimera_stream_target_point
+	var length := start.distance_to(end_p)
+	if length < 8.0:
+		return
+	var dir := (end_p - start) / length
+	var angle := dir.angle()
+	var age := Cfg.CHIMERA_STREAM_BURST_TICKS - t.chimera_stream_timer
+	var reach := minf(length, float(age + 1) * STREAM_GROW)
+	var shift := fmod(float(w.tick) * STREAM_FLOW + float(t.id) * 7.0, STREAM_SPACING)
+	var opacity := 0.55 if t.is_chimera_clone else 1.0
+	var count := int(length / STREAM_SPACING) + 1
+	for i in count:
+		var d := float(i) * STREAM_SPACING + shift
+		if d > reach:
+			break
+		var k := d / length
+		var size := Vector2(30, 24) * lerpf(0.7, 1.2, k)
+		_sprite("acid", "projectile", w.tick + i * 5, start + dir * d, angle,
+			size, Vector2(0.87, 0.5), false, opacity)
+
 func _draw() -> void:
 	if view == null or view.world == null or view.player == null:
 		return
 	var w: World = view.world
 	for patch in w.fire_patches:
 		var phase := 6 + (w.tick + int(patch.x + patch.y)) % 12
-		var alpha := clampf(float(patch.timer) / 45.0, 0.0, 0.8)
+		var alpha := clampf(float(patch.timer) / 45.0, 0.0, 0.8) * _under_tank_fade(w, patch.x, patch.y, patch.radius)
 		_sprite("fire", "fire_burst", phase, Vector2(patch.x, patch.y), 0.0,
 			Vector2.ONE * patch.radius * 2.4, Vector2(0.5, 0.5), false, alpha)
 	for b in w.bullets:
@@ -60,11 +104,16 @@ func _draw() -> void:
 		if kind == "fire": size = Vector2(43, 27)
 		elif kind == "freeze": size = Vector2(29, 23)
 		elif kind == "shock": size = Vector2(34, 20)
+		var age := w.tick - maxi(b.fx_spawn_tick, 0)
+		var travelled := float(age) * Vector2(b.vx, b.vy).length()
+		size.x = minf(size.x, maxf(TRAIL_MIN, (travelled + TRAIL_LEAD) / TRAIL_ANCHOR))
 		var pos := Vector2(b.x, b.y)
 		var angle := atan2(b.vy, b.vx)
-		# Leading tip stays at the actual collision point. Flame sheets point left.
-		_sprite(kind, TRAVEL[kind], w.tick - maxi(b.fx_spawn_tick, 0), pos,
-			angle, size, Vector2(0.87, 0.5), kind == "fire")
+		_sprite(kind, TRAVEL[kind], age, pos,
+			angle, size, Vector2(TRAIL_ANCHOR, 0.5), kind == "fire")
+	for t in w.tanks:
+		if t.alive and t.chimera_stream_active and t.chimera_stream_timer > 0:
+			_draw_acid_stream(w, t)
 	for e in w.shot_effects:
 		var age: int = w.tick - int(e.tick)
 		var kind := kind_of(String(e.kind))

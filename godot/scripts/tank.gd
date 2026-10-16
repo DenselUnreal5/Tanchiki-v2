@@ -379,6 +379,19 @@ func shot_kind() -> String:
 		kind = String(Cannons.get_cannon(cannon_id)["mode"])
 	return kind
 
+func bullet_life() -> int:
+	match shot_kind():
+		"fire":
+			return Cfg.FIRE_BULLET_LIFE
+		"shock":
+			return int(float(Cfg.BULLET_LIFE) / Cfg.SHOCK_BULLET_SPEED_MULT)
+	if is_sniper_chassis():
+		return int(float(Cfg.BULLET_LIFE) / Cfg.SNIPER_BULLET_SPEED_MULT)
+	return Cfg.BULLET_LIFE
+
+func bullet_range() -> float:
+	return bullet_speed() * float(bullet_life())
+
 func bullet_speed() -> float:
 	var speed: float = Cfg.BULLET_SPEED * float(mods["bulletSpeedMult"])
 	if weapon == "" and (cannon_id == "" or cannon_id == "standard"):
@@ -1064,6 +1077,7 @@ func _update_chimera_boss(world) -> void:
 				chimera_ambush_ready = true
 				world.particles.burst(x, y, [Color("#84cc16"), Color("#a3e635"), Color("#182b18")], 20, 2, 5, 14, 26, world.rng)
 				world.spawn_shockwave(x, y, 60.0, "acid", Color("#84cc16"), 18)
+				world.add_shot_effect("acid", "acid_cloud", Vector2(x, y), 0.0, 80.0)
 				Sfx.play("steam", x, y)
 				world.feed.emit(I18n.t("feed.chimeraCloak", {"name": name},
 					"🧪 %s активирует оптический камуфляж хищника!" % name), Color("#84cc16"))
@@ -1077,6 +1091,7 @@ func _update_chimera_boss(world) -> void:
 			turbo_timer = Cfg.CHIMERA_CLOAK_DURATION
 			chimera_ambush_ready = true
 			world.spawn_shockwave(x, y, 80.0, "acid", Color("#84cc16"), 24)
+			world.add_shot_effect("acid", "acid_cloud", Vector2(x, y), 0.0, 100.0)
 			world.particles.burst(x, y, [Color("#84cc16"), Color("#00ffff"), Color("#ff00ff"), Color.WHITE], 32, 3, 7, 20, 38, world.rng)
 			world.damage_number.emit(x, y - 30, "🧪 ГОЛОГРАММЫ!", Color("#84cc16"))
 			Sfx.play("thunder", x, y)
@@ -1114,6 +1129,8 @@ func _update_chimera_boss(world) -> void:
 		var my: float = y + sin(turret_angle) * muzzle_len
 		if chimera_stream_warmup_ticks % 8 == 0:
 			world.particles.burst(mx, my, [Color("#bef264"), Color("#84cc16"), Color("#ffffff")], 2, 1, 2, 4, 8, world.rng)
+		if chimera_stream_warmup_ticks % 14 == 0:
+			world.add_shot_effect("acid", "acid_cloud", Vector2(mx, my), 0.0, 30.0)
 		if chimera_stream_warmup_ticks <= 0:
 			start_chimera_stream(world)
 	elif is_chimera_clone and chimera_clone_parent != null and chimera_clone_parent.alive:
@@ -1176,6 +1193,8 @@ func start_chimera_stream(world) -> void:
 	var mx: float = x + cos(turret_angle) * muzzle_len
 	var my: float = y + sin(turret_angle) * muzzle_len
 	world.spawn_shockwave(mx, my, 32.0, "acid", Color("#84cc16"), 10)
+	world.add_shot_effect("acid", "muzzle", Vector2(mx, my), turret_angle, 52.0)
+	world.add_shot_effect("acid", "acid_cloud", Vector2(mx, my), 0.0, 56.0)
 	world.particles.burst(mx, my, [Color("#84cc16"), Color("#a3e635"), Color.WHITE], 10, 2, 4, 10, 18, world.rng)
 	Sfx.play("steam", mx, my)
 	if is_chimera_boss and not is_chimera_clone:
@@ -1244,6 +1263,8 @@ func _process_chimera_stream(world) -> void:
 			# Apply acid debuff stack only every 20 ticks (~0.33s), capped at 3 stacks max!
 			if chimera_stream_timer % 20 == 0 and other.acid_stacks < 3:
 				other.apply_acid(world, self, 1.0, 1)
+			if chimera_stream_timer % 10 == 0:
+				world.add_shot_effect("acid", "impact", Vector2(other.x, other.y), 0.0, 46.0)
 			if world.rng.nextf() < 0.20:
 				world.particles.burst(other.x, other.y, [Color("#84cc16"), Color("#a3e635"), Color("#4d7c0f")], 2, 1, 2, 6, 12, world.rng)
 
@@ -1257,7 +1278,11 @@ func _process_chimera_stream(world) -> void:
 	if chimera_stream_timer % 30 == 0:
 		world.spawn_acid_pool(hit_pos.x, hit_pos.y, 14.0, self, 80)
 
-	# Sound & particles
+	if chimera_stream_timer % 5 == 0:
+		world.add_shot_effect("acid", "muzzle", Vector2(muzzle_x, muzzle_y), turret_angle, 44.0)
+	if chimera_stream_timer % 6 == 0:
+		world.add_shot_effect("acid", "impact", hit_pos, 0.0, 50.0)
+
 	if chimera_stream_timer % 16 == 0:
 		Sfx.play("steam", muzzle_x, muzzle_y)
 
@@ -1442,7 +1467,8 @@ func shoot(world) -> bool:
 		if String(cn["mode"]) == "shock":
 			cd_mult *= float(mods["shockReloadMult"])
 		fire_cooldown = maxi(4, int(round(float(reload_ticks()) * cd_mult / class_fire_scale)))
-		scale_v /= class_dmg_scale
+		if String(cn["mode"]) != "acid":
+			scale_v /= class_dmg_scale
 		if bool(cn.get("special", false)):
 			return _shoot_special(world, String(cn["mode"]), muzzle_x, muzzle_y, scale_v, true)
 		var b := Ent.Bullet.new(muzzle_x, muzzle_y, turret_angle, self, float(cn["dmg_scale"]) * scale_v)

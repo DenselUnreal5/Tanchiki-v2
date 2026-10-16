@@ -387,6 +387,8 @@ var EN := {
 	"cos.buy": "Buy · {price} 🪙",
 	"upg.max": "MAX",
 	"upg.buy": "Upgrade · {price} 🪙",
+	"tip.upg.state": "Level: {lvl} / {max}\nNow: {now}\nNext level: {next} · {price} 🪙",
+	"tip.upg.maxed": "Level: {lvl} / {max}\nNow: {now}\nMaximum level reached",
 
 	"stats.title": "Statistics",
 	"stats.sub": "Profile level {lvl} · {xp} / {need} XP · perks {n}/{total} · coins {money} 🪙",
