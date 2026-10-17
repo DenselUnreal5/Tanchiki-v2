@@ -109,16 +109,11 @@ static func bolt_points(top: Vector2, impact: Vector2, seed_value: int) -> Packe
 
 static func draw_bolt(canvas: CanvasItem, top: Vector2, impact: Vector2, seed_value: int, alpha: float, flash_scale: float) -> void:
 	var points := bolt_points(top, impact, seed_value)
-	canvas.draw_polyline(points, Color("#778cbd", alpha * 0.18 * flash_scale), 8.0)
-	canvas.draw_polyline(points, Color("#aebed7", alpha * 0.65), 4.0)
-	canvas.draw_polyline(points, Color("#f3f2df", alpha), 2.0)
+	ElectricGlow.draw_path(canvas, points, alpha, flash_scale)
 	for index in [3, 5]:
 		var origin := points[index]
 		var side := -1.0 if Rng.hash01(seed_value, index) < 0.5 else 1.0
 		var fork := PackedVector2Array([origin, origin + Vector2(side * 32, 18),
 			origin + Vector2(side * 24, 38), origin + Vector2(side * 55, 58)])
-		canvas.draw_polyline(fork, Color("#c3cede", alpha * 0.7), 1.0)
-	var p := impact.round()
-	var spark := Color("#eeeace", alpha * (0.4 + 0.4 * flash_scale))
-	canvas.draw_rect(Rect2(p - Vector2(10, 1), Vector2(20, 2)), spark)
-	canvas.draw_rect(Rect2(p - Vector2(1, 8), Vector2(2, 16)), spark)
+		ElectricGlow.draw_path(canvas, fork, alpha * 0.7, flash_scale, true)
+	ElectricGlow.draw_spark(canvas, impact, 8.0, alpha * (0.4 + 0.4 * flash_scale), flash_scale)

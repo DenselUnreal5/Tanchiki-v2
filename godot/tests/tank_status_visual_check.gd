@@ -40,6 +40,9 @@ func _ready() -> void:
 		_check(first.get_data() != next.get_data(), "status %d animates" % flags)
 		_check(first.get_data() == repeat.get_data(), "status %d is stable when paused" % flags)
 		images.append(first)
+		if flags == TankStatusFx.SHOCK:
+			_check(_has_color(first, true), "shock has a blue outer glow")
+			_check(_has_color(first, false), "shock has a yellow center")
 		var expired := await _capture(0, 60)
 		_check(expired.get_data() == empty.get_data(), "status %d disappears immediately on expiry" % flags)
 	var mixed := await _capture(7, 60)
@@ -103,3 +106,15 @@ func _check(ok: bool, message: String) -> void:
 	if not ok:
 		failures += 1
 		push_error(message)
+
+func _has_color(image: Image, blue: bool) -> bool:
+	for y in image.get_height():
+		for x in image.get_width():
+			var color := image.get_pixel(x, y)
+			if color.a < 0.04:
+				continue
+			if blue and color.b > color.r * 1.3 and color.b > color.g * 1.1:
+				return true
+			if not blue and color.r > color.b * 1.3 and color.g > color.b * 1.2:
+				return true
+	return false

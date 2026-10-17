@@ -8,8 +8,8 @@ remain readable through low-opacity armor tints and an open center.
   small smoke clusters behind the hull. More burn stacks add flame coverage.
 - Acid: olive/lime deposits, downward drips and rising square bubbles. Coverage
   increases with acid stacks.
-- Shock: pale blue angular arcs along the tracks and rear armor, small forks and
-  sparks. Reduced flashes attenuate the outer glow.
+- Shock: blue glowing angular arcs with yellow centers along the tracks and rear
+  armor, small forks and sparks. Reduced flashes attenuate the outer glow.
 
 `TankStatusFx` is shared by sprite and geometric tank rendering. Anchors follow
 the chassis rotation; flames rise toward the top of the screen. Effects scale

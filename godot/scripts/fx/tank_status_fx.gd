@@ -105,20 +105,18 @@ static func _shock(canvas: CanvasItem, tank: Tank, tick: int, flash_scale: float
 		for i in 5:
 			var zig := float((frame + i * 3) % 5) - 1.0
 			points.append(_point(Vector2(side * (hw + zig), -hh * 0.7 + hh * i * 0.35), tank))
-		canvas.draw_polyline(points, Color("#497e96", alpha * (0.35 + 0.2 * flash_scale)), 3.0)
-		canvas.draw_polyline(points, Color("#b5d8de", alpha * 0.85), 1.0)
+		ElectricGlow.draw_path(canvas, points, alpha, flash_scale, true)
 		if detail > 0:
 			var origin := points[2]
 			var branch := PackedVector2Array([origin,
 				origin + _point(Vector2(side * 4, 2), tank),
 				origin + _point(Vector2(side * 3, 5), tank)])
-			canvas.draw_polyline(branch, Color("#8bbdcd", alpha * 0.8), 1.0)
+			ElectricGlow.draw_path(canvas, branch, alpha * 0.7, flash_scale, true)
 			var corner := _point(Vector2(side * (hw + 3), (-0.5 if frame % 2 else 0.5) * hh), tank)
-			canvas.draw_rect(Rect2(corner - Vector2(2, 0), Vector2(5, 1)), Color("#91c5cf", alpha))
-			canvas.draw_rect(Rect2(corner - Vector2(0, 2), Vector2(1, 5)), Color("#d2e9df", alpha))
+			ElectricGlow.draw_spark(canvas, corner, 2.0, alpha, flash_scale)
 	if detail > 0:
 		var rear := PackedVector2Array()
 		for i in 5:
 			rear.append(_point(Vector2(-hw * 0.65 + hw * i * 0.325,
 				hh * (0.45 if (frame + i) % 2 else 0.72)), tank))
-		canvas.draw_polyline(rear, Color("#79b4c6", alpha * 0.75), 1.0)
+		ElectricGlow.draw_path(canvas, rear, alpha * 0.75, flash_scale, true)

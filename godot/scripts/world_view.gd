@@ -112,6 +112,7 @@ func _draw() -> void:
 	_draw_wrecks()
 	_draw_rammer_meltdowns()
 	_draw_tanks()
+	_draw_electric_arcs()
 	_draw_acid_streams()
 	_draw_bullets()
 	_draw_particles()
@@ -731,6 +732,28 @@ func _draw_acid_streams() -> void:
 		draw_circle(end_p, 10.0 * pulse, Color(0.65, 0.95, 0.18, 0.75))
 		draw_circle(end_p, 5.0, Color(0.95, 1.0, 0.7, 0.95))
 		draw_arc(end_p, 14.0 * pulse, 0, TAU, 18, Color(0.75, 1.0, 0.25, 0.8), 2.0)
+
+func _draw_electric_arcs() -> void:
+	draw_set_transform(view_off)
+	for arc in world.electric_arcs:
+		var start: Vector2 = arc.start
+		var end: Vector2 = arc.end
+		# A link can cross the viewport with both endpoints offscreen.
+		if not _view.intersects(Rect2(start, end - start).abs().grow(24.0)):
+			continue
+		var age: int = world.tick - int(arc.tick)
+		if age < 0 or age >= 12:
+			continue
+		var points := ElectricGlow.link_points(start, end, int(arc.seed) + (age / 3) * 71)
+		var alpha := (1.0 - float(age) / 12.0) * 0.95
+		ElectricGlow.draw_path(self, points, alpha, Sets.flash_scale())
+		if Sets.fx_quality > 0:
+			var mid := points[points.size() / 2]
+			var dir := (end - start).normalized()
+			var side := Vector2(-dir.y, dir.x) * 12.0
+			ElectricGlow.draw_path(self, PackedVector2Array([mid, mid + side - dir * 5.0,
+				mid + side * 1.5 + dir * 4.0]), alpha * 0.65, Sets.flash_scale(), true)
+		ElectricGlow.draw_spark(self, end, 4.0, alpha, Sets.flash_scale())
 
 func _draw_bolts() -> void:
 	draw_set_transform(view_off)
