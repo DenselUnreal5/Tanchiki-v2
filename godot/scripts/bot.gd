@@ -238,11 +238,10 @@ func update(tank: Tank, world) -> void:
 			return
 
 	_decide(tank, world, tgt, target_dist)
-	if survival and tank.in_water and state != STATE_COMBAT:
-		dest_x = world.map.width * 0.5
-		dest_y = world.map.height * 0.5
-
-	if state == STATE_COMBAT:
+	if survival and tank.in_water:
+		_move_toward(tank, world, world.map.width * 0.5, world.map.height * 0.5)
+		_try_fire(tank, world, tgt, target_dist, has_shot)
+	elif state == STATE_COMBAT:
 		_do_combat(tank, world, tgt, target_dist, has_shot)
 	else:
 		_move_toward(tank, world, dest_x, dest_y)
@@ -256,7 +255,7 @@ func _track_frozen(tank: Tank, tgt, target_dist: float) -> void:
 		goal_far = target_dist > 40.0
 	else:
 		goal_far = Vector2(dest_x - tank.x, dest_y - tank.y).length() > 40.0
-	if goal_far and Vector2(tank.vx, tank.vy).length() < 0.15:
+	if goal_far and not tank.in_water and Vector2(tank.vx, tank.vy).length() < 0.15:
 		frozen_ticks += 1
 		if frozen_ticks > worst_frozen:
 			worst_frozen = frozen_ticks
