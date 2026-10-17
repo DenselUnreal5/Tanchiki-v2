@@ -917,6 +917,11 @@ func _round_road_corners(x: float, y: float, r: int, c: int) -> void:
 		_corner_cut(x, y, 3, col)
 
 func _draw_dune_tile(x: float, y: float, r: int, c: int) -> void:
+	if not _loc_ready:
+		_read_location()
+	if _loc_id == "dust":
+		_draw_sand_tile(x, y, r, c)
+		return
 	var k := _snow_k()
 	var lit: Color = Cfg.dune_light.lerp(Cfg.snow_ground, k)
 	var shade: Color = Cfg.dune_dark.lerp(Cfg.snow_ground, k * 0.6)
@@ -1434,7 +1439,7 @@ func _draw_water_tile(x: float, y: float, r: int, c: int, phase: float) -> void:
 		var left := not _is_wet(r, c - 1)
 		var right := not _is_wet(r, c + 1)
 		var texture: Texture2D
-		if _loc_id in ["frost", "exclusion", "shore"]:
+		if _loc_id in TerrainTextures.ADAPTED_BIOMES:
 			texture = TerrainTextures.biome_water(_loc_id, up, down, left, right)
 		else:
 			texture = TerrainTextures.river(_city_river_index(up, down, left, right), _loc_id)

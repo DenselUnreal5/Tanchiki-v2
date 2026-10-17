@@ -12,11 +12,16 @@ const BIOME_FILES := {
 	"citadel.png": 6, "house_warehouse.png": 7,
 }
 const BIOME_ATLAS := "res://art/terrain/biomes.png"
+const DUST_GROUND := "res://art/terrain/dust/sand_ground.png"
+const ADAPTED_BIOMES := ["dust", "frost", "exclusion", "shore"]
 
 static func has_textures(loc: String) -> bool:
 	return loc in ["city", "grassland", "jungle"] or BIOME_ROWS.has(loc)
 
 static func _biome_region(loc: String, file: String) -> Texture2D:
+	# All desert ground uses one surface, including underneath transparent props.
+	if loc == "dust" and file in ["grass.png", "sand.png"]:
+		return load(DUST_GROUND)
 	if not BIOME_ROWS.has(loc) or not BIOME_FILES.has(file):
 		return null
 	var atlas: Texture2D = load(BIOME_ATLAS)
@@ -63,7 +68,7 @@ static func _load_cached(loc: String, file: String) -> Texture2D:
 	if biome != null:
 		_cache[key] = biome
 		return biome
-	if effective_loc in ["frost", "exclusion", "shore"] and (
+	if effective_loc in ADAPTED_BIOMES and (
 			file.begins_with("road") or file.begins_with("river") or file.begins_with("bridge")):
 		var infrastructure := _biome_infrastructure(effective_loc, file)
 		_cache[key] = infrastructure
@@ -153,7 +158,7 @@ static func road(index: int, loc: String = "city") -> Texture2D:
 	return _load_cached(loc, "road%d.png" % index)
 
 static func cross_arcs(loc: String) -> Texture2D:
-	if not has_textures(loc) or loc == "city":
+	if not has_textures(loc) or loc == "city" or loc in ADAPTED_BIOMES:
 		return null
 	var path := "res://art/terrain/%s/road7.png" % loc
 	if not ResourceLoader.exists(path):
@@ -178,6 +183,8 @@ static func biome_water(loc: String, up: bool, down: bool, left: bool, right: bo
 		tint = Color("#41667e")
 	elif loc == "exclusion":
 		tint = Color("#405448")
+	elif loc == "dust":
+		tint = Color("#447b80")
 	for y in 32:
 		for x in 32:
 			# Only sample the water in the middle of the old river sprite.

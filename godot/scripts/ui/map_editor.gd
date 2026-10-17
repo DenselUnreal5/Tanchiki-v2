@@ -765,7 +765,11 @@ class _MapCanvas extends Control:
 							var left := _is_not_water(r, c - 1)
 							var right := _is_not_water(r, c + 1)
 							var idx := _river_index(up, down, left, right)
-							var wtex := TerrainTextures.river(idx, loc_id)
+							var wtex: Texture2D
+							if loc_id in TerrainTextures.ADAPTED_BIOMES:
+								wtex = TerrainTextures.biome_water(loc_id, up, down, left, right)
+							else:
+								wtex = TerrainTextures.river(idx, loc_id)
 							if wtex != null:
 								draw_texture_rect(wtex, rect, false)
 							else:
@@ -783,7 +787,10 @@ class _MapCanvas extends Control:
 						else:
 							_draw_bridge(rect)
 					Cfg.T_SAND, Cfg.T_DUNE:
-						draw_rect(rect, Color("#c9b878"))
+						if use_textures:
+							draw_texture_rect(TerrainTextures.sand(loc_id), rect, false)
+						else:
+							draw_rect(rect, Color("#c9b878"))
 					Cfg.T_QUICKSAND:
 						draw_rect(rect, Color("#7d6a45"))
 					Cfg.T_GRASS:
@@ -846,7 +853,8 @@ class _MapCanvas extends Control:
 	func _is_not_water(r: int, c: int) -> bool:
 		if current_map == null or not current_map.in_bounds(r, c):
 			return false
-		return current_map.get_tile(r, c) != Cfg.T_WATER
+		var tile := current_map.get_tile(r, c)
+		return tile != Cfg.T_WATER and tile != Cfg.T_BRIDGE
 
 	func _road_index(r: int, c: int, up: bool, down: bool, left: bool, right: bool) -> int:
 		var n := (1 if up else 0) + (1 if down else 0) + (1 if left else 0) + (1 if right else 0)
