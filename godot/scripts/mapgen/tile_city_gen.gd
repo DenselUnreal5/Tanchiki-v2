@@ -63,6 +63,7 @@ static func build(map: GameMap, rng: Rng, cols: int, rows: int, arch: String, wa
 	return {"v": [], "h": [], "blocks": [], "circles": [], "seeds": [], "links": links}
 
 static func tidy(map: GameMap, skip: Rect2i = Rect2i()) -> void:
+	_join_diagonals(map)
 	var changed := true
 	var guard := 0
 	while changed and guard < 64:
@@ -85,6 +86,25 @@ static func tidy(map: GameMap, skip: Rect2i = Rect2i()) -> void:
 						map.set_tile(r, c, fix)
 						changed = true
 
+static func _join_diagonals(map: GameMap) -> void:
+	for r in range(1, map.rows - 2):
+		for c in range(1, map.cols - 1):
+			if not _is_tile(map, r, c, true):
+				continue
+			for dc in [-1, 1]:
+				var c2: int = c + dc
+				if not _is_tile(map, r + 1, c2, true):
+					continue
+				if _is_tile(map, r + 1, c, true) or _is_tile(map, r, c2, true):
+					continue
+				if _open_ground(map.get_tile(r + 1, c)):
+					map.set_tile(r + 1, c, Cfg.T_ROAD)
+				elif _open_ground(map.get_tile(r, c2)):
+					map.set_tile(r, c2, Cfg.T_ROAD)
+
+static func _open_ground(t: int) -> bool:
+	return t == Cfg.T_GRASS or t == Cfg.T_EMPTY or t == Cfg.T_SAND or t == Cfg.T_TREE
+
 static func _is_tile(map: GameMap, r: int, c: int, paved: bool) -> bool:
 	var t := map.get_tile(r, c)
 	if t == Cfg.T_BRIDGE:
@@ -103,9 +123,13 @@ static func _degree(map: GameMap, r: int, c: int, paved: bool) -> int:
 		d += 1
 	return d
 
+static func _landing(map: GameMap, r: int, c: int) -> bool:
+	var t := map.get_tile(r, c)
+	return _is_tile(map, r, c, true) or (t != Cfg.T_WATER and GameMap.is_drivable_tile(t))
+
 static func _bridge_fix(map: GameMap, r: int, c: int) -> int:
-	var road_v := _is_tile(map, r - 1, c, true) and _is_tile(map, r + 1, c, true)
-	var road_h := _is_tile(map, r, c - 1, true) and _is_tile(map, r, c + 1, true)
+	var road_v := _landing(map, r - 1, c) and _landing(map, r + 1, c)
+	var road_h := _landing(map, r, c - 1) and _landing(map, r, c + 1)
 	var water_v := _is_tile(map, r - 1, c, false) and _is_tile(map, r + 1, c, false)
 	var water_h := _is_tile(map, r, c - 1, false) and _is_tile(map, r, c + 1, false)
 	if (road_v and water_h) or (road_h and water_v):
