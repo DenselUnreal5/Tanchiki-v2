@@ -157,6 +157,60 @@ static func road(index: int, loc: String = "city") -> Texture2D:
 		return _load_cached(loc, "road16.png")
 	return _load_cached(loc, "road%d.png" % index)
 
+static func road_shape(up: bool, down: bool, left: bool, right: bool) -> int:
+	if up and down and left and right:
+		return 16
+	if down and left and right:
+		return 8
+	if up and down and right:
+		return 9
+	if up and down and left:
+		return 10
+	if up and left and right:
+		return 11
+	if right and down and not up and not left:
+		return 12
+	if left and down and not up and not right:
+		return 13
+	if up and right and not down and not left:
+		return 14
+	if up and left and not down and not right:
+		return 15
+	if up or down:
+		return 2
+	return 1
+
+static func river_shape(up: bool, down: bool, left: bool, right: bool) -> int:
+	if not up and not down and not left and not right:
+		return 3
+	if up and not down and not left and not right:
+		return 4
+	if down and not up and not left and not right:
+		return 7
+	if left and not up and not down and not right:
+		return 5
+	if right and not up and not down and not left:
+		return 6
+	if up and left and not down and not right:
+		return 8
+	if up and right and not down and not left:
+		return 9
+	if down and left and not up and not right:
+		return 10
+	if down and right and not up and not left:
+		return 11
+	if up and down and not left and not right:
+		return 1
+	if left and right and not up and not down:
+		return 2
+	var wet_h := not left or not right
+	var wet_v := not up or not down
+	if wet_h and not wet_v:
+		return 1
+	if wet_v and not wet_h:
+		return 2
+	return 3
+
 static func cross_arcs(loc: String) -> Texture2D:
 	if not has_textures(loc) or loc == "city" or loc in ADAPTED_BIOMES:
 		return null

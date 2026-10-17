@@ -750,7 +750,7 @@ class _MapCanvas extends Control:
 							var down := _is_paved(r + 1, c)
 							var left := _is_paved(r, c - 1)
 							var right := _is_paved(r, c + 1)
-							var idx := _road_index(r, c, up, down, left, right)
+							var idx := TerrainTextures.road_shape(up, down, left, right)
 							var rtex := TerrainTextures.road(idx, loc_id)
 							if rtex != null:
 								draw_texture_rect(rtex, rect, false)
@@ -764,12 +764,11 @@ class _MapCanvas extends Control:
 							var down := _is_not_water(r + 1, c)
 							var left := _is_not_water(r, c - 1)
 							var right := _is_not_water(r, c + 1)
-							var idx := _river_index(up, down, left, right)
 							var wtex: Texture2D
 							if loc_id in TerrainTextures.ADAPTED_BIOMES:
 								wtex = TerrainTextures.biome_water(loc_id, up, down, left, right)
 							else:
-								wtex = TerrainTextures.river(idx, loc_id)
+								wtex = TerrainTextures.river(TerrainTextures.river_shape(up, down, left, right), loc_id)
 							if wtex != null:
 								draw_texture_rect(wtex, rect, false)
 							else:
@@ -852,66 +851,9 @@ class _MapCanvas extends Control:
 
 	func _is_not_water(r: int, c: int) -> bool:
 		if current_map == null or not current_map.in_bounds(r, c):
-			return false
-		var tile := current_map.get_tile(r, c)
-		return tile != Cfg.T_WATER and tile != Cfg.T_BRIDGE
-
-	func _road_index(r: int, c: int, up: bool, down: bool, left: bool, right: bool) -> int:
-		var n := (1 if up else 0) + (1 if down else 0) + (1 if left else 0) + (1 if right else 0)
-		if n >= 3:
-			if up and down and left and right:
-				return 7
-			if up and down and left:
-				return 10
-			if up and down and right:
-				return 11
-			if left and right and up:
-				return 8
-			if left and right and down:
-				return 9
-		if n == 2:
-			if left and right:
-				return 1
-			if up and down:
-				return 2
-			if up and left:
-				return 14
-			if up and right:
-				return 15
-			if down and left:
-				return 12
-			if down and right:
-				return 13
-		if up or down:
-			return 2
-		if left or right:
-			return 1
-		return 1
-
-	func _river_index(up: bool, down: bool, left: bool, right: bool) -> int:
-		if not up and not down and not left and not right:
-			return 3
-		if up and not down and not left and not right:
-			return 4
-		if down and not up and not left and not right:
-			return 7
-		if left and not up and not down and not right:
-			return 5
-		if right and not up and not down and not left:
-			return 6
-		if up and left and not down and not right:
-			return 8
-		if up and right and not down and not left:
-			return 9
-		if down and left and not up and not right:
-			return 10
-		if down and right and not up and not left:
-			return 11
-		if up and down and not left and not right:
-			return 1
-		if left and right and not up and not down:
-			return 2
-		return 3
+			return true
+		var t := current_map.get_tile(r, c)
+		return t != Cfg.T_WATER and t != Cfg.T_BRIDGE
 
 	func _draw_road(rect: Rect2, loc_id: String) -> void:
 		var road_color := Color("#2c2d30")
