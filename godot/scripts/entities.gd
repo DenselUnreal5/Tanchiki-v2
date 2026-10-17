@@ -252,7 +252,10 @@ class Bullet extends RefCounted:
 				return true
 
 			if cannon_kind == "shock":
-				var shock_dmg: float = Cfg.SHOCK_DMG * Tank._attacker_mod(owner, "shockDmgMult")
+				var shock_base := Cfg.SHOCK_DMG
+				if owner != null and "enemy_type" in owner and String(owner.enemy_type.get("id", "")) == "tesla":
+					shock_base = Cfg.TESLA_SHOCK_DMG
+				var shock_dmg: float = shock_base * Tank._attacker_mod(owner, "shockDmgMult")
 				if world.deal_damage(tank, shock_dmg, owner, "shock") > 0.0:
 					tank.apply_shock(world, owner)
 				if owner != null and owner.flags.has("arcChain"):
@@ -264,7 +267,7 @@ class Bullet extends RefCounted:
 			if cannon_kind == "fire":
 				if from_cannon:
 					world.deal_damage(tank, Cfg.FIRE_IMPACT_DMG * dmg_scale, owner, "fire")
-				if tank.ignite(world, owner, from_cannon, dmg_scale if from_cannon else 1.0):
+				if tank.ignite(world, owner, true, dmg_scale if from_cannon else 1.0):
 					tank.add_heat(Cfg.BURN_HIT_HEAT)
 				world.spawn_fire_patch(x, y, owner)
 				alive = false

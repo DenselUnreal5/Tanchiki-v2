@@ -4,7 +4,7 @@ extends RefCounted
 const LIST := {
 	"grunt": {
 		"id": "grunt", "name": "Рядовой", "icon": "🪖",
-		"hp_mult": 1.0, "speed_mult": 1.0, "fire_rate_mult": 1.0, "dmg_scale": 1.0,
+		"hp_mult": 1.1, "speed_mult": 1.0, "fire_rate_mult": 1.0, "dmg_scale": 1.0,
 		"accuracy_bonus": 0.0, "react_mult": 1.0,
 		"fire_range": 500.0, "keep_min": 80.0, "keep_max": 250.0,
 		"chassis": "standard", "role": "attacker", "color_key": "enemy",
@@ -12,7 +12,7 @@ const LIST := {
 	},
 	"scout": {
 		"id": "scout", "name": "Разведчик", "icon": "🏃",
-		"hp_mult": 0.75, "speed_mult": 1.3, "fire_rate_mult": 0.5, "dmg_scale": 0.5,
+		"hp_mult": 0.85, "speed_mult": 1.3, "fire_rate_mult": 0.5, "dmg_scale": 0.5,
 		"accuracy_bonus": -0.1, "react_mult": 0.9,
 		"fire_range": 380.0, "keep_min": 60.0, "keep_max": 200.0,
 		"chassis": "light", "role": "attacker", "color_key": "scout",
@@ -20,7 +20,7 @@ const LIST := {
 	},
 	"heavy": {
 		"id": "heavy", "name": "Громила", "icon": "🛡️",
-		"hp_mult": 2.2, "speed_mult": 0.8, "fire_rate_mult": 1.5, "dmg_scale": 1.35,
+		"hp_mult": 1.9, "speed_mult": 0.8, "fire_rate_mult": 1.5, "dmg_scale": 1.35,
 		"accuracy_bonus": 0.0, "react_mult": 1.1,
 		"fire_range": 400.0, "keep_min": 120.0, "keep_max": 280.0,
 		"chassis": "heavy", "role": "attacker", "color_key": "heavy",
@@ -36,7 +36,7 @@ const LIST := {
 	},
 	"mortar": {
 		"id": "mortar", "name": "Миномёт", "icon": "💣",
-		"hp_mult": 1.1, "speed_mult": 0.85, "fire_rate_mult": 2.5, "dmg_scale": 1.2,
+		"hp_mult": 1.45, "speed_mult": 0.85, "fire_rate_mult": 2.3, "dmg_scale": 1.3,
 		"accuracy_bonus": 0.0, "react_mult": 1.2,
 		"fire_range": 480.0, "keep_min": 320.0, "keep_max": 420.0,
 		"chassis": "mortar", "role": "defender", "color_key": "mortar",
@@ -53,7 +53,7 @@ const LIST := {
 	},
 	"tesla": {
 		"id": "tesla", "name": "Громовержец", "icon": "⚡",
-		"hp_mult": 1.0, "speed_mult": 1.05, "fire_rate_mult": 1.8, "dmg_scale": 1.0,
+		"hp_mult": 1.25, "speed_mult": 1.05, "fire_rate_mult": 1.35, "dmg_scale": 1.0,
 		"accuracy_bonus": 0.05, "react_mult": 1.0,
 		"fire_range": 420.0, "keep_min": 150.0, "keep_max": 320.0,
 		"chassis": "standard", "role": "attacker", "color_key": "tesla",

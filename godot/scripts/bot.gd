@@ -770,8 +770,9 @@ static func evaluate_threat_score(tank: Tank, other: Tank, world, d: float, has_
 		score += 1.5
 
 	# 6. Приоритет игрока
-	if other.is_player_controlled:
-		score += 1.4 if is_ffa else 0.6
+	var focus := Cfg.mode_tune(world.mode, "player_focus", 1.4 if is_ffa else 0.6)
+	if other.is_player_controlled and focus > 0.0:
+		score += focus
 		if d < Cfg.BOT_COMBAT_RANGE:
 			score += 0.8
 
@@ -815,7 +816,7 @@ static func find_best_threat(tank: Tank, world, lobbed: bool = false):
 			var f_dist2 := d2
 			if other.freeze_ticks > 0:
 				f_dist2 *= 0.3
-			elif other.is_player_controlled:
+			elif other.is_player_controlled and Cfg.mode_tune(world.mode, "player_focus", 0.6) > 0.0:
 				f_dist2 *= 0.4
 			elif other == tank.last_attacker:
 				f_dist2 *= 0.5

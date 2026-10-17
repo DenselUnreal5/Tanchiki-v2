@@ -120,7 +120,7 @@ func _check_tesla() -> void:
 	_check(absf(Vector2(b.vx, b.vy).length() - normal_speed * Cfg.SHOCK_BULLET_SPEED_MULT) < 0.01, "заряд летит быстрее обычной пули")
 	var hp0 := ptank.hp
 	_fly(world, b)
-	_check(is_equal_approx(hp0 - ptank.hp, Cfg.SHOCK_DMG), "попадание наносит %.0f урона (нанесено %.1f)" % [Cfg.SHOCK_DMG, hp0 - ptank.hp])
+	_check(is_equal_approx(hp0 - ptank.hp, Cfg.TESLA_SHOCK_DMG), "попадание наносит %.0f урона (нанесено %.1f)" % [Cfg.TESLA_SHOCK_DMG, hp0 - ptank.hp])
 	_check(ptank.stun_ticks > Cfg.SHOCK_STUN_TICKS - 10 and not ptank.can_fire, "цель оглушена на ~1 с и не может стрелять")
 	var stun_left := ptank.stun_ticks
 	var b2 := _fire_at(world, tesla, ptank)
@@ -143,13 +143,16 @@ func _check_pyro() -> void:
 	_check(world.fire_patches.size() >= 3, "снаряд выжег землю на пути (%d пятен)" % world.fire_patches.size())
 	_check(ptank.burn_ticks > 0, "попадание поджигает цель")
 	_check(ptank.heat >= heat0 + Cfg.BURN_HIT_HEAT - 0.01, "нагрев ствола вырос (%.2f → %.2f)" % [heat0, ptank.heat])
+	for i in Cfg.BURN_STACK_MAX - 1:
+		_fly(world, _fire_at(world, pyro, ptank))
+	_check(ptank.burn_stacks == Cfg.BURN_STACK_MAX, "повторные попадания раздувают пламя до %d уровней (%d)" % [Cfg.BURN_STACK_MAX, ptank.burn_stacks])
 	ptank.x = 700.0
 	ptank.y = 700.0
 	var hp0 := ptank.hp
 	for i in Cfg.TICK_HZ:
 		world.step()
 	var lost := hp0 - ptank.hp
-	_check(absf(lost - Cfg.BURN_DPS) <= 2.6, "горение отнимает ~%.0f HP в секунду (за секунду %.1f)" % [Cfg.BURN_DPS, lost])
+	_check(absf(lost - Cfg.BURN_DPS * Cfg.BURN_STACK_MAX) <= 4.0, "сильное горение отнимает ~%.0f HP в секунду (за секунду %.1f)" % [Cfg.BURN_DPS * Cfg.BURN_STACK_MAX, lost])
 	ptank.burn_ticks = 0
 	var patch = world.fire_patches[0]
 	ptank.x = patch.x

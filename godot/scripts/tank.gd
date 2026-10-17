@@ -454,7 +454,8 @@ func _update_burn(world) -> void:
 	burn_tick_timer -= 1
 	if burn_tick_timer <= 0:
 		burn_tick_timer = Cfg.BURN_TICK_INTERVAL
-		var dmg: float = Cfg.BURN_DPS * float(Cfg.BURN_TICK_INTERVAL) / float(Cfg.TICK_HZ) * burn_dmg_mult 			* float(maxi(1, burn_stacks)) * burn_power
+		var dmg: float = Cfg.BURN_DPS * float(Cfg.BURN_TICK_INTERVAL) / float(Cfg.TICK_HZ) * burn_dmg_mult \
+			* float(maxi(1, burn_stacks)) * burn_power
 		world.deal_damage(self, dmg, burn_attacker, "fire")
 	if world.tick % 6 == 0:
 		world.particles.spawn(x + (world.rng.nextf() - 0.5) * width * 0.6, y + (world.rng.nextf() - 0.5) * height * 0.6,
@@ -464,6 +465,36 @@ func reload_ticks() -> int:
 	if ability_active("overdrive") or ability_active("overclock"):
 		return maxi(3, int(round(float(fire_rate) * Cfg.OVERDRIVE_RELOAD_MULT)))
 	return fire_rate
+
+func upgrade_progress() -> float:
+	if upgrade_mods.is_empty():
+		return 0.0
+	var total := 0.0
+	var count := 0
+	for up in Upgrades.LIST:
+		var key := String(up["mod_key"])
+		var top := Upgrades.mult(up, int(up["max_level"]))
+		var neutral := 0.0 if String(up["mult_mode"]) == "flat" else 1.0
+		if is_equal_approx(top, neutral):
+			continue
+		var value := float(upgrade_mods.get(key, neutral))
+		total += clampf((value - neutral) / (top - neutral), 0.0, 1.0)
+		count += 1
+	return total / float(count) if count > 0 else 0.0
+
+func upgrade_offense_scale(keep: float) -> float:
+	if upgrade_mods.is_empty() or keep >= 1.0:
+		return 1.0
+	var offense := float(upgrade_mods.get("dmgMult", 1.0)) / maxf(0.1, float(upgrade_mods.get("fireRateMult", 1.0)))
+	if offense <= 1.0:
+		return 1.0
+	return (1.0 + (offense - 1.0) * keep) / offense
+
+func enemy_threat_mult(scale: float = Cfg.ENEMY_DMG_UPGRADE_SCALE) -> float:
+	if upgrade_mods.is_empty():
+		return 1.0
+	var toughness := float(upgrade_mods.get("maxHPMult", 1.0)) / maxf(0.1, float(upgrade_mods.get("damageTakenMult", 1.0)))
+	return 1.0 + maxf(0.0, toughness - 1.0) * scale
 
 func _apply_upgrade_mods(src: Dictionary) -> Dictionary:
 	var out := src.duplicate()
@@ -582,6 +613,8 @@ func update(world) -> void:
 		stun_ticks -= 1
 	if stun_guard_ticks > 0:
 		stun_guard_ticks -= 1
+	if boss_damage_grace_ticks > 0:
+		boss_damage_grace_ticks -= 1
 	if rammer_daze_ticks > 0:
 		rammer_daze_ticks -= 1
 	if world == null:

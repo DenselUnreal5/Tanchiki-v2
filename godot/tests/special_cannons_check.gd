@@ -145,7 +145,7 @@ func _check_fire() -> void:
 	eb.cannon_kind = "fire"
 	world.bullets.append(eb)
 	_fly(world, eb)
-	_check(victim.burn_stacks == 1 and victim.hp == victim.max_hp, "Огнемётчик-враг по-прежнему только поджигает")
+	_check(victim.burn_stacks == 1 and victim.hp == victim.max_hp, "Огнемётчик-враг поджигает без урона попаданием")
 	victim.burn_ticks = 0
 	ptank.weapon = "test_weapon"
 	_check(ptank.shot_kind() == "", "с подобранным оружием стреляет оружие, а не пушка")

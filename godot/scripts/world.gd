@@ -941,7 +941,7 @@ func _boss_stat_mult() -> Dictionary:
 	var dmg_mult := (1.0 + extra_players * Cfg.BOSS_DMG_PER_EXTRA_PLAYER) \
 		* (1.0 + wave_depth * Cfg.BOSS_DMG_PER_WAVE)
 	return {
-		"hp": clampf(hp_mult, 1.0, Cfg.BOSS_HP_MULT_CAP),
+		"hp": clampf(hp_mult, 1.0, Cfg.BOSS_HP_MULT_CAP) * Cfg.mode_tune(mode, "boss_hp", 1.0),
 		"dmg": clampf(dmg_mult, 1.0, Cfg.BOSS_DMG_MULT_CAP),
 	}
 
@@ -988,6 +988,7 @@ func _update_defense() -> void:
 		reward.emit("win", Cfg.REWARD_WIN, players[0].name if players.size() > 0 else "")
 		feed.emit(I18n.t("feed.defenseEndless", {"n": wave},
 			"🌊 Все %d волн отбиты — оборона продолжается без конца!" % wave), Color("#ffee55"))
+	base["hp"] = minf(float(base["max_hp"]), float(base["hp"]) + float(base["max_hp"]) * Cfg.DEFENSE_BASE_WAVE_HEAL)
 	wave_state = "delay"
 	wave_timer = int(Cfg.MODES["defense"]["wave_delay"])
 
@@ -1278,6 +1279,8 @@ func _update_ramp() -> void:
 func deal_damage(target, amount: float, attacker, source: String) -> float:
 	if target == null or not target.alive or amount <= 0.0:
 		return 0.0
+	if attacker != null:
+		amount *= Cfg.mode_tune(mode, "all_dmg", 1.0)
 	if attacker != null and attacker.alive and attacker.flags.has("berserk"):
 		var ratio: float = attacker.hp / attacker.max_hp if attacker.max_hp > 0.0 else 0.0
 		if ratio <= 0.4:
@@ -1318,7 +1321,13 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 			and attacker.flags.has("overload"):
 		amount *= Cfg.OVERLOAD_DMG_MULT
 
-	# Ребаланс урона боссов и защита от ваншота
+	if attacker != null and attacker != target and "is_bot" in attacker and attacker.is_bot and not target.is_bot:
+		amount *= target.enemy_threat_mult(Cfg.mode_tune(mode, "threat_scale", Cfg.ENEMY_DMG_UPGRADE_SCALE)) \
+			* Cfg.mode_tune(mode, "enemy_dmg", 1.0) \
+			* (1.0 + target.upgrade_progress() * Cfg.mode_tune(mode, "progress_threat", 0.0))
+	elif attacker != null and attacker != target and "is_bot" in attacker and not attacker.is_bot and target.is_bot:
+		amount *= attacker.upgrade_offense_scale(Cfg.mode_tune(mode, "offense_keep", 1.0))
+
 	if attacker != null and attacker.alive and attacker.is_boss:
 		if mode == "koth" and target != null and not target.is_player_controlled and not target.is_boss:
 			amount *= Cfg.BOSS_KOTH_BOT_DMG_MULT

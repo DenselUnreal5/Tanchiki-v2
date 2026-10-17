@@ -300,6 +300,7 @@ const BULLET_LIFE := 160
 const SNIPER_BULLET_SPEED_MULT := 3.0
 
 const SHOCK_DMG := 10.0
+const TESLA_SHOCK_DMG := 20.0
 const SHOCK_STUN_TICKS := 60
 const SHOCK_STUN_GUARD_TICKS := 150
 const SHOCK_BULLET_SPEED_MULT := 1.6
@@ -498,7 +499,7 @@ const MODES := {
 		"base_hp": 1000.0,
 		"start_delay": 3 * 60,
 		"wave_delay": 4 * 60,
-		"base_dps": 0.18,
+		"base_dps": 0.06,
 		"base_radius": 72.0,
 	},
 	"tutorial": {
@@ -518,7 +519,8 @@ const DEFENSE_PLAYER_HP_MULT := 1.6
 const DEFENSE_ENEMY_ACCURACY_PENALTY := 0.12
 const DEFENSE_ACCURACY_PENALTY_MAX := 0.30
 const DEFENSE_BASE_REGEN_PER_TICK := 0.0006
-const DEFENSE_WAVE_TIMEOUT := 50 * 60
+const DEFENSE_BASE_WAVE_HEAL := 0.35
+const DEFENSE_WAVE_TIMEOUT := 75 * 60
 
 const AIRSTRIKE_DMG := 70.0
 const AIRSTRIKE_MAX_HP_FRACTION := 0.1
@@ -550,6 +552,16 @@ const PLAYER_SPEED := 1.3
 const PLAYER_FIRE_RATE := 27
 
 const PLAYER_DMG_MULT := 1.5
+const ENEMY_DMG_UPGRADE_SCALE := 0.6
+const MODE_BALANCE := {
+	"ffa": {"player_focus": 1.4, "offense_keep": 0.0, "threat_scale": 0.85, "progress_threat": 0.4, "boss_hp": 0.5},
+	"koth": {"player_focus": 0.0, "offense_keep": 0.5, "threat_scale": 0.85, "all_dmg": 0.4, "boss_hp": 0.6},
+	"ctf": {"player_focus": 0.6, "offense_keep": 0.5, "threat_scale": 0.85, "progress_threat": 0.2},
+	"defense": {"player_focus": 0.6, "offense_keep": 1.0, "threat_scale": 0.6, "enemy_dmg": 0.6},
+}
+
+static func mode_tune(mode: String, key: String, fallback: float) -> float:
+	return float((MODE_BALANCE.get(mode, {}) as Dictionary).get(key, fallback))
 
 const REPAIR_FRACTION := 0.33
 const BREAKER_BUILDING_MULT := 4.0
