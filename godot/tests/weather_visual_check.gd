@@ -73,6 +73,10 @@ func _ready() -> void:
 	world.bolts.append({"x": 280.0, "y": 240.0, "life": 14, "seed": 77})
 	var bolt := await _capture("clear", 900)
 	_check(bolt.get_data() != baseline.get_data(), "damaging lightning remains visible with weather disabled")
+	Sets.reduce_flashes = false
+	var full_bolt := await _capture("clear", 900)
+	_check(_has_electric_color(full_bolt, baseline, true), "storm bolt has a blue halo")
+	_check(_has_electric_color(full_bolt, baseline, false), "storm bolt has a yellow center")
 	_check(world.rng.state == rng_before, "drawing does not advance simulation RNG")
 	var points := WeatherVisuals.bolt_points(Vector2(40, 10), Vector2(200, 240), 77)
 	for point in points:
@@ -106,3 +110,16 @@ func _check(ok: bool, label: String) -> void:
 	if not ok:
 		failures += 1
 		push_error(label)
+
+func _has_electric_color(image: Image, baseline: Image, blue: bool) -> bool:
+	for y in image.get_height():
+		for x in image.get_width():
+			var color := image.get_pixel(x, y)
+			var original := baseline.get_pixel(x, y)
+			if Vector3(color.r - original.r, color.g - original.g, color.b - original.b).length() < 0.05:
+				continue
+			if blue and color.b > color.r * 1.2 and color.b > color.g * 1.05:
+				return true
+			if not blue and color.r > 0.6 and color.g > 0.5 and color.b < color.r * 0.8 and color.r > color.g * 0.9:
+				return true
+	return false

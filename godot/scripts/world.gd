@@ -51,7 +51,15 @@ func add_shot_effect(kind: String, anim: String, pos: Vector2, angle: float = 0.
 	if shot_effects.size() > 160:
 		shot_effects.pop_front()
 
+func add_electric_arc(start: Vector2, end: Vector2) -> void:
+	electric_arcs.append({"start": start, "end": end, "tick": tick,
+		"seed": tick * 31 + electric_arcs.size() * 977})
+	if electric_arcs.size() > 128:
+		electric_arcs.pop_front()
+
 func _expire_shot_effects() -> void:
+	while not electric_arcs.is_empty() and tick - int(electric_arcs[0].tick) >= 12:
+		electric_arcs.pop_front()
 	while not shot_effects.is_empty() and tick - int(shot_effects[0].tick) > 60:
 		shot_effects.pop_front()
 
@@ -99,6 +107,8 @@ var flood_level := 0.0
 var used_names := {}
 var puppet := false
 var bolts: Array = []
+# Cosmetic hit-to-hit links; endpoints are frozen at the time damage is dealt.
+var electric_arcs: Array = []
 var scorches: Array = []
 var shockwaves: Array = []
 var barrels: Array = []
@@ -291,6 +301,7 @@ func _chain_lightning(x: float, y: float, attacker, already_hit: Dictionary) -> 
 	for i in mini(Cfg.CHAIN_LIGHTNING_MAX_TARGETS, candidates.size()):
 		var t = candidates[i][1]
 		deal_damage(t, chain_dmg, attacker, "lightning")
+		add_electric_arc(Vector2(x, y), Vector2(t.x, t.y))
 		scorches.append(Vector2(t.x, t.y))
 		while scorches.size() > Cfg.MAX_SCORCH:
 			scorches.pop_front()
@@ -1603,6 +1614,7 @@ func shock_arc(source_tank, attacker, dmg: float) -> Array:
 	for i in mini(Cfg.ARC_CHAIN_TARGETS, candidates.size()):
 		var t = candidates[i][1]
 		deal_damage(t, dmg, attacker, "shock")
+		add_electric_arc(Vector2(source_tank.x, source_tank.y), Vector2(t.x, t.y))
 		if t.alive:
 			t.apply_shock(self, attacker)
 		var steps := 6
@@ -2352,6 +2364,7 @@ func dispose() -> void:
 	players = []
 	particles.clear()
 	shockwaves.clear()
+	electric_arcs.clear()
 	barrels.clear()
 	power_generators.clear()
 	rammer_meltdowns.clear()
