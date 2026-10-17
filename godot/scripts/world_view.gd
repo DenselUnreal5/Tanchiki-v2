@@ -2123,7 +2123,7 @@ func _draw_tanks() -> void:
 			elif not tank.is_bot and tank.is_sniper_chassis() and not _is_stealth_hidden(tank):
 				_draw_aim_laser(tank)
 	for tank in world.tanks:
-		if not tank.alive or not _in_view(tank.x, tank.y, 40):
+		if not tank.alive or not _in_view(tank.x, tank.y, maxf(48.0, tank.hit_r * 3.0)):
 			continue
 		if _is_stealth_hidden(tank):
 			continue
@@ -2168,12 +2168,16 @@ func _draw_tank(tank: Tank) -> void:
 	draw_set_transform(view_off + pos)
 	_draw_ellipse(Vector2(2, 4), hw * 1.05, hh / 1.2, Color(0, 0, 0, 0.25))
 
+	draw_set_transform((view_off + pos).round())
+	TankStatusFx.draw_underlay(self, tank, int(anim_tick), Sets.fx_quality)
 	var sprite_hull := TankSprites.hull_class(tank)
 	if sprite_hull != "":
 		_draw_tank_sprite(tank, sprite_hull, palette, pos, hw, hh, anim_tick)
 	else:
 		_draw_tank_shape(tank, palette, shape, pos, hw, hh, anim_tick)
 
+	draw_set_transform((view_off + pos).round())
+	TankStatusFx.draw(self, tank, int(anim_tick), Sets.flash_scale(), Sets.fx_quality)
 	draw_set_transform(view_off + pos)
 
 	if world != null:
@@ -2336,18 +2340,11 @@ const SKIN_GLOW := {
 
 var _sprite_camo_cache: Dictionary = {}
 
-func _status_tints(tank: Tank, anim_tick: float) -> Array:
+func _status_tints(tank: Tank, _anim_tick: float) -> Array:
 	var tints := []
 	if tank.freeze_ticks > 0:
 		tints.append(Color(0.35, 0.75, 1.0, 0.38))
-	if tank.acid_stacks > 0:
-		tints.append(Color(0.52, 0.85, 0.09, clampf(float(tank.acid_stacks) * 0.10 + 0.15, 0.15, 0.55)))
-	if tank.burn_ticks > 0:
-		var burn_flick: float = 0.7 + 0.3 * sin(anim_tick * 0.5)
-		tints.append(Color(0.95, 0.40, 0.08, (0.2 + 0.1 * float(maxi(1, tank.burn_stacks))) * burn_flick))
-	if tank.stun_ticks > 0:
-		var zap: float = 0.6 + 0.4 * absf(sin(anim_tick * 0.9))
-		tints.append(Color(0.98, 0.85, 0.20, 0.22 * zap))
+	tints.append_array(TankStatusFx.body_tints(tank))
 	return tints
 
 func _draw_tank_sprite(tank: Tank, hull_cls: String, palette: Dictionary, pos: Vector2, hw: float, hh: float, anim_tick: float) -> void:
@@ -2598,20 +2595,8 @@ func _draw_tank_shape(tank: Tank, palette: Dictionary, shape: Dictionary, pos: V
 		draw_colored_polygon(body, Color(0.35, 0.75, 1.0, 0.38))
 		draw_polyline(body, Color(0.85, 0.98, 1.0, 0.75), 1.4)
 
-	if tank.acid_stacks > 0:
-		var acid_alpha: float = clampf(float(tank.acid_stacks) * 0.10 + 0.15, 0.15, 0.55)
-		draw_colored_polygon(body, Color(0.52, 0.85, 0.09, acid_alpha))
-		draw_polyline(body, Color(0.68, 0.98, 0.15, 0.85), 1.5)
-
-	if tank.burn_ticks > 0:
-		var burn_flick: float = 0.7 + 0.3 * sin(anim_tick * 0.5)
-		draw_colored_polygon(body, Color(0.95, 0.40, 0.08, (0.2 + 0.1 * float(maxi(1, tank.burn_stacks))) * burn_flick))
-		draw_polyline(body, Color(1.0, 0.70, 0.20, 0.85 * burn_flick), 1.5)
-
-	if tank.stun_ticks > 0:
-		var zap: float = 0.6 + 0.4 * absf(sin(anim_tick * 0.9))
-		draw_colored_polygon(body, Color(0.98, 0.85, 0.20, 0.22 * zap))
-		draw_polyline(body, Color(0.80, 0.90, 1.0, 0.95 * zap), 1.6)
+	for tint in TankStatusFx.body_tints(tank):
+		draw_colored_polygon(body, tint)
 
 	if tank.has_method("has_build"):
 		_draw_build_accents(tank, hw, hh, anim_tick)
