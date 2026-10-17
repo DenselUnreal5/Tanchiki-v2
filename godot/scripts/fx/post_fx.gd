@@ -52,8 +52,8 @@ static func update(mat: ShaderMaterial, world, player, view_size: Vector2, quali
 	saturation *= 1.0 - 0.18 * rain
 	shadow = shadow.lerp(Color(0.80, 0.88, 1.12), 0.35 * rain)
 
-	exposure += flash * 0.38
-	saturation += flash * 0.25
+	exposure += flash * 0.20
+	saturation += flash * 0.08
 
 	if player != null and player.tank != null and player.tank.alive:
 		var hp_ratio: float = player.tank.hp / maxf(1.0, player.tank.max_hp)
@@ -75,7 +75,7 @@ static func update(mat: ShaderMaterial, world, player, view_size: Vector2, quali
 
 	if quality >= HIGH:
 		var bloom := lerpf(NIGHT["bloom"], DAY["bloom"], t)
-		bloom += 0.3 * fog + 0.35 * flash
+		bloom += 0.3 * fog + 0.18 * flash
 		mat.set_shader_parameter("bloom", bloom)
 		mat.set_shader_parameter("bloom_threshold", lerpf(NIGHT["threshold"], DAY["threshold"], t))
 		mat.set_shader_parameter("bloom_radius", 7.0)

@@ -21,6 +21,7 @@ var bake_snow := -1.0
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	if world != null:
+		WeatherVisuals.fog_texture()
 		shot_fx = ShotFx.new()
 		shot_fx.view = self
 		add_child(shot_fx)
@@ -172,14 +173,10 @@ func _text_center(text: String, pos: Vector2, size: int, color: Color, bold: boo
 	draw_string(font, Vector2(pos.x - w * 0.5, pos.y + size * 0.35), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
-const WEATHER_FOG_MAX := 14
-const WEATHER_RAIN_MAX := 130
-const WEATHER_SNOW_MAX := 110
+const WEATHER_RAIN_MAX := 160
+const WEATHER_SNOW_MAX := 144
 
 var _weather_hash_ready := false
-var _fog_hx: PackedFloat32Array
-var _fog_hy: PackedFloat32Array
-var _fog_hr: PackedFloat32Array
 var _rain_hx: PackedFloat32Array
 var _rain_hspeed: PackedFloat32Array
 var _rain_hphase: PackedFloat32Array
@@ -197,13 +194,6 @@ func _ensure_weather_hash() -> void:
 	if _weather_hash_ready:
 		return
 	_weather_hash_ready = true
-	_fog_hx.resize(WEATHER_FOG_MAX)
-	_fog_hy.resize(WEATHER_FOG_MAX)
-	_fog_hr.resize(WEATHER_FOG_MAX)
-	for i in WEATHER_FOG_MAX:
-		_fog_hx[i] = Rng.hash01(i, 7)
-		_fog_hy[i] = Rng.hash01(i, 13)
-		_fog_hr[i] = Rng.hash01(i, 29)
 	_rain_hx.resize(WEATHER_RAIN_MAX)
 	_rain_hspeed.resize(WEATHER_RAIN_MAX)
 	_rain_hphase.resize(WEATHER_RAIN_MAX)
@@ -234,48 +224,45 @@ func _draw_weather(size: Vector2) -> void:
 	if dark > 0.01:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.039, 0.055, 0.133, dark))
 
-	var lamp_k: float = maxf((1.0 - w.light) if Sets.day_night else 0.0, w.fog * 0.7)
+	var lamp_k: float = maxf((1.0 - w.light) if Sets.day_night else 0.0, w.fog * k * 0.7)
 	if lamp_k > 0.25:
 		_draw_lamp_light(clampf((lamp_k - 0.25) / 0.6, 0.0, 1.0))
 
+	var wet := clampf(w.rain * k, 0.0, 1.0)
+	if wet > 0.03:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.12, 0.17, 0.22, wet * 0.075))
 	if w.fog * k > 0.02:
-		var count := int(round(w.fog * k * 14.0))
-		for i in count:
-			var cx := _fog_hx[i] * size.x + sin(world.tick * 0.003 + i * 2.1) * 40.0
-			var cy := _fog_hy[i] * size.y + cos(world.tick * 0.002 + i * 1.7) * 30.0
-			var r := 90.0 + _fog_hr[i] * 130.0
-			var fog_a := (0.02 + w.fog * 0.075) * k
-			if not _loc_ready:
-				_read_location()
-			var fog_col := _loc_fog
-			fog_col.a = fog_a
-			draw_circle(Vector2(cx, cy), r, fog_col)
-			draw_circle(Vector2(cx, cy), r * 0.6, fog_col)
+		if not _loc_ready:
+			_read_location()
+		WeatherVisuals.draw_fog(self, size, world.tick, w.fog * k, _loc_fog)
 
-	if w.rain * k > 0.03:
-		var count := int(round(w.rain * k * 130.0))
-		var col := Color(0.59, 0.71, 0.92, (0.15 + w.rain * 0.3) * k)
+	if wet > 0.03:
+		var count := int(round(wet * WEATHER_RAIN_MAX))
+		var wind := 2 if w.condition == "storm" else 1
 		for i in count:
-			var x := _rain_hx[i] * size.x
-			var speed := 6.0 + _rain_hspeed[i] * 6.0
-			var y := Rng.fract(_rain_hphase[i] + world.tick * 0.012 * speed) * (size.y + 40.0) - 20.0
-			var length := 8.0 + _rain_hlen[i] * 10.0
-			draw_line(Vector2(x, y), Vector2(x - length * 0.4, y + length), col, 1.0)
+			var near := i % 3 != 0
+			var speed := (4.0 + _rain_hspeed[i] * 4.0) * (1.0 if near else 0.7)
+			var x := fposmod(_rain_hx[i] * (size.x + 24.0) - world.tick * wind * 0.35, size.x + 24.0) - 12.0
+			var y := fposmod(_rain_hphase[i] * (size.y + 40.0) + world.tick * speed, size.y + 40.0) - 20.0
+			WeatherVisuals.draw_drop(self, Vector2(x, y), 7.0 + _rain_hlen[i] * 7.0,
+				near, wind, wet * (0.55 if near else 0.3))
+		WeatherVisuals.draw_splashes(self, world.map, _view, view_off, world.tick, wet)
 
-	if w.snow * k > 0.03:
-		draw_rect(Rect2(Vector2.ZERO, size),
-			Color(0.88, 0.92, 0.97, w.snow * k * 0.10))
-		var flakes := int(round(w.snow * k * 110.0))
+	var snow := clampf(w.snow * k, 0.0, 1.0)
+	if snow > 0.03:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.84, 0.89, 0.91, snow * 0.045))
+		var flakes := int(round(snow * WEATHER_SNOW_MAX))
 		for i in flakes:
-			var speed := 1.2 + _snow_hspeed[i] * 1.6
-			var sx := _snow_hx[i] * size.x 				+ sin(world.tick * 0.008 + float(i)) * 26.0
-			var sy := Rng.fract(_snow_hphase[i] + world.tick * 0.0022 * speed) 				* (size.y + 30.0) - 15.0
-			var r := 1.2 + _snow_hr[i] * 1.8
-			draw_circle(Vector2(sx, sy), r,
-				Color(1.0, 1.0, 1.0, (0.35 + w.snow * 0.4) * k))
+			var near := i % 3 == 0
+			var speed := (0.45 + _snow_hspeed[i] * 0.65) * (1.5 if near else 1.0)
+			var drift := sin(world.tick * 0.012 + float(i)) * (14.0 if near else 7.0)
+			var sx := fposmod(_snow_hx[i] * (size.x + 24.0) + world.tick * 0.18 + drift, size.x + 24.0) - 12.0
+			var sy := fposmod(_snow_hphase[i] * (size.y + 24.0) + world.tick * speed, size.y + 24.0) - 12.0
+			var flake_size := (3 if _snow_hr[i] > 0.5 else 2) if near else 1
+			WeatherVisuals.draw_flake(self, Vector2(sx, sy), flake_size, snow * (0.8 if near else 0.38))
 
 	if w.flash * k * Sets.flash_scale() > 0.02:
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.86, 0.92, 1.0, w.flash * k * Sets.flash_scale() * 0.35))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.84, 0.89, 0.95, w.flash * k * Sets.flash_scale() * 0.14))
 
 func _update_tile_cache() -> void:
 	# Кэш сам следит за изменениями карты (журнал GameMap.changes) и
@@ -331,6 +318,8 @@ func _draw_ground_range(r0: int, r1: int, c0: int, c1: int) -> void:
 			var gy := float(r * Cfg.TILE)
 			if textured_ground:
 				draw_texture_rect(TerrainTextures.grass(_loc_id), Rect2(gx, gy, Cfg.TILE, Cfg.TILE), false)
+				if map_ground_visible(world.map.get_tile(r, c)):
+					WeatherVisuals.draw_snow_cover(self, Vector2(gx, gy), snow_k, r * 7919 + c * 104729)
 			else:
 				_rect(gx, gy, Cfg.TILE, Cfg.TILE, g0 if (r + c) % 2 == 0 else g1)
 
@@ -399,6 +388,7 @@ func _draw_roof_tile(x: float, y: float, r: int, c: int) -> void:
 	if TerrainTextures.has_textures(_loc_id):
 		draw_texture_rect(TerrainTextures.building_at(_loc_id, variant, TerrainTextures.prop_hash(r, c)),
 			Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+		WeatherVisuals.draw_snow_cover(self, Vector2(x, y), _snow_k(), r * 7919 + c * 104729, true)
 		var dmg := world.map.damage_ratio(r, c)
 		if dmg > 0.06:
 			_draw_damage(x, y, r, c, dmg, Materials.at(r, c))
@@ -755,18 +745,7 @@ func _draw_bolts() -> void:
 
 		var top := Vector2(x + (Rng.hash01(seed_v, 3) - 0.5) * 120.0,
 			y - _view.size.y * 0.55)
-		var pts := PackedVector2Array()
-		var steps := 9
-		for i in steps + 1:
-			var t := float(i) / float(steps)
-			var px: float = lerpf(top.x, x, t)
-			var py: float = lerpf(top.y, y, t)
-			var jag := (Rng.hash01(seed_v + i * 977, 11) - 0.5) * 46.0 * (1.0 - t)
-			pts.append(Vector2(px + jag, py))
-		draw_polyline(pts, Color(Cfg.bolt_glow, a * 0.30), 13.0)
-		draw_polyline(pts, Color(Cfg.bolt_glow, a * 0.75), 6.0)
-		draw_polyline(pts, Color(Cfg.bolt_core, a), 2.0)
-		draw_circle(Vector2(x, y), 16.0 * a, Color(Cfg.bolt_glow, a * 0.35))
+		WeatherVisuals.draw_bolt(self, top, Vector2(x, y), seed_v, a, Sets.flash_scale())
 	draw_set_transform(Vector2.ZERO)
 
 func _lamp_at(r: int, c: int) -> bool:
@@ -1199,6 +1178,7 @@ func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
 		var right2 := _is_paved(r, c + 1)
 		var idx := _city_road_index(r, c, up2, down2, left2, right2)
 		draw_texture_rect(TerrainTextures.road(idx, _loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+		WeatherVisuals.draw_snow_cover(self, Vector2(x, y), _snow_k() * 0.7, r * 7919 + c * 104729, true)
 		if idx == 16:
 			_draw_cross_arcs(x, y, r, c)
 		if _road_class_at(r, c) == RC_SQUARE:
@@ -1324,6 +1304,7 @@ func _draw_grass_tile(x: float, y: float, r: int, c: int) -> void:
 		_read_location()
 	if TerrainTextures.has_textures(_loc_id):
 		draw_texture_rect(TerrainTextures.grass(_loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+		WeatherVisuals.draw_snow_cover(self, Vector2(x, y), _snow_k(), r * 7919 + c * 104729)
 		if _grass_surrounded(r, c) and Rng.hash01(r * 74351 + c * 5911, 9001) < 0.15:
 			_draw_bush(x, y, r, c)
 		return
@@ -1365,6 +1346,7 @@ func _draw_sand_tile(x: float, y: float, r: int, c: int) -> void:
 		_read_location()
 	if TerrainTextures.has_textures(_loc_id):
 		draw_texture_rect(TerrainTextures.sand(_loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+		WeatherVisuals.draw_snow_cover(self, Vector2(x, y), _snow_k(), r * 7919 + c * 104729)
 		return
 	var t := _terrain_shade(r, c)
 	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.sand_dark.lerp(Cfg.sand_light, 0.3 + t * 0.7))
@@ -3591,3 +3573,6 @@ func _draw_offscreen_markers(size: Vector2) -> void:
 		draw_colored_polygon(PackedVector2Array([
 			Vector2(10, 0), Vector2(-6, -6), Vector2(-6, 6)]), color)
 	draw_set_transform(view_off)
+
+static func map_ground_visible(tile: int) -> bool:
+	return tile == Cfg.T_EMPTY
