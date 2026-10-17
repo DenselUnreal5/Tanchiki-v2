@@ -8,7 +8,10 @@ func _ready() -> void:
 		_check(TerrainTextures.has_textures(loc), loc + ": textured rendering enabled")
 		for file in TerrainTextures.BIOME_FILES:
 			var texture := TerrainTextures._load_cached(loc, file)
-			_check(texture is AtlasTexture, loc + "/" + file + ": own atlas region")
+			if loc == "dust" and file in ["grass.png", "sand.png"]:
+				_check(texture != null, loc + "/" + file + ": desert ground loaded")
+			else:
+				_check(texture is AtlasTexture, loc + "/" + file + ": own atlas region")
 			if texture is AtlasTexture:
 				_check(texture.region.position.y > 0 or loc == "frost", loc + ": correct biome row")
 				_check(texture.get_image() != null, loc + "/" + file + ": readable pixels")
@@ -22,8 +25,11 @@ func _ready() -> void:
 			_check_texture(TerrainTextures.building_at(loc, variant, 0.2), loc + "/building")
 		var ground := TerrainTextures.grass(loc).get_image()
 		var sand := TerrainTextures.sand(loc).get_image()
-		_check(ground.get_data() != sand.get_data(), loc + ": sand differs from ground")
-		if loc != "dust":
+		if loc == "dust":
+			_check(ground.get_data() == sand.get_data(), "dust: consistent ground beneath sand and props")
+		else:
+			_check(ground.get_data() != sand.get_data(), loc + ": sand differs from ground")
+		if loc in TerrainTextures.ADAPTED_BIOMES:
 			var road := TerrainTextures.road(1, loc).get_image()
 			var city := TerrainTextures.road(1, "city").get_image()
 			_check(road.get_data() != city.get_data(), loc + ": road verges adapted to biome")

@@ -765,7 +765,7 @@ class _MapCanvas extends Control:
 							var left := _is_not_water(r, c - 1)
 							var right := _is_not_water(r, c + 1)
 							var wtex: Texture2D
-							if loc_id in ["frost", "exclusion", "shore"]:
+							if loc_id in TerrainTextures.ADAPTED_BIOMES:
 								wtex = TerrainTextures.biome_water(loc_id, up, down, left, right)
 							else:
 								wtex = TerrainTextures.river(TerrainTextures.river_shape(up, down, left, right), loc_id)
@@ -786,7 +786,10 @@ class _MapCanvas extends Control:
 						else:
 							_draw_bridge(rect)
 					Cfg.T_SAND, Cfg.T_DUNE:
-						draw_rect(rect, Color("#c9b878"))
+						if use_textures:
+							draw_texture_rect(TerrainTextures.sand(loc_id), rect, false)
+						else:
+							draw_rect(rect, Color("#c9b878"))
 					Cfg.T_QUICKSAND:
 						draw_rect(rect, Color("#7d6a45"))
 					Cfg.T_GRASS:

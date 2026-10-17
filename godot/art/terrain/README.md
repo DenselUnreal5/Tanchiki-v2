@@ -13,6 +13,12 @@ city source images unchanged. Wide water tiles use banks only on sides adjacent
 to land, so the coast has continuous open sea rather than repeated river corners.
 The existing desert cacti and oilfield props remain in use in `dust`.
 
+Desert ground now uses `dust/sand_ground.png`, imported at 64 pixels. Empty
+ground, sand and dune tiles share this quiet sandy surface, including beneath
+transparent props. Roads use the city's neutral curbs with matching sandy
+verges, and water uses muted blue-green tones. The map editor draws the same
+sand and bank textures as gameplay instead of painting sand with a flat color.
+
 Rendering is selected by the map's location ID, including the existing chunk
 cache; map generation, collision and movement rules are unchanged.
 
@@ -24,3 +30,6 @@ godot --headless --path godot tests/terrain_textures_check.tscn
 godot --headless --path godot tests/locations_check.tscn
 godot --headless --path godot tests/map_check.tscn
 ```
+
+For a rendered editor/game regression check, run with a graphics display:
+`godot --path godot tests/desert_render_check.tscn` (X11/Xvfb works on Linux).
