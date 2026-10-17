@@ -52,18 +52,20 @@ void fragment() {
 	// ---- свечение: два кольца по 6 выборок.
 	// Полноценный многопроходный блюр здесь не нужен и не по карману слабым
 	// видеокартам: яркие объекты в игре мелкие и контрастные, им хватает
-	// широкого мягкого ореола.
+	// ступенчатого ореола на сетке 2×2 без размытия деталей мира.
 	if (bloom > 0.001) {
 		vec3 sum = vec3(0.0);
+		vec2 block = max(texel * 2.0, vec2(0.000001));
+		vec2 glow_uv = (floor(UV / block) + 0.5) * block;
 		for (int i = 0; i < 6; i++) {
 			float a = float(i) * 1.0472;  // 60°
 			vec2 d = vec2(cos(a), sin(a));
-			vec2 o1 = clamp(UV + d * texel * bloom_radius, vec2(0.0), vec2(1.0));
-			vec2 o2 = clamp(UV - d * texel * bloom_radius * 2.2, vec2(0.0), vec2(1.0));
+			vec2 o1 = clamp(glow_uv + round(d * bloom_radius) * texel, vec2(0.0), vec2(1.0));
+			vec2 o2 = clamp(glow_uv - round(d * bloom_radius * 2.2) * texel, vec2(0.0), vec2(1.0));
 			sum += bright_pass(texture(TEXTURE, o1).rgb);
 			sum += bright_pass(texture(TEXTURE, o2).rgb) * 0.55;
 		}
-		col += sum * (bloom / 9.3);
+		col += floor(sum * 8.0 + 0.5) / 8.0 * (bloom / 9.3);
 	}
 
 	// ---- тональная коррекция

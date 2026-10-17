@@ -44,6 +44,6 @@ func _draw() -> void:
 		_glow(tip, 9.0, Color(1.0, 0.95, 0.75, muzzle))
 
 func _glow(center: Vector2, radius: float, color: Color) -> void:
-	draw_texture_rect(glow_tex,
-		Rect2(center - Vector2(radius, radius), Vector2(radius * 2.0, radius * 2.0)),
+	draw_texture_rect(PixelFx.glow_texture(),
+		Rect2((center - Vector2(radius, radius)).round(), Vector2(radius * 2.0, radius * 2.0)),
 		false, color)

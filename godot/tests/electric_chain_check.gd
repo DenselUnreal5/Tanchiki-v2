@@ -23,6 +23,10 @@ func _capture() -> Image:
 	return viewport.get_texture().get_image()
 
 func _ready() -> void:
+	if DisplayServer.get_name() == "headless":
+		push_error("This visual check requires a graphics display")
+		get_tree().quit(2)
+		return
 	var player := PlayerState.new(0, "Test", "p1", Ctl.KeyboardAimScheme.new())
 	player.reset_for_match()
 	var level := LevelGen.generate(1, "ffa", 5151, "city")

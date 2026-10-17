@@ -536,8 +536,7 @@ func _draw_ability_state(tank: Tank) -> void:
 			for i in 7:
 				var a := float(i) / 7.0 * TAU + float(world.tick) * 0.02
 				var r := 20.0 + 5.0 * sin(float(world.tick) * 0.08 + float(i))
-				draw_circle(Vector2(cos(a) * r, sin(a) * r), 9.0,
-					Color(0.82, 0.85, 0.88, 0.32))
+				PixelFx.smoke_puff(self, Vector2(cos(a) * r, sin(a) * r), 0.44)
 		"silencer":
 			draw_set_transform(view_off + Vector2(tank.x, tank.y), tank.turret_angle)
 			var shape := TankArt.chassis(tank.chassis_id)
@@ -546,30 +545,30 @@ func _draw_ability_state(tank: Tank) -> void:
 			_rect(tip - 9.0, -4.0, 11.0, 2.0, Color("#454b52"))
 			draw_set_transform(view_off + Vector2(tank.x, tank.y))
 		"breaker":
-			draw_arc(Vector2.ZERO, 15.0, 0, TAU, 20, Color(col.r, col.g, col.b, pulse), 2.0)
+			PixelFx.ring(self, Vector2.ZERO, 15.0, 0, TAU, 20, Color(col.r, col.g, col.b, pulse), 2.0)
 			for i in 3:
 				var a := float(world.tick) * 0.15 + float(i) * TAU / 3.0
-				draw_circle(Vector2(cos(a) * 15.0, sin(a) * 15.0), 1.8, col)
+				PixelFx.disk(self, Vector2(cos(a) * 15.0, sin(a) * 15.0), 1.8, col)
 		"grip":
 			for i in 4:
 				var a := tank.body_angle + PI + (float(i) - 1.5) * 0.5
-				draw_circle(Vector2(cos(a) * 14.0, sin(a) * 14.0), 1.6,
+				PixelFx.disk(self, Vector2(cos(a) * 14.0, sin(a) * 14.0), 1.6,
 					Color(0.75, 0.85, 1.0, 0.8))
 		"overclock":
-			draw_arc(Vector2.ZERO, 17.0, 0, TAU, 20,
+			PixelFx.ring(self, Vector2.ZERO, 17.0, 0, TAU, 20,
 				Color(1.0, 0.35, 0.15, pulse), 2.5)
 		"boss_barrage":
 			var fast_pulse := 0.5 + 0.4 * sin(float(world.tick) * 0.6)
-			draw_arc(Vector2.ZERO, 20.0, 0, TAU, 20, Color(1.0, 0.2, 0.3, fast_pulse), 3.0)
+			PixelFx.ring(self, Vector2.ZERO, 20.0, 0, TAU, 20, Color(1.0, 0.2, 0.3, fast_pulse), 3.0)
 			draw_set_transform(view_off + Vector2(tank.x, tank.y), tank.turret_angle)
 			var half := Cfg.BOSS_BARRAGE_SPREAD
 			var reach := 160.0
 			var warn := Color(1.0, 0.2, 0.3, 0.22 * fast_pulse)
-			draw_line(Vector2.ZERO, Vector2(cos(half) * reach, sin(half) * reach), warn, 2.0)
-			draw_line(Vector2.ZERO, Vector2(cos(-half) * reach, sin(-half) * reach), warn, 2.0)
+			PixelFx.line(self, Vector2.ZERO, Vector2(cos(half) * reach, sin(half) * reach), warn, 2.0)
+			PixelFx.line(self, Vector2.ZERO, Vector2(cos(-half) * reach, sin(-half) * reach), warn, 2.0)
 			draw_set_transform(view_off + Vector2(tank.x, tank.y))
 		_:
-			draw_arc(Vector2.ZERO, 17.0, 0, TAU, 20,
+			PixelFx.ring(self, Vector2.ZERO, 17.0, 0, TAU, 20,
 				Color(col.r, col.g, col.b, pulse * 0.8), 2.0)
 
 func _snow_k() -> float:
@@ -586,17 +585,17 @@ func _draw_lamp_light(k: float) -> void:
 		if not _in_view(lamp.x, lamp.y, 50):
 			continue
 		var p := lamp + view_off
-		draw_circle(p, 46.0, Color(Cfg.lamp_glow, 0.05 * k))
-		draw_circle(p, 30.0, Color(Cfg.lamp_glow, 0.07 * k))
-		draw_circle(p, 15.0, Color(Cfg.lamp_glow, 0.10 * k))
-		draw_circle(p - Vector2(0, 4.0), 3.0, Color(Cfg.lamp_glow, 0.9 * k))
+		PixelFx.disk(self, p, 46.0, Color(Cfg.lamp_glow, 0.05 * k))
+		PixelFx.disk(self, p, 30.0, Color(Cfg.lamp_glow, 0.07 * k))
+		PixelFx.disk(self, p, 15.0, Color(Cfg.lamp_glow, 0.10 * k))
+		PixelFx.disk(self, p - Vector2(0, 4.0), 3.0, Color(Cfg.lamp_glow, 0.9 * k))
 
 func _draw_scorches() -> void:
 	for p in world.scorches:
 		if not _in_view(p.x, p.y, 24):
 			continue
-		draw_circle(Vector2(p.x, p.y), 13.0, Color(Cfg.scorch, 0.55))
-		draw_circle(Vector2(p.x, p.y), 7.0, Color(Cfg.scorch, 0.75))
+		PixelFx.disk(self, Vector2(p.x, p.y), 13.0, Color(Cfg.scorch, 0.55), true)
+		PixelFx.disk(self, Vector2(p.x, p.y), 7.0, Color(Cfg.scorch, 0.75))
 
 func _draw_acid_pools() -> void:
 	if world == null or world.acid_pools.is_empty():
@@ -604,34 +603,7 @@ func _draw_acid_pools() -> void:
 	for pool in world.acid_pools:
 		if not _in_view(pool.x, pool.y, pool.radius + 10.0):
 			continue
-		var pos := Vector2(pool.x, pool.y)
-		var life_ratio: float = float(pool.timer) / float(maxi(1, pool.max_life))
-		var a: float = clampf(life_ratio * 1.5, 0.0, 1.0)
-		var r: float = pool.radius * (0.85 + 0.15 * minf(1.0, (1.0 - life_ratio) * 4.0))
-
-		# 1. Dark burned edge / acid melt underlayer
-		draw_circle(pos, r + 3.0, Color(0.04, 0.09, 0.04, 0.55 * a))
-
-		# 2. Corrosive caustic liquid body
-		draw_circle(pos, r, Color(0.12, 0.28, 0.08, 0.85 * a))
-
-		# 3. Glowing neon acid contour ring with pulsating edge
-		var pulse: float = 0.80 + 0.20 * sin(float(world.tick) * 0.18 + pool.x * 0.05)
-		draw_arc(pos, r - 1.0, 0, TAU, 28, Color(0.52, 0.80, 0.09, 0.75 * a * pulse), 2.0)
-
-		# 4. Inner brighter chemical pool
-		draw_circle(pos, r * 0.65, Color(0.24, 0.48, 0.12, 0.70 * a))
-
-		# 5. Animated popping acid bubbles
-		for i in 4:
-			var phase: float = float(world.tick) * (0.12 + float(i) * 0.04) + float(i) * 1.8 + pool.y * 0.03
-			var b_rad := r * 0.55 * (0.3 + 0.7 * absf(sin(phase * 0.7)))
-			var b_ang := phase * 1.2 + float(i) * 1.57
-			var b_pos := pos + Vector2(cos(b_ang) * b_rad, sin(b_ang) * b_rad)
-			var b_sz := (2.2 + 1.4 * sin(phase * 2.0)) * a
-			if b_sz > 0.8:
-				draw_circle(b_pos, b_sz, Color(0.64, 0.95, 0.15, 0.85 * a))
-				draw_circle(b_pos - Vector2(0.6, 0.6), maxf(0.5, b_sz * 0.4), Color(0.9, 1.0, 0.6, 0.9 * a))
+		AcidPoolFx.draw(self, pool, world.tick, Sets.fx_quality)
 
 func _draw_fire_patches() -> void:
 	if shot_fx != null:
@@ -646,10 +618,8 @@ func _draw_fire_patches() -> void:
 		var a: float = clampf(life_ratio * 2.0, 0.0, 1.0)
 		var flick: float = 0.75 + 0.25 * sin(float(world.tick) * 0.35 + patch.x * 0.11 + patch.y * 0.07)
 		var r: float = patch.radius * (0.7 + 0.3 * flick)
-		draw_circle(pos, patch.radius + 2.0, Color(0.10, 0.05, 0.03, 0.45 * a))
-		draw_circle(pos, r, Color(0.85, 0.28, 0.05, 0.55 * a))
-		draw_circle(pos, r * 0.62, Color(0.98, 0.58, 0.12, 0.70 * a * flick))
-		draw_circle(pos, r * 0.28, Color(1.0, 0.88, 0.45, 0.80 * a * flick))
+		PixelFx.disk(self, pos, patch.radius + 2.0, Color("#342c22", 0.45 * a), true)
+		PixelFx.flame(self, pos, r, world.tick, 0.8 * a)
 
 func _draw_acid_streams() -> void:
 	if world == null or shot_fx != null:
@@ -700,7 +670,7 @@ func _draw_acid_streams() -> void:
 			outer_poly.append(p)
 		for j in range(outer_right.size() - 1, -1, -1):
 			outer_poly.append(outer_right[j])
-		draw_colored_polygon(outer_poly, Color(0.18, 0.46, 0.08, 0.82))
+		PixelFx.polygon(self, outer_poly, Color(0.18, 0.46, 0.08, 0.82))
 
 		# 2. Inner intense chemical lime jet
 		var inner_poly := PackedVector2Array()
@@ -708,7 +678,7 @@ func _draw_acid_streams() -> void:
 			inner_poly.append(p)
 		for j in range(inner_right.size() - 1, -1, -1):
 			inner_poly.append(inner_right[j])
-		draw_colored_polygon(inner_poly, Color(0.64, 0.94, 0.18, 0.92))
+		PixelFx.polygon(self, inner_poly, Color(0.64, 0.94, 0.18, 0.92))
 
 		# 3. Hot neon core line
 		draw_polyline(core_pts, Color(0.92, 1.0, 0.65, 0.85), 2.5)
@@ -719,19 +689,19 @@ func _draw_acid_streams() -> void:
 			var b_wave: float = sin(anim_phase - bt * 12.0) * (3.5 * bt)
 			var b_pos: Vector2 = start_p + dir * (bt * length) + norm * (b_wave + sin(bt * 20.0) * 1.5)
 			var b_r: float = lerpf(2.0, 4.0, bt)
-			draw_circle(b_pos, b_r, Color(0.72, 1.0, 0.22, 0.90))
-			draw_circle(b_pos - Vector2(0.5, 0.5), maxf(0.8, b_r * 0.4), Color(1.0, 1.0, 0.85, 0.95))
+			PixelFx.disk(self, b_pos, b_r, Color(0.72, 1.0, 0.22, 0.90))
+			PixelFx.disk(self, b_pos - Vector2(0.5, 0.5), maxf(0.8, b_r * 0.4), Color(1.0, 1.0, 0.85, 0.95))
 
 		# 5. Muzzle nozzle flare
-		draw_circle(start_p, 8.0, Color(0.4, 0.8, 0.1, 0.55))
-		draw_circle(start_p, 4.0, Color(0.85, 1.0, 0.4, 0.95))
+		PixelFx.disk(self, start_p, 8.0, Color(0.4, 0.8, 0.1, 0.55))
+		PixelFx.disk(self, start_p, 4.0, Color(0.85, 1.0, 0.4, 0.95))
 
 		# 6. Impact splash crown at destination
 		var pulse: float = 0.8 + 0.2 * sin(float(world.tick) * 0.7)
-		draw_circle(end_p, 16.0 * pulse, Color(0.2, 0.55, 0.1, 0.45))
-		draw_circle(end_p, 10.0 * pulse, Color(0.65, 0.95, 0.18, 0.75))
-		draw_circle(end_p, 5.0, Color(0.95, 1.0, 0.7, 0.95))
-		draw_arc(end_p, 14.0 * pulse, 0, TAU, 18, Color(0.75, 1.0, 0.25, 0.8), 2.0)
+		PixelFx.disk(self, end_p, 16.0 * pulse, Color(0.2, 0.55, 0.1, 0.45))
+		PixelFx.disk(self, end_p, 10.0 * pulse, Color(0.65, 0.95, 0.18, 0.75))
+		PixelFx.disk(self, end_p, 5.0, Color(0.95, 1.0, 0.7, 0.95))
+		PixelFx.ring(self, end_p, 14.0 * pulse, 0, TAU, 18, Color(0.75, 1.0, 0.25, 0.8), 2.0)
 
 func _draw_electric_arcs() -> void:
 	draw_set_transform(view_off)
@@ -1631,39 +1601,39 @@ func _draw_power_generators() -> void:
 			aura_col = Color("#a855f7") if gen.capturing_team == "enemy" else Color("#38bdf8")
 
 		var ring_alpha: float = (0.15 if is_cooling else 0.35) * aura_pulse
-		draw_arc(pos, aura_r, 0.0, TAU, 48, Color(aura_col.r, aura_col.g, aura_col.b, ring_alpha), 2.0)
-		draw_circle(pos, aura_r, Color(aura_col.r, aura_col.g, aura_col.b, 0.04 * aura_pulse))
+		PixelFx.ring(self, pos, aura_r, 0.0, TAU, 48, Color(aura_col.r, aura_col.g, aura_col.b, ring_alpha), 2.0)
+		PixelFx.disk(self, pos, aura_r, Color(aura_col.r, aura_col.g, aura_col.b, 0.04 * aura_pulse))
 
 		# 2. Capture progress arc
 		if gen.capture_progress > 0.0 and not is_cooling:
 			var fill_angle: float = float(gen.capture_progress) * TAU
 			var prog_col: Color = Color("#818cf8")
-			draw_arc(pos, aura_r + 3.0, -PI * 0.5, -PI * 0.5 + fill_angle, 36, prog_col, 3.5)
+			PixelFx.ring(self, pos, aura_r + 3.0, -PI * 0.5, -PI * 0.5 + fill_angle, 36, prog_col, 3.5)
 
 		# 3. Ground shadow & metal base structure
 		_draw_ellipse(pos + Vector2(3.0, 5.0), r * 1.3, r * 0.8, Color(0.0, 0.0, 0.0, 0.4))
-		draw_circle(pos, r, Color("#1e293b"))
-		draw_arc(pos, r, 0.0, TAU, 8, Color("#475569"), 2.5)
+		PixelFx.disk(self, pos, r, Color("#1e293b"))
+		PixelFx.ring(self, pos, r, 0.0, TAU, 8, Color("#475569"), 2.5)
 
 		# 4. 4 Pylon anchor nodes
 		for i in 4:
 			var a: float = float(gen.anim_rot) + float(i) * (PI * 0.5)
 			var node_p := pos + Vector2(cos(a), sin(a)) * (r * 0.72)
-			draw_circle(node_p, 4.5, Color("#334155"))
-			draw_circle(node_p, 2.5, aura_col)
-			draw_line(pos, node_p, Color("#64748b"), 1.5)
+			PixelFx.disk(self, node_p, 4.5, Color("#334155"))
+			PixelFx.disk(self, node_p, 2.5, aura_col)
+			PixelFx.line(self, pos, node_p, Color("#64748b"), 1.5)
 
 		# 5. Glowing Central Power Core
 		var core_r: float = 7.0 + 2.0 * sin(float(gen.pulse_phase) * 1.5)
 		if is_cooling:
-			draw_circle(pos, 6.0, Color("#475569"))
-			draw_arc(pos, 8.0, 0.0, TAU, 16, Color("#334155"), 1.5)
+			PixelFx.disk(self, pos, 6.0, Color("#475569"))
+			PixelFx.ring(self, pos, 8.0, 0.0, TAU, 16, Color("#334155"), 1.5)
 			var cd_ratio: float = float(gen.cooldown) / float(maxi(1, gen.max_cooldown))
-			draw_arc(pos, 10.0, -PI * 0.5, -PI * 0.5 + cd_ratio * TAU, 20, Color("#94a3b8"), 2.0)
+			PixelFx.ring(self, pos, 10.0, -PI * 0.5, -PI * 0.5 + cd_ratio * TAU, 20, Color("#94a3b8"), 2.0)
 		else:
-			draw_circle(pos, core_r * 1.4, Color(aura_col.r, aura_col.g, aura_col.b, 0.35))
-			draw_circle(pos, core_r, aura_col)
-			draw_circle(pos, core_r * 0.5, Color.WHITE)
+			PixelFx.disk(self, pos, core_r * 1.4, Color(aura_col.r, aura_col.g, aura_col.b, 0.35))
+			PixelFx.disk(self, pos, core_r, aura_col)
+			PixelFx.disk(self, pos, core_r * 0.5, Color.WHITE)
 
 func _draw_bullets() -> void:
 	for b in world.bullets:
@@ -1675,18 +1645,18 @@ func _draw_bullets() -> void:
 		if b.lobbed:
 			if b.has_dest:
 				var mark := Vector2(b.dest_x, b.dest_y)
-				draw_arc(mark, Cfg.LOB_SPLASH_R, 0.0, TAU, 28, Color(1.0, 0.45, 0.2, 0.55), 2.0)
-				draw_arc(mark, Cfg.LOB_SPLASH_R * 0.45, 0.0, TAU, 20, Color(1.0, 0.7, 0.3, 0.45), 1.5)
-			draw_line(pos - Vector2(b.vx, b.vy) * 3.0, pos, Color(0.67, 0.67, 0.67, 0.3), 3.0)
-			draw_circle(pos, 4, Color("#ff9933"))
-			draw_circle(pos, 1.8, Color("#ffe8a0"))
+				PixelFx.ring(self, mark, Cfg.LOB_SPLASH_R, 0.0, TAU, 28, Color(1.0, 0.45, 0.2, 0.55), 2.0)
+				PixelFx.ring(self, mark, Cfg.LOB_SPLASH_R * 0.45, 0.0, TAU, 20, Color(1.0, 0.7, 0.3, 0.45), 1.5)
+			PixelFx.line(self, pos - Vector2(b.vx, b.vy) * 3.0, pos, Color(0.67, 0.67, 0.67, 0.3), 3.0)
+			PixelFx.disk(self, pos, 4, Color("#ff9933"))
+			PixelFx.disk(self, pos, 1.8, Color("#ffe8a0"))
 			continue
 		if b.cannon_kind == "fire":
 			var fl: float = 0.8 + 0.2 * sin(float(world.tick) * 0.6 + b.x * 0.1)
-			draw_line(pos - Vector2(b.vx, b.vy) * 4.0, pos, Color(0.98, 0.45, 0.1, 0.45), 6.0)
-			draw_circle(pos, 6.0 * fl, Color(0.92, 0.32, 0.06, 0.85))
-			draw_circle(pos, 3.8 * fl, Color(0.99, 0.66, 0.15))
-			draw_circle(pos, 1.8, Color(1.0, 0.95, 0.7))
+			PixelFx.line(self, pos - Vector2(b.vx, b.vy) * 4.0, pos, Color(0.98, 0.45, 0.1, 0.45), 6.0)
+			PixelFx.disk(self, pos, 6.0 * fl, Color(0.92, 0.32, 0.06, 0.85))
+			PixelFx.disk(self, pos, 3.8 * fl, Color(0.99, 0.66, 0.15))
+			PixelFx.disk(self, pos, 1.8, Color(1.0, 0.95, 0.7))
 			continue
 		if b.cannon_kind == "shock":
 			var dir := Vector2(b.vx, b.vy).normalized()
@@ -1695,10 +1665,9 @@ func _draw_bullets() -> void:
 			for k in 5:
 				var jitter: float = sin(float(world.tick) * 1.7 + float(k) * 2.3 + b.y * 0.2) * 3.5
 				pts.append(pos - dir * float(k) * 5.0 + side * jitter)
-			draw_polyline(pts, Color(0.98, 0.85, 0.2, 0.9), 2.2)
-			draw_polyline(pts, Color(1.0, 1.0, 1.0, 0.85), 1.0)
-			draw_circle(pos, 3.5, Color(0.75, 0.86, 1.0, 0.9))
-			draw_circle(pos, 1.8, Color.WHITE)
+			ElectricGlow.draw_path(self, pts, 0.9, Sets.flash_scale(), true)
+			PixelFx.disk(self, pos, 3.5, Color(0.75, 0.86, 1.0, 0.9))
+			PixelFx.disk(self, pos, 1.8, Color.WHITE)
 			continue
 		var cannon_color := Cannons.color_for_mode(b.cannon_kind)
 		var color: Color = cannon_color if cannon_color.a > 0.0 \
@@ -1709,36 +1678,36 @@ func _draw_bullets() -> void:
 			if b.owner.has_method("has_build") and b.owner.has_build("ghost_sniper"):
 				color = Color("#c084fc")
 				trail = Color("#a855f7", 0.6)
-				draw_line(pos - Vector2(b.vx, b.vy) * 4.5, pos, trail, 2.5)
-				draw_circle(pos, 3.5, color)
-				draw_circle(pos, 1.6, Color.WHITE)
+				PixelFx.line(self, pos - Vector2(b.vx, b.vy) * 4.5, pos, trail, 2.5)
+				PixelFx.disk(self, pos, 3.5, color)
+				PixelFx.disk(self, pos, 1.6, Color.WHITE)
 				continue
 			if b.cannon_kind == "freeze" and b.owner.has_method("has_build") and b.owner.has_build("ice_hunter"):
 				color = Color("#00f0ff")
 				trail = Color("#38bdf8", 0.7)
-				draw_line(pos - Vector2(b.vx, b.vy) * 3.5, pos, trail, 3.0)
-				draw_circle(pos, 4.0, Color("#38bdf8"))
-				draw_circle(pos, 2.0, Color.WHITE)
+				PixelFx.line(self, pos - Vector2(b.vx, b.vy) * 3.5, pos, trail, 3.0)
+				PixelFx.disk(self, pos, 4.0, Color("#38bdf8"))
+				PixelFx.disk(self, pos, 2.0, Color.WHITE)
 				continue
 			if b.cannon_kind == "acid" and b.owner.has_method("has_build") and b.owner.has_build("acid_hunter"):
 				color = Color("#84cc16")
 				trail = Color("#65a30d", 0.7)
-				draw_line(pos - Vector2(b.vx, b.vy) * 3.5, pos, trail, 3.0)
-				draw_circle(pos, 4.0, Color("#84cc16"))
-				draw_circle(pos, 2.0, Color("#d9f99d"))
+				PixelFx.line(self, pos - Vector2(b.vx, b.vy) * 3.5, pos, trail, 3.0)
+				PixelFx.disk(self, pos, 4.0, Color("#84cc16"))
+				PixelFx.disk(self, pos, 2.0, Color("#d9f99d"))
 				continue
 
-		draw_line(pos - Vector2(b.vx, b.vy) * 2.5, pos, trail, 2.0)
-		draw_circle(pos, 3, color)
-		draw_circle(pos, 1.4, Color.WHITE)
+		PixelFx.line(self, pos - Vector2(b.vx, b.vy) * 2.5, pos, trail, 2.0)
+		PixelFx.disk(self, pos, 3, color)
+		PixelFx.disk(self, pos, 1.4, Color.WHITE)
 
 	for r in world.airstrikes:
 		if not r.alive or not _in_view(r.x, r.y, 12):
 			continue
 		var pos := Vector2(r.x, r.y)
-		draw_line(pos - Vector2(r.vx, r.vy) * 4.0, pos, Color(1, 0.67, 0.27, 0.35), 4.0)
-		draw_circle(pos, 5, Color("#ff8833"))
-		draw_circle(pos, 2.2, Color("#fff6cc"))
+		PixelFx.line(self, pos - Vector2(r.vx, r.vy) * 4.0, pos, Color(1, 0.67, 0.27, 0.35), 4.0)
+		PixelFx.disk(self, pos, 5, Color("#ff8833"))
+		PixelFx.disk(self, pos, 2.2, Color("#fff6cc"))
 
 func _draw_particles() -> void:
 	var ps := world.particles
@@ -1774,21 +1743,21 @@ func _draw_shockwaves() -> void:
 
 		if kind == "acid":
 			# Semi-transparent toxic vapor cloud filling the blast radius
-			draw_circle(center, cur_r, Color(col.r, col.g, col.b, alpha * 0.22))
+			PixelFx.disk(self, center, cur_r, Color(col.r, col.g, col.b, alpha * 0.22))
 
 			# Glowing neon-acid primary expanding wave ring
-			var outer_col := Color(0.65, 1.0, 0.35, alpha * 0.95)
-			draw_arc(center, cur_r, 0, TAU, 48, outer_col, 4.0 * (1.0 - t * 0.4))
+			var outer_col := Color(0.58, 0.68, 0.31, alpha * 0.95)
+			PixelFx.ring(self, center, cur_r, 0, TAU, 48, outer_col, 4.0 * (1.0 - t * 0.4))
 
 			# Inner secondary wave
 			if cur_r > 16.0:
-				var mid_col := Color(0.85, 1.0, 0.55, alpha * 0.70)
-				draw_arc(center, cur_r * 0.82, 0, TAU, 40, mid_col, 2.5 * (1.0 - t * 0.5))
+				var mid_col := Color(0.78, 0.84, 0.49, alpha * 0.70)
+				PixelFx.ring(self, center, cur_r * 0.82, 0, TAU, 40, mid_col, 2.5 * (1.0 - t * 0.5))
 
 			# Third trailing corrosive ripple
 			if cur_r > 32.0:
-				var in_col := Color(0.35, 0.75, 0.15, alpha * 0.45)
-				draw_arc(center, cur_r * 0.55, 0, TAU, 32, in_col, 2.0)
+				var in_col := Color(0.32, 0.42, 0.21, alpha * 0.45)
+				PixelFx.ring(self, center, cur_r * 0.55, 0, TAU, 32, in_col, 2.0)
 
 			# Expanding toxic bubbles at wave perimeter
 			var bubble_count := 10
@@ -1797,29 +1766,49 @@ func _draw_shockwaves() -> void:
 				var b_dist: float = cur_r * (0.90 + 0.10 * sin(float(b_idx) * 2.3 + t * 4.0))
 				var b_pos := center + Vector2(cos(ang) * b_dist, sin(ang) * b_dist)
 				var b_sz: float = (3.2 + 1.6 * sin(float(b_idx) * 3.7)) * (1.0 - t * 0.5)
-				draw_circle(b_pos, b_sz, Color(0.7, 1.0, 0.3, alpha * 0.85))
-				draw_circle(b_pos, maxf(1.0, b_sz - 1.2), Color(0.9, 1.0, 0.7, alpha * 0.9))
+				PixelFx.disk(self, b_pos, b_sz, Color(0.58, 0.68, 0.31, alpha * 0.85))
+				PixelFx.disk(self, b_pos, maxf(1.0, b_sz - 1.2), Color(0.78, 0.84, 0.49, alpha * 0.9))
 		elif kind == "freeze":
 			# Crystalline frost flash & frost ring
-			draw_circle(center, cur_r, Color(0.1, 0.6, 1.0, alpha * 0.22))
+			PixelFx.disk(self, center, cur_r, Color(0.1, 0.6, 1.0, alpha * 0.22))
 			var frost_col := Color(0.2, 0.95, 1.0, alpha * 0.95)
-			draw_arc(center, cur_r, 0, TAU, 36, frost_col, 4.0 * (1.0 - t * 0.3))
+			PixelFx.ring(self, center, cur_r, 0, TAU, 36, frost_col, 4.0 * (1.0 - t * 0.3))
 			if cur_r > 14.0:
-				draw_arc(center, cur_r * 0.75, 0, TAU, 28, Color(1.0, 1.0, 1.0, alpha * 0.75), 2.2)
+				PixelFx.ring(self, center, cur_r * 0.75, 0, TAU, 28, Color(1.0, 1.0, 1.0, alpha * 0.75), 2.2)
+		elif kind == "emp":
+			PixelFx.ring(self, center, cur_r, 0, TAU, 32, Color(ElectricGlow.BLUE, alpha * 0.6), 3)
+			PixelFx.ring(self, center, cur_r - 3, 0, TAU, 32, Color(ElectricGlow.YELLOW, alpha * 0.8), 1)
+			if Sets.fx_quality > 0:
+				for i in 6:
+					var angle := TAU * float(i) / 6.0
+					var start := center + Vector2(cos(angle), sin(angle)) * cur_r * 0.6
+					var end := center + Vector2(cos(angle + 0.12), sin(angle + 0.12)) * cur_r
+					ElectricGlow.draw_path(self, ElectricGlow.link_points(start, end, i + int(t * 12)), alpha, Sets.flash_scale(), true)
 		elif kind == "synergy":
 			# Majestic celebratory expanding synergy ring
-			draw_circle(center, cur_r, Color(col.r, col.g, col.b, alpha * 0.2))
-			draw_arc(center, cur_r, 0, TAU, 48, Color(col.r, col.g, col.b, alpha * 0.95), 4.5 * (1.0 - t * 0.4))
+			PixelFx.disk(self, center, cur_r, Color(col.r, col.g, col.b, alpha * 0.2))
+			PixelFx.ring(self, center, cur_r, 0, TAU, 48, Color(col.r, col.g, col.b, alpha * 0.95), 4.5 * (1.0 - t * 0.4))
 			if cur_r > 18.0:
-				draw_arc(center, cur_r * 0.85, 0, TAU, 40, Color.WHITE, 2.0 * (1.0 - t * 0.5))
+				PixelFx.ring(self, center, cur_r * 0.85, 0, TAU, 40, Color.WHITE, 2.0 * (1.0 - t * 0.5))
 		else:
 			# Standard shockwave / blast
 			var ring_col := Color(col.r, col.g, col.b, alpha * 0.85)
 			var fill_c := Color(col.r, col.g, col.b, alpha * 0.12)
-			draw_circle(center, cur_r, fill_c)
-			draw_arc(center, cur_r, 0, TAU, 44, ring_col, 3.5 * (1.0 - t * 0.5))
+			PixelFx.disk(self, center, cur_r, fill_c)
+			PixelFx.ring(self, center, cur_r, 0, TAU, 44, ring_col, 3.5 * (1.0 - t * 0.5))
 			if cur_r > 18.0:
-				draw_arc(center, cur_r * 0.78, 0, TAU, 36, Color(1.0, 1.0, 1.0, alpha * 0.65), 1.8)
+				PixelFx.ring(self, center, cur_r * 0.78, 0, TAU, 36, Color(1.0, 1.0, 1.0, alpha * 0.65), 1.8)
+
+		if Sets.fx_quality > 0:
+			for i in 8:
+				var angle := TAU * float(i) / 8.0 + float(int(sx + sy) % 7) * 0.1
+				var point := (center + Vector2(cos(angle), sin(angle)) * cur_r).round()
+				var shard_col := Color(col, alpha * 0.75 * Sets.flash_scale())
+				if kind == "freeze":
+					PixelFx.polygon(self, PackedVector2Array([point + Vector2(0, -5),
+						point + Vector2(2, 0), point + Vector2(0, 3), point + Vector2(-2, 0)]), shard_col)
+				else:
+					draw_rect(Rect2(point, Vector2(3, 2)), shard_col)
 
 	draw_set_transform(Vector2.ZERO)
 
@@ -1864,10 +1853,10 @@ func _draw_wreck(wreck) -> void:
 	_rect(-hw + 4.0 * s, -hh + 2.0 * s, hw * 2.0 - 8.0 * s, 2.0 * s, edge)
 	_rect(-hw + 5.0 * s, -hh + 5.0 * s, hw * 0.9, hh * 0.7, Color(0.06, 0.05, 0.05, a))
 	_rect(hw * 0.1, hh * 0.1, hw * 0.7, hh * 0.6, Color(0.06, 0.05, 0.05, a))
-	draw_circle(Vector2(0, -2.0 * s), 4.5 * s, Color(0.02, 0.02, 0.02, a))
+	PixelFx.disk(self, Vector2(0, -2.0 * s), 4.5 * s, Color(0.02, 0.02, 0.02, a))
 
 	draw_set_transform(view_off + pos + wreck.turret_offset, wreck.turret_angle)
-	draw_circle(Vector2.ZERO, 7.0 * s, Color(0.09, 0.08, 0.08, a))
+	PixelFx.disk(self, Vector2.ZERO, 7.0 * s, Color(0.09, 0.08, 0.08, a))
 	_rect(0, -2.0 * s, 18.0 * s, 4.0 * s, Color(0.07, 0.06, 0.06, a))
 
 	draw_set_transform(view_off)
@@ -1877,9 +1866,7 @@ func _draw_wreck(wreck) -> void:
 		var r := (3.5 + 2.5 * flicker) * s
 		var fx: float = wreck.x + cos(i * 2.4 + wreck.turret_angle) * 6.0 * s
 		var fy: float = wreck.y + sin(i * 2.4 + wreck.turret_angle) * 5.0 * s - 2.0
-		draw_circle(Vector2(fx, fy), r * 1.7, Color(1.0, 0.42, 0.10, 0.20 * a * flicker))
-		draw_circle(Vector2(fx, fy), r, Color(1.0, 0.72, 0.24, 0.75 * a * flicker))
-		draw_circle(Vector2(fx, fy), r * 0.45, Color(1.0, 0.94, 0.72, 0.85 * a * flicker))
+		PixelFx.flame(self, Vector2(fx, fy), r, world.tick + i * 7, a * 0.85)
 
 func _draw_rammer_telegraph(tank: Tank) -> void:
 	if not tank.is_rammer_boss or tank.freeze_ticks > 0 or tank.rammer_state != "telegraph" or tank.rammer_telegraph_ticks <= 0:
@@ -1899,8 +1886,8 @@ func _draw_rammer_telegraph(tank: Tank) -> void:
 
 	# 2. Glowing hazard side borders
 	var edge_color := Color(1.0, 0.50, 0.1, 0.75 * pulse)
-	draw_line(Vector2(20.0, -lane_w * 0.5), Vector2(20.0 + lane_len, -lane_w * 0.5), edge_color, 2.0)
-	draw_line(Vector2(20.0, lane_w * 0.5), Vector2(20.0 + lane_len, lane_w * 0.5), edge_color, 2.0)
+	PixelFx.line(self, Vector2(20.0, -lane_w * 0.5), Vector2(20.0 + lane_len, -lane_w * 0.5), edge_color, 2.0)
+	PixelFx.line(self, Vector2(20.0, lane_w * 0.5), Vector2(20.0 + lane_len, lane_w * 0.5), edge_color, 2.0)
 
 	# 3. Animated forward-flowing arrows / chevrons (>>>)
 	var arrow_step := 42.0
@@ -1915,18 +1902,18 @@ func _draw_rammer_telegraph(tank: Tank) -> void:
 			Vector2(cur_x - 12.0, hw),
 			Vector2(cur_x - 6.0, 0.0),
 		])
-		draw_colored_polygon(pts, arrow_c)
+		PixelFx.polygon(self, pts, arrow_c)
 		cur_x += arrow_step
 
 	# 4. Target impact reticle at the end of the lane
 	var end_x := 20.0 + lane_len
 	var end_alpha := 0.45 + 0.35 * sin(float(world.tick) * 0.6)
-	draw_arc(Vector2(end_x, 0.0), lane_w * 0.45, 0, TAU, 20, Color(1.0, 0.2, 0.1, end_alpha), 2.5)
-	draw_circle(Vector2(end_x, 0.0), 5.0, Color(1.0, 0.4, 0.1, end_alpha * 0.8))
+	PixelFx.ring(self, Vector2(end_x, 0.0), lane_w * 0.45, 0, TAU, 20, Color(1.0, 0.2, 0.1, end_alpha), 2.5)
+	PixelFx.disk(self, Vector2(end_x, 0.0), 5.0, Color(1.0, 0.4, 0.1, end_alpha * 0.8))
 
 	# 5. Charge-up countdown progress bar along the center line
 	var bar_len := lane_len * progress
-	draw_line(Vector2(20.0, 0.0), Vector2(20.0 + bar_len, 0.0), Color(1.0, 0.9, 0.4, 0.85), 3.0)
+	PixelFx.line(self, Vector2(20.0, 0.0), Vector2(20.0 + bar_len, 0.0), Color(1.0, 0.9, 0.4, 0.85), 3.0)
 
 	draw_set_transform(view_off)
 
@@ -1943,12 +1930,12 @@ func _draw_rammer_spin(tank: Tank) -> void:
 
 	# 1. Outer danger / mine scatter radius
 	var max_r: float = Cfg.RAMMER_SPIN_RADIUS_MAX
-	draw_circle(Vector2.ZERO, max_r, Color(1.0, 0.30, 0.0, 0.08 * pulse))
-	draw_arc(Vector2.ZERO, max_r, 0, TAU, 36, Color(1.0, 0.45, 0.1, 0.40 * pulse), 1.5)
+	PixelFx.disk(self, Vector2.ZERO, max_r, Color(1.0, 0.30, 0.0, 0.08 * pulse))
+	PixelFx.ring(self, Vector2.ZERO, max_r, 0, TAU, 36, Color(1.0, 0.45, 0.1, 0.40 * pulse), 1.5)
 
 	# 2. Whirling vortex ring and saw-teeth at mid radius
 	var mid_r := 90.0
-	draw_arc(Vector2.ZERO, mid_r, rot, rot + TAU, 24, Color(1.0, 0.65, 0.15, 0.60 * pulse), 2.0)
+	PixelFx.ring(self, Vector2.ZERO, mid_r, rot, rot + TAU, 24, Color(1.0, 0.65, 0.15, 0.60 * pulse), 2.0)
 	var teeth := 8
 	for i in teeth:
 		var a: float = rot + i * (TAU / float(teeth))
@@ -1956,17 +1943,17 @@ func _draw_rammer_spin(tank: Tank) -> void:
 		var outer_pt := Vector2(cos(a + 0.25) * (mid_r + 14.0), sin(a + 0.25) * (mid_r + 14.0))
 		var back_pt := Vector2(cos(a + 0.12) * mid_r, sin(a + 0.12) * mid_r)
 		var pts := PackedVector2Array([inner_pt, outer_pt, back_pt])
-		draw_colored_polygon(pts, Color(1.0, 0.75, 0.2, 0.55 * pulse))
+		PixelFx.polygon(self, pts, Color(1.0, 0.75, 0.2, 0.55 * pulse))
 
 	# 3. Inner lethal kinetic buzzsaw zone (melee damage zone)
 	var inner_r := 48.0
-	draw_circle(Vector2.ZERO, inner_r, Color(1.0, 0.2, 0.0, 0.25 * pulse))
-	draw_arc(Vector2.ZERO, inner_r, -rot * 1.5, -rot * 1.5 + TAU, 20, Color(1.0, 0.9, 0.3, 0.85), 2.5)
+	PixelFx.disk(self, Vector2.ZERO, inner_r, Color(1.0, 0.2, 0.0, 0.25 * pulse))
+	PixelFx.ring(self, Vector2.ZERO, inner_r, -rot * 1.5, -rot * 1.5 + TAU, 20, Color(1.0, 0.9, 0.3, 0.85), 2.5)
 
 	# 4. Whirlwind spiral arcs
 	for i in 4:
 		var start_a: float = rot * 2.0 + i * (PI * 0.5)
-		draw_arc(Vector2.ZERO, 30.0 + i * 15.0, start_a, start_a + 1.2, 12, Color(1.0, 0.55, 0.1, 0.7 * pulse), 2.0)
+		PixelFx.ring(self, Vector2.ZERO, 30.0 + i * 15.0, start_a, start_a + 1.2, 12, Color(1.0, 0.55, 0.1, 0.7 * pulse), 2.0)
 
 	draw_set_transform(view_off)
 
@@ -1998,30 +1985,30 @@ func _draw_chimera_telegraph(tank: Tank) -> void:
 		start_p - norm * half_w_start,
 	])
 	var cone_color := Color(0.65, 0.95, 0.1, (0.10 + 0.14 * progress) * pulse)
-	draw_colored_polygon(cone_pts, cone_color)
+	PixelFx.polygon(self, cone_pts, cone_color)
 
 	# 2. Glowing hazard side borders
 	var edge_color := Color(0.75, 1.0, 0.15, (0.50 + 0.35 * progress) * pulse)
-	draw_line(start_p + norm * half_w_start, end_p + norm * half_w_end, edge_color, 1.8)
-	draw_line(start_p - norm * half_w_start, end_p - norm * half_w_end, edge_color, 1.8)
+	PixelFx.line(self, start_p + norm * half_w_start, end_p + norm * half_w_end, edge_color, 1.8)
+	PixelFx.line(self, start_p - norm * half_w_start, end_p - norm * half_w_end, edge_color, 1.8)
 
 	# 3. Charging laser guide line from muzzle to current progress
 	var guide_color := Color(0.85, 1.0, 0.3, 0.30 * pulse)
-	draw_line(start_p, end_p, guide_color, 1.2)
+	PixelFx.line(self, start_p, end_p, guide_color, 1.2)
 	var charge_end: Vector2 = start_p + dir * (length * progress)
-	draw_line(start_p, charge_end, Color(0.95, 1.0, 0.5, 0.85 * pulse), 2.5)
+	PixelFx.line(self, start_p, charge_end, Color(0.95, 1.0, 0.5, 0.85 * pulse), 2.5)
 
 	# 4. Muzzle energy gathering orb
 	var orb_r: float = 2.5 + 4.5 * progress + 1.0 * sin(float(world.tick) * 0.8)
-	draw_circle(start_p, orb_r * 1.5, Color(0.4, 0.85, 0.1, 0.35 * pulse))
-	draw_circle(start_p, orb_r, Color(0.8, 1.0, 0.25, 0.85))
-	draw_circle(start_p, orb_r * 0.45, Color(1.0, 1.0, 0.9, 0.95))
+	PixelFx.disk(self, start_p, orb_r * 1.5, Color(0.4, 0.85, 0.1, 0.35 * pulse))
+	PixelFx.disk(self, start_p, orb_r, Color(0.8, 1.0, 0.25, 0.85))
+	PixelFx.disk(self, start_p, orb_r * 0.45, Color(1.0, 1.0, 0.9, 0.95))
 
 	# 5. Danger reticle at impact point
 	var ret_r: float = 8.0 + 3.0 * sin(float(world.tick) * 0.6)
 	var ret_color := Color(0.85, 1.0, 0.2, (0.6 + 0.35 * progress) * pulse)
-	draw_arc(end_p, ret_r, 0, TAU, 16, ret_color, 2.0)
-	draw_circle(end_p, 3.5 * pulse, Color(1.0, 0.4, 0.1, 0.85))
+	PixelFx.ring(self, end_p, ret_r, 0, TAU, 16, ret_color, 2.0)
+	PixelFx.disk(self, end_p, 3.5 * pulse, Color(1.0, 0.4, 0.1, 0.85))
 
 func _laser_end(tank: Tank, start_p: Vector2, dir: Vector2, max_dist: float,
 		hostile_only: bool) -> Dictionary:
@@ -2055,13 +2042,13 @@ func _draw_aim_laser(tank: Tank) -> void:
 		return
 	var a := 0.6 if tank.can_fire else 0.22
 	var on_enemy: bool = hit["tank"] != null and world.are_hostile(tank, hit["tank"])
-	draw_line(start_p, end_p, Color(1.0, 0.12, 0.08, a * 0.35), 3.0)
-	draw_line(start_p, end_p, Color(1.0, 0.28, 0.18, a), 1.0)
-	draw_circle(start_p, 1.6, Color(1.0, 0.4, 0.3, minf(1.0, a + 0.3)))
+	PixelFx.line(self, start_p, end_p, Color(1.0, 0.12, 0.08, a * 0.35), 3.0)
+	PixelFx.line(self, start_p, end_p, Color(1.0, 0.28, 0.18, a), 1.0)
+	PixelFx.disk(self, start_p, 1.6, Color(1.0, 0.4, 0.3, minf(1.0, a + 0.3)))
 	if on_enemy:
-		draw_arc(end_p, 6.0, 0, TAU, 14, Color(1.0, 0.25, 0.15, minf(1.0, a + 0.3)), 1.5)
-	draw_circle(end_p, 2.6, Color(1.0, 0.22, 0.12, minf(1.0, a + 0.25)))
-	draw_circle(end_p, 1.1, Color(1.0, 0.95, 0.85, minf(1.0, a + 0.4)))
+		PixelFx.reticle(self, end_p, 6.0, Color(1.0, 0.25, 0.15, minf(1.0, a + 0.3)))
+	PixelFx.disk(self, end_p, 2.6, Color(1.0, 0.22, 0.12, minf(1.0, a + 0.25)))
+	PixelFx.disk(self, end_p, 1.1, Color(1.0, 0.95, 0.85, minf(1.0, a + 0.4)))
 
 func _draw_sniper_laser(tank: Tank) -> void:
 	if tank == null or not tank.alive or tank.sniper_laser_ticks <= 0:
@@ -2077,25 +2064,25 @@ func _draw_sniper_laser(tank: Tank) -> void:
 	var progress: float = clampf(1.0 - (float(tank.sniper_laser_ticks) / 27.0), 0.0, 1.0)
 	var pulse: float = 0.70 + 0.30 * sin(float(world.tick) * (0.8 + progress * 0.8))
 
-	draw_line(start_p, end_p, Color(1.0, 0.15, 0.1, (0.15 + 0.25 * progress) * pulse), 5.0)
+	PixelFx.line(self, start_p, end_p, Color(1.0, 0.15, 0.1, (0.15 + 0.25 * progress) * pulse), 5.0)
 
 	var beam_w: float = lerpf(3.0, 1.8, progress)
-	draw_line(start_p, end_p, Color(1.0, 0.25, 0.15, (0.70 + 0.30 * progress) * pulse), beam_w)
+	PixelFx.line(self, start_p, end_p, Color(1.0, 0.25, 0.15, (0.70 + 0.30 * progress) * pulse), beam_w)
 
-	draw_line(start_p, end_p, Color(1.0, 0.9, 0.85, (0.60 + 0.40 * progress) * pulse), 1.0)
+	PixelFx.line(self, start_p, end_p, Color(1.0, 0.9, 0.85, (0.60 + 0.40 * progress) * pulse), 1.0)
 
-	draw_circle(start_p, 3.5 + 2.5 * progress, Color(1.0, 0.2, 0.1, 0.65 * pulse))
-	draw_circle(start_p, 1.8, Color(1.0, 0.95, 0.9, 0.95))
+	PixelFx.disk(self, start_p, 3.5 + 2.5 * progress, Color(1.0, 0.2, 0.1, 0.65 * pulse))
+	PixelFx.disk(self, start_p, 1.8, Color(1.0, 0.95, 0.9, 0.95))
 
 	var ret_r: float = 8.0 - 3.5 * progress + 1.2 * sin(float(world.tick) * 1.2)
-	draw_arc(end_p, ret_r, 0, TAU, 16, Color(1.0, 0.2, 0.15, (0.75 + 0.25 * progress) * pulse), 1.8)
-	draw_circle(end_p, 2.4, Color(1.0, 0.95, 0.3, 0.95))
+	PixelFx.reticle(self, end_p, ret_r, Color(1.0, 0.2, 0.15, (0.75 + 0.25 * progress) * pulse))
+	PixelFx.disk(self, end_p, 2.4, Color(1.0, 0.95, 0.3, 0.95))
 
 	var tic_len := 4.0
-	draw_line(end_p + Vector2(0, -ret_r - tic_len), end_p + Vector2(0, -ret_r + 2.0), Color(1.0, 0.3, 0.2, 0.9), 1.5)
-	draw_line(end_p + Vector2(0, ret_r - 2.0), end_p + Vector2(0, ret_r + tic_len), Color(1.0, 0.3, 0.2, 0.9), 1.5)
-	draw_line(end_p + Vector2(-ret_r - tic_len, 0), end_p + Vector2(-ret_r + 2.0, 0), Color(1.0, 0.3, 0.2, 0.9), 1.5)
-	draw_line(end_p + Vector2(ret_r - 2.0, 0), end_p + Vector2(ret_r + tic_len, 0), Color(1.0, 0.3, 0.2, 0.9), 1.5)
+	PixelFx.line(self, end_p + Vector2(0, -ret_r - tic_len), end_p + Vector2(0, -ret_r + 2.0), Color(1.0, 0.3, 0.2, 0.9), 1.5)
+	PixelFx.line(self, end_p + Vector2(0, ret_r - 2.0), end_p + Vector2(0, ret_r + tic_len), Color(1.0, 0.3, 0.2, 0.9), 1.5)
+	PixelFx.line(self, end_p + Vector2(-ret_r - tic_len, 0), end_p + Vector2(-ret_r + 2.0, 0), Color(1.0, 0.3, 0.2, 0.9), 1.5)
+	PixelFx.line(self, end_p + Vector2(ret_r - 2.0, 0), end_p + Vector2(ret_r + tic_len, 0), Color(1.0, 0.3, 0.2, 0.9), 1.5)
 
 func _draw_rammer_meltdowns() -> void:
 	if world == null or world.rammer_meltdowns.is_empty():
@@ -2113,22 +2100,22 @@ func _draw_rammer_meltdowns() -> void:
 		var pulse: float = 0.65 + 0.35 * sin(float(world.tick) * (0.35 + progress * 0.55))
 
 		# 1. Lethal explosion area translucent red fill
-		draw_circle(pos, radius, Color(1.0, 0.15, 0.05, (0.06 + 0.10 * progress) * pulse))
+		PixelFx.disk(self, pos, radius, Color(1.0, 0.15, 0.05, (0.06 + 0.10 * progress) * pulse))
 
 		# 2. Expanding energetic overload shock front
 		var charge_r: float = radius * progress
-		draw_circle(pos, charge_r, Color(1.0, 0.35, 0.0, 0.08 * pulse))
-		draw_arc(pos, charge_r, 0, TAU, 48, Color(1.0, 0.7, 0.15, 0.85 * pulse), 2.0)
+		PixelFx.disk(self, pos, charge_r, Color(1.0, 0.35, 0.0, 0.08 * pulse))
+		PixelFx.ring(self, pos, charge_r, 0, TAU, 48, Color(1.0, 0.7, 0.15, 0.85 * pulse), 2.0)
 
 		# 3. Outer hazard boundary ring
-		draw_arc(pos, radius, 0, TAU, 64, Color(1.0, 0.2, 0.1, 0.70 + 0.30 * pulse), 2.5)
-		draw_arc(pos, radius - 4.0, 0, TAU, 48, Color(1.0, 0.6, 0.1, 0.35 * pulse), 1.2)
+		PixelFx.ring(self, pos, radius, 0, TAU, 64, Color(1.0, 0.2, 0.1, 0.70 + 0.30 * pulse), 2.5)
+		PixelFx.ring(self, pos, radius - 4.0, 0, TAU, 48, Color(1.0, 0.6, 0.1, 0.35 * pulse), 1.2)
 
 		# 4. Overheating reactor core
 		var core_r: float = 18.0 + 10.0 * progress + 3.0 * sin(float(world.tick) * 0.9)
-		draw_circle(pos, core_r, Color(1.0, 0.2, 0.0, 0.55 * pulse))
-		draw_circle(pos, core_r * 0.6, Color(1.0, 0.65, 0.1, 0.85))
-		draw_circle(pos, core_r * 0.3, Color(1.0, 1.0, 0.9, 0.95))
+		PixelFx.disk(self, pos, core_r, Color(1.0, 0.2, 0.0, 0.55 * pulse))
+		PixelFx.disk(self, pos, core_r * 0.6, Color(1.0, 0.65, 0.1, 0.85))
+		PixelFx.disk(self, pos, core_r * 0.3, Color(1.0, 1.0, 0.9, 0.95))
 
 		# 5. Overload warning countdown text
 		var sec_left: float = maxf(0.0, ticks / 60.0)
@@ -2208,28 +2195,27 @@ func _draw_tank(tank: Tank) -> void:
 			_draw_ability_state(tank)
 
 		if tank.spawn_protect > 0:
-			draw_arc(Vector2.ZERO, 20, 0, TAU, 32,
-				Color(1, 1, 1, 0.4 + 0.3 * sin(anim_tick * 0.3)), 2.0)
+			PixelFx.barrier(self, 22, int(anim_tick), Color("#f2ce7c", 0.4 + 0.2 * sin(anim_tick * 0.3)))
 		if tank.shield_hp > 0.0:
 			var sh := Cfg.shield
 			sh.a = 0.55
-			draw_arc(Vector2.ZERO, 18, 0, TAU, 32, sh, 2.0)
+			PixelFx.barrier(self, 18, int(anim_tick), sh)
 		if tank.turbo_timer > 0:
 			for k in 3:
 				var a := tank.body_angle + PI + (k - 1) * 0.3
-				draw_circle(Vector2(cos(a) * 20.0, sin(a) * 20.0), 3, Color(1, 0.67, 0.2, 0.5))
+				PixelFx.flame(self, Vector2(cos(a) * 20.0, sin(a) * 20.0), 3, int(anim_tick) + k * 7, 0.75)
 
 		if tank.dash_invuln_ticks > 0:
 			var invuln_alpha := clampf(float(tank.dash_invuln_ticks) / 15.0, 0.25, 1.0)
 			# Protective afterimage ring and distortion aura during dash i-frames
-			draw_arc(Vector2.ZERO, maxf(hw, hh) + 4.0, 0, TAU, 28, Color(0.3, 0.85, 1.0, 0.7 * invuln_alpha), 2.5)
-			draw_arc(Vector2.ZERO, maxf(hw, hh) + 8.0, 0, TAU, 28, Color(1.0, 1.0, 1.0, 0.45 * invuln_alpha), 1.2)
+			PixelFx.ring(self, Vector2.ZERO, maxf(hw, hh) + 4.0, 0, TAU, 28, Color(0.3, 0.85, 1.0, 0.7 * invuln_alpha), 2.5)
+			PixelFx.ring(self, Vector2.ZERO, maxf(hw, hh) + 8.0, 0, TAU, 28, Color(1.0, 1.0, 1.0, 0.45 * invuln_alpha), 1.2)
 			# Afterburner / jet boost flare pointing opposite to dash_dir
 			var bdir := -tank.dash_dir if tank.dash_dir.length_squared() > 0.01 else Vector2(-cos(tank.angle), -sin(tank.angle))
 			for jt in 4:
 				var jdist := (float(jt) + 1.0) * 7.0
 				var jcol := Color(0.25, 0.88, 1.0, 0.55 * invuln_alpha * (1.0 - float(jt) * 0.2))
-				draw_circle(bdir * jdist, 3.5 - float(jt) * 0.6, jcol)
+				PixelFx.line(self, bdir * jdist, bdir * (jdist + 6.0), jcol, 3.0 - float(jt) * 0.5)
 
 		if tank.weapon != "" and tank.weapon_timer > 0:
 			var weapon := Weapons.get_weapon(tank.weapon)
@@ -2333,16 +2319,16 @@ func _draw_tank(tank: Tank) -> void:
 			var scanline_c := Color(0.2, 0.9, 1.0, 0.35 * holo_pulse)
 			for sl in 5:
 				var s_y: float = tank.y - hh + float(sl) * (tank.height / 4.0) + fmod(float(world.tick) * 1.5, tank.height / 4.0)
-				draw_line(Vector2(tank.x - hw - 2.0, s_y), Vector2(tank.x + hw + 2.0, s_y), scanline_c, 1.0)
-			draw_arc(Vector2(tank.x + sin(float(world.tick) * 0.5) * 2.5, tank.y), hw * 1.1, 0, TAU, 16, Color(1.0, 0.2, 0.8, 0.3 * holo_pulse), 1.5)
+				PixelFx.line(self, Vector2(tank.x - hw - 2.0, s_y), Vector2(tank.x + hw + 2.0, s_y), scanline_c, 1.0)
+			PixelFx.ring(self, Vector2(tank.x + sin(float(world.tick) * 0.5) * 2.5, tank.y), hw * 1.1, 0, TAU, 16, Color(1.0, 0.2, 0.8, 0.3 * holo_pulse), 1.5)
 
 		if tank.shadow_timer > 0:
 			var shim_pulse := 0.45 + 0.35 * sin(float(world.tick) * 0.3)
 			var shim_col := Color(0.4, 0.9, 0.3, 0.40 * shim_pulse)
-			draw_arc(Vector2(tank.x, tank.y), hw * 1.25, 0, TAU, 20, shim_col, 2.0)
+			PixelFx.ring(self, Vector2(tank.x, tank.y), hw * 1.25, 0, TAU, 20, shim_col, 2.0)
 			for sh in 3:
 				var a_sh := float(world.tick) * 0.08 + float(sh) * 2.1
-				draw_line(Vector2(tank.x - cos(a_sh) * hw, tank.y - sin(a_sh) * hh),
+				PixelFx.line(self, Vector2(tank.x - cos(a_sh) * hw, tank.y - sin(a_sh) * hh),
 					Vector2(tank.x + cos(a_sh) * hw, tank.y + sin(a_sh) * hh),
 					Color(0.8, 1.0, 0.5, 0.25 * shim_pulse), 1.5)
 
@@ -3224,7 +3210,7 @@ func _draw_premium_skin(tank: Tank, hw: float, hh: float, nose: float, _palette:
 			_rect(x0, y0, w, h, Color("#090d16", 0.95))
 			var cy := y0
 			while cy < y1:
-				draw_line(Vector2(x0, cy), Vector2(x1, cy), Color("#00f0ff", 0.08), 1.0)
+				PixelFx.line(self, Vector2(x0, cy), Vector2(x1, cy), Color("#00f0ff", 0.08), 1.0)
 				cy += 6.0
 			var p_cyan := Color("#00f0ff", 0.85)
 			var p_pink := Color("#ec4899", 0.85)
@@ -3241,12 +3227,12 @@ func _draw_premium_skin(tank: Tank, hw: float, hh: float, nose: float, _palette:
 				Vector2(2.0, -hh + nose + 4.0)
 			]), p_pink, 1.6)
 			var led_a := 0.6 + 0.4 * sin(anim_tick * 0.2)
-			draw_circle(Vector2(-hw + 4.0, hh - 4.0), 2.0, Color("#00f0ff", led_a))
-			draw_circle(Vector2(-2.0, -hh + nose + 4.0), 2.0, Color("#00f0ff", led_a))
-			draw_circle(Vector2(hw - 4.0, hh - 4.0), 2.0, Color("#ec4899", led_a))
-			draw_circle(Vector2(2.0, -hh + nose + 4.0), 2.0, Color("#ec4899", led_a))
+			PixelFx.disk(self, Vector2(-hw + 4.0, hh - 4.0), 2.0, Color("#00f0ff", led_a))
+			PixelFx.disk(self, Vector2(-2.0, -hh + nose + 4.0), 2.0, Color("#00f0ff", led_a))
+			PixelFx.disk(self, Vector2(hw - 4.0, hh - 4.0), 2.0, Color("#ec4899", led_a))
+			PixelFx.disk(self, Vector2(2.0, -hh + nose + 4.0), 2.0, Color("#ec4899", led_a))
 			var scan_y := y0 + fmod(anim_tick * 1.8, h)
-			draw_line(Vector2(x0, scan_y), Vector2(x1, scan_y), Color("#00f0ff", 0.45), 1.5)
+			PixelFx.line(self, Vector2(x0, scan_y), Vector2(x1, scan_y), Color("#00f0ff", 0.45), 1.5)
 
 		"magma":
 			_rect(x0, y0, w, h, Color("#16110f", 0.95))
@@ -3269,8 +3255,8 @@ func _draw_premium_skin(tank: Tank, hw: float, hh: float, nose: float, _palette:
 				Vector2(-4.0, 5.0),
 				Vector2(-hw + 3.0, hh - 4.0)
 			]), Color("#ff3300", heat), 2.0)
-			draw_circle(Vector2.ZERO, 4.0 * heat, Color("#ffaa00", 0.85))
-			draw_circle(Vector2.ZERO, 2.0, Color("#ffffff", heat))
+			PixelFx.disk(self, Vector2.ZERO, 4.0 * heat, Color("#ffaa00", 0.85))
+			PixelFx.disk(self, Vector2.ZERO, 2.0, Color("#ffffff", heat))
 
 		"steampunk":
 			_rect(x0, y0, w, h, Color("#78350f", 0.95))
@@ -3279,28 +3265,28 @@ func _draw_premium_skin(tank: Tank, hw: float, hh: float, nose: float, _palette:
 			for rx in [x0 + 2.0, x1 - 2.0]:
 				var ry := y0 + 3.0
 				while ry < y1:
-					draw_circle(Vector2(rx, ry), 1.0, Color("#fef08a", 0.9))
+					PixelFx.disk(self, Vector2(rx, ry), 1.0, Color("#fef08a", 0.9))
 					ry += 5.0
 			var cog_rot := anim_tick * 0.04
 			var cog_c := Vector2(0, hh - 8.0)
-			draw_circle(cog_c, 4.5, Color("#d97706"))
+			PixelFx.disk(self, cog_c, 4.5, Color("#d97706"))
 			for i in 6:
 				var ang := cog_rot + float(i) * TAU / 6.0
-				draw_line(cog_c, cog_c + Vector2(cos(ang), sin(ang)) * 6.0, Color("#fef08a"), 1.4)
-			draw_circle(cog_c, 2.0, Color("#451a03"))
+				PixelFx.line(self, cog_c, cog_c + Vector2(cos(ang), sin(ang)) * 6.0, Color("#fef08a"), 1.4)
+			PixelFx.disk(self, cog_c, 2.0, Color("#451a03"))
 
 		"void":
 			_rect(x0, y0, w, h, Color("#090614", 0.95))
-			draw_circle(Vector2(-3.0, -2.0), 9.0, Color("#7c3aed", 0.25))
-			draw_circle(Vector2(4.0, 3.0), 8.0, Color("#2563eb", 0.20))
+			PixelFx.disk(self, Vector2(-3.0, -2.0), 9.0, Color("#7c3aed", 0.25))
+			PixelFx.disk(self, Vector2(4.0, 3.0), 8.0, Color("#2563eb", 0.20))
 			for i in 8:
 				var sx := x0 + w * (0.15 + 0.7 * Rng.hash01(i, 41))
 				var sy := y0 + h * (0.15 + 0.7 * Rng.hash01(i, 73))
 				var star_a := 0.4 + 0.6 * sin(anim_tick * 0.15 + float(i) * 1.5)
-				draw_circle(Vector2(sx, sy), 1.2, Color(1, 1, 1, star_a))
+				PixelFx.disk(self, Vector2(sx, sy), 1.2, Color(1, 1, 1, star_a))
 				if i % 3 == 0:
-					draw_line(Vector2(sx - 2.5, sy), Vector2(sx + 2.5, sy), Color(1, 1, 1, star_a * 0.8), 0.8)
-					draw_line(Vector2(sx, sy - 2.5), Vector2(sx, sy + 2.5), Color(1, 1, 1, star_a * 0.8), 0.8)
+					PixelFx.line(self, Vector2(sx - 2.5, sy), Vector2(sx + 2.5, sy), Color(1, 1, 1, star_a * 0.8), 0.8)
+					PixelFx.line(self, Vector2(sx, sy - 2.5), Vector2(sx, sy + 2.5), Color(1, 1, 1, star_a * 0.8), 0.8)
 
 		"dragon":
 			_rect(x0, y0, w, h, Color("#064e3b", 0.95))
@@ -3319,7 +3305,7 @@ func _draw_premium_skin(tank: Tank, hw: float, hh: float, nose: float, _palette:
 				sy2 += 3.5
 			for k in 4:
 				var ky := y0 + 3.0 + float(k) * 6.5
-				draw_colored_polygon(PackedVector2Array([
+				PixelFx.polygon(self, PackedVector2Array([
 					Vector2(-2.5, ky + 4.0), Vector2(0, ky), Vector2(2.5, ky + 4.0)
 				]), Color("#eab308", 0.9))
 
@@ -3333,33 +3319,33 @@ func _draw_premium_skin(tank: Tank, hw: float, hh: float, nose: float, _palette:
 				_rect(hw - 4.5, hz_y, 3.5, step, hz_col)
 				hz_y += step
 			var bio_a := 0.7 + 0.3 * sin(anim_tick * 0.15)
-			draw_arc(Vector2(0, -3.0), 3.0, 0.0, TAU, 16, Color("#84cc16", bio_a), 1.5)
-			draw_arc(Vector2(-2.5, 2.0), 3.0, 0.0, TAU, 16, Color("#84cc16", bio_a), 1.5)
-			draw_arc(Vector2(2.5, 2.0), 3.0, 0.0, TAU, 16, Color("#84cc16", bio_a), 1.5)
-			draw_circle(Vector2.ZERO, 1.5, Color("#84cc16", bio_a))
+			PixelFx.ring(self, Vector2(0, -3.0), 3.0, 0.0, TAU, 16, Color("#84cc16", bio_a), 1.5)
+			PixelFx.ring(self, Vector2(-2.5, 2.0), 3.0, 0.0, TAU, 16, Color("#84cc16", bio_a), 1.5)
+			PixelFx.ring(self, Vector2(2.5, 2.0), 3.0, 0.0, TAU, 16, Color("#84cc16", bio_a), 1.5)
+			PixelFx.disk(self, Vector2.ZERO, 1.5, Color("#84cc16", bio_a))
 
 		"golden_emperor":
 			_rect(x0, y0, w, h, Color("#d4af37", 0.95))
 			_rect(-hw * 0.45, -hh + nose + 4.0, hw * 0.9, (hh - nose) * 1.5, Color("#881337", 0.85))
-			draw_colored_polygon(PackedVector2Array([
+			PixelFx.polygon(self, PackedVector2Array([
 				Vector2(-4.0, -2.0), Vector2(-2.5, 3.0), Vector2(2.5, 3.0), Vector2(4.0, -2.0),
 				Vector2(2.0, 0.0), Vector2(0, -3.0), Vector2(-2.0, 0.0)
 			]), Color("#fef08a", 0.95))
 			var sweep := fmod(anim_tick * 2.0, (w + 24.0)) - 12.0
-			draw_line(Vector2(x0 + sweep, y0), Vector2(x0 + sweep + 8.0, y1), Color(1, 1, 1, 0.45), 2.0)
+			PixelFx.line(self, Vector2(x0 + sweep, y0), Vector2(x0 + sweep + 8.0, y1), Color(1, 1, 1, 0.45), 2.0)
 
 		"arctic_frost":
 			_rect(x0, y0, w, h, Color("#0284c7", 0.85))
-			draw_colored_polygon(PackedVector2Array([
+			PixelFx.polygon(self, PackedVector2Array([
 				Vector2(-hw * 0.7, -hh + nose + 2.0), Vector2(-hw * 0.2, y0 + h * 0.4),
 				Vector2(-hw * 0.8, y0 + h * 0.6)
 			]), Color("#7dd3fc", 0.75))
-			draw_colored_polygon(PackedVector2Array([
+			PixelFx.polygon(self, PackedVector2Array([
 				Vector2(hw * 0.7, -hh + nose + 2.0), Vector2(hw * 0.2, y0 + h * 0.4),
 				Vector2(hw * 0.8, y0 + h * 0.6)
 			]), Color("#bae6fd", 0.85))
-			draw_line(Vector2(0, -hh + nose), Vector2(0, -hh), Color("#ffffff", 0.9), 2.0)
-			draw_line(Vector2(-3.0, -hh + nose + 3.0), Vector2(3.0, -hh + nose + 3.0), Color("#e0f2fe", 0.8), 1.5)
+			PixelFx.line(self, Vector2(0, -hh + nose), Vector2(0, -hh), Color("#ffffff", 0.9), 2.0)
+			PixelFx.line(self, Vector2(-3.0, -hh + nose + 3.0), Vector2(3.0, -hh + nose + 3.0), Color("#e0f2fe", 0.8), 1.5)
 
 func _draw_skin_tracks(_tank: Tank, hw: float, hh: float, tw: float, wheels: int, _wheel_r: float, skin_id: String, anim_tick: float) -> void:
 	match skin_id:
@@ -3367,44 +3353,44 @@ func _draw_skin_tracks(_tank: Tank, hw: float, hh: float, tw: float, wheels: int
 			var pulse := 0.65 + 0.35 * sin(anim_tick * 0.25)
 			for side in [-1.0, 1.0]:
 				var tx: float = float(side) * hw - tw * 0.5
-				draw_line(Vector2(tx + (0.0 if side < 0 else tw), -hh), Vector2(tx + (0.0 if side < 0 else tw), hh), Color("#00f0ff", pulse * 0.85), 1.6)
+				PixelFx.line(self, Vector2(tx + (0.0 if side < 0 else tw), -hh), Vector2(tx + (0.0 if side < 0 else tw), hh), Color("#00f0ff", pulse * 0.85), 1.6)
 				for k in wheels:
 					var wy := -hh + _tank.height * (float(k) + 0.5) / float(wheels)
-					draw_circle(Vector2(tx + tw * 0.5, wy), 1.8, Color("#00f0ff", pulse))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 1.8, Color("#00f0ff", pulse))
 		"magma":
 			var heat := 0.7 + 0.3 * sin(anim_tick * 0.18)
 			for side in [-1.0, 1.0]:
 				var tx: float = float(side) * hw - tw * 0.5
-				draw_line(Vector2(tx + (0.0 if side < 0 else tw), -hh + 4.0), Vector2(tx + (0.0 if side < 0 else tw), hh - 4.0), Color("#ffaa00", heat * 0.75), 1.5)
+				PixelFx.line(self, Vector2(tx + (0.0 if side < 0 else tw), -hh + 4.0), Vector2(tx + (0.0 if side < 0 else tw), hh - 4.0), Color("#ffaa00", heat * 0.75), 1.5)
 				for k in wheels:
 					var wy := -hh + _tank.height * (float(k) + 0.5) / float(wheels)
-					draw_circle(Vector2(tx + tw * 0.5, wy), 2.0, Color("#ff4500", heat * 0.9))
-					draw_circle(Vector2(tx + tw * 0.5, wy), 1.0, Color("#ffffff", heat))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 2.0, Color("#ff4500", heat * 0.9))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 1.0, Color("#ffffff", heat))
 		"steampunk":
 			for side in [-1.0, 1.0]:
 				var tx: float = float(side) * hw - tw * 0.5
-				draw_line(Vector2(tx + (0.5 if side < 0 else tw - 0.5), -hh), Vector2(tx + (0.5 if side < 0 else tw - 0.5), hh), Color("#cd7f32", 0.9), 1.4)
+				PixelFx.line(self, Vector2(tx + (0.5 if side < 0 else tw - 0.5), -hh), Vector2(tx + (0.5 if side < 0 else tw - 0.5), hh), Color("#cd7f32", 0.9), 1.4)
 				for k in wheels:
 					var wy := -hh + _tank.height * (float(k) + 0.5) / float(wheels)
-					draw_circle(Vector2(tx + tw * 0.5, wy), 2.2, Color("#fef08a", 0.95))
-					draw_circle(Vector2(tx + tw * 0.5, wy), 1.0, Color("#451a03", 0.85))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 2.2, Color("#fef08a", 0.95))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 1.0, Color("#451a03", 0.85))
 		"void":
 			var pulse := 0.6 + 0.4 * sin(anim_tick * 0.15)
 			for side in [-1.0, 1.0]:
 				var tx: float = float(side) * hw - tw * 0.5
-				draw_line(Vector2(tx + (0.0 if side < 0 else tw), -hh), Vector2(tx + (0.0 if side < 0 else tw), hh), Color("#c084fc", pulse * 0.6), 1.5)
+				PixelFx.line(self, Vector2(tx + (0.0 if side < 0 else tw), -hh), Vector2(tx + (0.0 if side < 0 else tw), hh), Color("#c084fc", pulse * 0.6), 1.5)
 				for k in wheels:
 					var wy := -hh + _tank.height * (float(k) + 0.5) / float(wheels)
-					draw_circle(Vector2(tx + tw * 0.5, wy), 1.8, Color("#a855f7", pulse))
-					draw_circle(Vector2(tx + tw * 0.5, wy), 0.9, Color(1, 1, 1, 0.9))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 1.8, Color("#a855f7", pulse))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 0.9, Color(1, 1, 1, 0.9))
 		"dragon":
 			for side in [-1.0, 1.0]:
 				var tx: float = float(side) * hw - tw * 0.5
-				draw_line(Vector2(tx + (0.0 if side < 0 else tw), -hh), Vector2(tx + (0.0 if side < 0 else tw), hh), Color("#059669", 0.8), 1.5)
+				PixelFx.line(self, Vector2(tx + (0.0 if side < 0 else tw), -hh), Vector2(tx + (0.0 if side < 0 else tw), hh), Color("#059669", 0.8), 1.5)
 				for k in wheels:
 					var wy := -hh + _tank.height * (float(k) + 0.5) / float(wheels)
-					draw_circle(Vector2(tx + tw * 0.5, wy), 2.0, Color("#fbbf24", 0.95))
-					draw_circle(Vector2(tx + tw * 0.5, wy), 1.0, Color("#064e3b"))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 2.0, Color("#fbbf24", 0.95))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 1.0, Color("#064e3b"))
 		"toxic":
 			var step := 5.0
 			for side in [-1.0, 1.0]:
@@ -3416,23 +3402,23 @@ func _draw_skin_tracks(_tank: Tank, hw: float, hh: float, tw: float, wheels: int
 					y += step
 				for k in wheels:
 					var wy := -hh + _tank.height * (float(k) + 0.5) / float(wheels)
-					draw_circle(Vector2(tx + tw * 0.5, wy), 1.8, Color("#84cc16", 0.9))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 1.8, Color("#84cc16", 0.9))
 		"golden_emperor":
 			for side in [-1.0, 1.0]:
 				var tx: float = float(side) * hw - tw * 0.5
-				draw_line(Vector2(tx + (0.5 if side < 0 else tw - 0.5), -hh), Vector2(tx + (0.5 if side < 0 else tw - 0.5), hh), Color("#ffd700", 0.9), 1.8)
+				PixelFx.line(self, Vector2(tx + (0.5 if side < 0 else tw - 0.5), -hh), Vector2(tx + (0.5 if side < 0 else tw - 0.5), hh), Color("#ffd700", 0.9), 1.8)
 				for k in wheels:
 					var wy := -hh + _tank.height * (float(k) + 0.5) / float(wheels)
-					draw_circle(Vector2(tx + tw * 0.5, wy), 2.4, Color("#ffd700"))
-					draw_circle(Vector2(tx + tw * 0.5, wy), 1.2, Color("#dc2626"))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 2.4, Color("#ffd700"))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 1.2, Color("#dc2626"))
 		"arctic_frost":
 			for side in [-1.0, 1.0]:
 				var tx: float = float(side) * hw - tw * 0.5
-				draw_line(Vector2(tx + (0.0 if side < 0 else tw), -hh), Vector2(tx + (0.0 if side < 0 else tw), hh), Color("#e0f2fe", 0.8), 1.5)
+				PixelFx.line(self, Vector2(tx + (0.0 if side < 0 else tw), -hh), Vector2(tx + (0.0 if side < 0 else tw), hh), Color("#e0f2fe", 0.8), 1.5)
 				for k in wheels:
 					var wy := -hh + _tank.height * (float(k) + 0.5) / float(wheels)
-					draw_circle(Vector2(tx + tw * 0.5, wy), 2.0, Color("#38bdf8", 0.9))
-					draw_circle(Vector2(tx + tw * 0.5, wy), 1.0, Color("#ffffff", 0.85))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 2.0, Color("#38bdf8", 0.9))
+					PixelFx.disk(self, Vector2(tx + tw * 0.5, wy), 1.0, Color("#ffffff", 0.85))
 
 func _draw_skin_barrel(b0: float, b1: float, bl: float, bw: float, skin_id: String, anim_tick: float) -> void:
 	match skin_id:
@@ -3443,7 +3429,7 @@ func _draw_skin_barrel(b0: float, b1: float, bl: float, bw: float, skin_id: Stri
 			_rect(b1 - 3.5, -bw * 0.5 - 1.8, 4.0, bw + 3.6, Color("#00f0ff", 0.95))
 		"magma":
 			var heat := 0.75 + 0.25 * sin(anim_tick * 0.2)
-			draw_line(Vector2(b0 + 2.0, 0), Vector2(b1 - 2.0, 0), Color("#ffaa00", heat), 1.6)
+			PixelFx.line(self, Vector2(b0 + 2.0, 0), Vector2(b1 - 2.0, 0), Color("#ffaa00", heat), 1.6)
 			_rect(b1 - 5.0, -bw * 0.5 - 1.5, 5.0, bw + 3.0, Color("#ff4500", heat))
 		"steampunk":
 			_rect(b0 + bl * 0.35, -bw * 0.5 - 1.5, 3.0, bw + 3.0, Color("#fef08a", 0.9))
@@ -3452,10 +3438,10 @@ func _draw_skin_barrel(b0: float, b1: float, bl: float, bw: float, skin_id: Stri
 		"void":
 			var pulse := 0.6 + 0.4 * sin(anim_tick * 0.2)
 			_rect(b0 + bl * 0.5, -bw * 0.5 - 1.2, 3.0, bw + 2.4, Color("#c084fc", pulse))
-			draw_circle(Vector2(b1 - 1.0, 0), 2.2, Color(1, 1, 1, 0.9))
+			PixelFx.disk(self, Vector2(b1 - 1.0, 0), 2.2, Color(1, 1, 1, 0.9))
 		"dragon":
-			draw_line(Vector2(b1 - 4.0, -bw * 0.5), Vector2(b1, -bw * 0.5 - 2.5), Color("#fbbf24"), 1.8)
-			draw_line(Vector2(b1 - 4.0, bw * 0.5), Vector2(b1, bw * 0.5 + 2.5), Color("#fbbf24"), 1.8)
+			PixelFx.line(self, Vector2(b1 - 4.0, -bw * 0.5), Vector2(b1, -bw * 0.5 - 2.5), Color("#fbbf24"), 1.8)
+			PixelFx.line(self, Vector2(b1 - 4.0, bw * 0.5), Vector2(b1, bw * 0.5 + 2.5), Color("#fbbf24"), 1.8)
 			_rect(b0 + bl * 0.5, -bw * 0.5 - 1.0, 2.5, bw + 2.0, Color("#10b981"))
 		"toxic":
 			_rect(b0 + 4.0, -bw * 0.5 - 1.0, bl - 10.0, 1.4, Color("#84cc16", 0.9))
@@ -3466,63 +3452,63 @@ func _draw_skin_barrel(b0: float, b1: float, bl: float, bw: float, skin_id: Stri
 			_rect(b1 - 6.0, -bw * 0.5 - 2.0, 6.0, bw + 4.0, Color("#fef08a"))
 		"arctic_frost":
 			_rect(b0 + 3.0, -bw * 0.5 - 1.0, bl - 6.0, 1.6, Color("#e0f2fe", 0.85))
-			draw_circle(Vector2(b1, 0), 2.5, Color("#7dd3fc", 0.95))
+			PixelFx.disk(self, Vector2(b1, 0), 2.5, Color("#7dd3fc", 0.95))
 
 func _draw_skin_turret(tr: float, skin_id: String, anim_tick: float) -> void:
 	match skin_id:
 		"cyberpunk":
 			var pulse := 0.7 + 0.3 * sin(anim_tick * 0.25)
-			draw_arc(Vector2.ZERO, tr - 1.5, -PI * 0.45, PI * 0.45, 14, Color("#00f0ff", pulse), 2.2)
-			draw_circle(Vector2.ZERO, 2.5, Color("#00f0ff", 0.95))
-			draw_line(Vector2(-tr * 0.4, 0), Vector2(tr * 0.4, 0), Color("#ec4899", 0.85), 1.2)
+			PixelFx.ring(self, Vector2.ZERO, tr - 1.5, -PI * 0.45, PI * 0.45, 14, Color("#00f0ff", pulse), 2.2)
+			PixelFx.disk(self, Vector2.ZERO, 2.5, Color("#00f0ff", 0.95))
+			PixelFx.line(self, Vector2(-tr * 0.4, 0), Vector2(tr * 0.4, 0), Color("#ec4899", 0.85), 1.2)
 		"magma":
 			var heat := 0.75 + 0.25 * sin(anim_tick * 0.18)
-			draw_circle(Vector2.ZERO, tr * 0.5, Color("#16110f"))
-			draw_circle(Vector2.ZERO, tr * 0.35, Color("#ffaa00", heat))
-			draw_circle(Vector2.ZERO, tr * 0.18, Color("#ffffff", heat))
+			PixelFx.disk(self, Vector2.ZERO, tr * 0.5, Color("#16110f"))
+			PixelFx.disk(self, Vector2.ZERO, tr * 0.35, Color("#ffaa00", heat))
+			PixelFx.disk(self, Vector2.ZERO, tr * 0.18, Color("#ffffff", heat))
 			for k in 4:
 				var ang: float = float(k) * PI * 0.5 + 0.3
-				draw_line(Vector2.ZERO, Vector2(cos(ang), sin(ang)) * (tr - 1.2), Color("#ff4500", 0.9), 1.5)
+				PixelFx.line(self, Vector2.ZERO, Vector2(cos(ang), sin(ang)) * (tr - 1.2), Color("#ff4500", 0.9), 1.5)
 		"steampunk":
-			draw_circle(Vector2.ZERO, tr * 0.52, Color("#fef08a", 0.95))
-			draw_arc(Vector2.ZERO, tr * 0.52, 0, TAU, 16, Color("#78350f"), 1.6)
+			PixelFx.disk(self, Vector2.ZERO, tr * 0.52, Color("#fef08a", 0.95))
+			PixelFx.ring(self, Vector2.ZERO, tr * 0.52, 0, TAU, 16, Color("#78350f"), 1.6)
 			var needle_a := sin(anim_tick * 0.08) * 1.2 - PI * 0.5
-			draw_line(Vector2.ZERO, Vector2(cos(needle_a), sin(needle_a)) * (tr * 0.42), Color("#dc2626"), 1.5)
-			draw_circle(Vector2.ZERO, 1.8, Color("#451a03"))
+			PixelFx.line(self, Vector2.ZERO, Vector2(cos(needle_a), sin(needle_a)) * (tr * 0.42), Color("#dc2626"), 1.5)
+			PixelFx.disk(self, Vector2.ZERO, 1.8, Color("#451a03"))
 		"void":
-			draw_circle(Vector2.ZERO, tr * 0.4, Color("#090614"))
+			PixelFx.disk(self, Vector2.ZERO, tr * 0.4, Color("#090614"))
 			var pulse := 0.7 + 0.3 * sin(anim_tick * 0.2)
-			draw_arc(Vector2.ZERO, tr * 0.55, 0, TAU, 20, Color("#a855f7", pulse), 2.0)
+			PixelFx.ring(self, Vector2.ZERO, tr * 0.55, 0, TAU, 20, Color("#a855f7", pulse), 2.0)
 			for i in 3:
 				var a := anim_tick * 0.06 + float(i) * TAU / 3.0
-				draw_circle(Vector2(cos(a), sin(a)) * (tr * 0.62), 1.5, Color(1, 1, 1, 0.95))
+				PixelFx.disk(self, Vector2(cos(a), sin(a)) * (tr * 0.62), 1.5, Color(1, 1, 1, 0.95))
 		"dragon":
 			draw_polyline(PackedVector2Array([Vector2(-tr * 0.3, -tr * 0.6), Vector2(-tr * 0.8, -tr * 0.3), Vector2(-tr * 0.4, 0)]), Color("#fbbf24"), 2.0)
 			draw_polyline(PackedVector2Array([Vector2(tr * 0.3, -tr * 0.6), Vector2(tr * 0.8, -tr * 0.3), Vector2(tr * 0.4, 0)]), Color("#fbbf24"), 2.0)
-			draw_circle(Vector2.ZERO, tr * 0.32, Color("#fbbf24"))
-			draw_line(Vector2(0, -tr * 0.26), Vector2(0, tr * 0.26), Color("#064e3b"), 2.0)
+			PixelFx.disk(self, Vector2.ZERO, tr * 0.32, Color("#fbbf24"))
+			PixelFx.line(self, Vector2(0, -tr * 0.26), Vector2(0, tr * 0.26), Color("#064e3b"), 2.0)
 		"toxic":
 			var pulse := 0.7 + 0.3 * sin(anim_tick * 0.22)
-			draw_circle(Vector2.ZERO, tr * 0.45, Color("#84cc16", pulse))
-			draw_arc(Vector2.ZERO, tr * 0.6, 0, TAU, 16, Color("#eab308"), 2.0)
-			draw_circle(Vector2.ZERO, tr * 0.18, Color("#18181b"))
+			PixelFx.disk(self, Vector2.ZERO, tr * 0.45, Color("#84cc16", pulse))
+			PixelFx.ring(self, Vector2.ZERO, tr * 0.6, 0, TAU, 16, Color("#eab308"), 2.0)
+			PixelFx.disk(self, Vector2.ZERO, tr * 0.18, Color("#18181b"))
 		"golden_emperor":
-			draw_colored_polygon(PackedVector2Array([
+			PixelFx.polygon(self, PackedVector2Array([
 				Vector2(-tr * 0.5, -tr * 0.3), Vector2(-tr * 0.3, -tr * 0.7),
 				Vector2(0, -tr * 0.4), Vector2(tr * 0.3, -tr * 0.7),
 				Vector2(tr * 0.5, -tr * 0.3), Vector2(0, 0)
 			]), Color("#fef08a"))
-			draw_circle(Vector2(0, tr * 0.1), tr * 0.25, Color("#dc2626"))
-			draw_circle(Vector2(-tr * 0.08, tr * 0.02), tr * 0.08, Color(1, 1, 1, 0.9))
+			PixelFx.disk(self, Vector2(0, tr * 0.1), tr * 0.25, Color("#dc2626"))
+			PixelFx.disk(self, Vector2(-tr * 0.08, tr * 0.02), tr * 0.08, Color(1, 1, 1, 0.9))
 		"arctic_frost":
 			for k in 6:
 				var ang: float = float(k) * TAU / 6.0
-				draw_line(Vector2.ZERO, Vector2(cos(ang), sin(ang)) * (tr - 1.0), Color("#e0f2fe", 0.9), 1.5)
-			draw_colored_polygon(PackedVector2Array([
+				PixelFx.line(self, Vector2.ZERO, Vector2(cos(ang), sin(ang)) * (tr - 1.0), Color("#e0f2fe", 0.9), 1.5)
+			PixelFx.polygon(self, PackedVector2Array([
 				Vector2(0, -tr * 0.35), Vector2(tr * 0.35, 0),
 				Vector2(0, tr * 0.35), Vector2(-tr * 0.35, 0)
 			]), Color("#7dd3fc", 0.95))
-			draw_arc(Vector2.ZERO, tr - 1.0, 0, TAU, 18, Color(1, 1, 1, 0.85), 1.4)
+			PixelFx.ring(self, Vector2.ZERO, tr - 1.0, 0, TAU, 18, Color(1, 1, 1, 0.85), 1.4)
 
 func _draw_offscreen_markers(size: Vector2) -> void:
 	if player.tank == null:
