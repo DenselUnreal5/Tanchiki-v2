@@ -1159,24 +1159,9 @@ func _city_road_index(r: int, c: int, up: bool, down: bool, left: bool, right: b
 	if _loc_tiles and up and down and left and right and _is_paved(r - 1, c - 1) \
 			and _is_paved(r - 1, c + 1) and _is_paved(r + 1, c - 1) and _is_paved(r + 1, c + 1):
 		return 18
-	if up and down and left and right:
-		return 16
-	if down and left and right and not up:
-		return 8
-	if up and down and right and not left:
-		return 9
-	if up and down and left and not right:
-		return 10
-	if up and left and right and not down:
-		return 11
-	if right and down and not up and not left:
-		return 12
-	if left and down and not up and not right:
-		return 13
-	if up and right and not down and not left:
-		return 14
-	if up and left and not down and not right:
-		return 15
+	var shape := TerrainTextures.road_shape(up, down, left, right)
+	if shape != 1 and shape != 2:
+		return shape
 	if left and right and not up and not down:
 		if _is_crossing(r, c + 1):
 			return 3
@@ -1390,37 +1375,6 @@ func _draw_sand_tile(x: float, y: float, r: int, c: int) -> void:
 		_rect(x, y, 2, Cfg.TILE, Cfg.sand_light)
 	_round_block_corners(x, y, r, c)
 
-func _city_river_index(up: bool, down: bool, left: bool, right: bool) -> int:
-	if not up and not down and not left and not right:
-		return 3
-	if up and not down and not left and not right:
-		return 4
-	if down and not up and not left and not right:
-		return 7
-	if left and not up and not down and not right:
-		return 5
-	if right and not up and not down and not left:
-		return 6
-	if up and left and not down and not right:
-		return 8
-	if up and right and not down and not left:
-		return 9
-	if down and left and not up and not right:
-		return 10
-	if down and right and not up and not left:
-		return 11
-	if up and down and not left and not right:
-		return 1
-	if left and right and not up and not down:
-		return 2
-	var wet_h := not left or not right
-	var wet_v := not up or not down
-	if wet_h and not wet_v:
-		return 1
-	if wet_v and not wet_h:
-		return 2
-	return 3
-
 func _is_wet(r: int, c: int) -> bool:
 	var t := world.map.get_tile(r, c)
 	return t == Cfg.T_WATER or t == Cfg.T_BRIDGE
@@ -1433,7 +1387,7 @@ func _draw_water_tile(x: float, y: float, r: int, c: int, phase: float) -> void:
 		var down := not _is_wet(r + 1, c)
 		var left := not _is_wet(r, c - 1)
 		var right := not _is_wet(r, c + 1)
-		draw_texture_rect(TerrainTextures.river(_city_river_index(up, down, left, right), _loc_id),
+		draw_texture_rect(TerrainTextures.river(TerrainTextures.river_shape(up, down, left, right), _loc_id),
 			Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		return
 	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.water)
