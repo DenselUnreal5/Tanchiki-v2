@@ -1374,7 +1374,7 @@ func _draw_sand_tile(x: float, y: float, r: int, c: int) -> void:
 	if not _loc_ready:
 		_read_location()
 	if TerrainTextures.has_textures(_loc_id):
-		_draw_grass_tile(x, y, r, c)
+		draw_texture_rect(TerrainTextures.sand(_loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		return
 	var t := _terrain_shade(r, c)
 	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.sand_dark.lerp(Cfg.sand_light, 0.3 + t * 0.7))
@@ -1433,7 +1433,12 @@ func _draw_water_tile(x: float, y: float, r: int, c: int, phase: float) -> void:
 		var down := not _is_wet(r + 1, c)
 		var left := not _is_wet(r, c - 1)
 		var right := not _is_wet(r, c + 1)
-		draw_texture_rect(TerrainTextures.river(_city_river_index(up, down, left, right), _loc_id),
+		var texture: Texture2D
+		if _loc_id in ["frost", "exclusion", "shore"]:
+			texture = TerrainTextures.biome_water(_loc_id, up, down, left, right)
+		else:
+			texture = TerrainTextures.river(_city_river_index(up, down, left, right), _loc_id)
+		draw_texture_rect(texture,
 			Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		return
 	_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.water)
