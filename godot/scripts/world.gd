@@ -969,9 +969,6 @@ func _update_defense() -> void:
 		return
 
 	if wave_state == "delay":
-		if _alive_enemy_count() == 0 and float(base["hp"]) < float(base["max_hp"]):
-			base["hp"] = minf(float(base["max_hp"]),
-				float(base["hp"]) + float(base["max_hp"]) * Cfg.DEFENSE_BASE_REGEN_PER_TICK)
 		wave_timer -= 1
 		if wave_timer <= 0:
 			_setup_wave(wave + 1)
