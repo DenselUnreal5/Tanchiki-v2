@@ -764,8 +764,11 @@ class _MapCanvas extends Control:
 							var down := _is_not_water(r + 1, c)
 							var left := _is_not_water(r, c - 1)
 							var right := _is_not_water(r, c + 1)
-							var idx := TerrainTextures.river_shape(up, down, left, right)
-							var wtex := TerrainTextures.river(idx, loc_id)
+							var wtex: Texture2D
+							if loc_id in ["frost", "exclusion", "shore"]:
+								wtex = TerrainTextures.biome_water(loc_id, up, down, left, right)
+							else:
+								wtex = TerrainTextures.river(TerrainTextures.river_shape(up, down, left, right), loc_id)
 							if wtex != null:
 								draw_texture_rect(wtex, rect, false)
 							else:
