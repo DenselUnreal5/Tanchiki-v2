@@ -238,6 +238,9 @@ func update(tank: Tank, world) -> void:
 			return
 
 	_decide(tank, world, tgt, target_dist)
+	if survival and tank.in_water and state != STATE_COMBAT:
+		dest_x = world.map.width * 0.5
+		dest_y = world.map.height * 0.5
 
 	if state == STATE_COMBAT:
 		_do_combat(tank, world, tgt, target_dist, has_shot)
