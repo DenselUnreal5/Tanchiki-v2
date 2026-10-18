@@ -347,11 +347,15 @@ func _draw_tile_range(r0: int, r1: int, c0: int, c1: int) -> void:
 
 			match tile:
 				Cfg.T_WALL:
-					_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.wall)
-					_rect(x, y, Cfg.TILE, 3, Cfg.wall_top)
-					_rect(x, y, 3, Cfg.TILE, Cfg.wall_top)
-					_rect(x, y + Cfg.TILE - 3, Cfg.TILE, 3, Cfg.wall_edge)
-					_rect(x + Cfg.TILE - 3, y, 3, Cfg.TILE, Cfg.wall_edge)
+					var wall_texture := TerrainTextures.wall()
+					if wall_texture != null:
+						draw_texture_rect(wall_texture, Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+					else:
+						_rect(x, y, Cfg.TILE, Cfg.TILE, Cfg.wall)
+						_rect(x, y, Cfg.TILE, 3, Cfg.wall_top)
+						_rect(x, y, 3, Cfg.TILE, Cfg.wall_top)
+						_rect(x, y + Cfg.TILE - 3, Cfg.TILE, 3, Cfg.wall_edge)
+						_rect(x + Cfg.TILE - 3, y, 3, Cfg.TILE, Cfg.wall_edge)
 				Cfg.T_BRICK:
 					_draw_roof_tile(x, y, r, c)
 				Cfg.T_ADOBE:

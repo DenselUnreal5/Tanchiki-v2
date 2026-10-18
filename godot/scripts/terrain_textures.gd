@@ -93,6 +93,23 @@ static func _load_cached(loc: String, file: String) -> Texture2D:
 		return _load_cached("city", file)
 	return null
 
+## Shared indestructible wall material across every biome and the map editor.
+static func wall() -> Texture2D:
+	const key := "_indestructible_wall"
+	if _cache.has(key):
+		return _cache[key]
+	var path := "res://art/terrain/indestructible_wall.png"
+	if not ResourceLoader.exists(path):
+		return null
+	var source := load(path) as Texture2D
+	if source == null:
+		return null
+	var texture := CanvasTexture.new()
+	texture.diffuse_texture = source
+	texture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_cache[key] = texture
+	return texture
+
 static func grass(loc: String = "city") -> Texture2D:
 	return _load_cached(loc, "grass.png")
 

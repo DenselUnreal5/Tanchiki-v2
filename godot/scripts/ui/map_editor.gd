@@ -884,6 +884,10 @@ class _MapCanvas extends Control:
 				Vector2(rect.position.x + rect.size.x, rect.position.y + rect.size.y), Color("#4a3725"), 1.0)
 
 	func _draw_wall(rect: Rect2) -> void:
+		var wall_texture := TerrainTextures.wall()
+		if wall_texture != null:
+			draw_texture_rect(wall_texture, rect, false)
+			return
 		draw_rect(rect, Color("#555a60"))
 		# 3D bevel
 		if rect.size.x >= 4.0:
