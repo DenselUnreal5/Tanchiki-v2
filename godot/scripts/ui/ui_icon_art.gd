@@ -2,12 +2,14 @@
 class_name UiIconArt
 extends RefCounted
 
-# Source artwork is preserved in four atlases. No runtime recoloring or image cuts.
+# Source artwork is preserved in atlases. No runtime recoloring or image cuts.
 const SHEETS := {
 	"perks_a": ["res://art/ui_icons/perks_a.png", 8, 5],
 	"perks_b": ["res://art/ui_icons/perks_b.png", 8, 5],
 	"achievements": ["res://art/ui_icons/achievements.png", 6, 6],
 	"achievement_details": ["res://art/ui_icons/achievement_details.png", 3, 1],
+	"equipment": ["res://art/ui_icons/equipment.png", 4, 3],
+	"weapons": ["res://art/ui_icons/weapons.png", 3, 1],
 	"upgrades": ["res://art/ui_icons/upgrades.png", 5, 2],
 }
 const ENTRIES := {
@@ -148,6 +150,20 @@ const ENTRIES := {
 	"bot_lightning_lord": ["perks_a", 13],
 	"bot_sky_strike": ["perks_a", 14],
 	"bot_chain_lightning": ["perks_a", 15],
+	"cannon_standard": ["equipment", 0],
+	"cannon_ice": ["equipment", 1],
+	"cannon_acid": ["equipment", 2],
+	"cannon_fire": ["equipment", 3],
+	"cannon_shock": ["equipment", 4],
+	"class_standard": ["equipment", 5],
+	"class_grunt": ["equipment", 6],
+	"class_scout": ["equipment", 7],
+	"class_heavy": ["equipment", 8, [0, 724, 400, 362]],
+	"class_sniper": ["equipment", 9, [400, 724, 344, 362]],
+	"class_mortar": ["equipment", 10, [744, 724, 344, 362]],
+	"weapon_gatling": ["weapons", 0],
+	"weapon_rockets": ["weapons", 1],
+	"weapon_shotgun": ["weapons", 2],
 }
 
 static var _cache: Dictionary = {}
@@ -176,6 +192,15 @@ static func texture_of(id: String) -> Texture2D:
 		var region := AtlasTexture.new()
 		region.atlas = source
 		region.region = Rect2(start, end - start)
+		if entry.size() > 2:
+			var rect: Array = entry[2]
+			region.region = Rect2(rect[0], rect[1], rect[2], rect[3])
+			# Some wide tank silhouettes extend past an equal grid cell.
+			# Their explicit regions keep the artwork intact; square padding
+			# preserves proportions when the UI places them in an icon slot.
+			var side := maxf(region.region.size.x, region.region.size.y)
+			var extra := Vector2.ONE * side - region.region.size
+			region.margin = Rect2(extra * 0.5, extra)
 		region.filter_clip = true
 		_cache[id] = region
 	return _cache[id]

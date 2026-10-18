@@ -172,8 +172,10 @@ func _all_row(on_all: Callable, off_all: Callable) -> HBoxContainer:
 	row.add_child(close_all)
 	return row
 
-func _toggle_row(text: String, value: bool, on_change: Callable) -> HBoxContainer:
+func _toggle_row(text: String, value: bool, on_change: Callable, icon_id: String = "") -> HBoxContainer:
 	var row := UiKit.hbox(10)
+	if icon_id != "":
+		row.add_child(PerkIcons.make_view(icon_id, 36))
 	var label := UiKit.label(text, 12, Cfg.UI_TEXT)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.clip_text = true
@@ -193,8 +195,8 @@ func _fill_perks() -> void:
 	_body.add_child(_all_row(func(): DevTools.set_all_perks(true), func(): DevTools.set_all_perks(false)))
 	for p in Perks.all():
 		var id := String(p["id"])
-		var text := "%s  %s" % [String(p.get("icon", "")), I18n.dn(p, "name", "perk")]
-		_body.add_child(_toggle_row(text, Prof.is_unlocked(id), func(on: bool): DevTools.set_perk(id, on)))
+		var text := I18n.dn(p, "name", "perk")
+		_body.add_child(_toggle_row(text, Prof.is_unlocked(id), func(on: bool): DevTools.set_perk(id, on), id))
 
 func _fill_cosmetics() -> void:
 	_body.add_child(_all_row(func(): DevTools.set_all_cosmetics(true), func(): DevTools.set_all_cosmetics(false)))
@@ -215,12 +217,12 @@ func _fill_tanks() -> void:
 		var id := String(entry["id"])
 		if id == TankClasses.DEFAULT:
 			continue
-		var text := "%s  %s  ·  %d 🪙" % [String(entry.get("icon", "")), TankClasses.display_name(entry), TankClasses.price(id)]
-		_body.add_child(_toggle_row(text, Prof.is_class_owned(id), func(on: bool): DevTools.set_class(id, on)))
+		var text := "%s  ·  %d 🪙" % [TankClasses.display_name(entry), TankClasses.price(id)]
+		_body.add_child(_toggle_row(text, Prof.is_class_owned(id), func(on: bool): DevTools.set_class(id, on), "class_" + id))
 	_body.add_child(UiKit.section("Пушки", Cfg.UI_GOLD))
 	for c in Cannons.LIST:
 		var id := String(c["id"])
 		if id == "standard":
 			continue
-		var text := "%s  %s  ·  %d 🪙" % [String(c.get("icon", "")), String(c["name"]), int(c.get("price", 0))]
-		_body.add_child(_toggle_row(text, Prof.is_cannon_owned(id), func(on: bool): DevTools.set_cannon(id, on)))
+		var text := "%s  ·  %d 🪙" % [String(c["name"]), int(c.get("price", 0))]
+		_body.add_child(_toggle_row(text, Prof.is_cannon_owned(id), func(on: bool): DevTools.set_cannon(id, on), "cannon_" + id))

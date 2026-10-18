@@ -26,7 +26,7 @@ var synergy_build_name := ""
 		outer_size = v
 		custom_minimum_size = v
 		queue_redraw()
-@export var icon_size: Vector2 = Vector2(30, 30):
+@export var icon_size: Vector2 = Vector2(40, 40):
 	set(v):
 		icon_size = v
 		if _icon != null:

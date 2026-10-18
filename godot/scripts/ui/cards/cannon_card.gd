@@ -4,23 +4,18 @@ extends PanelContainer
 
 signal action_pressed
 
-@export var icon_size: Vector2 = Vector2(26, 26):
+@export var icon_size: Vector2 = Vector2(48, 48):
 	set(v):
 		icon_size = v
 		if _icon != null:
-			_icon.custom_minimum_size = v
-@export var icon_font_size: int = 22:
-	set(v):
-		icon_font_size = v
-		if _icon != null:
-			_icon.add_theme_font_size_override("font_size", v)
+			_icon.icon_size = v
 @export var card_min_width: float = 258.0:
 	set(v):
 		card_min_width = v
 		custom_minimum_size.x = v
 
 @onready var _row: HBoxContainer = %Row
-@onready var _icon: Label = %Icon
+@onready var _icon: PerkIconView = %Icon
 @onready var _info: VBoxContainer = %Info
 @onready var _name_label: Label = %NameLabel
 @onready var _state_label: Label = %StateLabel
@@ -32,9 +27,7 @@ func _ready() -> void:
 	_info.add_theme_constant_override("separation", 3)
 	_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	_icon.add_theme_font_override("font", Fonts.regular)
-	_icon.add_theme_font_size_override("font_size", icon_font_size)
-	_icon.custom_minimum_size = icon_size
+	_icon.icon_size = icon_size
 	_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	_name_label.add_theme_font_override("font", Fonts.bold)
@@ -68,7 +61,6 @@ func _style_button(target: Button, donor: Button) -> void:
 		target.add_theme_color_override(col, donor.get_theme_color(col))
 	donor.queue_free()
 
-var _tex_view: PerkIconView
 var _details_label: Label
 
 func set_details(text: String) -> void:
@@ -83,17 +75,8 @@ func set_details(text: String) -> void:
 	_details_label.visible = text != ""
 
 func _set_tex_icon(tex_id: String, color: Color) -> void:
-	if tex_id == "":
-		if _tex_view != null:
-			_tex_view.visible = false
-		return
-	if _tex_view == null:
-		_tex_view = PerkIconView.new()
-		_icon.add_child(_tex_view)
-		_tex_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_tex_view.visible = true
-	_tex_view.perk_id = tex_id
-	_tex_view.icon_color = color
+	_icon.perk_id = tex_id
+	_icon.icon_color = color
 
 func set_data(icon_text: String, icon_color: Color, name_text: String, state_text: String,
 		action_text: String, action_disabled: bool, equipped: bool, can_buy: bool,
@@ -102,10 +85,7 @@ func set_data(icon_text: String, icon_color: Color, name_text: String, state_tex
 	var border := Cfg.UI_ACCENT_DIM if equipped else (Color(Cfg.UI_GOLD, 0.45) if can_buy else Cfg.UI_BORDER)
 	add_theme_stylebox_override("panel", UiKit.card_style(border))
 
-	var has_tex := PerkIcons.texture_of(card_id) != null
-	_icon.text = "" if has_tex else icon_text
-	_icon.add_theme_color_override("font_color", icon_color)
-	_set_tex_icon(card_id if has_tex else "", icon_color)
+	_set_tex_icon(card_id, icon_color)
 	_name_label.text = name_text
 	_state_label.text = state_text
 

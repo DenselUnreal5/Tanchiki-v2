@@ -12,6 +12,9 @@ func _ready() -> void:
 		for perk in list: ids.append(perk.id)
 	for achievement in Achievements.LIST: ids.append("ach_" + achievement.id)
 	for upgrade in Upgrades.LIST: ids.append("upg_" + upgrade.id)
+	for cannon in Cannons.LIST: ids.append("cannon_" + cannon.id)
+	for entry in TankClasses.LIST: ids.append("class_" + entry.id)
+	for weapon in Weapons.LIST.values(): ids.append("weapon_" + weapon.id)
 	for id in ids:
 		var texture := PerkIcons.texture_of(id) as AtlasTexture
 		if texture == null:
@@ -36,6 +39,10 @@ func _ready() -> void:
 		var entry: Array = UiIconArt.ENTRIES[id]
 		var documented: Array = manifest.get(id, ["missing", -1])
 		mapping_matches = mapping_matches and documented[0] == entry[0] and int(documented[1]) == int(entry[1])
+		if entry.size() > 2:
+			mapping_matches = mapping_matches and documented.size() == entry.size()
+			if documented.size() == entry.size():
+				for i in 4: mapping_matches = mapping_matches and int(documented[2][i]) == int(entry[2][i])
 	check(mapping_matches, "documented atlas mapping matches runtime mapping")
 	check(UiIconArt.texture_of("unknown_future_perk") == null, "unknown icon retains fallback")
 	check(UiIconArt.texture_of("bot_rapid").region == UiIconArt.texture_of("rapid_fire").region, "bot alias matches player perk")

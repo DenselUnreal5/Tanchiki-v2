@@ -793,9 +793,6 @@ func _fill_gallery_tab() -> void:
 	left_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list_scroll.add_child(left_col)
 
-	if not Perks.BUILDS.is_empty():
-		left_col.add_child(_build_builds_overview())
-
 	var first_id := ""
 	var _prev_band_last: SkillNode = null
 	for cat in Perks.CATEGORIES:
@@ -857,6 +854,9 @@ func _fill_gallery_tab() -> void:
 			band_first.focus_neighbor_top = _prev_band_last.get_path()
 		if not columns.is_empty() and not columns.back().is_empty():
 			_prev_band_last = columns.back().back()
+
+	if not Perks.BUILDS.is_empty():
+		left_col.add_child(_build_builds_overview())
 
 	if _gallery_selected_id == "" or Perks.get_perk(_gallery_selected_id).is_empty():
 		_gallery_selected_id = first_id
@@ -942,7 +942,14 @@ func _build_builds_overview() -> Control:
 		var box := UiKit.vbox(4)
 		card.add_child(box)
 
-		box.add_child(UiKit.label(I18n.dn(b, "name", "build").to_upper(), 11, build_col, true))
+		var heading := UiKit.hbox(6)
+		box.add_child(heading)
+		heading.add_child(PerkIcons.make_view(String(b["id"]), 32))
+		heading.add_child(UiKit.label(I18n.dn(b, "name", "build").to_upper(), 11, build_col, true))
+		var member_icons := UiKit.hbox(6)
+		box.add_child(member_icons)
+		for pid in b["perks"]:
+			member_icons.add_child(PerkIcons.make_view(String(pid), 24))
 
 		var names_bbcode := []
 		for pid in (b["perks"] as Array):
