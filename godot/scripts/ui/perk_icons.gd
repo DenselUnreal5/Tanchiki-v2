@@ -871,6 +871,9 @@ static func make_view(id: String, px: float, color: Color = Color.WHITE) -> Cont
 	return v
 
 static func texture_of(id: String) -> Texture2D:
+	var artwork := UiIconArt.texture_of(id)
+	if artwork != null:
+		return artwork
 	if not TEXTURE_PATHS.has(id):
 		return null
 	if not _textures.has(id):

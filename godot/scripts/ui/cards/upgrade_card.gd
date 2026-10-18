@@ -4,7 +4,7 @@ extends PanelContainer
 
 signal buy_pressed
 
-@export var icon_size: Vector2 = Vector2(26, 26):
+@export var icon_size: Vector2 = Vector2(40, 40):
 	set(v):
 		icon_size = v
 		if _icon != null:

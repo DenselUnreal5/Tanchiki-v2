@@ -47,7 +47,7 @@ func _draw() -> void:
 		return
 	var tex: Texture2D = PerkIcons.texture_of(perk_id)
 	if tex != null:
-		draw_texture_rect(tex, Rect2(Vector2.ZERO, size), false, icon_color)
+		draw_texture_rect(tex, Rect2(Vector2.ZERO, size), false, Color(1, 1, 1, icon_color.a))
 		if rough:
 			draw_set_transform(Vector2.ZERO, 0.0, size / 64.0)
 			for spot in _grain_spots():

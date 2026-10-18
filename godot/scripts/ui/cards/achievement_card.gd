@@ -2,7 +2,7 @@
 class_name AchievementCard
 extends FocusRingPanel
 
-@export var icon_size: Vector2 = Vector2(28, 28):
+@export var icon_size: Vector2 = Vector2(48, 48):
 	set(v):
 		icon_size = v
 		if _icon != null:

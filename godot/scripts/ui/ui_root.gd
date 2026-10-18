@@ -765,10 +765,10 @@ func _perk_card(player, id: String) -> Control:
 	btn.add_child(box)
 
 	var icon_wrap := CenterContainer.new()
-	icon_wrap.custom_minimum_size = Vector2(0, 40)
+	icon_wrap.custom_minimum_size = Vector2(0, 60)
 	box.add_child(icon_wrap)
 	var icon := PerkIconView.new()
-	icon.custom_minimum_size = Vector2(36, 36)
+	icon.icon_size = Vector2(56, 56)
 	icon.perk_id = id
 	icon.icon_color = build_col if has_build else Cfg.UI_TEXT
 	icon_wrap.add_child(icon)
