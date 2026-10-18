@@ -312,6 +312,7 @@ var _tank_completed_builds := {}
 func check_tank_synergies(tank) -> void:
 	if tank == null:
 		return
+	TankBuildFx.sync(tank, tick)
 	if not _tank_completed_builds.has(tank.id):
 		_tank_completed_builds[tank.id] = []
 	var known: Array = _tank_completed_builds[tank.id]
@@ -459,9 +460,14 @@ func roster() -> Array:
 		out.append(tank_info(t))
 	return out
 
+func _update_build_fx() -> void:
+	for tank in tanks:
+		TankBuildFx.sync(tank, tick)
+
 func step_cosmetic() -> void:
 	tick += 1
 	_expire_shot_effects()
+	_update_build_fx()
 	Sfx.advance()
 	weather.update()
 	particles.update()
@@ -1137,6 +1143,7 @@ func step() -> void:
 		return
 	tick += 1
 	_expire_shot_effects()
+	_update_build_fx()
 	Sfx.advance()
 	weather.update()
 	if mode == "koth":
@@ -2338,6 +2345,9 @@ func dispose() -> void:
 		t.flag = null
 		t.last_attacker = null
 		t.perk_ids = []
+		t.build_fx_started.clear()
+		t.build_fx_remote_ids.clear()
+		t.build_fx_use_remote = false
 	for p in players:
 		p.tank = null
 		p.map = null

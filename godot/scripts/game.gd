@@ -952,9 +952,14 @@ func _net_extra() -> Dictionary:
 	var weapons := []
 	for w in world.weapon_pickups:
 		weapons.append([w.x, w.y, w.weapon_id])
+	var build_fx := {}
+	for tank in world.tanks:
+		var ids := []
+		for build in tank.completed_builds(): ids.append(String(build.id))
+		if not ids.is_empty(): build_fx[tank.net_id] = ids
 	var out := {
 		"flags": flags, "pickups": picks, "weapons": weapons,
-		"score": world.team_score, "wave": world.wave,
+		"score": world.team_score, "wave": world.wave, "build_fx": build_fx,
 	}
 	if world.base != null:
 		out["base"] = [world.base["hp"], world.base["max_hp"]]
@@ -1035,6 +1040,14 @@ func _apply_net_state() -> void:
 func _apply_net_extra(extra: Dictionary) -> void:
 	if extra.is_empty():
 		return
+	# Optional cosmetic data, compatible with snapshots from older hosts.
+	if extra.get("build_fx") is Dictionary:
+		var builds: Dictionary = extra["build_fx"]
+		for tank in world.tanks:
+			tank.build_fx_use_remote = true
+			var ids = builds.get(tank.net_id, [])
+			tank.build_fx_remote_ids = ids if ids is Array else []
+			TankBuildFx.sync(tank, world.tick)
 	world.flags.clear()
 	for f in extra.get("flags", []):
 		var fl = Ent.Flag.new(float(f[0]), float(f[1]), "player" if int(f[2]) == 0 else "enemy")

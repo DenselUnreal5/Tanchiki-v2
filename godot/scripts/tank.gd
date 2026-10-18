@@ -62,6 +62,10 @@ var body_angle: float
 var turret_angle: float
 
 var perk_ids: Array = []
+# Local presentation timestamps; not combat state or network protocol fields.
+var build_fx_started: Dictionary = {}
+var build_fx_use_remote := false
+var build_fx_remote_ids: Array = []
 var mods := {}
 var flags := {}
 

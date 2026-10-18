@@ -2150,7 +2150,7 @@ func _is_stealth_hidden(tank: Tank) -> bool:
 		return false
 
 	var is_cloaked := tank.shadow_timer > 0
-	if not is_cloaked and tank.has_method("has_build") and tank.has_build("stealth_hunter"):
+	if not is_cloaked and TankBuildFx.has(tank, "stealth_hunter"):
 		if world != null and world.map != null:
 			var t := world.map.get_tile(int(tank.y / Cfg.TILE), int(tank.x / Cfg.TILE))
 			if t == Cfg.T_GRASS:
@@ -2183,6 +2183,7 @@ func _draw_tank(tank: Tank) -> void:
 	_draw_ellipse(Vector2(2, 4), hw * 1.05, hh / 1.2, Color(0, 0, 0, 0.25))
 
 	draw_set_transform((view_off + pos).round())
+	TankBuildFx.draw_underlay(self, tank, int(anim_tick), Sets.flash_scale(), Sets.fx_quality)
 	TankStatusFx.draw_underlay(self, tank, int(anim_tick), Sets.fx_quality)
 	var sprite_hull := TankSprites.hull_class(tank)
 	if sprite_hull != "":
@@ -2191,6 +2192,7 @@ func _draw_tank(tank: Tank) -> void:
 		_draw_tank_shape(tank, palette, shape, pos, hw, hh, anim_tick)
 
 	draw_set_transform((view_off + pos).round())
+	TankBuildFx.draw(self, tank, int(anim_tick), Sets.flash_scale(), Sets.fx_quality)
 	TankStatusFx.draw(self, tank, int(anim_tick), Sets.flash_scale(), Sets.fx_quality)
 	draw_set_transform(view_off + pos)
 
