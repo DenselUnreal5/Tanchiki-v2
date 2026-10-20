@@ -77,7 +77,7 @@ func _run() -> void:
 			details_ok = false
 			print("    карточка %s: %s" % [cid, details.text if details != null else "нет строки"])
 	_check(details_ok, "на всех карточках классов итоговые HP и ход с учётом апгрейдов")
-	_check(cards["heavy"].tooltip_text.find("до перегрева") != -1, "в подсказке класса расшифровка характеристик")
+	_check(String(cards["heavy"].get_meta("tip_body", "")).find("до перегрева") != -1, "в подсказке класса расшифровка характеристик")
 
 	grunt_btn.pressed.emit()
 	await get_tree().process_frame

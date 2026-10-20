@@ -40,8 +40,10 @@ func _ready() -> void:
 	_banner = UiKit.label("", 24, Cfg.UI_GOLD, true)
 	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_banner.modulate.a = 0.0
+	_banner.visible = false
 	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_banner)
+	I18n.language_changed.connect(_drop_banner)
 
 	_wave_box = UiKit.vbox(2)
 	_wave_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -620,6 +622,7 @@ func update_hud(world: World) -> void:
 		if _banner_timer == 0:
 			var tw := create_tween()
 			tw.tween_property(_banner, "modulate:a", 0.0, 0.25)
+			tw.tween_callback(_banner.hide)
 	if scoreboard_visible:
 		var sb_rows := world.scoreboard()
 		if sb_rows != _last_sb_data:
@@ -671,11 +674,17 @@ func _tick_feed() -> void:
 		kept.append(e)
 	feed_entries = kept
 
+func _drop_banner() -> void:
+	_banner_timer = 0
+	_banner.modulate.a = 0.0
+	_banner.hide()
+
 func banner(text: String, color: Color = Cfg.UI_GOLD, ticks: int = 150, font_size: int = 24) -> void:
 	_banner.text = text
 	_banner.add_theme_color_override("font_color", color)
 	_banner.add_theme_font_size_override("font_size", font_size)
 	_banner.modulate.a = 1.0
+	_banner.visible = true
 	_banner_timer = ticks
 
 func toggle_scoreboard(world: World) -> void:

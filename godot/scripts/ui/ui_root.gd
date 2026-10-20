@@ -1388,7 +1388,17 @@ func _on_language_changed() -> void:
 			btn.text = I18n.t("btn.close", {}, "Закрыть")
 	_refresh_hub_language()
 	_refresh_settings_language()
+	_refresh_map_editor_language()
 	_refresh_screens()
+
+func _refresh_map_editor_language() -> void:
+	if _map_editor == null:
+		return
+	var editor_open := _map_editor.visible
+	_map_editor.queue_free()
+	_map_editor = null
+	if editor_open:
+		open_map_editor()
 
 func _refresh_screens() -> void:
 	var was_menu := _menu.visible

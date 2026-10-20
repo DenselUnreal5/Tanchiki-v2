@@ -133,6 +133,7 @@ func _attach_tip(ctrl: Control, title: String, body: String) -> void:
 	if body == "" and title == "":
 		return
 	ctrl.tooltip_text = ""
+	ctrl.set_meta("tip_body", body)
 	ctrl.mouse_entered.connect(_show_tip.bind(ctrl, title, body))
 	ctrl.mouse_exited.connect(_hide_tip.bind(ctrl))
 	ctrl.tree_exiting.connect(_hide_tip.bind(ctrl))
