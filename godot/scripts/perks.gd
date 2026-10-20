@@ -626,7 +626,7 @@ const BUILDS := [
 		"bonus": "Дарует способность «Электробуря»: разряд в радиусе 17 метров наносит 15 урона и оглушает всех врагов на 1.5 секунды, пробивая защиту от повторного стана (перезарядка 12 сек). Разряды «Громовержца» бьют на 40% сильнее, а оглушение длится на 20% дольше."},
 	{"id": "fortress", "name": "Несокрушимая крепость", "color": Color("#3b82f6"),
 		"perks": ["heavy_armor", "regen", "shield"],
-		"bonus": "Корпус превращается в крепость: получаемый урон снижен ещё на 15%, а ремонт восстанавливает дополнительно 90 HP в минуту."},
+		"bonus": "Корпус превращается в крепость: получаемый урон снижен ещё на 15%, ремонт восстанавливает дополнительно 90 HP в минуту, а четверть полученного урона возвращается атакующему."},
 	{"id": "gunner", "name": "Скорострел", "color": Color("#f43f5e"),
 		"perks": ["rapid_fire", "thermal", "heat_sink"],
 		"bonus": "Ствол почти не греется: нагрев за выстрел ниже ещё на 25%, а урон каждого выстрела выше на 15%."},
@@ -638,6 +638,7 @@ static func apply_build_mods(mods: Dictionary, ids: Array) -> void:
 	if is_build_complete("fortress", ids):
 		mods["damageTakenMult"] = float(mods["damageTakenMult"]) * 0.85
 		mods["regenPerMinute"] = float(mods["regenPerMinute"]) + 90.0
+		mods["reflectFraction"] = float(mods["reflectFraction"]) + 0.25
 	if is_build_complete("gunner", ids):
 		mods["heatPerShotMult"] = float(mods["heatPerShotMult"]) * 0.75
 		mods["dmgMult"] = float(mods["dmgMult"]) * 1.15

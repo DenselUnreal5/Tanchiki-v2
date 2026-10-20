@@ -1006,7 +1006,7 @@ var EN := {
 	"build.acid_hunter.name": "Plague Barrage",
 	"build.acid_hunter.bonus": "Grants «Acid Bomb»: an aerosol detonation douses all nearby enemy hulls in 3 corrosion layers (10s cooldown). Acid corrodes 40% harder.",
 	"build.fortress.name": "Unbreakable Fortress",
-	"build.fortress.bonus": "The hull becomes a fortress: damage taken is reduced by a further 15% and repairs restore an extra 90 HP per minute.",
+	"build.fortress.bonus": "The hull becomes a fortress: damage taken is reduced by a further 15% and repairs restore an extra 90 HP per minute and a quarter of the damage taken is reflected to the attacker.",
 	"build.gunner.name": "Rapid Gunner",
 	"build.gunner.bonus": "The barrel hardly heats up: heat per shot is a further 25% lower and every shot deals 15% more damage.",
 	"ability.acid_bomb.name": "Acid Bomb",
