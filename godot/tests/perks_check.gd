@@ -56,11 +56,11 @@ func _ready() -> void:
 		tank.recompute()
 		tank._update_surface(world)
 		var plain := tank.surface_speed
-		tank.perk_ids = ["all_terrain"]
+		tank.perk_ids = ["road_king"]
 		tank.recompute()
 		tank._update_surface(world)
 		var gripped := tank.surface_speed
-		_check(gripped > plain, "«Вездеход» на газоне: %.2f -> %.2f" % [plain, gripped])
+		_check(gripped > plain, "«Ходовая» на газоне: %.2f -> %.2f" % [plain, gripped])
 
 		tank.perk_ids = ["grip"]
 		tank.recompute()
@@ -73,8 +73,8 @@ func _ready() -> void:
 		_check(false, "газон на карте не найден")
 
 	_check_wood_pierce(world, tank)
-	_expect("can_opener", tank, func(): return float(tank.mods["metalDmgMult"]), 1.0, 2.5)
-	_expect("concrete_breaker", tank, func(): return float(tank.mods["concreteDmgMult"]), 1.0, 2.2)
+	_expect("lumberjack", tank, func(): return float(tank.mods["metalDmgMult"]), 1.0, 2.5)
+	_expect("lumberjack", tank, func(): return float(tank.mods["concreteDmgMult"]), 1.0, 2.2)
 
 	_expect("keen_ear", tank, func(): return float(tank.mods["hearingMult"]), 1.0, 1.7)
 	_expect("muffler", tank, func(): return float(tank.mods["noiseMult"]), 1.0, 0.5)

@@ -390,7 +390,7 @@ func _update_lightning_lord() -> void:
 		if rng.nextf() > chance:
 			continue
 		var target = _nearest_hostile(holder)
-		if target != null:
+		if target != null and Vector2(target.x - holder.x, target.y - holder.y).length() <= Cfg.LIGHTNING_LORD_RANGE:
 			strike_lightning(target.x, target.y, holder)
 
 func _nearest_hostile(tank):

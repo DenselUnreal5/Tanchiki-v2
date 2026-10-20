@@ -65,6 +65,37 @@ godot --headless --path . --export-release "Windows" "../build/Tanchiki.exe"
 godot --headless --path godot tests/version_check.tscn
 ```
 
+## Промо-видео
+
+Вертикальный ролик 1080×1920 пишет сцена `godot/tests/reel.tscn`: автопилот ведёт танк по
+пяти сценам, Movie Maker записывает кадры и звук игры. Видео выпускается на четырёх языках
+(английский, русский, французский, испанский) через субтитры YouTube: одно видео без
+вшитого текста и `.srt` на каждый язык. Тексты всех языков лежат в словаре `TEXT` в
+`reel.gd`, тайминг субтитров берётся из реальных номеров кадров.
+
+На время записи положите в `godot/` файл `override.cfg`, иначе Movie Maker пишет 1280×720:
+
+```ini
+[display]
+window/size/viewport_width=540
+window/size/viewport_height=960
+window/stretch/aspect="expand"
+```
+
+```bash
+godot --path godot --write-movie reel.avi --fixed-fps 30 tests/reel.tscn -- --lang=subs
+ffmpeg -i reel.avi -vf "scale=1080:1920:flags=neighbor,format=yuv420p" -c:v libx264 -crf 18 -af loudnorm=I=-14 -c:a aac -b:a 192k -movflags +faststart reel.mp4
+```
+
+Ролики про классы танков (14 с: заставка, три фишки класса, лента остальных классов)
+пишет `tests/class_reel.tscn` с флагом `--class=standard|grunt|scout|heavy|sniper|mortar`.
+Обе сцены сохраняют `profile.json` перед записью и восстанавливают после, поэтому
+сыгранные автопилотом матчи не попадают в профиль.
+
+Субтитры появятся в `%APPDATA%\Godot\app_userdata\Iron Storm\reel_subs\`. С `--lang=ru`
+(или `en`, `fr`, `es`) текст вшивается в кадр — это вариант для TikTok и VK. После записи
+удалите `override.cfg`. Готовые ролики храните в `marketing/`, папка не попадает в git.
+
 ## Выделенный сервер
 
 ```bash

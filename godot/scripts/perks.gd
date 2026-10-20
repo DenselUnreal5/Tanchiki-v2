@@ -443,29 +443,15 @@ const EXTRA_LIST := [
 		"mods": {"bulletSpeedMult": 1.3, "heatPerShotMult": 0.8},
 	},
 	{
-		"id": "road_king", "name": "Асфальтоукладчик", "icon": "🛣",
-		"desc": "Шоссейные траки: увеличивают скорость движения по дорогам, мостам и асфальту на 18%.", "category": "speed",
-		"mods": {"roadSpeedMult": 1.18},
+		"id": "road_king", "name": "Ходовая", "icon": "🛣",
+		"desc": "Шоссейные траки и широкие гусеницы: +18% скорости по дорогам и мостам, без штрафа на траве, кустах и песке.", "category": "speed",
+		"mods": {"roadSpeedMult": 1.18, "softGrip": 1.0},
 	},
 	{
-		"id": "all_terrain", "name": "Вездеход", "icon": "🌾",
-		"desc": "Широкие гусеницы: движение по высокой траве, кустам и песку без штрафа к скорости.", "category": "speed",
-		"mods": {"softGrip": 1.0},
-	},
-	{
-		"id": "lumberjack", "name": "Лесоруб", "icon": "🪓",
-		"desc": "Снаряды прошивают деревянные постройки и заборы насквозь, не теряя убойной силы.", "category": "fire",
+		"id": "lumberjack", "name": "Сапёр", "icon": "🪓",
+		"desc": "Снаряды прошивают деревянные постройки насквозь, наносят в 2.2 раза больше урона по бетону и в 2.5 раза по металлу.", "category": "fire",
 		"flags": ["woodPierce"],
-	},
-	{
-		"id": "concrete_breaker", "name": "Бетонолом", "icon": "🧱",
-		"desc": "Кумулятивные наконечники: наносят в 2.2 раза больше урона по бетонным ДОТам и стенам.", "category": "fire",
-		"mods": {"concreteDmgMult": 2.2},
-	},
-	{
-		"id": "can_opener", "name": "Консервный нож", "icon": "🔩",
-		"desc": "Бронебойные сердечники: наносят в 2.5 раза больше урона по металлическим преградам.", "category": "fire",
-		"mods": {"metalDmgMult": 2.5},
+		"mods": {"concreteDmgMult": 2.2, "metalDmgMult": 2.5},
 	},
 	{
 		"id": "scavenger", "name": "Мародёр", "icon": "🧰",
@@ -586,12 +572,12 @@ const UNLOCK_TABLE := {
 	2: ["regen", "quick_vent"],
 	3: ["evasion", "scavenger"],
 	4: ["nitro", "shield"],
-	5: ["double_shot", "all_terrain"],
+	5: ["double_shot"],
 	6: ["thermal", "lumberjack"],
-	7: ["quick_reload", "concrete_breaker"],
+	7: ["quick_reload"],
 	8: ["light_shell", "explosive"],
 	9: ["siege", "grip"],
-	10: ["mines", "piercing", "can_opener"],
+	10: ["mines", "piercing"],
 	11: ["fan_shot", "smoke"],
 	12: ["reflect", "silencer", "road_king"],
 	13: ["bulwark", "breaker", "chilled_barrel"],
@@ -613,7 +599,7 @@ static func unlock_level_of(perk_id: String) -> int:
 const BUILDS := [
 	{"id": "lightning", "name": "Владыка бури", "color": Color("#f59e0b"),
 		"perks": ["lightning_lord", "sky_strike", "chain_lightning"],
-		"bonus": "Над ареной разражается вечная гроза, а шанс удара небесной молнии возрастает втрое — с 25% до 75%."},
+		"bonus": "Над ареной разражается вечная гроза, а шанс удара небесной молнии возрастает втрое — с 25% до 40%, но бьёт только по врагам не дальше 60 метров."},
 	{"id": "stealth_hunter", "name": "Лесной призрак", "color": Color("#10b981"),
 		"perks": ["predator", "forest", "shadow"],
 		"bonus": "Маскировка и лесные заросли делают танк неуловимым, а первый выстрел из засады наносит сокрушительный урон (×2.5)."},
@@ -622,23 +608,46 @@ const BUILDS := [
 		"bonus": "Превращает танк в несокрушимый таран: уничтожение врага лобовым ударом вызывает мощную взрывную волну, калечащую и отбрасывающую соседние танки."},
 	{"id": "ghost_sniper", "name": "Фантомный снайпер", "color": Color("#a855f7"),
 		"perks": ["sniper", "evasion", "keen_ear"],
-		"bonus": "Идеальная маскировка и прицельный огонь: попадания с дистанции более 50 метров гарантируют критический урон (+60%)."},
+		"bonus": "Идеальная маскировка и прицельный огонь: попадания с дистанции более 35 метров гарантируют критический урон (+60%)."},
 	{"id": "ice_hunter", "name": "Абсолютный ноль", "color": Color("#06b6d4"),
 		"perks": ["deep_freeze", "frost_dash", "chilled_barrel"],
 		"bonus": "Смертоносный холод: выстрелы «Ледяной пушки» мгновенно уничтожают противников с одного удара (не действует на боссов)."},
 	{"id": "acid_hunter", "name": "Чумной шквал", "color": Color("#84cc16"),
 		"perks": ["corrosive_acid", "acid_cloud", "corroding_armor"],
 		"active": "acid_bomb",
-		"bonus": "Дарует способность «Кислотная бомба»: взрывной выброс химического аэрозоля покрывает всю вражескую технику поблизости сразу 3 слоями едкого нагара (перезарядка 10 сек)."},
+		"bonus": "Дарует способность «Кислотная бомба»: взрывной выброс химического аэрозоля покрывает всю вражескую технику поблизости сразу 3 слоями едкого нагара (перезарядка 10 сек). Кислота разъедает на 40% сильнее."},
 	{"id": "fire_hunter", "name": "Инферно", "color": Color("#f97316"),
 		"perks": ["napalm", "slow_burn", "flashover"],
 		"active": "fire_ring",
-		"bonus": "Дарует способность «Огненное кольцо»: танк окружает себя стеной пламени и мгновенно поджигает всех врагов в радиусе 11 метров (перезарядка 10 сек)."},
+		"bonus": "Дарует способность «Огненное кольцо»: танк окружает себя стеной пламени и мгновенно поджигает всех врагов в радиусе 11 метров (перезарядка 10 сек). Горение сильнее на 40%."},
 	{"id": "shock_hunter", "name": "Громовой молот", "color": Color("#facc15"),
 		"perks": ["high_voltage", "arc_chain", "overload"],
 		"active": "storm_pulse",
-		"bonus": "Дарует способность «Электробуря»: разряд в радиусе 17 метров наносит 15 урона и оглушает всех врагов на 1.5 секунды, пробивая защиту от повторного стана (перезарядка 12 сек)."},
+		"bonus": "Дарует способность «Электробуря»: разряд в радиусе 17 метров наносит 15 урона и оглушает всех врагов на 1.5 секунды, пробивая защиту от повторного стана (перезарядка 12 сек). Разряды «Громовержца» бьют на 40% сильнее, а оглушение длится на 20% дольше."},
+	{"id": "fortress", "name": "Несокрушимая крепость", "color": Color("#3b82f6"),
+		"perks": ["heavy_armor", "regen", "shield"],
+		"bonus": "Корпус превращается в крепость: получаемый урон снижен ещё на 15%, а ремонт восстанавливает дополнительно 90 HP в минуту."},
+	{"id": "gunner", "name": "Скорострел", "color": Color("#f43f5e"),
+		"perks": ["rapid_fire", "thermal", "heat_sink"],
+		"bonus": "Ствол почти не греется: нагрев за выстрел ниже ещё на 25%, а урон каждого выстрела выше на 15%."},
 ]
+
+static func apply_build_mods(mods: Dictionary, ids: Array) -> void:
+	if ids == null or ids.is_empty():
+		return
+	if is_build_complete("fortress", ids):
+		mods["damageTakenMult"] = float(mods["damageTakenMult"]) * 0.85
+		mods["regenPerMinute"] = float(mods["regenPerMinute"]) + 90.0
+	if is_build_complete("gunner", ids):
+		mods["heatPerShotMult"] = float(mods["heatPerShotMult"]) * 0.75
+		mods["dmgMult"] = float(mods["dmgMult"]) * 1.15
+	if is_build_complete("acid_hunter", ids):
+		mods["acidDmgMult"] = float(mods.get("acidDmgMult", 1.0)) * 1.4
+	if is_build_complete("fire_hunter", ids):
+		mods["burnDmgMult"] = float(mods.get("burnDmgMult", 1.0)) * 1.4
+	if is_build_complete("shock_hunter", ids):
+		mods["shockDmgMult"] = float(mods.get("shockDmgMult", 1.0)) * 1.4
+		mods["stunDurationMult"] = float(mods.get("stunDurationMult", 1.0)) * 1.2
 
 static func builds_with_perk(perk_id: String) -> Array:
 	var out := []

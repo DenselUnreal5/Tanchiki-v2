@@ -531,6 +531,7 @@ func recompute() -> void:
 		mods = _apply_upgrade_mods(mods)
 	Mutators.apply_mods(mods)
 	TankClasses.apply_mods(mods, class_id)
+	Perks.apply_build_mods(mods, perk_ids)
 	max_hp = maxf(1.0, round(base_max_hp * float(mods["maxHPMult"])))
 	speed = base_speed * float(mods["speedMult"]) * enrage_speed_mult
 	fire_rate = maxi(4, int(round(float(base_fire_rate) * float(mods["fireRateMult"]) * enrage_fire_rate_mult)))

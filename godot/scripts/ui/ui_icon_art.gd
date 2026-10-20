@@ -92,6 +92,8 @@ const ENTRIES := {
 	"acid_hunter": ["perks_b", 36],
 	"fire_hunter": ["perks_b", 37],
 	"shock_hunter": ["perks_b", 38],
+	"fortress": ["perks_a", 6],
+	"gunner": ["perks_a", 2],
 	"ach_first_blood": ["achievements", 0],
 	"ach_kill_10": ["achievements", 1],
 	"ach_kill_50": ["achievements", 2],

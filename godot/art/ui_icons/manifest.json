@@ -315,6 +315,14 @@
     "perks_b",
     38
   ],
+  "fortress": [
+    "perks_a",
+    6
+  ],
+  "gunner": [
+    "perks_a",
+    2
+  ],
   "ach_first_blood": [
     "achievements",
     0

@@ -10,6 +10,9 @@ class Pilot extends RefCounted:
 	var last := Vector2.ZERO
 	var strafe := 1.0
 	var tick := 0
+	var dash_every := 170
+	var close_dist := 210.0
+	var ram := false
 
 	func hints() -> Array:
 		return []
@@ -42,7 +45,12 @@ class Pilot extends RefCounted:
 		if best != null:
 			var to := Vector2(best.x - tank.x, best.y - tank.y).normalized()
 			var side := Vector2(-to.y, to.x) * strafe
-			move = (to * (1.0 if best_d > 210.0 else -0.2) + side * 0.8).normalized()
+			if ram:
+				move = (to + side * 0.25).normalized()
+				if best_d < 170.0 and tick % 12 == 0:
+					tank.dash(move)
+			else:
+				move = (to * (1.0 if best_d > close_dist else -0.2) + side * 0.8).normalized()
 			tank.aim_at(best.x, best.y)
 			tank.shoot(world)
 		else:
@@ -50,7 +58,7 @@ class Pilot extends RefCounted:
 			if tick % 20 == 0:
 				tank.shoot(world)
 		tank.thrust(move.x, move.y)
-		if tick % 170 == 0:
+		if tick % dash_every == 0:
 			tank.dash(move)
 
 const TEXT := {
@@ -72,12 +80,47 @@ const TEXT := {
 		"line1": "Разрушаемые карты · Боссы", "line2": "Кооп вдвоём · Онлайн-бои",
 		"cta": "СКОРО В STEAM", "follow": "Подпишись на девлоги",
 	},
+	"fr": {
+		"hook1": "BATTLE CITY...", "hook2": "...MAIS TOUT EXPLOSE",
+		"storm": "DES ORAGES QUI RIPOSTENT", "storm_sub": "La foudre frappe les tanks et les murs",
+		"base": "DÉFENDS LA BASE", "base_sub": "Vague après vague de blindés",
+		"perks": "CHOISIS TES PERKS. CRÉE TON BUILD.",
+		"runs": "CHAQUE PARTIE EST UNIQUE", "runs_sub": "Un roguelite aux cartes destructibles",
+		"line1": "Cartes destructibles · Boss", "line2": "Coop à deux · Combats en ligne",
+		"cta": "BIENTÔT SUR STEAM", "follow": "Abonne-toi pour les devlogs",
+	},
+	"es": {
+		"hook1": "BATTLE CITY...", "hook2": "...PERO TODO EXPLOTA",
+		"storm": "TORMENTAS QUE CONTRAATACAN", "storm_sub": "Los rayos golpean tanques y muros",
+		"base": "DEFIENDE LA BASE", "base_sub": "Oleada tras oleada de blindados",
+		"perks": "ELIGE MEJORAS. CREA TU BUILD.",
+		"runs": "CADA PARTIDA ES DISTINTA", "runs_sub": "Un roguelite con mapas destructibles",
+		"line1": "Mapas destructibles · Jefes", "line2": "Cooperativo a dos · Batallas online",
+		"cta": "PRÓXIMAMENTE EN STEAM", "follow": "Síguenos para ver los devlogs",
+	},
 }
 
+const FPS := 30
+const SUBS_DIR := "user://reel_subs/"
+
 var lang := "en"
+var burn := true
+var frame := 0
+var cues: Array = []
+var _cue := {}
+
+const PROFILE_PATH := "user://profile.json"
+
+var subs_name := "reel"
+var _profile_backup := PackedByteArray()
+var _had_profile := false
+var _original_lang := "ru"
+
+func _texts() -> Dictionary:
+	return TEXT
 
 func _t(key: String) -> String:
-	return String(TEXT[lang][key])
+	return String(_texts()[lang][key])
 
 var game: Node
 var caption: Label
@@ -87,6 +130,27 @@ var card: VBoxContainer
 var overlay: CanvasLayer
 
 func _ready() -> void:
+	await _setup()
+	await _city_chaos()
+	await _storm()
+	await _defense()
+	await _perks()
+	await _end_card()
+	_teardown()
+
+func _process(_delta: float) -> void:
+	if game == null:
+		return
+	if game.state == "paused":
+		game.resume()
+	for p in game.players:
+		p.damage_flash = 0
+
+func _setup() -> void:
+	process_priority = 1000
+	_had_profile = FileAccess.file_exists(PROFILE_PATH)
+	if _had_profile:
+		_profile_backup = FileAccess.get_file_as_bytes(PROFILE_PATH)
 	Sets.display_mode = Sets.MODE_WINDOWED
 	Sets.resolution = Vector2i(W, H)
 	Sets.apply_video()
@@ -94,11 +158,14 @@ func _ready() -> void:
 	win.size = Vector2i(W, H)
 	win.content_scale_size = Vector2i(W, H)
 	win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
-	var original_lang := I18n.lang
+	_original_lang = I18n.lang
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--lang="):
 			lang = a.substr(7)
-	if not TEXT.has(lang):
+	if lang == "subs":
+		burn = false
+		lang = "en"
+	if not _texts().has(lang):
 		lang = "en"
 	I18n.set_lang(lang)
 	Sets.weather_effects = true
@@ -110,13 +177,15 @@ func _ready() -> void:
 	_build_overlay()
 	await _frames(3)
 
-	await _city_chaos()
-	await _storm()
-	await _defense()
-	await _perks()
-	await _end_card()
-
-	I18n.set_lang(original_lang)
+func _teardown() -> void:
+	_close_cue()
+	_write_subs()
+	I18n.set_lang(_original_lang)
+	if _had_profile:
+		var f := FileAccess.open(PROFILE_PATH, FileAccess.WRITE)
+		f.store_buffer(_profile_backup)
+		f.close()
+		print("профиль восстановлен")
 	get_tree().quit()
 
 func _build_overlay() -> void:
@@ -157,6 +226,47 @@ func _big_label(size: int) -> Label:
 	l.pivot_offset = l.size / 2.0
 	return l
 
+func _open_cue(keys: Array) -> void:
+	_close_cue()
+	_cue = {"start": frame, "keys": keys}
+
+func _close_cue() -> void:
+	if _cue.is_empty():
+		return
+	_cue["end"] = frame
+	if int(_cue["end"]) > int(_cue["start"]):
+		cues.append(_cue)
+	_cue = {}
+
+func _stamp(f: int) -> String:
+	var ms := int(round(float(f) * 1000.0 / float(FPS)))
+	return "%02d:%02d:%02d,%03d" % [ms / 3600000, (ms / 60000) % 60, (ms / 1000) % 60, ms % 1000]
+
+func _write_subs() -> void:
+	DirAccess.make_dir_recursive_absolute(SUBS_DIR)
+	print("SUBS=", ProjectSettings.globalize_path(SUBS_DIR))
+	var texts := _texts()
+	for code in texts:
+		var out := PackedStringArray()
+		for i in cues.size():
+			var c: Dictionary = cues[i]
+			var lines := PackedStringArray()
+			for k in c["keys"]:
+				lines.append(String(texts[code][k]))
+			out.append("%d\n%s --> %s\n%s\n" % [i + 1, _stamp(int(c["start"])), _stamp(int(c["end"])), "\n".join(lines)])
+		var f := FileAccess.open(SUBS_DIR + "%s.%s.srt" % [subs_name, code], FileAccess.WRITE)
+		f.store_string("\n".join(out))
+		f.close()
+	print("кадров: %d, реплик: %d" % [frame, cues.size()])
+
+func _say_keys(key: String, sub_key: String = "") -> void:
+	var keys := [key]
+	if sub_key != "":
+		keys.append(sub_key)
+	_open_cue(keys)
+	if burn:
+		_say(_t(key), _t(sub_key) if sub_key != "" else "")
+
 func _say(text: String, small: String = "") -> void:
 	caption.text = text
 	sub.text = small
@@ -179,6 +289,7 @@ func _start(mode: String, location: String, weather: String, daytime: String, se
 	s["difficulty"] = "medium"
 	caption.text = ""
 	sub.text = ""
+	_close_cue()
 	game.start_match()
 	_skip_perks()
 	var p = game.players[0]
@@ -254,13 +365,13 @@ func _blast_bricks(radius_tiles: int, every: int) -> void:
 func _city_chaos() -> void:
 	await _start("ffa", "city", "clear", "day", 7101)
 	_pull_enemies(4, 230.0)
-	_say(_t("hook1"))
+	_say_keys("hook1")
 	for i in 60:
 		_keep_alive()
 		if i % 6 == 0:
 			_blast_bricks(5, 3 + i % 4)
 		await _frames(1)
-	_say(_t("hook2"))
+	_say_keys("hook2")
 	for i in 90:
 		_keep_alive()
 		if i % 4 == 0:
@@ -273,7 +384,7 @@ func _city_chaos() -> void:
 func _storm() -> void:
 	await _start("ffa", "city", "storm", "night", 7202)
 	_pull_enemies(4, 240.0)
-	_say(_t("storm"), _t("storm_sub"))
+	_say_keys("storm", "storm_sub")
 	for i in 150:
 		_keep_alive()
 		if i % 9 == 2:
@@ -288,7 +399,7 @@ func _defense() -> void:
 	game.world.wave_timer = 1
 	await _frames(3)
 	_pull_enemies(7, 260.0)
-	_say(_t("base"), _t("base_sub"))
+	_say_keys("base", "base_sub")
 	for i in 165:
 		_keep_alive()
 		if i == 60:
@@ -307,14 +418,14 @@ func _perks() -> void:
 	game.ui.scale = Vector2(k, k)
 	game.ui.size = Vector2(W, H) / k
 	game.ui.show_perk_select(p, 0, Rng.new(11))
-	_say(_t("perks"))
+	_say_keys("perks")
 	for i in 75:
 		await _frames(1)
 	game.ui.hide_perk_select()
 	game._apply_ui_scale()
 	p.perk_ids.append("nitro")
 	p.tank.recompute()
-	_say(_t("runs"), _t("runs_sub"))
+	_say_keys("runs", "runs_sub")
 	for i in 75:
 		_keep_alive()
 		await _frames(1)
@@ -342,29 +453,35 @@ func _end_card() -> void:
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(0, 40)
 	card.add_child(gap)
-	for line in [_t("line1"), _t("line2")]:
-		var l := _big_label(26)
-		l.text = line
-		l.custom_minimum_size = Vector2(W, 44)
-		card.add_child(l)
-	var gap2 := Control.new()
-	gap2.custom_minimum_size = Vector2(0, 40)
-	card.add_child(gap2)
-	var cta := _big_label(34)
-	cta.text = _t("cta")
-	cta.add_theme_color_override("font_color", Color("#ffd54a"))
-	cta.custom_minimum_size = Vector2(W, 56)
-	card.add_child(cta)
-	var follow := _big_label(24)
-	follow.text = _t("follow")
-	follow.custom_minimum_size = Vector2(W, 40)
-	card.add_child(follow)
+	if burn:
+		for line in [_t("line1"), _t("line2")]:
+			var l := _big_label(26)
+			l.text = line
+			l.custom_minimum_size = Vector2(W, 44)
+			card.add_child(l)
+		var gap2 := Control.new()
+		gap2.custom_minimum_size = Vector2(0, 40)
+		card.add_child(gap2)
+		var cta := _big_label(34)
+		cta.text = _t("cta")
+		cta.add_theme_color_override("font_color", Color("#ffd54a"))
+		cta.custom_minimum_size = Vector2(W, 56)
+		card.add_child(cta)
+		var follow := _big_label(24)
+		follow.text = _t("follow")
+		follow.custom_minimum_size = Vector2(W, 40)
+		card.add_child(follow)
+	_open_cue(["line1", "line2"])
 	for i in 120:
+		if i == 60:
+			_open_cue(["cta", "follow"])
 		_keep_alive()
 		await _frames(1)
+	_close_cue()
 	await _end_match()
 
 func _frames(n: int) -> void:
 	for i in n:
 		_pin_overlay()
+		frame += 1
 		await get_tree().process_frame

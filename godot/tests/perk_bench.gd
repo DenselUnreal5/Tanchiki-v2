@@ -15,8 +15,8 @@ const IDS := [
 	"heavy_armor", "regen", "reflect", "evasion", "shield", "sprinter",
 	"siege", "nitro", "overdrive", "bulwark", "shockwave",
 	"heat_sink", "thermal", "quick_vent", "heavy_shell", "light_shell",
-	"road_king", "all_terrain",
-	"lumberjack", "concrete_breaker", "can_opener", "scavenger",
+	"road_king",
+	"lumberjack", "scavenger",
 	"keen_ear", "muffler",
 	"coolant", "overclock", "grip", "breaker", "silencer", "smoke", "repair",
 ]
