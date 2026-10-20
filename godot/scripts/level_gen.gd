@@ -84,10 +84,7 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 	var tile_style: Dictionary = loc.get("tile_style", {})
 	if tiled and bool(tile_style.get("river_always", false)):
 		want_river = true
-	if terrain == "organic":
-		plan = {"v": [], "h": [], "blocks": [], "circles": [], "seeds": [], "links": []}
-		OrganicGen.build(map, rng, cols, rows, loc)
-	elif tiled:
+	if tiled:
 		plan = TileCityGen.build(map, rng, cols, rows, arch, want_river, tile_style)
 	else:
 		plan = MapPlan.build(rng, cols, rows, loc)

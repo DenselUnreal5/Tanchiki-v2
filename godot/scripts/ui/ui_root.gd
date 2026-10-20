@@ -233,7 +233,7 @@ func _on_menu_overlay_visibility(ov: Control) -> void:
 	if ov.visible:
 		_push_focus()
 		_set_menu_focusable(false)
-		var cb = ov.get_meta("close_button", null)
+		var cb = ov.get_meta("close_button") if ov.has_meta("close_button") else null
 		_grab(cb if cb != null else _first_focusable(ov))
 	else:
 		_pop_focus()
@@ -479,7 +479,7 @@ func refresh_profile() -> void:
 		main_menu.refresh_profile()
 
 func hide_all_overlays() -> void:
-	for c in [_menu, _pause, _perk, _gameover, _hub, _stats, _daily, _settings, _net, _map_editor, _controls_ref, _dev_board]:
+	for c in [_menu, _pause, _perk, _gameover, _hub, _stats, _daily, _settings, _net, _map_editor, _controls_ref, _dev_board, _leaderboards]:
 		if c != null:
 			c.visible = false
 
@@ -589,15 +589,19 @@ func _build_perk() -> void:
 
 	var box := UiKit.vbox(12)
 	panel.add_child(box)
-	box.add_child(UiKit.title(I18n.t("perk.title", {}, "УРОВЕНЬ ПОВЫШЕН"), 24, Cfg.UI_GOLD))
+	_perk_title = UiKit.title(I18n.t("perk.title", {}, "УРОВЕНЬ ПОВЫШЕН"), 24, Cfg.UI_GOLD)
+	box.add_child(_perk_title)
 
 	_perk_body = UiKit.vbox(12)
 	box.add_child(_perk_body)
 	box.add_child(_pad_hint_strip())
 
 var last_perk_choices: Array = []
+var _perk_title: Label
 
 func show_perk_select(player, queue_left: int, rng: Rng) -> void:
+	if _perk_title != null:
+		_perk_title.text = I18n.t("perk.title", {}, "УРОВЕНЬ ПОВЫШЕН")
 	var available := []
 	var equipped_cannon: String = String(player.tank.cannon_id) if player.tank != null else ""
 	var player_class: String = String(player.tank.class_id) if player.tank != null else TankClasses.DEFAULT
@@ -1167,8 +1171,14 @@ func open_leaderboards(tab: String = "") -> void:
 		r_lbl.custom_minimum_size.x = 48
 		row.add_child(r_lbl)
 
-		var name_str: String = String(entry.get("name", "Боец"))
-		var n_lbl := UiKit.label(name_str, 10, Color.WHITE, name_str == "Игрок")
+		var name_str: String = I18n.lookup("lbseed." + String(entry.get("seed", "")), String(entry.get("name", I18n.t("lb.fighter", {}, "Боец"))))
+		if name_str == "Игрок":
+			name_str = I18n.t("net.player", {}, "Игрок")
+		elif name_str == "Игрок 1":
+			name_str = I18n.t("player1", {}, "Игрок 1")
+		elif name_str == "Игрок 2":
+			name_str = I18n.t("player2", {}, "Игрок 2")
+		var n_lbl := UiKit.label(name_str, 10, Color.WHITE, name_str == I18n.t("net.player", {}, "Игрок"))
 		n_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(n_lbl)
 
@@ -1229,12 +1239,26 @@ func _build_gameover() -> void:
 	var lboard := UiKit.secondary(I18n.t("go.records", {}, "🏆 Рекорды"), 13)
 	lboard.pressed.connect(func(): open_leaderboards())
 	actions.add_child(lboard)
+	_gameover_records_btn = lboard
 	var to_menu := UiKit.secondary(I18n.t("go.menu", {}, "В меню"), 13)
 	to_menu.pressed.connect(func(): menu_requested.emit())
 	actions.add_child(to_menu)
+	_gameover_menu_btn = to_menu
 	box.add_child(_pad_hint_strip())
 
+var _gameover_records_btn: Button
+var _gameover_menu_btn: Button
+
+func _refresh_gameover_buttons() -> void:
+	if _gameover_replay_btn != null:
+		_gameover_replay_btn.text = I18n.t("go.replay", {}, "Ещё раз")
+	if _gameover_records_btn != null:
+		_gameover_records_btn.text = I18n.t("go.records", {}, "🏆 Рекорды")
+	if _gameover_menu_btn != null:
+		_gameover_menu_btn.text = I18n.t("go.menu", {}, "В меню")
+
 func show_game_over(result: Dictionary, world: World, hotseat: bool) -> void:
+	_refresh_gameover_buttons()
 	_last_gameover = {"result": result, "world": world, "hotseat": hotseat}
 	var win := bool(result["victory"])
 	_gameover.visible = true
@@ -1349,7 +1373,10 @@ func hide_game_over() -> void:
 	_gameover.visible = false
 
 func _on_language_changed() -> void:
-	for root in [_stats, _daily, _net, _gameover]:
+	if _perk_title != null:
+		_perk_title.text = I18n.t("perk.title", {}, "УРОВЕНЬ ПОВЫШЕН")
+	_refresh_gameover_buttons()
+	for root in [_stats, _daily, _net, _gameover, _leaderboards, _controls_ref]:
 		if root == null or not root.has_meta("title_key"):
 			continue
 		var label := root.get_meta("title_label") as Label

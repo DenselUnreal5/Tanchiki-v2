@@ -72,7 +72,7 @@ func _run() -> void:
 	for cid in cards.keys():
 		var fs := TankClasses.final_stats(String(cid), Prof.upgrade_mods(), float(Cfg.DIFFICULTY["medium"]["player_hp"]))
 		var details: Label = cards[cid].get_node_or_null("Row/Info/DetailsLabel")
-		if details == null or not details.visible or details.text.find("HP %d" % int(fs["hp"])) == -1 \
+		if details == null or not details.visible or details.text.find("%d HP" % int(fs["hp"])) == -1 \
 				or details.text.find("%d%%" % int(fs["speed_pct"])) == -1:
 			details_ok = false
 			print("    карточка %s: %s" % [cid, details.text if details != null else "нет строки"])

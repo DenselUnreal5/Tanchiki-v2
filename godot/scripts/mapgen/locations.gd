@@ -8,9 +8,8 @@ const JUNGLE := "jungle"
 const FROST := "frost"
 const EXCLUSION := "exclusion"
 const SHORE := "shore"
-const VILLAGE := "village"
 
-const ORDER := [CITY, GRASSLAND, DUST, JUNGLE, FROST, EXCLUSION, SHORE, VILLAGE]
+const ORDER := [CITY, GRASSLAND, DUST, JUNGLE, FROST, EXCLUSION, SHORE]
 
 static var LIST := {
 	"city": {
@@ -168,24 +167,6 @@ static var LIST := {
 		"fog_tint": Color(0.84, 0.90, 0.93),
 		"dune_chance": 0.0, "oases": 1,
 		"ground": Color("#3c4030"), "ground_alt": Color("#39402f"),
-	},
-	"village": {
-		"id": "village", "name": "Пустынный посёлок", "icon": "🏺", "music": "dust",
-		"block_min": 8, "block_max": 14,
-		"arterials": false, "circles": false, "river": 0.0,
-		"terrain": "organic", "organic_fill": 0.40,
-		"districts": {"downtown": 0, "residential": 0, "industrial": 0,
-			"park": 1, "adobe_village": 6},
-		"cover": "sand", "cover_chance": 0.30, "ruin_chance": 0.18,
-		"ground_tile": Cfg.T_SAND, "yard_tile": Cfg.T_SAND,
-		"road_kind": "sand_path",
-		"arterial_w": 2, "street_w": 1, "street_w_wide": 2,
-		"link_chance": 0.30,
-		"wave_streets": false,
-		"weather": ["clear", "fog"],
-		"fog_tint": Color("#e0cf9e"),
-		"dune_chance": 0.12, "oases": 4,
-		"ground": Color("#8a7350"), "ground_alt": Color("#82694a"),
 	},
 }
 

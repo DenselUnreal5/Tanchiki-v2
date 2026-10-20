@@ -690,13 +690,13 @@ func _update_bestiary_detail(tank_id: String) -> void:
 	stats_box.add_child(stats_vbox)
 
 	if is_unlocked:
-		stats_vbox.add_child(_stat_row(_tr("bestiary.stat.hp", "Прочность корпуса:"), int(item.get("hp_rating", 3)), Bestiary.text(item, "hp_val")))
-		stats_vbox.add_child(_stat_row(_tr("bestiary.stat.speed", "Подвижность / Ход:"), int(item.get("speed_rating", 3)), Bestiary.text(item, "speed_val")))
-		stats_vbox.add_child(_stat_row(_tr("bestiary.stat.dmg", "Огневая мощь / Урон:"), int(item.get("dmg_rating", 3)), Bestiary.text(item, "dmg_val")))
+		stats_vbox.add_child(_stat_row(_tr("bestiary.stat.hp", "Корпус:"), int(item.get("hp_rating", 3)), Bestiary.text(item, "hp_val")))
+		stats_vbox.add_child(_stat_row(_tr("bestiary.stat.speed", "Ход:"), int(item.get("speed_rating", 3)), Bestiary.text(item, "speed_val")))
+		stats_vbox.add_child(_stat_row(_tr("bestiary.stat.dmg", "Мощь:"), int(item.get("dmg_rating", 3)), Bestiary.text(item, "dmg_val")))
 	else:
-		stats_vbox.add_child(_stat_row_masked(_tr("bestiary.stat.hp", "Прочность корпуса:")))
-		stats_vbox.add_child(_stat_row_masked(_tr("bestiary.stat.speed", "Подвижность / Ход:")))
-		stats_vbox.add_child(_stat_row_masked(_tr("bestiary.stat.dmg", "Огневая мощь / Урон:")))
+		stats_vbox.add_child(_stat_row_masked(_tr("bestiary.stat.hp", "Корпус:")))
+		stats_vbox.add_child(_stat_row_masked(_tr("bestiary.stat.speed", "Ход:")))
+		stats_vbox.add_child(_stat_row_masked(_tr("bestiary.stat.dmg", "Мощь:")))
 
 	# 5. Tactical Profile / Lore
 	_bestiary_detail_container.add_child(UiKit.section(_tr("bestiary.tactics", "ТАКТИЧЕСКИЙ ПРОФИЛЬ И ПРИМЕНЕНИЕ"), Cfg.UI_ACCENT))
@@ -1221,7 +1221,7 @@ func _set_cosmetic_preview(type: String, id: String) -> void:
 
 	var name_str := I18n.dn(item, "name", "cos." + type)
 	var rarity_str := String(item.get("rarity", ""))
-	var desc_str := String(item.get("desc", ""))
+	var desc_str := I18n.dn(item, "desc", "cos." + type)
 	var price_val := int(item.get("price", 0))
 	var owned := Prof.is_cosmetic_owned(type, id)
 	var equipped := String(Prof.cosmetics.get(type, "none")) == id
@@ -1420,7 +1420,7 @@ func _cosmetic_card(c: Dictionary, type: String, parent: Node, tab_key: String =
 		action_disabled = not can_buy
 
 	var rarity: String = String(c.get("rarity", ""))
-	var desc_text: String = String(c.get("desc", ""))
+	var desc_text: String = I18n.dn(c, "desc", "cos." + type)
 
 	var card: CosmeticCard = CosmeticCardScene.instantiate()
 	parent.add_child(card)
@@ -1510,7 +1510,7 @@ func _class_card(entry: Dictionary, parent: Node) -> Control:
 	var price := TankClasses.price(id)
 	var fs := TankClasses.final_stats(id, Prof.upgrade_mods(), float(Cfg.DIFFICULTY["medium"]["player_hp"]))
 	var reload_text := "%.2f" % float(fs["reload"])
-	var details := _tr("class.final", "HP %d · урон %d\nход %d%% · перезарядка %s с" % [
+	var details := _tr("class.final", "Корпус %d HP · Мощь %d\nХод %d%% · Перезарядка %s с" % [
 		fs["hp"], fs["dmg"], fs["speed_pct"], reload_text], {
 		"hp": fs["hp"], "dmg": fs["dmg"], "spd": fs["speed_pct"], "reload": reload_text})
 
@@ -1542,7 +1542,7 @@ func _class_card(entry: Dictionary, parent: Node) -> Control:
 	if trait_line != "":
 		tip += "\n" + trait_line
 	tip += "\n\n" + _tr("class.finalTip",
-		"С учётом апгрейдов гаража (средняя сложность, стандартная пушка):\n• Броня: %d HP\n• Урон за попадание: %d\n• Скорость хода: %d%% от базовой\n• Перезарядка: %s с\n• Выстрелов подряд до перегрева: %d" % [
+		"С учётом апгрейдов гаража (средняя сложность, стандартная пушка):\n• Корпус: %d HP\n• Мощь выстрела: %d\n• Ход: %d%% от базового\n• Перезарядка: %s с\n• Выстрелов подряд до перегрева: %d" % [
 			fs["hp"], fs["dmg"], fs["speed_pct"], reload_text, fs["overheat_shots"]], {
 		"hp": fs["hp"], "dmg": fs["dmg"], "spd": fs["speed_pct"], "reload": reload_text, "shots": fs["overheat_shots"]})
 	if not unlocked:

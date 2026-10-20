@@ -96,7 +96,7 @@ func _build_ui() -> void:
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_author_box.add_child(name_label)
 
-	var pres_label := UiKit.label("П Р Е Д С Т А В Л Я Е Т", 10, Color("#64748b"), true)
+	var pres_label := UiKit.label(I18n.t("splash.presents", {}, "П Р Е Д С Т А В Л Я Е Т"), 10, Color("#64748b"), true)
 	pres_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_author_box.add_child(pres_label)
 
@@ -149,12 +149,12 @@ func _build_ui() -> void:
 	_bar_draw.draw.connect(_on_bar_draw)
 	_bar_holder.add_child(_bar_draw)
 
-	_status_label = UiKit.label("ИНИЦИАЛИЗАЦИЯ БОЕВОГО ЯДРА...", 11, Color("#94a3b8"))
+	_status_label = UiKit.label(I18n.t("splash.boot1", {}, "ИНИЦИАЛИЗАЦИЯ БОЕВОГО ЯДРА..."), 11, Color("#94a3b8"))
 	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_bar_holder.add_child(_status_label)
 
 	# --- 5. Подсказка о пропуске внизу ---
-	_skip_hint = UiKit.label("[ НАЖМИТЕ ЛЮБУЮ КЛАВИШУ ДЛЯ ВХОДА ]", 11, Color("#475569"))
+	_skip_hint = UiKit.label(I18n.t("splash.skip", {}, "[ НАЖМИТЕ ЛЮБУЮ КЛАВИШУ ДЛЯ ВХОДА ]"), 11, Color("#475569"))
 	_skip_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_skip_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	_skip_hint.offset_left = -340
@@ -227,16 +227,16 @@ func _set_progress(val: float) -> void:
 
 	if _status_label != null and is_instance_valid(_status_label):
 		if _progress < 0.35:
-			_status_label.text = "ИНИЦИАЛИЗАЦИЯ БОЕВОГО ЯДРА..."
+			_status_label.text = I18n.t("splash.boot1", {}, "ИНИЦИАЛИЗАЦИЯ БОЕВОГО ЯДРА...")
 			_status_label.add_theme_color_override("font_color", Color("#94a3b8"))
 		elif _progress < 0.70:
-			_status_label.text = "КАЛИБРОВКА ОРУДИЙНЫХ СИСТЕМ..."
+			_status_label.text = I18n.t("splash.boot2", {}, "КАЛИБРОВКА ОРУДИЙНЫХ СИСТЕМ...")
 			_status_label.add_theme_color_override("font_color", Color("#cbd5e1"))
 		elif _progress < 0.96:
-			_status_label.text = "ЗАГРУЗКА ТАКТИЧЕСКИХ ПРОТОКОЛОВ..."
+			_status_label.text = I18n.t("splash.boot3", {}, "ЗАГРУЗКА ТАКТИЧЕСКИХ ПРОТОКОЛОВ...")
 			_status_label.add_theme_color_override("font_color", Color("#f59e0b"))
 		else:
-			_status_label.text = "БОЕВЫЕ СИСТЕМЫ ГОТОВЫ  [ 100% ]"
+			_status_label.text = I18n.t("splash.boot4", {}, "БОЕВЫЕ СИСТЕМЫ ГОТОВЫ  [ 100% ]")
 			_status_label.add_theme_color_override("font_color", Color("#4ade80"))
 
 func _skip() -> void:

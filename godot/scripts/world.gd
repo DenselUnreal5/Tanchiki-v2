@@ -345,20 +345,20 @@ func check_player_synergies(player) -> void:
 
 func _on_synergy_unlocked(tank, build: Dictionary) -> void:
 	var b_id: String = String(build["id"])
-	var b_name: String = String(build.get("name", "Синергия"))
+	var b_name: String = I18n.dn(build, "name", "build")
 	var b_col: Color = build.get("color", Color("#f59e0b"))
 	var p_name: String = tank.name
 	if tank.owner != null and String(tank.owner.name) != "":
 		p_name = tank.owner.name
 
 	# 1. Feed notification
-	var feed_text := "⚡ %s активировал синергию «%s»!" % [p_name, b_name]
+	var feed_text := I18n.t("feed.synergy", {"name": p_name, "build": b_name}, "⚡ %s активировал синергию «%s»!" % [p_name, b_name])
 	feed.emit(feed_text, b_col)
 
 	# 2. Visual & Audio celebration
 	spawn_shockwave(tank.x, tank.y, 120.0, "synergy", b_col, 24)
 	particles.burst(tank.x, tank.y, [b_col, Color.WHITE, Color("#ffe066")], 28, 3, 7, 20, 48, rng)
-	damage_number.emit(tank.x, tank.y - 38, "⚡ СИНЕРГИЯ: " + b_name.to_upper() + "!", b_col)
+	damage_number.emit(tank.x, tank.y - 38, I18n.t("fx.synergy", {"name": b_name.to_upper()}, "⚡ СИНЕРГИЯ: " + b_name.to_upper() + "!"), b_col)
 	add_shake(5.0, tank.x, tank.y)
 	Sfx.play("unlock")
 
@@ -1363,15 +1363,15 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 
 	if is_stealth_crit:
 		particles.burst(target.x, target.y, [Color("#10b981"), Color("#34d399"), Color.WHITE], 20, 3, 7, 18, 36, rng)
-		damage_number.emit(target.x, target.y - 34, "🌿 ЗАСАДА! ×2.5", Color("#10b981"))
+		damage_number.emit(target.x, target.y - 34, I18n.t("fx.ambushHunter", {}, "🌿 ЗАСАДА! ×2.5"), Color("#10b981"))
 		add_shake(4.5, target.x, target.y)
 	if is_sniper_crit:
 		particles.burst(target.x, target.y, [Color("#a855f7"), Color("#c084fc"), Color.WHITE], 20, 3, 7, 20, 40, rng)
-		damage_number.emit(target.x, target.y - 34, "🎯 СНАЙПЕР! +60%", Color("#a855f7"))
+		damage_number.emit(target.x, target.y - 34, I18n.t("fx.ghostSniper", {}, "🎯 СНАЙПЕР! +60%"), Color("#a855f7"))
 		add_shake(4.0, target.x, target.y)
 	if is_corroded_hit:
 		particles.burst(target.x, target.y, [Color("#84cc16"), Color("#a3e635")], 8, 2, 4, 10, 20, rng)
-		damage_number.emit(target.x, target.y - 34, "🦴 РАЗЪЕДАНИЕ +40%", Color("#84cc16"))
+		damage_number.emit(target.x, target.y - 34, I18n.t("fx.corroded", {}, "🦴 РАЗЪЕДАНИЕ +40%"), Color("#84cc16"))
 
 	if is_ambush and float(attacker.mods["ambushDashTicks"]) > 0.0:
 		attacker.turbo_timer = maxi(attacker.turbo_timer, int(attacker.mods["ambushDashTicks"]))
@@ -1386,7 +1386,7 @@ func deal_damage(target, amount: float, attacker, source: String) -> float:
 		if (source == "bullet" or source == "ram") and attacker.stun_ticks <= 0 and not attacker.is_boss:
 			attacker.stun_ticks = Cfg.REFLECT_STUN_TICKS
 			particles.burst(attacker.x, attacker.y, [Color("#38bdf8"), Color.WHITE], 10, 2, 4, 10, 20, rng)
-			damage_number.emit(attacker.x, attacker.y - 30, "⚡ СТАН 0.8с!", Color("#38bdf8"))
+			damage_number.emit(attacker.x, attacker.y - 30, I18n.t("fx.reflectStun", {}, "⚡ СТАН 0.8с!"), Color("#38bdf8"))
 
 	if attacker != null:
 		attacker.damage_dealt += float(res["applied"])
@@ -1462,9 +1462,9 @@ func execute_frozen_kill(victim, attacker) -> void:
 		weather.flash = maxf(weather.flash, 0.4)
 
 	if is_boss:
-		damage_number.emit(victim.x, victim.y - 34, "❄️ ЛЕДЯНОЙ УДАР! -%d" % int(round(amount)), Color("#00f0ff"))
+		damage_number.emit(victim.x, victim.y - 34, I18n.t("fx.iceStrike", {"n": int(round(amount))}, "❄️ ЛЕДЯНОЙ УДАР! -%d" % int(round(amount))), Color("#00f0ff"))
 	else:
-		damage_number.emit(victim.x, victim.y - 34, "❄️ РАСКОЛ ЛЬДА!", Color("#00f0ff"))
+		damage_number.emit(victim.x, victim.y - 34, I18n.t("fx.iceShatter", {}, "❄️ РАСКОЛ ЛЬДА!"), Color("#00f0ff"))
 
 	if victim.owner != null:
 		victim.owner.damage_flash = 12
@@ -1497,7 +1497,7 @@ func _juggernaut_shock(killer, ox: float, oy: float) -> void:
 		other.vx += (dx / d) * Cfg.JUGGERNAUT_SHOCK_PUSH * k
 		other.vy += (dy / d) * Cfg.JUGGERNAUT_SHOCK_PUSH * k
 	particles.burst(ox, oy, [Color("#ffaa33"), Color("#ff5533"), Color.WHITE], 24, 3, 7, 20, 48, rng)
-	damage_number.emit(ox, oy - 32, "💥 СОКРУШИТЕЛЬНЫЙ ТАРАН!", Color("#ef4444"))
+	damage_number.emit(ox, oy - 32, I18n.t("fx.ramCrush", {}, "💥 СОКРУШИТЕЛЬНЫЙ ТАРАН!"), Color("#ef4444"))
 	Sfx.play("explosion", ox, oy)
 	add_shake(8.0, ox, oy)
 
@@ -1583,7 +1583,7 @@ func _rammer_death_explosion(victim) -> void:
 				var applied_death_base_dmg: float = minf(remaining_cap, 50.0 * falloff)
 				victim.rammer_base_damage_dealt += applied_death_base_dmg
 				base["hp"] = maxf(0.0, float(base["hp"]) - applied_death_base_dmg)
-				damage_number.emit(base["x"], base["y"] - 30, "-%d БАЗА!" % int(applied_death_base_dmg), Color("#ff4444"))
+				damage_number.emit(base["x"], base["y"] - 30, I18n.t("fx.baseHit", {"n": int(applied_death_base_dmg)}, "-%d БАЗА!" % int(applied_death_base_dmg)), Color("#ff4444"))
 
 func register_dodge(tank, bullet) -> void:
 	particles.burst(bullet.x, bullet.y, [Color("#38bdf8"), Color.WHITE], 6, 2, 3, 10, 14, rng)
@@ -1702,7 +1702,7 @@ func spawn_chimera_clone(parent_tank: Tank, side: float) -> Tank:
 
 	var clone := Tank.new({
 		"x": spawn_pos.x, "y": spawn_pos.y, "team": parent_tank.team,
-		"name": "«Фантом-Клон»", "owner": null,
+		"name": I18n.t("enemy.chimera_clone.short", {}, "«Фантом-Клон»"), "owner": null,
 		"max_hp": round(clone_hp),
 		"speed": parent_tank.speed * 1.05,
 		"fire_rate": maxi(4, int(round(float(diff["enemy_fire_rate"]) * 1.1))),

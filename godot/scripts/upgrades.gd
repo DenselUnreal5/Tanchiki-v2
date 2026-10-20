@@ -11,12 +11,12 @@ static var CATEGORIES := [
 
 const LIST := [
 	{
-		"id": "dmg", "name": "Мощный ствол", "icon": "💥", "desc": "Урон своих пуль",
+		"id": "dmg", "name": "Мощный ствол", "icon": "💥", "desc": "Мощь своих выстрелов",
 		"category": "fire", "mod_key": "dmgMult", "max_level": 10,
 		"cost_base": 60, "cost_step": 25, "mult_step": 0.06, "mult_mode": "add",
 	},
 	{
-		"id": "fire_rate", "name": "Автоускоритель", "icon": "⚡", "desc": "Перезарядка быстрее, ствол меньше греется",
+		"id": "fire_rate", "name": "Автоускоритель", "icon": "⚡", "desc": "Темп огня выше, ствол меньше греется",
 		"category": "fire", "mod_key": "fireRateMult", "max_level": 10,
 		"cost_base": 50, "cost_step": 20, "mult_step": 0.03, "mult_mode": "sub",
 		"extra_key": "heatPerShotMult", "extra_step": 0.025,
@@ -27,17 +27,17 @@ const LIST := [
 		"cost_base": 40, "cost_step": 15, "mult_step": 0.05, "mult_mode": "add",
 	},
 	{
-		"id": "max_hp", "name": "Усиленная броня", "icon": "🛡", "desc": "Максимум HP",
+		"id": "max_hp", "name": "Усиленный корпус", "icon": "🛡", "desc": "Корпус: максимум HP",
 		"category": "defense", "mod_key": "maxHPMult", "max_level": 10,
 		"cost_base": 55, "cost_step": 25, "mult_step": 0.07, "mult_mode": "add",
 	},
 	{
-		"id": "damage_taken", "name": "Композитная броня", "icon": "🧱", "desc": "Получаемый урон меньше",
+		"id": "damage_taken", "name": "Композитная броня", "icon": "🧱", "desc": "Броня: меньше получаемого урона",
 		"category": "defense", "mod_key": "damageTakenMult", "max_level": 8,
 		"cost_base": 70, "cost_step": 30, "mult_step": 0.04, "mult_mode": "sub",
 	},
 	{
-		"id": "speed", "name": "Форсированный мотор", "icon": "👟", "desc": "Предельная скорость",
+		"id": "speed", "name": "Форсированный мотор", "icon": "👟", "desc": "Ход: предельная скорость",
 		"category": "speed", "mod_key": "speedMult", "max_level": 10,
 		"cost_base": 45, "cost_step": 20, "mult_step": 0.045, "mult_mode": "add",
 	},
@@ -57,7 +57,7 @@ const LIST := [
 		"cost_base": 35, "cost_step": 15, "mult_step": 0.15, "mult_mode": "add",
 	},
 	{
-		"id": "regen", "name": "Ремонтный модуль", "icon": "❤", "desc": "HP в минуту",
+		"id": "regen", "name": "Ремонтный модуль", "icon": "❤", "desc": "Ремонт: HP в минуту",
 		"category": "utility", "mod_key": "regenPerMinute", "max_level": 6,
 		"cost_base": 55, "cost_step": 25, "mult_step": 20.0, "mult_mode": "flat",
 	},

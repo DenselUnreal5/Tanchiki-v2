@@ -2123,7 +2123,7 @@ func _draw_rammer_meltdowns() -> void:
 
 		# 5. Overload warning countdown text
 		var sec_left: float = maxf(0.0, ticks / 60.0)
-		var label := "⚠️ ПЕРЕГРУЗКА: %.1fс" % sec_left
+		var label := I18n.t("fx.overload", {"sec": "%.1f" % sec_left}, "⚠️ ПЕРЕГРУЗКА: %.1fс" % sec_left)
 		_text_center(label, pos + Vector2(0.0, -core_r - 18.0), 15, Color(1.0, 0.35, 0.25, 0.95), true)
 
 func _draw_tanks() -> void:

@@ -134,19 +134,19 @@ func _update_header() -> void:
 	if _title_sub == null:
 		return
 	var loc_info = Locations.get_location(current_location)
-	var loc_name: String = loc_info.get("name", current_location)
+	var loc_name: String = I18n.t("loc." + current_location, {}, String(loc_info.get("name", current_location)))
 	var mode_name := current_mode.to_upper()
 	for m in MODES:
 		if m["id"] == current_mode:
-			mode_name = m["name"]
+			mode_name = I18n.dn(m, "name", "me.mode")
 			break
 	var arch_name := current_archetype
 	for a in ARCHETYPES:
 		if a["id"] == current_archetype:
-			arch_name = a["name"]
+			arch_name = I18n.dn(a, "name", "me.arch")
 			break
-	var level_text := (" · Уровень %d" % current_level) if current_level > 0 else ""
-	_title_sub.text = "%s · %s · %s%s (Сид: %d)" % [loc_name, mode_name, arch_name, level_text, current_seed]
+	var level_text := (I18n.t("me.levelSuffix", {}, " · Уровень %d") % current_level) if current_level > 0 else ""
+	_title_sub.text = I18n.t("me.titleSub", {}, "%s · %s · %s%s (Сид: %d)") % [loc_name, mode_name, arch_name, level_text, current_seed]
 
 func _update_stats() -> void:
 	if current_map == null:
@@ -175,24 +175,24 @@ func _update_stats() -> void:
 		spots_cnt = level_data.get("flag_spots", {}).get("neutral", []).size()
 
 	if _stat_size != null:
-		_stat_size.text = "%d × %d клеток" % [current_map.cols, current_map.rows]
+		_stat_size.text = I18n.t("me.size", {}, "%d × %d клеток") % [current_map.cols, current_map.rows]
 	if _stat_walkable != null:
-		_stat_walkable.text = "%.1f%% (Связно 100%%)" % walk_pct
+		_stat_walkable.text = I18n.t("me.walkable", {}, "%.1f%% (Связно 100%%)") % walk_pct
 	if _stat_buildings != null:
-		_stat_buildings.text = "%d клеток" % buildings
+		_stat_buildings.text = I18n.t("me.tiles", {}, "%d клеток") % buildings
 	if _stat_bridges != null:
-		_stat_bridges.text = "%d переправ" % bridges
+		_stat_bridges.text = I18n.t("me.crossings", {}, "%d переправ") % bridges
 	if _stat_roads != null:
-		_stat_roads.text = "%d (%d%% асфальт)" % [roads, int(float(roads) / float(maxi(1, drivable)) * 100.0)]
+		_stat_roads.text = I18n.t("me.roads", {}, "%d (%d%% асфальт)") % [roads, int(float(roads) / float(maxi(1, drivable)) * 100.0)]
 	if _stat_flags != null:
 		if current_mode == "ctf":
-			_stat_flags.text = "%d точек (по 1 флагу)" % spots_cnt
+			_stat_flags.text = I18n.t("me.flagSpots", {}, "%d точек (по 1 флагу)") % spots_cnt
 		elif current_mode == "koth":
-			_stat_flags.text = "Центральная высота"
+			_stat_flags.text = I18n.t("me.hillGoal", {}, "Центральная высота")
 		elif current_mode == "defense":
-			_stat_flags.text = "Штаб базы"
+			_stat_flags.text = I18n.t("me.baseGoal", {}, "Штаб базы")
 		else:
-			_stat_flags.text = "Свободные спавны"
+			_stat_flags.text = I18n.t("me.spawnGoal", {}, "Свободные спавны")
 
 func _sync_ui_state() -> void:
 	if _loc_buttons.has(current_location):
@@ -249,7 +249,7 @@ func _build_canvas_toolbar(parent: Control) -> void:
 	top_bar.add_theme_constant_override("separation", 8)
 	parent.add_child(top_bar)
 
-	var title_lbl := UiKit.label("ПРЕДПРОСМОТР КАРТЫ", 14, Cfg.UI_TEXT, true)
+	var title_lbl := UiKit.label(I18n.t("me.preview", {}, "ПРЕДПРОСМОТР КАРТЫ"), 14, Cfg.UI_TEXT, true)
 	top_bar.add_child(title_lbl)
 
 	_title_sub = UiKit.label("", 11, Cfg.UI_MUTED)
@@ -261,26 +261,26 @@ func _build_canvas_toolbar(parent: Control) -> void:
 
 	# Zoom controls
 	var btn_zoom_out := UiKit.small(" - ")
-	btn_zoom_out.tooltip_text = "Уменьшить масштаб (Колёсико мыши вниз)"
+	btn_zoom_out.tooltip_text = I18n.t("me.zoomOut", {}, "Уменьшить масштаб (Колёсико мыши вниз)")
 	btn_zoom_out.pressed.connect(func(): if _canvas: _canvas.zoom_by(0.8))
 	top_bar.add_child(btn_zoom_out)
 
 	var btn_zoom_in := UiKit.small(" + ")
-	btn_zoom_in.tooltip_text = "Увеличить масштаб (Колёсико мыши вверх)"
+	btn_zoom_in.tooltip_text = I18n.t("me.zoomIn", {}, "Увеличить масштаб (Колёсико мыши вверх)")
 	btn_zoom_in.pressed.connect(func(): if _canvas: _canvas.zoom_by(1.25))
 	top_bar.add_child(btn_zoom_in)
 
-	var btn_reset := UiKit.small(" Центр ")
-	btn_reset.tooltip_text = "Сбросить масштаб и отцентрировать карту"
+	var btn_reset := UiKit.small(I18n.t("me.center", {}, " Центр "))
+	btn_reset.tooltip_text = I18n.t("me.centerTip", {}, "Сбросить масштаб и отцентрировать карту")
 	btn_reset.pressed.connect(func(): if _canvas: _canvas.reset_view())
 	top_bar.add_child(btn_reset)
 
-	var btn_tex := UiKit.small(" Текстуры ")
-	btn_tex.tooltip_text = "Переключить отображение текстур биома или схемы"
+	var btn_tex := UiKit.small(I18n.t("me.textures", {}, " Текстуры "))
+	btn_tex.tooltip_text = I18n.t("me.texturesTip", {}, "Переключить отображение текстур биома или схемы")
 	btn_tex.pressed.connect(func():
 		if _canvas:
 			_canvas.show_textures = not _canvas.show_textures
-			btn_tex.text = " Текстуры " if _canvas.show_textures else " Схема "
+			btn_tex.text = I18n.t("me.textures", {}, " Текстуры ") if _canvas.show_textures else I18n.t("me.schematic", {}, " Схема ")
 			_canvas.queue_redraw()
 	)
 	top_bar.add_child(btn_tex)
@@ -307,14 +307,14 @@ func _build_canvas_footer(parent: Control) -> void:
 	bot_bar.add_theme_constant_override("separation", 8)
 	parent.add_child(bot_bar)
 
-	_info_label = UiKit.label("Клетка: - | Тайл: -", 11, Cfg.UI_TEXT, true)
+	_info_label = UiKit.label(I18n.t("me.cellEmpty", {}, "Клетка: - | Тайл: -"), 11, Cfg.UI_TEXT, true)
 	_info_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_info_label.clip_text = true
 	_info_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_info_label.custom_minimum_size = Vector2(0, 0)
 	bot_bar.add_child(_info_label)
 
-	var hint := UiKit.label("Панорама: ЛКМ · Зум: колёсико · Space: сид", 10, Cfg.UI_MUTED)
+	var hint := UiKit.label(I18n.t("me.hint", {}, "Панорама: ЛКМ · Зум: колёсико · Space: сид"), 10, Cfg.UI_MUTED)
 	hint.clip_text = true
 	hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	hint.custom_minimum_size = Vector2(0, 0)
@@ -342,10 +342,10 @@ func _build_control_panel(parent: Control) -> void:
 
 	# --- Pinned Header ---
 	var hdr := UiKit.vbox(1)
-	var t := UiKit.label("РЕДАКТОР КАРТ", 15, Cfg.UI_TEXT, true)
+	var t := UiKit.label(I18n.t("me.title", {}, "РЕДАКТОР КАРТ"), 15, Cfg.UI_TEXT, true)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hdr.add_child(t)
-	var sub := UiKit.label("Генератор разнообразных тактических карт", 10, Cfg.UI_MUTED)
+	var sub := UiKit.label(I18n.t("me.sub", {}, "Генератор разнообразных тактических карт"), 10, Cfg.UI_MUTED)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hdr.add_child(sub)
 	panel_vbox.add_child(hdr)
@@ -365,7 +365,7 @@ func _build_control_panel(parent: Control) -> void:
 	scroll.add_child(vcol)
 
 	# Section 1: Biomes
-	vcol.add_child(UiKit.label("ЛОКАЦИЯ И БИОМ", 11, Cfg.UI_ACCENT, true))
+	vcol.add_child(UiKit.label(I18n.t("me.secLocation", {}, "ЛОКАЦИЯ И БИОМ"), 11, Cfg.UI_ACCENT, true))
 	var loc_grid := GridContainer.new()
 	loc_grid.columns = 2
 	loc_grid.add_theme_constant_override("h_separation", 4)
@@ -375,7 +375,7 @@ func _build_control_panel(parent: Control) -> void:
 	_loc_buttons.clear()
 	for loc_id in Locations.ORDER:
 		var loc_info: Dictionary = Locations.get_location(loc_id)
-		var loc_name: String = loc_info.get("name", loc_id)
+		var loc_name: String = I18n.t("loc." + String(loc_id), {}, String(loc_info.get("name", loc_id)))
 		var loc_icon: String = loc_info.get("icon", "📍")
 		var b := UiKit.toggle("%s %s" % [loc_icon, loc_name], 11)
 		b.clip_text = true
@@ -391,7 +391,7 @@ func _build_control_panel(parent: Control) -> void:
 	vcol.add_child(_make_divider())
 
 	# Section 2: Mode
-	vcol.add_child(UiKit.label("РЕЖИМ БОЯ", 11, Cfg.UI_ACCENT, true))
+	vcol.add_child(UiKit.label(I18n.t("me.secMode", {}, "РЕЖИМ БОЯ"), 11, Cfg.UI_ACCENT, true))
 	var mode_grid := GridContainer.new()
 	mode_grid.columns = 2
 	mode_grid.add_theme_constant_override("h_separation", 4)
@@ -400,9 +400,9 @@ func _build_control_panel(parent: Control) -> void:
 
 	_mode_buttons.clear()
 	for m in MODES:
-		var b := UiKit.toggle(m["name"], 11)
+		var b := UiKit.toggle(I18n.dn(m, "name", "me.mode"), 11)
 		b.clip_text = true
-		b.tooltip_text = m["desc"]
+		b.tooltip_text = I18n.dn(m, "desc", "me.mode")
 		b.button_group = _mode_btn_group
 		b.button_pressed = (m["id"] == current_mode)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -417,7 +417,7 @@ func _build_control_panel(parent: Control) -> void:
 	vcol.add_child(_make_divider())
 
 	# Section 3: Architectural Archetype
-	vcol.add_child(UiKit.label("АРХИТЕКТУРА И СТИЛЬ КАРТЫ", 11, Cfg.UI_ACCENT, true))
+	vcol.add_child(UiKit.label(I18n.t("me.secArch", {}, "АРХИТЕКТУРА И СТИЛЬ КАРТЫ"), 11, Cfg.UI_ACCENT, true))
 	var arch_grid := GridContainer.new()
 	arch_grid.columns = 2
 	arch_grid.add_theme_constant_override("h_separation", 4)
@@ -426,9 +426,9 @@ func _build_control_panel(parent: Control) -> void:
 
 	_arch_buttons.clear()
 	for a in ARCHETYPES:
-		var b := UiKit.toggle(a["name"], 11)
+		var b := UiKit.toggle(I18n.dn(a, "name", "me.arch"), 11)
 		b.clip_text = true
-		b.tooltip_text = a["desc"]
+		b.tooltip_text = I18n.dn(a, "desc", "me.arch")
 		b.button_group = _arch_btn_group
 		b.button_pressed = (a["id"] == current_archetype)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -448,7 +448,7 @@ func _build_control_panel(parent: Control) -> void:
 
 	var seed_col := VBoxContainer.new()
 	seed_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	seed_col.add_child(UiKit.label("СИД (SEED)", 10, Cfg.UI_MUTED, true))
+	seed_col.add_child(UiKit.label(I18n.t("me.secSeed", {}, "СИД (SEED)"), 10, Cfg.UI_MUTED, true))
 
 	var seed_input_row := HBoxContainer.new()
 	seed_input_row.add_theme_constant_override("separation", 4)
@@ -465,8 +465,8 @@ func _build_control_panel(parent: Control) -> void:
 			generate_map())
 	seed_input_row.add_child(_seed_input)
 
-	var btn_dice := UiKit.small(" Ранд ")
-	btn_dice.tooltip_text = "Случайный сид"
+	var btn_dice := UiKit.small(I18n.t("me.roll", {}, " Ранд "))
+	btn_dice.tooltip_text = I18n.t("me.rollTip", {}, "Случайный сид")
 	btn_dice.pressed.connect(func():
 		randomize_seed()
 		generate_map())
@@ -475,7 +475,7 @@ func _build_control_panel(parent: Control) -> void:
 
 	# Level (1-5)
 	var lvl_col := VBoxContainer.new()
-	lvl_col.add_child(UiKit.label("УРОВЕНЬ", 10, Cfg.UI_MUTED, true))
+	lvl_col.add_child(UiKit.label(I18n.t("me.secLevel", {}, "УРОВЕНЬ"), 10, Cfg.UI_MUTED, true))
 	var lvl_row := HBoxContainer.new()
 	lvl_row.add_theme_constant_override("separation", 2)
 	lvl_col.add_child(lvl_row)
@@ -487,7 +487,7 @@ func _build_control_panel(parent: Control) -> void:
 		lb.custom_minimum_size = Vector2(22, 22)
 		lb.button_group = _level_btn_group
 		lb.button_pressed = (l == current_level)
-		lb.tooltip_text = "Постоянная карта уровня %d (сид %d)" % [l, LevelGen.level_seed(l)]
+		lb.tooltip_text = I18n.t("me.levelTip", {}, "Постоянная карта уровня %d (сид %d)") % [l, LevelGen.level_seed(l)]
 		lb.pressed.connect(func():
 			select_level(l)
 			generate_map())
@@ -498,7 +498,7 @@ func _build_control_panel(parent: Control) -> void:
 	vcol.add_child(_make_divider())
 
 	# Section 5: Stats Card
-	vcol.add_child(UiKit.label("ТАКТИЧЕСКИЙ АНАЛИЗ КАРТЫ", 11, Cfg.UI_GOLD, true))
+	vcol.add_child(UiKit.label(I18n.t("me.secAnalysis", {}, "ТАКТИЧЕСКИЙ АНАЛИЗ КАРТЫ"), 11, Cfg.UI_GOLD, true))
 	var stats_card := PanelContainer.new()
 	stats_card.add_theme_stylebox_override("panel", UiKit.card_style())
 	vcol.add_child(stats_card)
@@ -509,12 +509,12 @@ func _build_control_panel(parent: Control) -> void:
 	sgrid.add_theme_constant_override("v_separation", 3)
 	stats_card.add_child(sgrid)
 
-	_stat_size = _add_stat_row(sgrid, "Размеры:", "-")
-	_stat_walkable = _add_stat_row(sgrid, "Проходимость:", "-")
-	_stat_buildings = _add_stat_row(sgrid, "Зданий/стен:", "-")
-	_stat_bridges = _add_stat_row(sgrid, "Переправ:", "-")
-	_stat_roads = _add_stat_row(sgrid, "Дорог:", "-")
-	_stat_flags = _add_stat_row(sgrid, "Точек целей:", "-")
+	_stat_size = _add_stat_row(sgrid, I18n.t("me.statSize", {}, "Размеры:"), "-")
+	_stat_walkable = _add_stat_row(sgrid, I18n.t("me.statWalkable", {}, "Проходимость:"), "-")
+	_stat_buildings = _add_stat_row(sgrid, I18n.t("me.statBuildings", {}, "Зданий/стен:"), "-")
+	_stat_bridges = _add_stat_row(sgrid, I18n.t("me.statBridges", {}, "Переправ:"), "-")
+	_stat_roads = _add_stat_row(sgrid, I18n.t("me.statRoads", {}, "Дорог:"), "-")
+	_stat_flags = _add_stat_row(sgrid, I18n.t("me.statGoals", {}, "Точек целей:"), "-")
 
 	# --- Pinned Footer Action Bar (Always Visible!) ---
 	var footer_box := UiKit.vbox(5)
@@ -522,7 +522,7 @@ func _build_control_panel(parent: Control) -> void:
 
 	footer_box.add_child(_make_divider())
 
-	_btn_battle = UiKit.primary("В БОЙ НА ЭТОЙ КАРТЕ!", 14)
+	_btn_battle = UiKit.primary(I18n.t("me.fight", {}, "В БОЙ НА ЭТОЙ КАРТЕ!"), 14)
 	_btn_battle.custom_minimum_size = Vector2(0, 38)
 	_btn_battle.pressed.connect(_on_battle_pressed)
 	footer_box.add_child(_btn_battle)
@@ -531,7 +531,7 @@ func _build_control_panel(parent: Control) -> void:
 	act_row.add_theme_constant_override("separation", 6)
 	footer_box.add_child(act_row)
 
-	_btn_gen = UiKit.secondary("Случайно (Space)", 11)
+	_btn_gen = UiKit.secondary(I18n.t("me.random", {}, "Случайно (Space)"), 11)
 	_btn_gen.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_btn_gen.custom_minimum_size = Vector2(0, 30)
 	_btn_gen.pressed.connect(func():
@@ -539,7 +539,7 @@ func _build_control_panel(parent: Control) -> void:
 		generate_map())
 	act_row.add_child(_btn_gen)
 
-	_btn_close = UiKit.secondary("В меню (Esc)", 11)
+	_btn_close = UiKit.secondary(I18n.t("me.close", {}, "В меню (Esc)"), 11)
 	_btn_close.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_btn_close.custom_minimum_size = Vector2(0, 30)
 	_btn_close.pressed.connect(func(): close_requested.emit())
@@ -590,29 +590,29 @@ func set_hover_info(r: int, c: int) -> void:
 	if _info_label == null:
 		return
 	if current_map == null or not current_map.in_bounds(r, c):
-		_info_label.text = "Клетка: - | Тайл: -"
+		_info_label.text = I18n.t("me.cellEmpty", {}, "Клетка: - | Тайл: -")
 		return
 	var t := current_map.get_tile(r, c)
-	var tile_name := "Пустота"
+	var tile_name := I18n.t("me.tile.void", {}, "Пустота")
 	var passable := GameMap.is_drivable_tile(t)
 	match t:
-		Cfg.T_WALL: tile_name = "Бетонная стена (непробиваемо)"
-		Cfg.T_BRICK: tile_name = "Кирпичная стена (разрушаемо)"
-		Cfg.T_ADOBE: tile_name = "Глинобитная стена"
-		Cfg.T_WATER: tile_name = "Водная преграда"
-		Cfg.T_BRIDGE: tile_name = "Мост / переправа"
-		Cfg.T_ROAD: tile_name = "Асфальт / шоссе"
-		Cfg.T_SAND: tile_name = "Песчаный грунт"
-		Cfg.T_DUNE: tile_name = "Бархан"
-		Cfg.T_QUICKSAND: tile_name = "Зыбучий песок"
-		Cfg.T_GRASS: tile_name = "Трава / газон"
-		Cfg.T_TREE: tile_name = "Лесной массив"
-		Cfg.T_BASE_P: tile_name = "База синих (Игрок)"
-		Cfg.T_BASE_E: tile_name = "База красных (Враг)"
+		Cfg.T_WALL: tile_name = I18n.t("me.tile.wall", {}, "Бетонная стена (непробиваемо)")
+		Cfg.T_BRICK: tile_name = I18n.t("me.tile.brick", {}, "Кирпичная стена (разрушаемо)")
+		Cfg.T_ADOBE: tile_name = I18n.t("me.tile.adobe", {}, "Глинобитная стена")
+		Cfg.T_WATER: tile_name = I18n.t("me.tile.water", {}, "Водная преграда")
+		Cfg.T_BRIDGE: tile_name = I18n.t("me.tile.bridge", {}, "Мост / переправа")
+		Cfg.T_ROAD: tile_name = I18n.t("me.tile.road", {}, "Асфальт / шоссе")
+		Cfg.T_SAND: tile_name = I18n.t("me.tile.sand", {}, "Песчаный грунт")
+		Cfg.T_DUNE: tile_name = I18n.t("me.tile.dune", {}, "Бархан")
+		Cfg.T_QUICKSAND: tile_name = I18n.t("me.tile.quicksand", {}, "Зыбучий песок")
+		Cfg.T_GRASS: tile_name = I18n.t("me.tile.grass", {}, "Трава / газон")
+		Cfg.T_TREE: tile_name = I18n.t("me.tile.tree", {}, "Лесной массив")
+		Cfg.T_BASE_P: tile_name = I18n.t("me.tile.baseP", {}, "База синих (Игрок)")
+		Cfg.T_BASE_E: tile_name = I18n.t("me.tile.baseE", {}, "База красных (Враг)")
 
-	_info_label.text = "Клетка: (%d, %d) | %s | %s" % [
+	_info_label.text = I18n.t("me.cell", {}, "Клетка: (%d, %d) | %s | %s") % [
 		c, r, tile_name,
-		"🟢 Проходимо" if passable else "🔴 Препятствие"
+		I18n.t("me.passable", {}, "🟢 Проходимо") if passable else I18n.t("me.blocked", {}, "🔴 Препятствие")
 	]
 
 
@@ -700,7 +700,7 @@ class _MapCanvas extends Control:
 		draw_rect(Rect2(Vector2.ZERO, size), Color("#0a0c0e"))
 
 		if current_map == null:
-			draw_string(Fonts.bold, size * 0.5 - Vector2(100, 0), "Карта не сгенерирована",
+			draw_string(Fonts.bold, size * 0.5 - Vector2(100, 0), I18n.t("me.noMap", {}, "Карта не сгенерирована"),
 				HORIZONTAL_ALIGNMENT_CENTER, -1, 14, Cfg.UI_MUTED)
 			return
 
@@ -936,7 +936,7 @@ class _MapCanvas extends Control:
 				var col: Color = Color("#3498db") if team == "player" else Color("#e74c3c")
 				draw_circle(p, tile_sz * 1.2, Color(col.r, col.g, col.b, 0.25))
 				draw_arc(p, tile_sz * 1.2, 0.0, TAU, 24, col, 2.0)
-				var tag := "БАЗА [СИНИЕ]" if team == "player" else "БАЗА [КРАСНЫЕ]"
+				var tag := I18n.t("me.baseBlue", {}, "БАЗА [СИНИЕ]") if team == "player" else I18n.t("me.baseRed", {}, "БАЗА [КРАСНЫЕ]")
 				draw_string(Fonts.bold, p + Vector2(-30, -tile_sz * 1.4), tag,
 					HORIZONTAL_ALIGNMENT_CENTER, -1, 10, col)
 
@@ -956,7 +956,7 @@ class _MapCanvas extends Control:
 				draw_circle(p, tile_sz * 1.5, Color(1.0, 0.84, 0.0, 0.35))
 				draw_arc(p, tile_sz * 1.5, 0.0, TAU, 24, gold, 2.5)
 				draw_circle(p, tile_sz * 0.45, gold)
-				draw_string(Fonts.bold, p + Vector2(-32, -tile_sz * 1.7), "1-й ФЛАГ",
+				draw_string(Fonts.bold, p + Vector2(-32, -tile_sz * 1.7), I18n.t("me.flag1", {}, "1-й ФЛАГ"),
 					HORIZONTAL_ALIGNMENT_CENTER, -1, 11, gold)
 			else:
 				# Next sequential flag spawn spots
@@ -976,4 +976,4 @@ class _MapCanvas extends Control:
 			draw_rect(h_rect, Color(1.0, 0.7, 0.0, 0.2))
 			draw_rect(h_rect, Color("#ffaa00"), false, 2.0)
 			draw_string(Fonts.bold, h_rect.position + Vector2(h_rect.size.x * 0.5 - 35, h_rect.size.y * 0.5 + 4),
-				"ГОРА", HORIZONTAL_ALIGNMENT_CENTER, -1, 13, Color("#ffdd44"))
+				I18n.t("me.hill", {}, "ГОРА"), HORIZONTAL_ALIGNMENT_CENTER, -1, 13, Color("#ffdd44"))

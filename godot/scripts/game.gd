@@ -417,7 +417,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 				continue
 			var info: Dictionary = Net.lobby[peer_id]
 			var rp := PlayerState.new(remote_players.size() + 1,
-				String(info.get("name", "Игрок")), String(info.get("color_key", "p2")),
+				String(info.get("name", I18n.t("net.player", {}, "Игрок"))), String(info.get("color_key", "p2")),
 				Ctl.NetScheme.new(int(peer_id)))
 			rp.peer_id = int(peer_id)
 			rp.cosmetics = info.get("cosmetics", {})
@@ -608,7 +608,7 @@ func _bind_world_events(w: World) -> void:
 	w.synergy_unlocked.connect(func(player, build_id: String, build_name: String, col: Color):
 		hud.banner("⚡ " + build_name.to_upper() + " ⚡", col, 140, 26)
 		if Net.role == "host":
-			Net.host_event("feed", {"text": "⚡ " + build_name + " АКТИВИРОВАН!", "color": col.to_html()}))
+			Net.host_event("feed", {"text": I18n.t("feed.buildActivated", {"name": build_name}, "⚡ " + build_name + " АКТИВИРОВАН!"), "color": col.to_html()}))
 
 	w.damage_number.connect(func(x: float, y: float, text: String, color: Color):
 		if floaters.size() > 80:
@@ -706,7 +706,7 @@ func _on_finish(result: Dictionary) -> void:
 	if world.mode == "defense":
 		Prof.bump_stat("defenseWaveReached", world.wave)
 		Prof.bump_weekly_max("defense_wave", world.wave)
-		var p_name: String = players[0].name if not players.is_empty() else "Игрок"
+		var p_name: String = players[0].name if not players.is_empty() else I18n.t("net.player", {}, "Игрок")
 		var p_score: int = players[0].score if not players.is_empty() else 0
 		Prof.record_local_leaderboard("survival_waves", p_name, world.wave)
 		Prof.record_local_leaderboard("survival_score", p_name, p_score)
@@ -721,7 +721,7 @@ func _on_finish(result: Dictionary) -> void:
 	for p in players:
 		best = maxi(best, p.score)
 	var board_score := world.wave if world.mode == "defense" else best
-	var leader_name: String = players[0].name if not players.is_empty() else "Игрок"
+	var leader_name: String = players[0].name if not players.is_empty() else I18n.t("net.player", {}, "Игрок")
 	Prof.record_local_leaderboard(world.mode, leader_name, board_score)
 	SteamStats.push_score(board_score, world.mode)
 	hud.hide_hud()

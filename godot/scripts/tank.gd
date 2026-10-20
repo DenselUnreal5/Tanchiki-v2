@@ -440,7 +440,7 @@ func apply_shock(world, attacker, base_ticks: int = Cfg.SHOCK_STUN_TICKS, ignore
 	interrupt_current_action(CC_STUN)
 	if world != null:
 		world.particles.burst(x, y, [Color("#facc15"), Color("#bfdbfe"), Color.WHITE], 14, 2, 5, 10, 18, world.rng)
-		world.damage_number.emit(x, y - 26, "⚡ СТАН", Color("#facc15"))
+		world.damage_number.emit(x, y - 26, I18n.t("fx.stun", {}, "⚡ СТАН"), Color("#facc15"))
 	return true
 
 func _update_burn(world) -> void:
@@ -651,7 +651,7 @@ func update(world) -> void:
 				if acid_stacks >= Cfg.ACID_STACK_MAX and acid_attacker != null \
 						and acid_attacker.alive and acid_attacker.flags.has("acidCloud"):
 					world.particles.burst(x, y, [Color("#84cc16"), Color("#a3e635"), Color.WHITE], 14, 2, 5, 14, 28, world.rng)
-					world.damage_number.emit(x, y - 24, "☁️ ЕДКОЕ ОБЛАКО", Color("#84cc16"))
+					world.damage_number.emit(x, y - 24, I18n.t("fx.acidCloud", {}, "☁️ ЕДКОЕ ОБЛАКО"), Color("#84cc16"))
 					for other in world.tanks:
 						if other == self or not other.alive or not world.are_hostile(acid_attacker, other):
 							continue
@@ -1077,7 +1077,7 @@ func _update_rammer_boss(world) -> void:
 						var applied_base_hit := minf(remaining_cap, 50.0)
 						rammer_base_damage_dealt += applied_base_hit
 						world.base["hp"] = maxf(0.0, float(world.base["hp"]) - applied_base_hit)
-						world.damage_number.emit(world.base["x"], world.base["y"] - 30, "-%d БАЗА!" % int(applied_base_hit), Color("#ff4444"))
+						world.damage_number.emit(world.base["x"], world.base["y"] - 30, I18n.t("fx.baseHit", {"n": int(applied_base_hit)}, "-%d БАЗА!" % int(applied_base_hit)), Color("#ff4444"))
 						world.add_shake(12.0, world.base["x"], world.base["y"])
 						Sfx.play("hit")
 
@@ -1087,7 +1087,7 @@ func _update_rammer_boss(world) -> void:
 				rammer_daze_ticks = Cfg.RAMMER_DAZE_TICKS
 				vx = 0.0
 				vy = 0.0
-				world.damage_number.emit(x, y - 34, "⚡ ОГЛУШЁН!", Color("#ffee55"))
+				world.damage_number.emit(x, y - 34, I18n.t("fx.stunned", {}, "⚡ ОГЛУШЁН!"), Color("#ffee55"))
 				world.particles.burst(x, y, [Color("#ffee55"), Color("#888888")], 18, 2, 5, 14, 24, world.rng)
 
 		"cooldown":
@@ -1131,7 +1131,7 @@ func _update_chimera_boss(world) -> void:
 			world.spawn_shockwave(x, y, 80.0, "acid", Color("#84cc16"), 24)
 			world.add_shot_effect("acid", "acid_cloud", Vector2(x, y), 0.0, 100.0)
 			world.particles.burst(x, y, [Color("#84cc16"), Color("#00ffff"), Color("#ff00ff"), Color.WHITE], 32, 3, 7, 20, 38, world.rng)
-			world.damage_number.emit(x, y - 30, "🧪 ГОЛОГРАММЫ!", Color("#84cc16"))
+			world.damage_number.emit(x, y - 30, I18n.t("fx.holograms", {}, "🧪 ГОЛОГРАММЫ!"), Color("#84cc16"))
 			Sfx.play("thunder", x, y)
 			world.feed.emit(I18n.t("feed.chimeraClones", {"name": name},
 				"🧪 %s развёртывает голографических клонов и уходит в тень!" % name), Color("#84cc16"))
@@ -1198,7 +1198,7 @@ func start_chimera_warmup(world) -> void:
 	var my: float = y + sin(turret_angle) * muzzle_len
 	Sfx.play("steam", mx, my)
 	if is_chimera_boss and not is_chimera_clone:
-		world.damage_number.emit(x, y - 24, "⚠️ ЗАРЯДКА КИСЛОТЫ", Color("#a3e635"))
+		world.damage_number.emit(x, y - 24, I18n.t("fx.acidCharge", {}, "⚠️ ЗАРЯДКА КИСЛОТЫ"), Color("#a3e635"))
 
 func _update_chimera_telegraph(world) -> void:
 	var muzzle_x: float = x + cos(turret_angle) * muzzle_len
@@ -1820,7 +1820,7 @@ func _acid_bomb(world) -> void:
 
 	world.particles.burst(x, y, [Color("#9dff5c"), Color("#4a7a2a"), Color.WHITE],
 		30, 3, 7, 26, 52, world.rng)
-	world.damage_number.emit(x, y - 32, "☣️ ЧУМНОЙ ШКВАЛ!", Color("#84cc16"))
+	world.damage_number.emit(x, y - 32, I18n.t("fx.plague", {}, "☣️ ЧУМНОЙ ШКВАЛ!"), Color("#84cc16"))
 	world.add_shake(9.0, x, y)
 	Sfx.play("steam", x, y)
 	Sfx.play("explosion", x, y)
@@ -1844,7 +1844,7 @@ func _fire_ring(world) -> void:
 		other.ignite(world, self)
 	world.spawn_shockwave(x, y, Cfg.FIRE_RING_IGNITE_R, "shockwave", Color("#f97316"), 24)
 	world.particles.burst(x, y, [Color("#f97316"), Color("#fbbf24"), Color("#7c2d12")], 36, 3, 7, 20, 40, world.rng)
-	world.damage_number.emit(x, y - 32, "🔥 ИНФЕРНО!", Color("#f97316"))
+	world.damage_number.emit(x, y - 32, I18n.t("fx.inferno", {}, "🔥 ИНФЕРНО!"), Color("#f97316"))
 	world.add_shake(7.0, x, y)
 	Sfx.play("flame", x, y)
 
@@ -1855,7 +1855,7 @@ func _storm_pulse(world) -> void:
 			other.apply_shock(world, self, Cfg.STORM_PULSE_STUN_TICKS, true)
 	world.spawn_shockwave(x, y, Cfg.STORM_PULSE_R, "emp", Color("#facc15"), 26)
 	world.particles.burst(x, y, [Color("#facc15"), Color("#bfdbfe"), Color.WHITE], 40, 3, 7, 18, 36, world.rng)
-	world.damage_number.emit(x, y - 32, "⚡ ЭЛЕКТРОБУРЯ!", Color("#facc15"))
+	world.damage_number.emit(x, y - 32, I18n.t("fx.stormPulse", {}, "⚡ ЭЛЕКТРОБУРЯ!"), Color("#facc15"))
 	world.add_shake(8.0, x, y)
 	Sfx.play("zap", x, y)
 

@@ -470,7 +470,7 @@ func update_hud(world: World) -> void:
 		if tank.acid_stacks > 0 and tank.acid_ticks_left > 0:
 			acid_row.visible = true
 			var sec_left: float = float(tank.acid_ticks_left) / float(Cfg.TICK_HZ)
-			acid_label.text = "КИСЛОТА ×%d · %.1f с" % [tank.acid_stacks, sec_left]
+			acid_label.text = I18n.t("hud.acid", {"n": tank.acid_stacks, "sec": "%.1f" % sec_left}, "КИСЛОТА ×%d · %.1f с" % [tank.acid_stacks, sec_left])
 			var prog: float = clampf(float(tank.acid_ticks_left) / float(Cfg.ACID_DURATION_TICKS), 0.0, 1.0)
 			acid_fill.size.x = 70.0 * prog
 			var pulse: float = 0.8 + 0.2 * sin(float(world.tick) * 0.35)
@@ -485,7 +485,7 @@ func update_hud(world: World) -> void:
 			if tank.freeze_ticks > 0:
 				freeze_row.visible = true
 				var sec_f: float = float(tank.freeze_ticks) / float(Cfg.TICK_HZ)
-				freeze_label.text = "ЗАМОРОЗКА · %.1f с" % sec_f
+				freeze_label.text = I18n.t("hud.freeze", {"sec": "%.1f" % sec_f}, "ЗАМОРОЗКА · %.1f с" % sec_f)
 				var f_max: float = float(tank.freeze_max_ticks) if "freeze_max_ticks" in tank and tank.freeze_max_ticks > 0 else float(Cfg.ICE_FREEZE_TICKS)
 				var prog_f: float = clampf(float(tank.freeze_ticks) / f_max, 0.0, 1.0)
 				freeze_fill.size.x = 70.0 * prog_f
@@ -534,7 +534,7 @@ func update_hud(world: World) -> void:
 					"Фраги %d / %d   Смертей: %d" % [progress["current"], progress["target"], player.deaths])
 			"tutorial":
 				var tinfo: Dictionary = progress.get("task", world.get_tutorial_task_info())
-				objective.text = "%s  [%s]" % [tinfo.get("title", "Обучение"), tinfo.get("keys", "")]
+				objective.text = "%s  [%s]" % [tinfo.get("title", I18n.t("hud.training", {}, "Обучение")), tinfo.get("keys", "")]
 			_:
 				var txt := I18n.t("hud.flags",
 					{"a": world.team_score["player"], "b": world.team_score["enemy"],
@@ -747,13 +747,13 @@ func _show_perk_tooltip(id: String, source_node: Control) -> void:
 	if cat != "":
 		var cat_text := ""
 		match cat:
-			"fire": cat_text = "[ОГОНЬ]"
-			"defense": cat_text = "[ЗАЩИТА]"
-			"speed": cat_text = "[СКОРОСТЬ]"
-			"special": cat_text = "[ОСОБОЕ]"
-			"challenge": cat_text = "[ЧЕЛЛЕНДЖ]"
-			"bot": cat_text = "[БОТ]"
-			"ability": cat_text = "[НАВЫК]"
+			"fire": cat_text = "[%s]" % I18n.t("hud.cat.fire", {}, "ОГОНЬ")
+			"defense": cat_text = "[%s]" % I18n.t("hud.cat.defense", {}, "ЗАЩИТА")
+			"speed": cat_text = "[%s]" % I18n.t("hud.cat.speed", {}, "СКОРОСТЬ")
+			"special": cat_text = "[%s]" % I18n.t("hud.cat.special", {}, "ОСОБОЕ")
+			"challenge": cat_text = "[%s]" % I18n.t("hud.cat.challenge", {}, "ЧЕЛЛЕНДЖ")
+			"bot": cat_text = "[%s]" % I18n.t("hud.cat.bot", {}, "БОТ")
+			"ability": cat_text = "[%s]" % I18n.t("hud.cat.ability", {}, "НАВЫК")
 			_: cat_text = "[%s]" % cat.to_upper()
 		var cat_lbl := UiKit.label(cat_text, 9, Cfg.UI_MUTED)
 		cat_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE

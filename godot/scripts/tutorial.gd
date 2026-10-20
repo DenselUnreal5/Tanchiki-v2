@@ -110,7 +110,17 @@ func begin_stage(n: int) -> void:
 	_apply_layout()
 	_reset_player()
 	_spawn_objects()
-	world.feed.emit("ЗАДАНИЕ %d/%d: %s — %s" % [stage, TOTAL, TITLES[stage], DESCS[stage]], Color("#ffd700"))
+	world.feed.emit(I18n.t("tut.feed.start", {"n": stage, "total": TOTAL, "title": title_of(stage), "desc": desc_of(stage)},
+		"ЗАДАНИЕ %d/%d: %s — %s" % [stage, TOTAL, TITLES[stage], DESCS[stage]]), Color("#ffd700"))
+
+static func title_of(n: int) -> String:
+	return I18n.t("tut.title.%d" % n, {}, String(TITLES.get(n, "")))
+
+static func desc_of(n: int) -> String:
+	return I18n.t("tut.desc.%d" % n, {}, String(DESCS.get(n, "")))
+
+static func keys_of(n: int) -> String:
+	return I18n.t("tut.keys.%d" % n, {}, String(KEYS.get(n, "")))
 
 func _clear_arena() -> void:
 	var keep := []
@@ -196,13 +206,13 @@ func _spawn_objects() -> void:
 	for pos in TutorialLayouts.markers(stage, "T"):
 		match stage:
 			5:
-				targets.append(_spawn_dummy(pos, "Танк в укрытии", 50.0, "standard", "enemy"))
+				targets.append(_spawn_dummy(pos, I18n.t("tut.dummy.cover", {}, "Танк в укрытии"), 50.0, "standard", "enemy"))
 			8:
-				targets.append(_spawn_dummy(pos, "Манекен", 60.0, "light", "target"))
+				targets.append(_spawn_dummy(pos, I18n.t("tut.dummy", {}, "Манекен"), 60.0, "light", "target"))
 			9:
-				targets.append(_spawn_dummy(pos, "Тяжёлый манекен", 90.0, "heavy", "target"))
+				targets.append(_spawn_dummy(pos, I18n.t("tut.dummy.heavy", {}, "Тяжёлый манекен"), 90.0, "heavy", "target"))
 			_:
-				targets.append(_spawn_dummy(pos, "Манекен", 40.0, "standard", "target"))
+				targets.append(_spawn_dummy(pos, I18n.t("tut.dummy", {}, "Манекен"), 40.0, "standard", "target"))
 	for pos in TutorialLayouts.markers(stage, "E"):
 		if stage == 3:
 			enemy = _spawn_turret(pos)
@@ -228,7 +238,7 @@ func _spawn_dummy(pos: Vector2, label: String, hp: float, chassis: String, color
 
 func _spawn_turret(pos: Vector2) -> Tank:
 	var t := Tank.new({
-		"x": pos.x, "y": pos.y, "team": "enemy", "name": "Учебная турель", "owner": null,
+		"x": pos.x, "y": pos.y, "team": "enemy", "name": I18n.t("tut.turret", {}, "Учебная турель"), "owner": null,
 		"max_hp": 99999.0, "speed": 0.0, "fire_rate": TURRET_FIRE_INTERVAL,
 		"color_key": "enemy", "chassis": "heavy", "dmg_scale": 0.4,
 	})
@@ -278,7 +288,7 @@ func update() -> void:
 		if stage == TOTAL:
 			_finish_course(false)
 		else:
-			_fail("Танк уничтожен")
+			_fail(I18n.t("tut.fail.destroyed", {}, "Танк уничтожен"))
 		return
 	_track(tank)
 	if stage == 3:
@@ -336,7 +346,7 @@ func _verdict(tank) -> int:
 			if _alive_count(barrels) == 0:
 				barrels_gone_ticks += 1
 				if barrels_gone_ticks > BARREL_GRACE:
-					fail_reason = "Бочки взорваны, а танк уцелел"
+					fail_reason = I18n.t("tut.fail.barrels", {}, "Бочки взорваны, а танк уцелел")
 					return -1
 			return 0
 		6:
@@ -348,14 +358,14 @@ func _verdict(tank) -> int:
 				return 0
 			if was_frozen:
 				return 1
-			fail_reason = "Манекен уничтожен без заморозки"
+			fail_reason = I18n.t("tut.fail.nofreeze", {}, "Манекен уничтожен без заморозки")
 			return -1
 		9:
 			if _alive_count(targets) > 0:
 				return 0
 			if String(kill_sources.get(targets[0], "")) == "acid":
 				return 1
-			fail_reason = "Манекен уничтожен не ядом"
+			fail_reason = I18n.t("tut.fail.noacid", {}, "Манекен уничтожен не ядом")
 			return -1
 		10, 11:
 			return 1 if enemy != null and not enemy.alive else 0
@@ -374,14 +384,14 @@ func _succeed(tank) -> void:
 	Sfx.play("pickup")
 	world.spawn_shockwave(tank.x, tank.y, 60.0, "dash", Color("#86efac"), 16)
 	world.particles.burst(tank.x, tank.y, [Color("#86efac"), Color.WHITE], 20, 2, 5, 14, 28, world.rng)
-	world.feed.emit("✔ Задание %d выполнено!" % stage, Color("#86efac"))
+	world.feed.emit(I18n.t("tut.feed.done", {"n": stage}, "✔ Задание %d выполнено!" % stage), Color("#86efac"))
 
 func _fail(reason: String) -> void:
 	state = ST_FAIL
 	fail_reason = reason
 	pause_ticks = FAIL_PAUSE
 	_disarm_enemies()
-	world.feed.emit("✖ %s — задание начнётся заново" % reason, Color("#f87171"))
+	world.feed.emit(I18n.t("tut.feed.fail", {"reason": reason}, "✖ %s — задание начнётся заново" % reason), Color("#f87171"))
 
 func _disarm_enemies() -> void:
 	for t in world.tanks:
@@ -392,8 +402,8 @@ func _finish_course(boss_defeated: bool) -> void:
 	state = ST_OVER
 	Prof.bump_stat("tutorialCompleted", 1)
 	var player = world.players[0]
-	var reason := "Курс молодого бойца пройден! Босс повержен." if boss_defeated \
-		else "Курс молодого бойца пройден! Босс оказался сильнее, но обучение завершено."
+	var reason := I18n.t("tut.over.won", {}, "Курс молодого бойца пройден! Босс повержен.") if boss_defeated \
+		else I18n.t("tut.over.lost", {}, "Курс молодого бойца пройден! Босс оказался сильнее, но обучение завершено.")
 	world.feed.emit("🏆 " + reason, Color("#ffd700"))
 	world._finish(player.name, 0, "player", reason)
 
@@ -407,7 +417,7 @@ func on_damage_evaded(target, source: String) -> void:
 	last_dodge_tick = world.tick
 	dodges += 1
 	Sfx.play("dash", target.x, target.y)
-	world.damage_number.emit(target.x, target.y - 30, "УКЛОНЕНИЕ %d/%d" % [mini(dodges, DODGES_NEEDED), DODGES_NEEDED], Color("#38bdf8"))
+	world.damage_number.emit(target.x, target.y - 30, I18n.t("tut.dodge", {"n": mini(dodges, DODGES_NEEDED), "total": DODGES_NEEDED}, "УКЛОНЕНИЕ %d/%d" % [mini(dodges, DODGES_NEEDED), DODGES_NEEDED]), Color("#38bdf8"))
 
 func on_tank_killed(victim, source: String) -> void:
 	kill_sources[victim] = source
@@ -415,25 +425,25 @@ func on_tank_killed(victim, source: String) -> void:
 func task_info() -> Dictionary:
 	var info := {
 		"stage": stage, "total": TOTAL,
-		"title": "ЗАДАНИЕ %d/%d: %s" % [stage, TOTAL, TITLES.get(stage, "")],
-		"desc": String(DESCS.get(stage, "")),
-		"keys": String(KEYS.get(stage, "")),
+		"title": I18n.t("tut.task", {"n": stage, "total": TOTAL, "title": title_of(stage)}, "ЗАДАНИЕ %d/%d: %s" % [stage, TOTAL, TITLES.get(stage, "")]),
+		"desc": desc_of(stage),
+		"keys": keys_of(stage),
 		"progress_text": "", "progress": 0.0, "done": false,
 	}
 	match state:
 		ST_DONE:
-			info["title"] = "✔ ЗАДАНИЕ %d ВЫПОЛНЕНО" % stage
-			info["progress_text"] = "Следующее задание через %d…" % _seconds_left()
+			info["title"] = I18n.t("tut.state.done", {"n": stage}, "✔ ЗАДАНИЕ %d ВЫПОЛНЕНО" % stage)
+			info["progress_text"] = I18n.t("tut.next", {"n": _seconds_left()}, "Следующее задание через %d…" % _seconds_left())
 			info["progress"] = 1.0
 			return info
 		ST_FAIL:
-			info["title"] = "✖ ЗАДАНИЕ %d НЕ ВЫПОЛНЕНО" % stage
+			info["title"] = I18n.t("tut.state.fail", {"n": stage}, "✖ ЗАДАНИЕ %d НЕ ВЫПОЛНЕНО" % stage)
 			info["desc"] = fail_reason
-			info["progress_text"] = "Перезапуск через %d…" % _seconds_left()
+			info["progress_text"] = I18n.t("tut.restart", {"n": _seconds_left()}, "Перезапуск через %d…" % _seconds_left())
 			return info
 		ST_OVER:
-			info["title"] = "ОБУЧЕНИЕ ЗАВЕРШЕНО"
-			info["desc"] = "Курс молодого бойца пройден!"
+			info["title"] = I18n.t("tut.state.over", {}, "ОБУЧЕНИЕ ЗАВЕРШЕНО")
+			info["desc"] = I18n.t("tut.over.short", {}, "Курс молодого бойца пройден!")
 			info["progress"] = 1.0
 			info["done"] = true
 			return info
@@ -443,36 +453,39 @@ func task_info() -> Dictionary:
 			var parts := []
 			for k in ["W", "A", "S", "D"]:
 				parts.append("%s %s" % [k, "✔" if bool(keys_used[k]) else "—"])
-			info["progress_text"] = "   ".join(parts) + "   ·   до точки: %d м" % _meters_to_checkpoint(tank)
+			info["progress_text"] = "   ".join(parts) + "   ·   " + I18n.t("tut.toPoint.inline", {"n": _meters_to_checkpoint(tank)}, "до точки: %d м" % _meters_to_checkpoint(tank))
 		2:
-			info["progress_text"] = "Уничтожено манекенов: %d / %d" % [targets.size() - _alive_count(targets), targets.size()]
+			info["progress_text"] = I18n.t("tut.p.dummies", {"a": targets.size() - _alive_count(targets), "b": targets.size()}, "Уничтожено манекенов: %d / %d" % [targets.size() - _alive_count(targets), targets.size()])
 		3:
-			info["progress_text"] = "Уклонений: %d / %d" % [mini(dodges, DODGES_NEEDED), DODGES_NEEDED]
+			info["progress_text"] = I18n.t("tut.p.dodges", {"a": mini(dodges, DODGES_NEEDED), "b": DODGES_NEEDED}, "Уклонений: %d / %d" % [mini(dodges, DODGES_NEEDED), DODGES_NEEDED])
 		4:
 			var charge := 0
 			if generator != null:
 				charge = 100 if generator.captured_team != "" else int(generator.capture_progress * 100.0)
-			info["progress_text"] = "Заряд генератора: %d%%" % charge
+			info["progress_text"] = I18n.t("tut.p.charge", {"n": charge}, "Заряд генератора: %d%%" % charge)
 		5:
-			info["progress_text"] = "Бочек взорвано: %d / %d   ·   танк: %s" % [
-				barrels.size() - _alive_count(barrels), barrels.size(), _hp_text(targets[0] if not targets.is_empty() else null)]
+			info["progress_text"] = I18n.t("tut.p.barrels", {"a": barrels.size() - _alive_count(barrels), "b": barrels.size(),
+				"tank": _hp_text(targets[0] if not targets.is_empty() else null)}, "Бочек взорвано: %d / %d   ·   танк: %s" % [
+				barrels.size() - _alive_count(barrels), barrels.size(), _hp_text(targets[0] if not targets.is_empty() else null)])
 		6:
-			info["progress_text"] = "До точки: %d м" % _meters_to_checkpoint(tank)
+			info["progress_text"] = I18n.t("tut.p.toPoint", {"n": _meters_to_checkpoint(tank)}, "До точки: %d м" % _meters_to_checkpoint(tank))
 		7:
 			var has_perk: bool = tank != null and tank.flags.has("mines")
-			info["progress_text"] = "Перк: %s   ·   Мина: %s" % [
-				"✔" if has_perk else "—", "✔" if tank != null and _player_mine_placed(tank) else "—"]
+			info["progress_text"] = I18n.t("tut.p.mine", {"perk": "✔" if has_perk else "—",
+				"mine": "✔" if tank != null and _player_mine_placed(tank) else "—"}, "Перк: %s   ·   Мина: %s" % [
+				"✔" if has_perk else "—", "✔" if tank != null and _player_mine_placed(tank) else "—"])
 		8:
-			info["progress_text"] = "Заморожен: %s   ·   манекен: %s" % [
-				"✔" if was_frozen else "—", _hp_text(targets[0] if not targets.is_empty() else null)]
+			info["progress_text"] = I18n.t("tut.p.frozen", {"frozen": "✔" if was_frozen else "—",
+				"dummy": _hp_text(targets[0] if not targets.is_empty() else null)}, "Заморожен: %s   ·   манекен: %s" % [
+				"✔" if was_frozen else "—", _hp_text(targets[0] if not targets.is_empty() else null)])
 		9:
 			var dummy = targets[0] if not targets.is_empty() else null
 			var stacks: int = dummy.acid_stacks if dummy != null and dummy.alive else 0
-			info["progress_text"] = "Слоёв яда: %d / %d   ·   манекен: %s" % [stacks, Cfg.ACID_STACK_MAX, _hp_text(dummy)]
+			info["progress_text"] = I18n.t("tut.p.acid", {"a": stacks, "b": Cfg.ACID_STACK_MAX, "dummy": _hp_text(dummy)}, "Слоёв яда: %d / %d   ·   манекен: %s" % [stacks, Cfg.ACID_STACK_MAX, _hp_text(dummy)])
 		10:
-			info["progress_text"] = "Противник: %s" % _hp_text(enemy)
+			info["progress_text"] = I18n.t("tut.p.enemy", {"hp": _hp_text(enemy)}, "Противник: %s" % _hp_text(enemy))
 		11:
-			info["progress_text"] = "Босс: %s" % _hp_text(enemy)
+			info["progress_text"] = I18n.t("tut.p.boss", {"hp": _hp_text(enemy)}, "Босс: %s" % _hp_text(enemy))
 	return info
 
 func _seconds_left() -> int:
@@ -485,7 +498,7 @@ func _meters_to_checkpoint(tank) -> int:
 
 func _hp_text(t) -> String:
 	if t == null or not t.alive:
-		return "уничтожен"
+		return I18n.t("tut.destroyed", {}, "уничтожен")
 	return "%d / %d HP" % [int(ceil(t.hp)), int(t.max_hp)]
 
 func highlights() -> Array:
@@ -495,28 +508,28 @@ func highlights() -> Array:
 	match stage:
 		1, 6:
 			if checkpoint != Vector2.INF:
-				out.append({"pos": checkpoint, "label": "КОНТРОЛЬНАЯ ТОЧКА", "color": Color("#38bdf8"), "point": true})
+				out.append({"pos": checkpoint, "label": I18n.t("tut.l.checkpoint", {}, "КОНТРОЛЬНАЯ ТОЧКА"), "color": Color("#38bdf8"), "point": true})
 		2:
-			_add_alive(out, targets, "МАНЕКЕН", Color("#fde047"))
+			_add_alive(out, targets, I18n.t("tut.l.dummy", {}, "МАНЕКЕН"), Color("#fde047"))
 		3:
-			_add_alive(out, [enemy], "ТУРЕЛЬ", Color("#f87171"))
+			_add_alive(out, [enemy], I18n.t("tut.l.turret", {}, "ТУРЕЛЬ"), Color("#f87171"))
 		4:
 			if generator != null:
-				out.append({"pos": Vector2(generator.x, generator.y), "label": "ГЕНЕРАТОР ЩИТА", "color": Color("#34d399"), "point": true})
+				out.append({"pos": Vector2(generator.x, generator.y), "label": I18n.t("tut.l.generator", {}, "ГЕНЕРАТОР ЩИТА"), "color": Color("#34d399"), "point": true})
 		5:
-			_add_alive(out, barrels, "ВЗРЫВНАЯ БОЧКА", Color("#f97316"))
-			_add_alive(out, targets, "ЦЕЛЬ", Color("#f87171"))
+			_add_alive(out, barrels, I18n.t("tut.l.barrel", {}, "ВЗРЫВНАЯ БОЧКА"), Color("#f97316"))
+			_add_alive(out, targets, I18n.t("tut.l.target", {}, "ЦЕЛЬ"), Color("#f87171"))
 		7:
 			if perk_drop != null and perk_drop.active:
-				out.append({"pos": Vector2(perk_drop.x, perk_drop.y), "label": "ПЕРК «МИНОУКЛАДЧИК»", "color": Color("#ff88ff"), "point": false})
+				out.append({"pos": Vector2(perk_drop.x, perk_drop.y), "label": I18n.t("tut.l.minePerk", {}, "ПЕРК «МИНОУКЛАДЧИК»"), "color": Color("#ff88ff"), "point": false})
 		8:
-			_add_alive(out, targets, "ЦЕЛЬ (ЗАМОРОЗКА)", Color("#7fdfff"))
+			_add_alive(out, targets, I18n.t("tut.l.freeze", {}, "ЦЕЛЬ (ЗАМОРОЗКА)"), Color("#7fdfff"))
 		9:
-			_add_alive(out, targets, "ЦЕЛЬ (ЯД)", Color("#84cc16"))
+			_add_alive(out, targets, I18n.t("tut.l.acid", {}, "ЦЕЛЬ (ЯД)"), Color("#84cc16"))
 		10:
-			_add_alive(out, [enemy], "ПРОТИВНИК", Color("#f43f5e"))
+			_add_alive(out, [enemy], I18n.t("tut.l.enemy", {}, "ПРОТИВНИК"), Color("#f43f5e"))
 		11:
-			_add_alive(out, [enemy], "БОСС", Color("#e74c3c"))
+			_add_alive(out, [enemy], I18n.t("tut.l.boss", {}, "БОСС"), Color("#e74c3c"))
 	return out
 
 func _add_alive(out: Array, list: Array, label: String, color: Color) -> void:

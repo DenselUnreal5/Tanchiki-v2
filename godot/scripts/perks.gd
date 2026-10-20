@@ -94,8 +94,8 @@ const LIST := [
 	},
 
 	{
-		"id": "heavy_armor", "name": "Тяжёлая броня", "icon": "🛡",
-		"desc": "Усиленный бронекорпус увеличивает максимальный запас прочности танка на 50%.", "category": "defense", "mods": {"maxHPMult": 1.5},
+		"id": "heavy_armor", "name": "Усиленный корпус", "icon": "🛡",
+		"desc": "Бронеплиты делают корпус танка прочнее на 50% (максимум HP +50%).", "category": "defense", "mods": {"maxHPMult": 1.5},
 	},
 	{
 		"id": "regen", "name": "Регенерация", "icon": "❤",
@@ -316,7 +316,7 @@ const LIST := [
 const BOT_LIST := [
 	{"id": "bot_rapid", "icon": "⚡", "name": "Скорострельность", "desc": "Перезарядка ускорена на 30%", "mods": {"fireRateMult": 0.7}},
 	{"id": "bot_speed", "icon": "👟", "name": "Форсаж", "desc": "Скорость движения увеличена на 30%", "mods": {"speedMult": 1.3}},
-	{"id": "bot_tough", "icon": "🛡", "name": "Толстая броня", "desc": "Запас прочности увеличен на 40%", "mods": {"maxHPMult": 1.4}},
+	{"id": "bot_tough", "icon": "🛡", "name": "Толстый корпус", "desc": "Корпус прочнее на 40%", "mods": {"maxHPMult": 1.4}},
 	{"id": "bot_double", "icon": "🔫", "name": "Двойной выстрел", "desc": "Стреляет двумя параллельными снарядами", "flags": ["doubleShot"]},
 	{"id": "bot_nitro", "icon": "🚀", "name": "Нитро", "desc": "Периодический рывок скорости для сближения", "active": "nitro"},
 	{"id": "bot_wave", "icon": "💠", "name": "Ударная волна", "desc": "Круговой импульс, отбрасывающий врагов в упор", "active": "shockwave"},

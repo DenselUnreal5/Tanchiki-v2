@@ -16,7 +16,6 @@ const DISTRICTS := {
 	"residential":  {"id": "residential", "weight": 4},
 	"industrial":   {"id": "industrial", "weight": 2},
 	"park":         {"id": "park", "weight": 2},
-	"adobe_village": {"id": "adobe_village", "weight": 0},
 }
 
 static func build(rng: Rng, cols: int, rows: int, loc: Dictionary) -> Dictionary:

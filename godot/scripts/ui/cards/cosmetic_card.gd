@@ -162,27 +162,27 @@ func set_data(perk_id: String, icon_color: Color, name_text: String, state_text:
 	var badge_bbcode := ""
 	if cos_type == "skin":
 		if rarity == "legendary":
-			badge_bbcode = "[color=#ffd700]ЛЕГЕНДАРНЫЙ · ПОЛНЫЙ КОМПЛЕКТ[/color]"
+			badge_bbcode = "[color=#ffd700]" + I18n.t("cos.badge.legendary_set", {}, "ЛЕГЕНДАРНЫЙ · ПОЛНЫЙ КОМПЛЕКТ") + "[/color]"
 		elif rarity == "epic":
-			badge_bbcode = "[color=#c084fc]ЭПИЧЕСКИЙ · ПОЛНЫЙ КОМПЛЕКТ[/color]"
+			badge_bbcode = "[color=#c084fc]" + I18n.t("cos.badge.epic_set", {}, "ЭПИЧЕСКИЙ · ПОЛНЫЙ КОМПЛЕКТ") + "[/color]"
 		elif rarity == "rare":
-			badge_bbcode = "[color=#60a5fa]РЕДКИЙ · ПОЛНЫЙ КОМПЛЕКТ[/color]"
+			badge_bbcode = "[color=#60a5fa]" + I18n.t("cos.badge.rare_set", {}, "РЕДКИЙ · ПОЛНЫЙ КОМПЛЕКТ") + "[/color]"
 		else:
-			badge_bbcode = "[color=#94a3b8]БАЗОВЫЙ КОМПЛЕКТ[/color]"
+			badge_bbcode = "[color=#94a3b8]" + I18n.t("cos.badge.base_set", {}, "БАЗОВЫЙ КОМПЛЕКТ") + "[/color]"
 	else:
 		if rarity == "legendary":
-			badge_bbcode = "[color=#ffd700]ЛЕГЕНДАРНЫЙ[/color]"
+			badge_bbcode = "[color=#ffd700]" + I18n.t("cos.badge.legendary", {}, "ЛЕГЕНДАРНЫЙ") + "[/color]"
 		elif rarity == "epic":
-			badge_bbcode = "[color=#c084fc]ЭПИЧЕСКИЙ[/color]"
+			badge_bbcode = "[color=#c084fc]" + I18n.t("cos.badge.epic", {}, "ЭПИЧЕСКИЙ") + "[/color]"
 		elif rarity == "rare":
-			badge_bbcode = "[color=#60a5fa]РЕДКИЙ[/color]"
+			badge_bbcode = "[color=#60a5fa]" + I18n.t("cos.badge.rare", {}, "РЕДКИЙ") + "[/color]"
 		else:
 			match cos_type:
-				"camo": badge_bbcode = "[color=#94a3b8]КАМУФЛЯЖ[/color]"
-				"hull": badge_bbcode = "[color=#94a3b8]ДЕКАЛЬ КОРПУСА[/color]"
-				"track": badge_bbcode = "[color=#94a3b8]ГУСЕНИЦЫ[/color]"
-				"turret": badge_bbcode = "[color=#94a3b8]БАШНЯ[/color]"
-				_: badge_bbcode = "[color=#94a3b8]КОСМЕТИКА[/color]"
+				"camo": badge_bbcode = "[color=#94a3b8]" + I18n.t("cos.badge.camo", {}, "КАМУФЛЯЖ") + "[/color]"
+				"hull": badge_bbcode = "[color=#94a3b8]" + I18n.t("cos.badge.hull", {}, "ДЕКАЛЬ КОРПУСА") + "[/color]"
+				"track": badge_bbcode = "[color=#94a3b8]" + I18n.t("cos.badge.track", {}, "ГУСЕНИЦЫ") + "[/color]"
+				"turret": badge_bbcode = "[color=#94a3b8]" + I18n.t("cos.badge.turret", {}, "БАШНЯ") + "[/color]"
+				_: badge_bbcode = "[color=#94a3b8]" + I18n.t("cos.badge.cosmetic", {}, "КОСМЕТИКА") + "[/color]"
 
 	_badge_label.text = badge_bbcode
 

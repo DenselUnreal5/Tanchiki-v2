@@ -946,7 +946,7 @@ class PowerGenerator extends RefCounted:
 		Sfx.play("laser", x, y)
 		Sfx.play("shield")
 
-		world.feed.emit("⚡ Генератор поля разряжен! ЭМИ-волна поразила противников!", Color("#38bdf8"))
+		world.feed.emit(I18n.t("feed.generatorDischarged", {}, "⚡ Генератор поля разряжен! ЭМИ-волна поразила противников!"), Color("#38bdf8"))
 
 		for tank in world.tanks:
 			if not tank.alive:

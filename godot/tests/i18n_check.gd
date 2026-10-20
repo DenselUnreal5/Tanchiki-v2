@@ -6,7 +6,11 @@ func _ready() -> void:
 
 	var prefixes := []
 	var missing := []
-	for key in used.keys():
+	for raw_key in used.keys():
+		var key: String = String(raw_key)
+		if key.contains("%"):
+			used[key.substr(0, key.find("%"))] = used[raw_key]
+			key = key.substr(0, key.find("%"))
 		if key.ends_with("."):
 			prefixes.append(key)
 			var found := false

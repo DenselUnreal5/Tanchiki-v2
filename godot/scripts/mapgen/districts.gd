@@ -20,8 +20,6 @@ static func paint(map: GameMap, rng: Rng, block: Dictionary,
 			_industrial(map, rng, r0, r1, c0, c1, yard)
 		"park":
 			_park(map, rng, r0, r1, c0, c1, ground)
-		"adobe_village":
-			VillageGen.paint(map, rng, r0, r1, c0, c1, ground, loc)
 		_:
 			_residential(map, rng, r0, r1, c0, c1, ground)
 
