@@ -28,6 +28,7 @@ var _touch: TouchControls
 
 var ui_rng := Rng.new(int(Time.get_ticks_usec()) & 0xFFFFFFFF)
 var match_damage := 0.0
+var _history_recorded := false
 
 var floaters: Array = []
 
@@ -489,6 +490,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 	_bind_world_events(world)
 
 	match_damage = 0.0
+	_history_recorded = false
 	accumulator = 0.0
 	floaters.clear()
 
@@ -699,8 +701,10 @@ func _reward_label(kind: String, who: String) -> String:
 	return I18n.t("reward.other", {}, "награда")
 
 func _on_finish(result: Dictionary) -> void:
+	_record_match_history(result)
 	state = S_GAMEOVER
 	if Net.role == "host":
+		result["stats_history"] = _finish_history_rows(result)
 		Net.host_event("finish", result)
 	Mus.play_menu()
 	if bool(result["victory"]):
@@ -729,6 +733,30 @@ func _on_finish(result: Dictionary) -> void:
 	hud.hide_hud()
 	ui.refresh_profile()
 	ui.show_game_over(result, world, players.size() > 1)
+
+func _finish_history_rows(result: Dictionary) -> Dictionary:
+	var history_rows := {}
+	for participant in players:
+		if participant.tank == null: continue
+		var won := bool(result.get("victory", false))
+		if world.mode in ["ffa", "koth"]:
+			won = int(result.get("winner_player_index", -1)) == participant.index
+		elif world.mode == "ctf":
+			won = String(result.get("winner_team", "")) == participant.tank.team
+		history_rows[str(participant.tank.net_id)] = StatsHistory.from_player(world, participant, won)
+	return history_rows
+
+func _record_match_history(result: Dictionary) -> void:
+	if _history_recorded or world == null or players.is_empty(): return
+	var entry := StatsHistory.from_player(world, players[0], bool(result.get("victory", false)))
+	if Net.role == "client":
+		# Finish events carry authoritative totals; old hosts may omit them.
+		if players[0].tank == null or not result.get("stats_history") is Dictionary: return
+		var remote = result.stats_history.get(str(players[0].tank.net_id))
+		if not remote is Dictionary: return
+		entry = remote
+	_history_recorded = true
+	Prof.record_match(entry)
 
 func _sync_steam() -> void:
 	if not SteamStats.ready():

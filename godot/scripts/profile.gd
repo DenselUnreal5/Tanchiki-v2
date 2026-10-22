@@ -3,7 +3,7 @@ extends Node
 const Weekly = preload("res://scripts/weekly.gd")
 
 const SAVE_PATH := "user://profile.json"
-const SCHEMA := 6
+const SCHEMA := 7
 
 signal levelup(levels: Array)
 signal unlock(ids: Array, reason: String)
@@ -92,6 +92,7 @@ var class_owned := {}
 var equipped_color1 := "p1"
 var equipped_color2 := "p2"
 var bestiary_kills: Dictionary = {}
+var match_history: Array = []
 
 func _ready() -> void:
 	_empty_stats()
@@ -124,6 +125,7 @@ func load_profile() -> void:
 	_sync_level_unlocks()
 
 func _apply(data: Dictionary) -> void:
+	match_history = StatsHistory.clean(data.get("matchHistory", []))
 	global_level = clampi(int(data.get("globalLevel", 1)), 1, 999)
 	global_xp = maxi(0, int(data.get("globalXP", 0)))
 	var known_perks := {}
@@ -239,6 +241,7 @@ func save_profile() -> void:
 		"equippedClass": equipped_class,
 		"classOwned": class_owned.keys(),
 		"bestiaryKills": bestiary_kills,
+		"matchHistory": match_history,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f != null:
@@ -264,11 +267,16 @@ func reset() -> void:
 	equipped_class = TankClasses.DEFAULT
 	class_owned.clear()
 	bestiary_kills.clear()
+	match_history.clear()
 	_sync_level_unlocks()
 	save_profile()
 
 func xp_to_next_level() -> int:
 	return Cfg.xp_for_global_level(global_level)
+
+func record_match(entry: Dictionary) -> void:
+	match_history = StatsHistory.clean(match_history + [entry])
+	save_profile()
 
 func add_xp(amount: int) -> void:
 	if amount <= 0:

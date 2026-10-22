@@ -106,7 +106,7 @@ func _ready() -> void:
 	_stats = _make_overlay(true)
 	_stats_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
 	_stats_body = _overlay_body(_stats, "stats.title", "Статистика", _stats_sub,
-		func(): close_stats(), 540)
+		func(): close_stats(), 920)
 	_daily = _make_overlay(true)
 	_daily_sub = UiKit.rich("", 11, Cfg.UI_MUTED)
 	_daily_body = _overlay_body(_daily, "daily.title", "Ежедневные задания",
@@ -389,7 +389,17 @@ func _overlay_body(root: Control, title_key: String, title_fallback: String,
 	panel.add_child(box)
 
 	var title := UiKit.title(title_text, 24, Cfg.UI_TEXT)
-	box.add_child(title)
+	if title_key == "stats.title":
+		var header := HBoxContainer.new()
+		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		header.add_child(title)
+		var dismiss := UiKit.secondary("×")
+		dismiss.tooltip_text = I18n.t("btn.close", {}, "Закрыть")
+		dismiss.pressed.connect(on_close)
+		header.add_child(dismiss)
+		box.add_child(header)
+	else:
+		box.add_child(title)
 	box.add_child(sub)
 
 	var body := UiKit.vbox(8)
@@ -408,6 +418,7 @@ func _overlay_body(root: Control, title_key: String, title_fallback: String,
 	root.set_meta("title_fallback", title_fallback)
 	root.set_meta("close_button", close)
 	root.set_meta("scroll", scroll)
+	root.set_meta("content_panel", panel)
 	return body
 
 func _resize_overlays() -> void:
@@ -417,6 +428,10 @@ func _resize_overlays() -> void:
 			continue
 		var scroll: ScrollContainer = root.get_meta("scroll")
 		scroll.custom_minimum_size.y = minf(screen.y * 0.86, 900.0)
+	if _stats != null and _stats.has_meta("content_panel"):
+		var width := maxf(360.0, minf(920.0, screen.x - 48.0))
+		(_stats.get_meta("scroll") as ScrollContainer).custom_minimum_size.x = width
+		(_stats.get_meta("content_panel") as Control).custom_minimum_size.x = width
 	_resize_settings_scroll()
 
 func _notification(what: int) -> void:
@@ -892,23 +907,12 @@ func open_stats() -> void:
 		Prof.unlocked.size(), Perks.all().size(), Prof.money]) + "[/center]"
 
 	for c in _stats_body.get_children():
+		_stats_body.remove_child(c)
 		c.queue_free()
 
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 20)
-	grid.add_theme_constant_override("v_separation", 7)
-	_stats_body.add_child(grid)
-
-	for key in Prof.STAT_KEYS:
-		var label_text := I18n.t("stat." + key, {}, String(Prof.STAT_LABELS.get(key, key)))
-		var name_label := UiKit.label(label_text, 12, Cfg.UI_MUTED)
-		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		grid.add_child(name_label)
-		var value := UiKit.label(str(Prof.stats.get(key, 0)), 12, Color.WHITE, true)
-		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		grid.add_child(value)
+	var dashboard := StatsDashboard.new()
+	_stats_body.add_child(dashboard)
+	_resize_overlays()
 
 	_stats.visible = true
 
