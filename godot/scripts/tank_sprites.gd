@@ -79,14 +79,18 @@ static func turret_part(tank, hull: String) -> Dictionary:
 	var color: Color = Cannons.get_cannon(cannon).get("color", Color.WHITE)
 	match cannon:
 		"ice":
-			for y in range(tip + 2, root - 2):
+			for y in range(tip, root - 2):
 				for x in range(left - 1, left + width + 1):
 					_gun_pixel(tex, paint, x, y, Color("#c2e0e5") if (y - tip) % 4 == 0 else Color("#527f96"), false)
 		"acid":
 			for y in range(tip + 3, root - 2):
 				for x in range(left, left + width):
 					if x == left or x == left + width - 1: _gun_pixel(tex, paint, x, y, color.darkened(0.25), false)
-			for x in range(left - 1, left + width + 1): _gun_pixel(tex, paint, x, tip + 1, Color("#344039"), false)
+			# The nozzle is the frontmost part: no paintable factory pipe
+			# may extend ahead of it when a cosmetic skin is applied.
+			for y in range(tip, tip + 2):
+				for x in range(left - 1, left + width + 1):
+					_gun_pixel(tex, paint, x, y, Color("#344039") if y == tip else color.darkened(0.25), false)
 		"fire":
 			for y in range(tip + 3, root - 2):
 				for x in range(left, left + width):
