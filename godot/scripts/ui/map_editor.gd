@@ -6,18 +6,6 @@ signal battle_requested(settings: Dictionary)
 
 const BASE_TILE_PX := 14.0
 
-const ARCHETYPES := [
-	{"id": "auto", "name": "Авто", "desc": "Под стиль биома"},
-	{"id": "avenues", "name": "Кварталы", "desc": "Проспекты и арки"},
-	{"id": "plaza", "name": "Площадь", "desc": "Центральный монумент"},
-	{"id": "river", "name": "Река", "desc": "Долина с мостами"},
-	{"id": "fortress", "name": "Цитадель", "desc": "Укреплённый центр"},
-	{"id": "radial", "name": "Кольца", "desc": "Кольца и лучи от центра"},
-	{"id": "labyrinths", "name": "Лабиринт", "desc": "Тактические укрытия"},
-	{"id": "industrial", "name": "Промзона", "desc": "Контейнеры и ангары"},
-	{"id": "canyon", "name": "Каньон", "desc": "Ущелья и мосты"},
-]
-
 const MODES := [
 	{"id": "ffa", "name": "Каждый за себя", "desc": "Классический бой до 40 фрагов"},
 	{"id": "ctf", "name": "Захват флага", "desc": "1 нейтральный флаг, цель — 5 захватов"},
@@ -27,7 +15,6 @@ const MODES := [
 
 var current_location: String = "city"
 var current_mode: String = "ctf"
-var current_archetype: String = "auto"
 var current_level: int = 0
 var current_seed: int = 12345
 
@@ -42,12 +29,10 @@ var _title_sub: Label = null
 # UI Buttons & Inputs
 var _loc_btn_group: ButtonGroup = ButtonGroup.new()
 var _mode_btn_group: ButtonGroup = ButtonGroup.new()
-var _arch_btn_group: ButtonGroup = ButtonGroup.new()
 var _level_btn_group: ButtonGroup = ButtonGroup.new()
 
 var _loc_buttons: Dictionary = {}
 var _mode_buttons: Dictionary = {}
-var _arch_buttons: Dictionary = {}
 var _level_buttons: Array[Button] = []
 
 var _seed_input: LineEdit = null
@@ -85,9 +70,6 @@ func open_with_settings(settings: Dictionary) -> void:
 	if m != "":
 		current_mode = m
 
-	var arch = String(settings.get("archetype", "auto"))
-	current_archetype = arch
-
 	var lvl := int(settings.get("level", -1))
 	if int(settings.get("seed", -1)) >= 0:
 		current_seed = int(settings["seed"])
@@ -121,7 +103,7 @@ func _sync_level_buttons() -> void:
 
 func generate_map() -> void:
 	level_data = LevelGen.generate(current_level if current_level > 0 else -1, current_mode, current_seed,
-		current_location, current_archetype)
+		current_location, "auto")
 	current_map = level_data.get("map", null)
 	_update_stats()
 	_update_header()
@@ -140,13 +122,8 @@ func _update_header() -> void:
 		if m["id"] == current_mode:
 			mode_name = I18n.dn(m, "name", "me.mode")
 			break
-	var arch_name := current_archetype
-	for a in ARCHETYPES:
-		if a["id"] == current_archetype:
-			arch_name = I18n.dn(a, "name", "me.arch")
-			break
 	var level_text := (I18n.t("me.levelSuffix", {}, " · Уровень %d") % current_level) if current_level > 0 else ""
-	_title_sub.text = I18n.t("me.titleSub", {}, "%s · %s · %s%s (Сид: %d)") % [loc_name, mode_name, arch_name, level_text, current_seed]
+	_title_sub.text = I18n.t("me.titleSub", {}, "%s · %s%s (Сид: %d)") % [loc_name, mode_name, level_text, current_seed]
 
 func _update_stats() -> void:
 	if current_map == null:
@@ -199,8 +176,6 @@ func _sync_ui_state() -> void:
 		_loc_buttons[current_location].button_pressed = true
 	if _mode_buttons.has(current_mode):
 		_mode_buttons[current_mode].button_pressed = true
-	if _arch_buttons.has(current_archetype):
-		_arch_buttons[current_archetype].button_pressed = true
 	_sync_level_buttons()
 	if _seed_input != null:
 		_seed_input.text = str(current_seed)
@@ -416,32 +391,7 @@ func _build_control_panel(parent: Control) -> void:
 
 	vcol.add_child(_make_divider())
 
-	# Section 3: Architectural Archetype
-	vcol.add_child(UiKit.label(I18n.t("me.secArch", {}, "АРХИТЕКТУРА И СТИЛЬ КАРТЫ"), 11, Cfg.UI_ACCENT, true))
-	var arch_grid := GridContainer.new()
-	arch_grid.columns = 2
-	arch_grid.add_theme_constant_override("h_separation", 4)
-	arch_grid.add_theme_constant_override("v_separation", 4)
-	vcol.add_child(arch_grid)
-
-	_arch_buttons.clear()
-	for a in ARCHETYPES:
-		var b := UiKit.toggle(I18n.dn(a, "name", "me.arch"), 11)
-		b.clip_text = true
-		b.tooltip_text = I18n.dn(a, "desc", "me.arch")
-		b.button_group = _arch_btn_group
-		b.button_pressed = (a["id"] == current_archetype)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var arch_id: String = a["id"]
-		b.pressed.connect(func():
-			current_archetype = arch_id
-			generate_map())
-		arch_grid.add_child(b)
-		_arch_buttons[arch_id] = b
-
-	vcol.add_child(_make_divider())
-
-	# Section 4: Seed & Level
+	# Seed & Level
 	var seed_row := HBoxContainer.new()
 	seed_row.add_theme_constant_override("separation", 6)
 	vcol.add_child(seed_row)
@@ -565,7 +515,7 @@ func _on_battle_pressed() -> void:
 	var match_settings := {
 		"location": current_location,
 		"mode": current_mode,
-		"archetype": current_archetype,
+		"archetype": "auto",
 		"level": current_level if current_level > 0 else -1,
 		"seed": current_seed,
 	}
