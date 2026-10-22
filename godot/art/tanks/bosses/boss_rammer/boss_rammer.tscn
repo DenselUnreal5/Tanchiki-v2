@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Texture2D" path="res://art/tanks/bosses/boss_rammer/hull.tres" id="1"]
+[ext_resource type="Texture2D" path="res://art/tanks/bosses/boss_rammer/turret.tres" id="2"]
+
+[node name="boss_rammer" type="Node2D"]
+texture_filter = 1
+
+[node name="Hull" type="Sprite2D" parent="."]
+texture = ExtResource("1")
+centered = false
+offset = Vector2(-475, -494)
+
+[node name="Turret" type="Sprite2D" parent="."]
+scale = Vector2(0.65, 0.65)
+texture = ExtResource("2")
+centered = false
+offset = Vector2(-455, -495)

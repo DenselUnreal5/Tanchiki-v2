@@ -1043,6 +1043,7 @@ func _update_rammer_boss(world) -> void:
 
 			if hit_hard or x <= col_w or x >= map.width - col_w or y <= col_h or y >= map.height - col_h:
 				rammer_charge_ticks = 0
+				world.add_shot_effect("rammer", "ram_impact", Vector2(x, y), rammer_dir + PI, 82.0)
 				world.spawn_shockwave(x, y, 90.0, "ram", Color("#ff4400"), 22)
 				world.add_shake(14.0, x, y)
 				Sfx.play("crack", x, y)
@@ -1059,6 +1060,7 @@ func _update_rammer_boss(world) -> void:
 				var d2: float = (other.x - x) * (other.x - x) + (other.y - y) * (other.y - y)
 				if d2 <= 42.0 * 42.0:
 					rammer_charge_hit.append(other)
+					world.add_shot_effect("rammer", "ram_impact", Vector2(other.x, other.y), rammer_dir + PI, 66.0)
 					var ram_dmg: float = minf(Cfg.RAMMER_CHARGE_MAX_DMG * dmg_scale, other.max_hp * Cfg.BOSS_HIT_CAP_FRACTION)
 					world.deal_damage(other, ram_dmg, self, "ram")
 					other.vx += cos(rammer_dir) * 14.0
@@ -1111,6 +1113,7 @@ func _update_chimera_boss(world) -> void:
 			if chimera_cloak_timer <= 0:
 				chimera_cloak_timer = Cfg.CHIMERA_CLOAK_INTERVAL
 				shadow_timer = Cfg.CHIMERA_CLOAK_DURATION
+				world.add_shot_effect("chimera", "phase_shift", Vector2(x, y), 0.0, 100.0)
 				turbo_timer = Cfg.CHIMERA_CLOAK_DURATION
 				chimera_ambush_ready = true
 				world.particles.burst(x, y, [Color("#84cc16"), Color("#a3e635"), Color("#182b18")], 20, 2, 5, 14, 26, world.rng)

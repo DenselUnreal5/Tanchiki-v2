@@ -274,6 +274,8 @@ func _rebuild_views() -> void:
 		_views_root.add_child(_tile_cache)
 	for player in players:
 		var container := SubViewportContainer.new()
+		if CitadelArt.enabled(world):
+			container.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		container.stretch = false
 		container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_views_root.add_child(container)

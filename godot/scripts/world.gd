@@ -1532,6 +1532,7 @@ func _update_rammer_meltdowns() -> void:
 	rammer_meltdowns = kept
 
 func _rammer_death_explosion(victim) -> void:
+	add_shot_effect("rammer", "meltdown", Vector2(victim.x, victim.y), 0.0, 240.0)
 	var exp_r: float = Cfg.RAMMER_EXPLOSION_RADIUS
 	spawn_shockwave(victim.x, victim.y, exp_r, "ram", Color("#ff4400"), 50)
 	spawn_shockwave(victim.x, victim.y, exp_r * 0.6, "shockwave", Color("#ffaa00"), 36)

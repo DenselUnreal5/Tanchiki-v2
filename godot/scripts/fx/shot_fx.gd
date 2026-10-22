@@ -8,6 +8,8 @@ const SHEETS := {
 	"fire": preload("res://art/fx/flamethrower_shots/flamethrower_shots.tres"),
 	"shock": preload("res://art/fx/electric_shots/electric_shots.tres"),
 	"freeze": preload("res://art/fx/ice_shots/ice_shots.tres"),
+	"rammer": preload("res://art/fx/rammer_attacks/rammer_attacks.tres"),
+	"chimera": preload("res://art/fx/chimera_attacks/chimera_attacks.tres"),
 }
 const TRAVEL := {"standard": "projectile", "acid": "projectile",
 	"fire": "flame_stream", "shock": "projectile", "freeze": "ice_shards"}
@@ -75,17 +77,11 @@ func _draw_acid_stream(w: World, t: Tank) -> void:
 	var angle := dir.angle()
 	var age := Cfg.CHIMERA_STREAM_BURST_TICKS - t.chimera_stream_timer
 	var reach := minf(length, float(age + 1) * STREAM_GROW)
-	var shift := fmod(float(w.tick) * STREAM_FLOW + float(t.id) * 7.0, STREAM_SPACING)
 	var opacity := 0.55 if t.is_chimera_clone else 1.0
-	var count := int(length / STREAM_SPACING) + 1
-	for i in count:
-		var d := float(i) * STREAM_SPACING + shift
-		if d > reach:
-			break
-		var k := d / length
-		var size := Vector2(30, 24) * lerpf(0.7, 1.2, k)
-		_sprite("acid", "projectile", w.tick + i * 5, start + dir * d, angle,
-			size, Vector2(0.87, 0.5), false, opacity)
+	_sprite("chimera", "acid_stream_loop", w.tick, start, angle,
+		Vector2(reach / 0.92, Cfg.CHIMERA_STREAM_WIDTH * 1.8), Vector2(0.04, 0.5), false, opacity)
+	if reach >= length:
+		_sprite("chimera", "acid_splash", w.tick % 24, end_p, 0.0, Vector2.ONE * 44.0, Vector2(0.5, 0.5), false, opacity)
 
 func _draw() -> void:
 	if view == null or view.world == null or view.player == null:
@@ -124,6 +120,8 @@ func _draw() -> void:
 		if flip: anchor.x = 0.18
 		_sprite(kind, row, age, e.pos, float(e.angle), size, anchor, flip)
 	for t in w.tanks:
+		if t.alive and t.freeze_ticks <= 0:
+			_boss_attack(t, w.tick)
 		if not t.alive or t.freeze_ticks <= 0:
 			continue
 		# Open center leaves the tank silhouette readable; expires with the status.
@@ -131,3 +129,21 @@ func _draw() -> void:
 		var alpha := 0.85 if t.freeze_ticks > 45 else 0.45 + 0.4 * float(t.freeze_ticks) / 45.0
 		_sprite("freeze", "freeze_loop", w.tick, Vector2(t.x, t.y), 0.0,
 			size, Vector2(0.5, 0.5), false, alpha)
+
+func _boss_attack(t: Tank, tick: int) -> void:
+	var pos := Vector2(t.x, t.y)
+	if t.is_rammer_boss:
+		if t.rammer_state == "charge":
+			var dir := Vector2.from_angle(t.rammer_dir)
+			_sprite("rammer", "charge_dust", tick, pos - dir * 26.0,
+				t.rammer_dir, Vector2(100, 76), Vector2(0.6, 0.5), false, 0.8)
+		elif t.rammer_state == "spin":
+			_sprite("rammer", "spin_loop", tick, pos, 0.0, Vector2.ONE * 150.0,
+				Vector2(0.5, 0.5), false, 0.7)
+	if not (t.is_chimera_boss or t.is_chimera_clone):
+		return
+	var muzzle := pos + Vector2.from_angle(t.turret_angle) * t.muzzle_len
+	if t.chimera_stream_warmup_ticks > 0:
+		var progress := 1.0 - float(t.chimera_stream_warmup_ticks) / float(Cfg.CHIMERA_STREAM_WARMUP_TICKS)
+		_sprite("chimera", "acid_charge", int(clampf(progress, 0.0, 1.0) * 23.0),
+			muzzle, t.turret_angle, Vector2(34, 34))

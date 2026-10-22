@@ -19,7 +19,7 @@ var _tile_cache_ready := false
 var bake_snow := -1.0
 
 func _ready() -> void:
-	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if CitadelArt.enabled(world) else CanvasItem.TEXTURE_FILTER_LINEAR
 	if world != null:
 		WeatherVisuals.fog_texture()
 		shot_fx = ShotFx.new()
@@ -331,16 +331,19 @@ func _draw_tile_range(r0: int, r1: int, c0: int, c1: int) -> void:
 
 	if not _loc_ready:
 		_read_location()
-	var has_citadel := _citadel.has_area()
 	for r in range(r0, r1 + 1):
 		for c in range(c0, c1 + 1):
 			var tile := map.get_tile(r, c)
-			if tile == Cfg.T_EMPTY:
-				continue
-			if has_citadel and _citadel.has_point(Vector2i(c, r)):
-				continue
 			var x := float(c * Cfg.TILE)
 			var y := float(r * Cfg.TILE)
+			if CitadelArt.draw_tile(self, world, r, c):
+				if tile == Cfg.T_BRICK or tile == Cfg.T_ADOBE:
+					var damage := map.damage_ratio(r, c)
+					if damage > 0.06:
+						_draw_damage(x, y, r, c, damage, Materials.at(r, c, tile))
+				continue
+			if tile == Cfg.T_EMPTY:
+				continue
 			if tile == Cfg.T_BRICK or tile == Cfg.T_WALL or tile == Cfg.T_ADOBE:
 				if not GameMap.is_solid_tile(map.get_tile(r + 1, c)):
 					_rect(x + 3, y + Cfg.TILE, Cfg.TILE, 5, Color(0, 0, 0, 0.38))
@@ -380,15 +383,17 @@ func _draw_tile_range(r0: int, r1: int, c0: int, c1: int) -> void:
 					_draw_base_tile(x, y, true)
 				Cfg.T_BASE_E:
 					_draw_base_tile(x, y, false)
-	if has_citadel and _citadel.intersects(Rect2i(c0, r0, c1 - c0 + 1, r1 - r0 + 1)):
-		var tex := TerrainTextures.citadel(_loc_id)
-		if tex != null:
-			draw_texture_rect(tex, Rect2(_citadel.position.x * Cfg.TILE, _citadel.position.y * Cfg.TILE,
-				_citadel.size.x * Cfg.TILE, _citadel.size.y * Cfg.TILE), false)
 
 func _draw_roof_tile(x: float, y: float, r: int, c: int) -> void:
 	if not _loc_ready:
 		_read_location()
+	if _loc_id in ["dust", "jungle"] and not TerrainTextures.has_textures(_loc_id):
+		var house := "wooden_hut" if _loc_id == "jungle" else "adobe_house"
+		draw_texture_rect(EnvironmentArt.texture(house, _loc_id), Rect2(x - 3, y - 3, Cfg.TILE + 6, Cfg.TILE + 6), false)
+		var damage := world.map.damage_ratio(r, c)
+		if damage > 0.06:
+			_draw_damage(x, y, r, c, damage, Materials.at(r, c))
+		return
 	var variant := Materials.variant_at(r, c)
 	if TerrainTextures.has_textures(_loc_id):
 		draw_texture_rect(TerrainTextures.building_at(_loc_id, variant, TerrainTextures.prop_hash(r, c)),
@@ -1335,7 +1340,10 @@ func _draw_bush(x: float, y: float, r: int, c: int) -> void:
 	var bs := 20.0
 	var jx := float((r * 13 + c * 7) % 9) - 4.0
 	var by := Cfg.TILE - bs - 4.0 + float((r * 5 + c * 11) % 5)
-	draw_texture_rect(TerrainTextures.bush(_loc_id),
+	var tex := TerrainTextures.bush(_loc_id)
+	if _loc_id in ["dust", "jungle"] and not TerrainTextures.has_textures(_loc_id):
+		tex = EnvironmentArt.texture("dense_bush" if _loc_id == "jungle" else "dry_bush", _loc_id)
+	draw_texture_rect(tex,
 		Rect2(x + (Cfg.TILE - bs) * 0.5 + jx, y + by, bs, bs), false)
 
 func _draw_sand_tile(x: float, y: float, r: int, c: int) -> void:
@@ -1364,6 +1372,8 @@ func _is_wet(r: int, c: int) -> bool:
 	return t == Cfg.T_WATER or t == Cfg.T_BRIDGE
 
 func _draw_water_tile(x: float, y: float, r: int, c: int, phase: float) -> void:
+	if CitadelArt.draw_tile(self, world, r, c):
+		return
 	if not _loc_ready:
 		_read_location()
 	if TerrainTextures.has_textures(_loc_id):
@@ -1390,6 +1400,14 @@ func _draw_water_tile(x: float, y: float, r: int, c: int, phase: float) -> void:
 func _draw_tree_tile(x: float, y: float, r: int, c: int) -> void:
 	if not _loc_ready:
 		_read_location()
+	if _loc_id in ["dust", "jungle"] and not TerrainTextures.has_textures(_loc_id):
+		var id := "palm"
+		if _loc_id == "jungle" and (r + c) % 3 != 0:
+			id = "broadleaf_tree"
+		elif _loc_id != "jungle" and (r + c) % 4 == 0:
+			id = "cactus"
+		draw_texture_rect(EnvironmentArt.texture(id, _loc_id), Rect2(x - 3, y - 3, Cfg.TILE + 6, Cfg.TILE + 6), false)
+		return
 	if TerrainTextures.has_textures(_loc_id):
 		draw_texture_rect(TerrainTextures.grass(_loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		draw_texture_rect(TerrainTextures.tree_at(_loc_id, TerrainTextures.prop_hash(r, c)), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
@@ -1559,30 +1577,10 @@ func _draw_barrels() -> void:
 		var pos := Vector2(barrel.x, barrel.y)
 		var r: float = barrel.radius
 
-		# 1. Soft ground shadow
-		_draw_ellipse(pos + Vector2(2.0, 4.0), r * 1.15, r * 0.75, Color(0.0, 0.0, 0.0, 0.35))
+		var sprite := EnvironmentArt.texture("fuel_barrel_burning" if barrel.ignited else "fuel_barrel", world.location)
+		var tint := Color("#fff2bd") if barrel.flash_timer > 0 else Color.WHITE
+		draw_texture_rect(sprite, Rect2(pos - Vector2.ONE * r * 1.7, Vector2.ONE * r * 3.4), false, tint)
 
-		# 2. Barrel body (industrial hazard crimson or flash)
-		var body_color := Color("#b91c1c")
-		if barrel.flash_timer > 0:
-			body_color = Color("#fef08a")
-		elif barrel.ignited:
-			var pulse := 0.5 + 0.5 * sin(float(world.tick) * 0.6)
-			body_color = body_color.lerp(Color("#f97316"), pulse)
-
-		# Outer metallic barrel cylinder
-		draw_circle(pos, r, body_color)
-		draw_arc(pos, r, 0.0, TAU, 24, Color("#450a0a"), 2.0)
-		draw_arc(pos, r * 0.65, 0.0, TAU, 20, Color("#7f1d1d"), 1.5)
-
-		# 3. Hazard warning center
-		draw_circle(pos, r * 0.32, Color("#facc15"))
-		draw_circle(pos, r * 0.18, Color("#1e293b"))
-		draw_line(pos + Vector2(-r * 0.45, -r * 0.45), pos + Vector2(r * 0.45, r * 0.45), Color("#0f172a"), 1.8)
-		draw_line(pos + Vector2(-r * 0.45, r * 0.45), pos + Vector2(r * 0.45, -r * 0.45), Color("#0f172a"), 1.8)
-
-		# Top specular highlight
-		draw_arc(pos + Vector2(-2.0, -2.0), r * 0.7, -PI * 0.8, -PI * 0.2, 12, Color(1.0, 1.0, 1.0, 0.45), 1.5)
 
 func _draw_power_generators() -> void:
 	if world == null or world.power_generators.is_empty():
@@ -1614,30 +1612,12 @@ func _draw_power_generators() -> void:
 			var prog_col: Color = Color("#818cf8")
 			PixelFx.ring(self, pos, aura_r + 3.0, -PI * 0.5, -PI * 0.5 + fill_angle, 36, prog_col, 3.5)
 
-		# 3. Ground shadow & metal base structure
-		_draw_ellipse(pos + Vector2(3.0, 5.0), r * 1.3, r * 0.8, Color(0.0, 0.0, 0.0, 0.4))
-		PixelFx.disk(self, pos, r, Color("#1e293b"))
-		PixelFx.ring(self, pos, r, 0.0, TAU, 8, Color("#475569"), 2.5)
-
-		# 4. 4 Pylon anchor nodes
-		for i in 4:
-			var a: float = float(gen.anim_rot) + float(i) * (PI * 0.5)
-			var node_p := pos + Vector2(cos(a), sin(a)) * (r * 0.72)
-			PixelFx.disk(self, node_p, 4.5, Color("#334155"))
-			PixelFx.disk(self, node_p, 2.5, aura_col)
-			PixelFx.line(self, pos, node_p, Color("#64748b"), 1.5)
-
-		# 5. Glowing Central Power Core
-		var core_r: float = 7.0 + 2.0 * sin(float(gen.pulse_phase) * 1.5)
+		var sprite := EnvironmentArt.texture("generator_idle" if is_cooling else "generator_active")
+		draw_texture_rect(sprite, Rect2(pos - Vector2.ONE * r * 1.35, Vector2.ONE * r * 2.7), false)
 		if is_cooling:
-			PixelFx.disk(self, pos, 6.0, Color("#475569"))
-			PixelFx.ring(self, pos, 8.0, 0.0, TAU, 16, Color("#334155"), 1.5)
-			var cd_ratio: float = float(gen.cooldown) / float(maxi(1, gen.max_cooldown))
-			PixelFx.ring(self, pos, 10.0, -PI * 0.5, -PI * 0.5 + cd_ratio * TAU, 20, Color("#94a3b8"), 2.0)
-		else:
-			PixelFx.disk(self, pos, core_r * 1.4, Color(aura_col.r, aura_col.g, aura_col.b, 0.35))
-			PixelFx.disk(self, pos, core_r, aura_col)
-			PixelFx.disk(self, pos, core_r * 0.5, Color.WHITE)
+			var ratio := float(gen.cooldown) / float(maxi(1, gen.max_cooldown))
+			PixelFx.ring(self, pos, r + 4.0, -PI * 0.5, -PI * 0.5 + ratio * TAU, 24, Color("#94a3b8"), 2.0)
+
 
 func _draw_bullets() -> void:
 	for b in world.bullets:
