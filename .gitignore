@@ -18,5 +18,7 @@ godot/addons/godotsteam/linux32/
 godot/addons/godotsteam/linuxarm64/
 godot/addons/godotsteam/win32/
 build/Tanchiki.exe
+# Ролики для соцсетей — десятки мегабайт, пересобираются tests/lightning_reel.tscn.
+build/*.mp4
 
 marketing/
