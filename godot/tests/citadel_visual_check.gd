@@ -6,14 +6,14 @@ func _ready() -> void:
 	var baseline := OS.get_cmdline_user_args().has("--baseline")
 	var prefix := "citadel-before-" if baseline else "citadel-after-"
 	for loc in ["city", "dust", "jungle"]:
-		var level := LevelGen.generate(1, "ffa", 84, loc, "fortress")
+		var level := LevelGen.generate(1, "defense", 84, loc, "fortress")
 		var map: GameMap = level.map
 		var original_tiles := map.tiles.duplicate()
 		var original_passable := map.passable.duplicate()
 		var player := PlayerState.new(0, "Preview", "p1", null)
 		player.viewport = Rect2(0, 0, 1280, 900)
 		player.camera = Vector2(map.width * 0.5, map.height * 0.5)
-		var world := World.new({"map": map, "level": level, "mode": "ffa",
+		var world := World.new({"map": map, "level": level, "mode": "defense",
 			"difficulty": "medium", "players": [], "puppet": true, "rng_seed": 84})
 		world.weather = WeatherSystem.new(84, {"condition": "clear", "phase": 0.25})
 		var vp := SubViewport.new()
@@ -57,14 +57,20 @@ func _ready() -> void:
 	get_tree().quit(1 if failures else 0)
 
 func _check_rebake(world: World, vp: SubViewport, player: PlayerState) -> void:
-	var bounds := CitadelArt.central_rect(world.map)
+	var bounds := CitadelArt.bounds(world)
+	# The defense fortress has indestructible walls and open paving. Insert a
+	# temporary destructible tile to exercise cache updates, then restore it.
+	var temporary := bounds.position + Vector2i(5, 5)
+	var original := world.map.get_tile(temporary.y, temporary.x)
+	world.map.set_tile(temporary.y, temporary.x, Cfg.T_BRICK)
+	for frame in 12: await get_tree().process_frame
 	for r in range(bounds.position.y, bounds.end.y):
 		for c in range(bounds.position.x, bounds.end.x):
 			if world.map.get_tile(r, c) != Cfg.T_BRICK: continue
 			var point := Vector2(c * 32 + 16, r * 32 + 16) - player.camera + Vector2(640, 450)
 			await RenderingServer.frame_post_draw
 			var before := vp.get_texture().get_image().get_pixelv(Vector2i(point))
-			world.map.set_tile(r, c, Cfg.T_EMPTY)
+			world.map.set_tile(r, c, original if Vector2i(c, r) == temporary else Cfg.T_EMPTY)
 			for frame in 12: await get_tree().process_frame
 			await RenderingServer.frame_post_draw
 			var after := vp.get_texture().get_image().get_pixelv(Vector2i(point))
