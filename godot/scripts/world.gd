@@ -144,6 +144,7 @@ func _init(opts: Dictionary) -> void:
 	rng = Rng.new(seed_mix)
 
 	location = String(level.get("location", Locations.CITY))
+	map.lamps_enabled = location != "dust"
 	var loc := Locations.get_location(location)
 	road_kind = String(loc.get("road_kind", "asphalt"))
 	mutator = String(opts.get("mutator", ""))
@@ -1569,7 +1570,7 @@ func _rammer_death_explosion(victim) -> void:
 		for dc in range(-reach, reach + 1):
 			var r := v_row + dr
 			var c := v_col + dc
-			if map.get_tile(r, c) == Cfg.T_BRICK:
+			if map.get_tile(r, c) in [Cfg.T_BRICK, Cfg.T_ADOBE]:
 				hit_building(r, c, 999.0, "blast", c * Cfg.TILE + 16, r * Cfg.TILE + 16, victim)
 			elif map.get_tile(r, c) == Cfg.T_TREE:
 				map.set_tile(r, c, Cfg.T_EMPTY)
@@ -1979,7 +1980,9 @@ const MAX_DEBRIS := 300
 
 func hit_building(row: int, col: int, amount: float, source: String,
 		x: float, y: float, owner_tank) -> void:
-	var mat := Materials.at(row, col, map.get_tile(row, col))
+	if not map.is_destructible_at(row, col):
+		return
+	var mat := Materials.WOOD if map.has_lamp(row, col) or map.has_bush(row, col) else Materials.at(row, col, map.get_tile(row, col))
 	if owner_tank != null and amount > 0.0:
 		amount *= float(owner_tank.mods.get("buildingDmgMult", 1.0))
 		match String(mat["id"]):

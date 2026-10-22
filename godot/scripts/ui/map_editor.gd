@@ -751,7 +751,7 @@ class _MapCanvas extends Control:
 							var left := _is_paved(r, c - 1)
 							var right := _is_paved(r, c + 1)
 							var idx := TerrainTextures.road_shape(up, down, left, right)
-							var rtex := TerrainTextures.road(idx, loc_id)
+							var rtex := TerrainTextures.desert_road(up, down, left, right) if loc_id == "dust" else TerrainTextures.road(idx, loc_id)
 							if rtex != null:
 								draw_texture_rect(rtex, rect, false)
 							else:
@@ -791,12 +791,12 @@ class _MapCanvas extends Control:
 						else:
 							draw_rect(rect, Color("#c9b878"))
 					Cfg.T_QUICKSAND:
-						draw_rect(rect, Color("#7d6a45"))
+						draw_texture_rect(TerrainTextures.quicksand(), rect, false)
 					Cfg.T_GRASS:
 						if use_textures:
 							if grass_tex != null:
 								draw_texture_rect(grass_tex, rect, false)
-							if (r * 74351 + c * 5911) % 7 == 0:
+							if current_map.has_bush(r, c):
 								var bs := tile_sz * 0.65
 								var b_rect := Rect2(rect.position + Vector2((tile_sz - bs) * 0.5, (tile_sz - bs) * 0.5), Vector2(bs, bs))
 								var btex := TerrainTextures.bush(loc_id)

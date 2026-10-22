@@ -959,8 +959,12 @@ func _net_extra() -> Dictionary:
 		var ids := []
 		for build in tank.completed_builds(): ids.append(String(build.id))
 		if not ids.is_empty(): build_fx[tank.net_id] = ids
+	var generators := []
+	for generator in world.power_generators:
+		generators.append([generator.x, generator.y, generator.hp, generator.alive,
+			generator.cooldown, generator.capture_progress, generator.capturing_team])
 	var out := {
-		"flags": flags, "pickups": picks, "weapons": weapons,
+		"flags": flags, "pickups": picks, "weapons": weapons, "generators": generators,
 		"score": world.team_score, "wave": world.wave, "build_fx": build_fx,
 	}
 	if world.base != null:
@@ -1050,6 +1054,17 @@ func _apply_net_extra(extra: Dictionary) -> void:
 			var ids = builds.get(tank.net_id, [])
 			tank.build_fx_remote_ids = ids if ids is Array else []
 			TankBuildFx.sync(tank, world.tick)
+	if extra.has("generators"):
+		world.power_generators.clear()
+		for state in extra["generators"]:
+			var generator := Ent.PowerGenerator.new(float(state[0]), float(state[1]))
+			generator.hp = float(state[2])
+			generator.alive = bool(state[3])
+			generator.cooldown = int(state[4])
+			generator.capture_progress = float(state[5])
+			generator.capturing_team = String(state[6])
+			generator.pulse_phase = float(world.tick) * 0.05
+			world.power_generators.append(generator)
 	world.flags.clear()
 	for f in extra.get("flags", []):
 		var fl = Ent.Flag.new(float(f[0]), float(f[1]), "player" if int(f[2]) == 0 else "enemy")

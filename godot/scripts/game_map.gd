@@ -12,6 +12,7 @@ var damage: PackedByteArray
 var passable: PackedByteArray
 var reachable := PackedByteArray()
 var version := 0
+var lamps_enabled := true
 
 ## Журнал изменённых клеток для инкрементальных подписчиков (кэш тайлов,
 ## миникарта, AO): индекс i >= 0 — сменился сам тайл, -(i + 1) — только
@@ -40,6 +41,31 @@ func _init(cols_: int = Cfg.COLS, rows_: int = Cfg.ROWS) -> void:
 
 static func is_solid_tile(tile: int) -> bool:
 	return tile == Cfg.T_WALL or tile == Cfg.T_BRICK or tile == Cfg.T_ADOBE
+
+static func is_destructible_tile(tile: int) -> bool:
+	return tile in [Cfg.T_BRICK, Cfg.T_ADOBE, Cfg.T_TREE]
+
+func has_lamp(row: int, col: int) -> bool:
+	if not lamps_enabled or not in_bounds(row, col) or damage[row * cols + col] == 255:
+		return false
+	if get_tile(row, col) not in [Cfg.T_ROAD, Cfg.T_BRIDGE] or (row * 7 + col * 13) % 17 != 0:
+		return false
+	for offset in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		if get_tile(row + offset.y, col + offset.x) not in [Cfg.T_ROAD, Cfg.T_BRIDGE]:
+			return true
+	return false
+
+func has_bush(row: int, col: int) -> bool:
+	if get_tile(row, col) != Cfg.T_GRASS or Rng.hash01(row * 74351 + col * 5911, 9001) >= 0.15:
+		return false
+	for dr in range(-2, 3):
+		for dc in range(-2, 3):
+			if in_bounds(row + dr, col + dc) and get_tile(row + dr, col + dc) in [Cfg.T_ROAD, Cfg.T_BRIDGE, Cfg.T_BRICK, Cfg.T_ADOBE, Cfg.T_WALL]:
+				return false
+	return true
+
+func is_destructible_at(row: int, col: int) -> bool:
+	return is_destructible_tile(get_tile(row, col)) or has_lamp(row, col) or has_bush(row, col)
 
 static func is_drivable_tile(tile: int) -> bool:
 	return tile == Cfg.T_EMPTY or tile == Cfg.T_TREE or tile == Cfg.T_BASE_P \
@@ -181,13 +207,19 @@ func apply_damage(row: int, col: int, amount: float, source: String) -> bool:
 	if not in_bounds(row, col):
 		return false
 	var i := row * cols + col
-	if not is_solid_tile(tiles[i]) or tiles[i] == Cfg.T_WALL:
+	if not is_destructible_at(row, col):
 		return false
-	var mat := Materials.at(row, col, tiles[i])
+	var mat := Materials.WOOD if has_lamp(row, col) or has_bush(row, col) else Materials.at(row, col, tiles[i])
 	var dealt := amount * Materials.resist(mat, source)
 	var total: float = float(damage[i]) + dealt
 	if total >= float(mat["hp"]):
-		set_tile(row, col, Cfg.T_EMPTY)
+		if tiles[i] in [Cfg.T_ROAD, Cfg.T_BRIDGE]:
+			# Destroy only the lamp, preserving the road and network tile identity.
+			damage[i] = 255
+			_note_change(i, false)
+			_log_tile(row, col)
+		else:
+			set_tile(row, col, Cfg.T_EMPTY)
 		return true
 	damage[i] = int(minf(255.0, total))
 	_note_change(i, false)

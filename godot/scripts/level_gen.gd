@@ -155,6 +155,8 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 				for c in cols:
 					if map.get_tile(r, c) == Cfg.T_GRASS:
 						map.set_tile(r, c, ground)
+	if tiled and loc_id == "dust":
+		_paint_desert_hazards(map, seed_value, citadel_rect, homes)
 	map.mark_reachable()
 
 	var areas := {}
@@ -478,3 +480,29 @@ static func find_choke_points(map: GameMap) -> Array[Vector2]:
 				points.append(Vector2(c * Cfg.TILE + Cfg.TILE * 0.5, r * Cfg.TILE + Cfg.TILE * 0.5))
 	return points
 
+
+## Paint only unoccupied sand after road repairs, keeping roads and spawn bases safe.
+static func _paint_desert_hazards(map: GameMap, seed_value: int, citadel: Rect2i, homes: Dictionary) -> void:
+	for r in range(2, map.rows - 2):
+		for c in range(2, map.cols - 2):
+			if map.get_tile(r, c) not in [Cfg.T_EMPTY, Cfg.T_SAND]:
+				continue
+			if citadel.has_area() and citadel.grow(2).has_point(Vector2i(c, r)):
+				continue
+			var safe := false
+			for home in homes.values():
+				if home != null and Vector2(c * Cfg.TILE, r * Cfg.TILE).distance_to(home) < Cfg.TILE * 5:
+					safe = true
+			if safe:
+				continue
+			# Coarse noise forms patches rather than scattered single hazardous tiles.
+			var cell := Vector2i(int(c / 6), int(r / 6))
+			var patch := Rng.hash01(cell.y * 92821 + cell.x * 68917, seed_value ^ 6743)
+			var center := Vector2(cell * 6) + Vector2(2.5, 2.5)
+			var offset := Vector2(c, r) - center
+			var distance := offset.x * offset.x / 10.0 + offset.y * offset.y / 6.0
+			if distance < 1.0:
+				if patch < 0.10:
+					map.set_tile(r, c, Cfg.T_QUICKSAND)
+				elif patch < 0.75:
+					map.set_tile(r, c, Cfg.T_DUNE)

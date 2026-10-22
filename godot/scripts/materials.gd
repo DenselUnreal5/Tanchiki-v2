@@ -53,6 +53,8 @@ static func variant_at(r: int, c: int) -> int:
 	return int(Rng.hash01(r * 73856093 + c, 1337) * 5.0)
 
 static func at(r: int, c: int, tile: int = Cfg.T_BRICK) -> Dictionary:
+	if tile == Cfg.T_TREE:
+		return WOOD
 	if tile == Cfg.T_ADOBE:
 		return ADOBE
 	return BY_VARIANT[variant_at(r, c) % BY_VARIANT.size()]

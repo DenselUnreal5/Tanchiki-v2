@@ -19,7 +19,7 @@ var c1 := -1
 var cache = null
 
 func _ready() -> void:
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if CitadelArt.enabled(world) else CanvasItem.TEXTURE_FILTER_LINEAR
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if CitadelArt.enabled(world) or (world != null and world.location == "dust") else CanvasItem.TEXTURE_FILTER_LINEAR
 
 func _process(_delta: float) -> void:
 	pass

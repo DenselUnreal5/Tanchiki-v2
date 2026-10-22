@@ -19,7 +19,7 @@ var _tile_cache_ready := false
 var bake_snow := -1.0
 
 func _ready() -> void:
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if CitadelArt.enabled(world) else CanvasItem.TEXTURE_FILTER_LINEAR
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if CitadelArt.enabled(world) or (world != null and world.location == "dust") else CanvasItem.TEXTURE_FILTER_LINEAR
 	if world != null:
 		WeatherVisuals.fog_texture()
 		shot_fx = ShotFx.new()
@@ -591,7 +591,7 @@ func _draw_lamp_light(k: float) -> void:
 	if not _lamps_ready:
 		_build_lamps()
 	for lamp in _lamps:
-		if not _in_view(lamp.x, lamp.y, 50):
+		if not _in_view(lamp.x, lamp.y, 50) or not world.map.has_lamp(world.map.row_at(lamp.y), world.map.col_at(lamp.x)):
 			continue
 		var p := lamp + view_off
 		PixelFx.disk(self, p, 46.0, Color(Cfg.lamp_glow, 0.05 * k))
@@ -751,12 +751,7 @@ func _draw_bolts() -> void:
 	draw_set_transform(Vector2.ZERO)
 
 func _lamp_at(r: int, c: int) -> bool:
-	if not _is_paved(r, c):
-		return false
-	if _is_paved(r, c - 1) and _is_paved(r, c + 1) \
-			and _is_paved(r - 1, c) and _is_paved(r + 1, c):
-		return false
-	return (r * 7 + c * 13) % 17 == 0
+	return world.map.has_lamp(r, c)
 
 var _lamps: PackedVector2Array = PackedVector2Array()
 var _lamps_ready := false
@@ -788,6 +783,8 @@ func _draw_lamp_posts_in(rect: Rect2) -> void:
 			_draw_lamp_post(p)
 
 func _draw_lamp_post(p: Vector2) -> void:
+	if not world.map.has_lamp(world.map.row_at(p.y), world.map.col_at(p.x)):
+		return
 	_rect(p.x - 1.0, p.y - 2.0, 2.0, 9.0, Cfg.lamp_post)
 	_rect(p.x - 3.0, p.y - 5.0, 6.0, 3.0, Cfg.lamp_head)
 
@@ -921,17 +918,14 @@ func _draw_dune_tile(x: float, y: float, r: int, c: int) -> void:
 			Color(1, 1, 1, 0.10))
 
 func _draw_quicksand_tile(x: float, y: float, r: int, c: int) -> void:
-	_rect(x, y, Cfg.TILE, Cfg.TILE,
-		Cfg.quicksand if (r * 3 + c * 5) % 2 == 0
-		else Cfg.quicksand_dark.lerp(Cfg.quicksand, 0.6))
-
+	draw_texture_rect(TerrainTextures.quicksand(), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 	if (r * 7 + c * 13) % 4 == 0:
-		var cx := x + Cfg.TILE * 0.5
-		var cy := y + Cfg.TILE * 0.5
-		var phase := float((world.tick + (r * 13 + c * 7) * 11) % 150) / 150.0
-		var col := Cfg.quicksand_wet
-		col.a = 0.45 * (1.0 - phase)
-		draw_arc(Vector2(cx, cy), 2.0 + phase * 9.0, 0.0, TAU, 12, col, 1.0)
+		var step := int((world.tick + r * 13 + c * 7) % 150 / 30)
+		var inset := float(12 - step * 2)
+		var color := Color("#bba174", 0.45 * (1.0 - float(step) / 5.0))
+		# Stepped pixel ripples, with no smooth circles over the pixel terrain.
+		draw_rect(Rect2(x + inset, y + 15, Cfg.TILE - inset * 2, 1), color)
+		draw_rect(Rect2(x + inset + 2, y + 18, maxf(2, Cfg.TILE - inset * 2 - 4), 1), color)
 
 	if not _is_quicksand(r - 1, c):
 		_rect(x, y, Cfg.TILE, 2, Cfg.quicksand_dark)
@@ -1169,7 +1163,7 @@ func _city_road_index(r: int, c: int, up: bool, down: bool, left: bool, right: b
 func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
 	if not _loc_ready:
 		_read_location()
-	if _loc_road_kind != "asphalt":
+	if _loc_road_kind != "asphalt" and _loc_id != "dust":
 		_draw_dirt_road(x, y, r, c)
 		_round_road_corners(x, y, r, c)
 		return
@@ -1178,12 +1172,15 @@ func _draw_road_tile(x: float, y: float, r: int, c: int) -> void:
 		var down2 := _is_paved(r + 1, c)
 		var left2 := _is_paved(r, c - 1)
 		var right2 := _is_paved(r, c + 1)
+		if _loc_id == "dust":
+			draw_texture_rect(TerrainTextures.desert_road(up2, down2, left2, right2), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
+			return
 		var idx := _city_road_index(r, c, up2, down2, left2, right2)
 		draw_texture_rect(TerrainTextures.road(idx, _loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		WeatherVisuals.draw_snow_cover(self, Vector2(x, y), _snow_k() * 0.7, r * 7919 + c * 104729, true)
 		if idx == 16:
 			_draw_cross_arcs(x, y, r, c)
-		if _road_class_at(r, c) == RC_SQUARE:
+		if _loc_id != "dust" and _road_class_at(r, c) == RC_SQUARE:
 			_draw_parking_bay(x, y, r, c)
 		return
 	var k := _snow_k() * 0.6
@@ -1307,7 +1304,7 @@ func _draw_grass_tile(x: float, y: float, r: int, c: int) -> void:
 	if TerrainTextures.has_textures(_loc_id):
 		draw_texture_rect(TerrainTextures.grass(_loc_id), Rect2(x, y, Cfg.TILE, Cfg.TILE), false)
 		WeatherVisuals.draw_snow_cover(self, Vector2(x, y), _snow_k(), r * 7919 + c * 104729)
-		if _grass_surrounded(r, c) and Rng.hash01(r * 74351 + c * 5911, 9001) < 0.15:
+		if world.map.has_bush(r, c):
 			_draw_bush(x, y, r, c)
 		return
 	var k := _snow_k()
@@ -1590,6 +1587,10 @@ func _draw_power_generators() -> void:
 		if not _in_view(gen.x, gen.y, margin):
 			continue
 		var pos := Vector2(gen.x, gen.y)
+		if not gen.alive:
+			var wreck := EnvironmentArt.texture("generator_broken")
+			draw_texture_rect(wreck, Rect2(pos - Vector2.ONE * gen.radius * 1.35, Vector2.ONE * gen.radius * 2.7), false)
+			continue
 		var aura_r: float = gen.aura_radius
 		var r: float = gen.radius
 

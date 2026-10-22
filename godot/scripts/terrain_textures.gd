@@ -12,7 +12,6 @@ const BIOME_FILES := {
 	"citadel.png": 6, "house_warehouse.png": 7,
 }
 const BIOME_ATLAS := "res://art/terrain/biomes.png"
-const DUST_GROUND := "res://art/terrain/dust/sand_ground.png"
 const ADAPTED_BIOMES := ["dust", "frost", "exclusion", "shore"]
 
 static func has_textures(loc: String) -> bool:
@@ -21,7 +20,7 @@ static func has_textures(loc: String) -> bool:
 static func _biome_region(loc: String, file: String) -> Texture2D:
 	# All desert ground uses one surface, including underneath transparent props.
 	if loc == "dust" and file in ["grass.png", "sand.png"]:
-		return load(DUST_GROUND)
+		return _desert_ground()
 	if not BIOME_ROWS.has(loc) or not BIOME_FILES.has(file):
 		return null
 	var atlas: Texture2D = load(BIOME_ATLAS)
@@ -32,9 +31,43 @@ static func _biome_region(loc: String, file: String) -> Texture2D:
 	region.filter_clip = true
 	return region
 
+## Native 32px terrain: a small shared palette keeps sand crisp at game scale.
+static func _desert_ground() -> Texture2D:
+	const key := "dust/pixel_ground"
+	if _cache.has(key):
+		return _cache[key]
+	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	var palette := [Color("#bca06a"), Color("#c6aa72"), Color("#cfb57c"), Color("#d7be87")]
+	for y in 32:
+		for x in 32:
+			var grain := Rng.hash01(x + y * 32, 813)
+			var ripple := (y + int(2.0 * sin(float(x) * TAU / 32.0))) % 12
+			var index := 1 if grain < 0.7 else 2
+			if ripple == 0 and grain < 0.4:
+				index = 0
+			elif grain > 0.96:
+				index = 3
+			image.set_pixel(x, y, palette[index])
+	var texture := ImageTexture.create_from_image(image)
+	_cache[key] = texture
+	return texture
+
+static func quicksand() -> Texture2D:
+	const key := "dust/quicksand"
+	if _cache.has(key):
+		return _cache[key]
+	var image := _desert_ground().get_image().duplicate() as Image
+	for y in 32:
+		for x in 32:
+			var color := image.get_pixel(x, y).lerp(Color("#79633f"), 0.63)
+			image.set_pixel(x, y, color)
+	var texture := ImageTexture.create_from_image(image)
+	_cache[key] = texture
+	return texture
+
 ## Reuse the city's connected road/river shapes so junctions stay aligned.
-## Only the green verges are replaced; asphalt, markings and bridge geometry
-## remain readable. This is cached once per tile, not recomputed while drawing.
+## Green verges follow the biome. Desert roads replace asphalt and markings
+## with compacted sand while preserving the connected shapes. This is cached once per tile, not recomputed while drawing.
 static func _biome_infrastructure(loc: String, file: String) -> Texture2D:
 	var source := _load_cached("city", file)
 	if source == null:
@@ -54,6 +87,16 @@ static func _biome_infrastructure(loc: String, file: String) -> Texture2D:
 				var replacement := ground.get_pixel(gx, gy)
 				replacement.a = pixel.a
 				img.set_pixel(x, y, replacement)
+			elif loc == "dust" and file.begins_with("road"):
+				var gx := x * ground.get_width() / img.get_width()
+				var gy := y * ground.get_height() / img.get_height()
+				var sand_pixel := ground.get_pixel(gx, gy)
+				# Road geometry comes from the source; its paint is deliberately ignored.
+				var rut := (file == "road1.png" and gy in [9, 22]) or (file == "road2.png" and gx in [9, 22])
+				var shade := 0.18 if rut else 0.09
+				if (gx + gy * 3) % 7 == 0:
+					shade += 0.025
+				img.set_pixel(x, y, sand_pixel.darkened(shade))
 			elif loc == "frost" and file.begins_with("road"):
 				# A light frost film leaves the dark carriageway and lines visible.
 				img.set_pixel(x, y, pixel.lerp(Color(0.7, 0.78, 0.84, pixel.a), 0.2))
@@ -115,6 +158,29 @@ static func grass(loc: String = "city") -> Texture2D:
 
 static func sand(loc: String = "city") -> Texture2D:
 	return _load_cached(loc, "sand.png" if BIOME_ROWS.has(loc) else "grass.png")
+
+## Neighbour masks also support roads wider than one tile without grid seams.
+static func desert_road(up: bool, down: bool, left: bool, right: bool) -> Texture2D:
+	var mask := int(up) | (int(down) << 1) | (int(left) << 2) | (int(right) << 3)
+	var key := "dust/sand_road/%d" % mask
+	if _cache.has(key):
+		return _cache[key]
+	var image := _desert_ground().get_image().duplicate() as Image
+	for y in 32:
+		for x in 32:
+			var edge := (not up and y < 2) or (not down and y > 29) or (not left and x < 2) or (not right and x > 29)
+			if edge:
+				continue
+			var rut := false
+			if up and down:
+				rut = (not left and x in [6, 8]) or (not right and x in [23, 25])
+			if left and right:
+				rut = rut or (not up and y in [6, 8]) or (not down and y in [23, 25])
+			var shade := 0.18 if rut and (x + y) % 7 != 0 else 0.10
+			image.set_pixel(x, y, image.get_pixel(x, y).darkened(shade))
+	var texture := ImageTexture.create_from_image(image)
+	_cache[key] = texture
+	return texture
 
 static func tree(loc: String = "city") -> Texture2D:
 	return _load_cached(loc, "tree1.png")

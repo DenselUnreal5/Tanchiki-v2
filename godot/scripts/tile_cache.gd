@@ -107,7 +107,7 @@ func _ensure_chunk(idx: int) -> void:
 		return
 	var rect: Rect2 = _rects[idx]
 	var vp := SubViewport.new()
-	if CitadelArt.enabled(world):
+	if CitadelArt.enabled(world) or world.location == "dust":
 		vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	vp.size = Vector2i(int(rect.size.x), int(rect.size.y))
 	vp.transparent_bg = false

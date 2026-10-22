@@ -152,7 +152,7 @@ class Bullet extends RefCounted:
 			if x < 0.0 or x > world.map.width or y < 0.0 or y > world.map.height:
 				alive = false
 				return
-			if _hit_barrels(world):
+			if _hit_barrels(world) or _hit_generators(world):
 				return
 			_hit_tanks(world)
 			return
@@ -171,7 +171,7 @@ class Bullet extends RefCounted:
 				world.spawn_fire_patch(x, y, owner)
 		if _hit_tiles(world):
 			return
-		if _hit_barrels(world):
+		if _hit_barrels(world) or _hit_generators(world):
 			return
 		_hit_tanks(world)
 
@@ -189,14 +189,14 @@ class Bullet extends RefCounted:
 			world.particles.burst(x, y, [Color("#888888"), Color("#aaaaaa")], 8, 2, 4, 10, 20, world.rng)
 			return true
 
-		if tile == Cfg.T_BRICK:
+		if tile == Cfg.T_BRICK or tile == Cfg.T_ADOBE:
 			if keep_bricks:
 				alive = false
 				world.hit_building(row, col, 0.0, "bullet", x, y, owner)
 				return true
 			var dmg := (Cfg.BULLET_DMG_MIN + Cfg.BULLET_DMG_MAX) * 0.5 * dmg_scale
 			world.hit_building(row, col, dmg, "bullet", x, y, owner)
-			if owner != null and owner.flags.has("woodPierce") 					and String(Materials.at(row, col)["id"]) == "wood":
+			if owner != null and owner.flags.has("woodPierce") 					and String(Materials.at(row, col, tile)["id"]) == "wood":
 				return false
 			if owner != null and owner.ability_active("breaker"):
 				return false
@@ -206,6 +206,13 @@ class Bullet extends RefCounted:
 			alive = false
 			return true
 
+		if map.has_lamp(row, col):
+			if Vector2(x - (col * Cfg.TILE + 16), y - (row * Cfg.TILE + 16)).length() <= 10:
+				world.hit_building(row, col, 999, "bullet", x, y, owner)
+				alive = false
+				return true
+		if map.has_bush(row, col):
+			world.hit_building(row, col, 999, "bullet", x, y, owner)
 		if tile == Cfg.T_TREE:
 			map.set_tile(row, col, Cfg.T_EMPTY)
 			world.particles.burst(x, y, [Cfg.tree, Cfg.tree_dark], 8, 2, 4, 10, 20, world.rng)
@@ -225,7 +232,7 @@ class Bullet extends RefCounted:
 			if x < 0.0 or x > map.width or y < 0.0 or y > map.height:
 				break
 			var tile := map.get_tile(map.row_at(y), map.col_at(x))
-			if tile != Cfg.T_WALL and tile != Cfg.T_BRICK:
+			if not GameMap.is_solid_tile(tile):
 				world.particles.burst(x, y, [Color("#ffddaa"), Color("#888888")], 6, 2, 3, 8, 14, world.rng)
 				return true
 		alive = false
@@ -327,6 +334,17 @@ class Bullet extends RefCounted:
 				return true
 		return false
 
+	func _hit_generators(world) -> bool:
+		for generator in world.power_generators:
+			if not generator.alive:
+				continue
+			if Vector2(x - generator.x, y - generator.y).length_squared() <= pow(generator.radius + 6.0, 2):
+				var amount := (Cfg.BULLET_DMG_MIN + Cfg.BULLET_DMG_MAX) * 0.5 * dmg_scale
+				generator.hit(amount, owner, world)
+				alive = false
+				return true
+		return false
+
 	func _land(world) -> void:
 		var base := (Cfg.BULLET_DMG_MIN + Cfg.BULLET_DMG_MAX) * 0.5 * dmg_scale
 		var direct = null
@@ -368,12 +386,15 @@ class Bullet extends RefCounted:
 			if dx * dx + dy * dy > r2:
 				continue
 			world.deal_damage(other, base_damage * Cfg.EXPLOSIVE_SPLASH, owner, "bullet")
+		for generator in world.power_generators:
+			if generator.alive and Vector2(x - generator.x, y - generator.y).length() <= Cfg.TILE * 1.5 + generator.radius:
+				generator.hit(Cfg.BLAST_TILE_DAMAGE, owner, world)
 		var map: GameMap = world.map
 		var row := map.row_at(y)
 		var col := map.col_at(x)
 		for dr in range(-1, 2):
 			for dc in range(-1, 2):
-				if map.get_tile(row + dr, col + dc) != Cfg.T_BRICK:
+				if not map.is_destructible_at(row + dr, col + dc):
 					continue
 				var falloff := 1.0 if (dr == 0 and dc == 0) else 0.5
 				world.hit_building(row + dr, col + dc, Cfg.BLAST_TILE_DAMAGE * falloff, "blast",
@@ -439,12 +460,15 @@ class Mine extends RefCounted:
 			if dx * dx + dy * dy > splash_r2:
 				continue
 			world.deal_damage(tank, Cfg.MINE_SPLASH_DMG, owner, "mine")
+		for generator in world.power_generators:
+			if generator.alive and Vector2(x - generator.x, y - generator.y).length() <= Cfg.TILE * 1.5 + generator.radius:
+				generator.hit(Cfg.BLAST_TILE_DAMAGE, owner, world)
 		var map: GameMap = world.map
 		var row := map.row_at(y)
 		var col := map.col_at(x)
 		for dr in range(-1, 2):
 			for dc in range(-1, 2):
-				if map.get_tile(row + dr, col + dc) != Cfg.T_BRICK:
+				if not map.is_destructible_at(row + dr, col + dc):
 					continue
 				var falloff := 1.0 if (dr == 0 and dc == 0) else 0.55
 				world.hit_building(row + dr, col + dc, Cfg.MINE_TILE_DAMAGE * falloff, "blast",
@@ -845,11 +869,15 @@ class ExplosiveBarrel extends RefCounted:
 		for r in range(tr_min, tr_max + 1):
 			for c in range(tc_min, tc_max + 1):
 				var tile: int = map.get_tile(r, c)
-				if tile == Cfg.T_BRICK or tile == Cfg.T_TREE:
+				if map.is_destructible_at(r, c):
 					var bx: float = c * Cfg.TILE + Cfg.TILE * 0.5
 					var by: float = r * Cfg.TILE + Cfg.TILE * 0.5
 					if Vector2(x - bx, y - by).length() <= 80.0:
 						world.hit_building(r, c, 100.0, "blast", bx, by, last_attacker)
+
+		for generator in world.power_generators:
+			if generator.alive and Vector2(x - generator.x, y - generator.y).length() <= exp_r + generator.radius:
+				generator.hit(base_dmg, last_attacker, world)
 
 		# 4. Chain react with other barrels in radius
 		for other_barrel in world.barrels:
@@ -861,6 +889,8 @@ class ExplosiveBarrel extends RefCounted:
 
 
 class PowerGenerator extends RefCounted:
+	var alive := true
+	var hp := 110.0
 	var x: float
 	var y: float
 	var radius: float = 24.0
@@ -886,7 +916,23 @@ class PowerGenerator extends RefCounted:
 		anim_rot = 0.0
 		pulse_phase = 0.0
 
+	func hit(amount: float, _attacker, world) -> void:
+		if not alive:
+			return
+		hp = maxf(0.0, hp - amount)
+		world.particles.burst(x, y, [Color("#a5acb6"), Color("#ffca68")], 6, 1, 3, 8, 16, world.rng)
+		if hp > 0.0:
+			return
+		alive = false
+		capture_progress = 0.0
+		capturing_team = ""
+		world.particles.burst(x, y, Cfg.explosion, 22, 2, 5, 12, 28, world.rng)
+		world.add_shake(5.0, x, y)
+		Sfx.play("explosion", x, y)
+
 	func update(world) -> void:
+		if not alive:
+			return
 		anim_rot += 0.03
 		pulse_phase += 0.05
 
@@ -928,6 +974,8 @@ class PowerGenerator extends RefCounted:
 			capture_progress = maxf(0.0, capture_progress - 0.005)
 
 	func discharge(world, team: String) -> void:
+		if not alive:
+			return
 		cooldown = int(float(max_cooldown) / Mutators.emp_charge_scale())
 		for t in world.tanks:
 			if t.owner != null and t.team == team:

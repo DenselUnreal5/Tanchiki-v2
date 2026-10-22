@@ -67,7 +67,7 @@ static var LIST := {
 		"cover": "sand", "cover_chance": 0.55,
 		"ruin_chance": 0.34,
 		"ground_tile": Cfg.T_SAND, "yard_tile": Cfg.T_SAND,
-		"road_kind": "asphalt",
+		"road_kind": "dirt",
 		"arterial_w": 3, "street_w": 2, "street_w_wide": 2,
 		"link_chance": 0.65,
 		"weather": ["clear", "fog"],

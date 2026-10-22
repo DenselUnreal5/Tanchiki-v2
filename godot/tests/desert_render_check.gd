@@ -45,7 +45,11 @@ func _ready() -> void:
 		var dune := image.get_region(Rect2i(101, 37, 22, 22)).get_data()
 		_check(ground == sand, name + ": sand must not cover the ground texture with a flat fill")
 		_check(sand == dune, name + ": dunes use the same desert palette")
-		_check(image.get_pixel(70, 38) != image.get_pixel(78, 48), name + ": sand has visible texture")
+		var colors := {}
+		for sy in range(37, 59):
+			for sx in range(69, 91):
+				colors[image.get_pixel(sx, sy).to_rgba32()] = true
+		_check(colors.size() >= 3, name + ": sand has visible pixel texture")
 	_check(editor_image.get_region(Rect2i(69, 37, 22, 22)).get_data() ==
 		game_image.get_region(Rect2i(69, 37, 22, 22)).get_data(), "editor and game render the same desert sand")
 	_check(editor_image.get_region(Rect2i(69, 97, 22, 22)).get_data() ==
