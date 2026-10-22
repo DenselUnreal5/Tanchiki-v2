@@ -52,6 +52,8 @@ const GUN_FIT := {
 static func turret_part(tank, hull: String) -> Dictionary:
 	var original := part(hull, "turret")
 	if original.is_empty(): return original
+	# Mortar keeps its authored tube; elemental identity is in the side modules.
+	if hull == "mortar": return original
 	var cannon: String = tank.cannon_id
 	if not tank.enemy_type.is_empty() or cannon in ["", "standard"] or not GUN_FIT.has(hull) or Cannons.get_cannon(cannon).is_empty(): return original
 	var key := hull + "_turret:" + cannon
@@ -188,7 +190,7 @@ static func weapon_modules(tank, hull: String) -> Texture2D:
 	return texture
 
 static func fitted_barrel(tank, hull: String) -> bool:
-	return tank.enemy_type.is_empty() and GUN_FIT.has(hull) and tank.cannon_id in ["ice", "acid", "fire", "shock"]
+	return hull != "mortar" and tank.enemy_type.is_empty() and GUN_FIT.has(hull) and tank.cannon_id in ["ice", "acid", "fire", "shock"]
 
 static func barrel_tip_y(tank, hull: String) -> float:
 	var body := part(hull, "hull")

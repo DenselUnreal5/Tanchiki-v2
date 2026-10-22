@@ -22,6 +22,13 @@ func _ready() -> void:
 			check(TankSprites.turret_class(tank, hull) == hull, "%s/%s: native class turret" % [cls.id, cannon.id])
 			if cannon.id == "standard":
 				check(part == source, cls.id + ": factory gun remains available")
+			elif hull == "mortar":
+				check(part == source and not TankSprites.fitted_barrel(tank, hull), "mortar/" + cannon.id + ": native tube, no front attachment")
+				var modules := TankSprites.weapon_modules(tank, hull)
+				check(modules != null, "mortar/" + cannon.id + ": side modules identify weapon")
+				parts[hash(modules.get_image().get_data())] = true
+				for skin in TankSkinArt.PALETTES:
+					check(TankSkinArt.texture(part, "mortar_turret", skin) != null, "mortar/" + skin + ": skin fits native tube")
 			else:
 				var image: Image = part.tex.get_image()
 				var root: int = part.barrel_root

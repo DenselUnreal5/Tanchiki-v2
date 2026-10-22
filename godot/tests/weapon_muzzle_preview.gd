@@ -17,6 +17,7 @@ func _ready() -> void:
 	var gallery := Gallery.new()
 	gallery.scale = Vector2.ONE * 5
 	add_child(gallery)
+	var mortar := OS.get_cmdline_user_args().has("--mortar")
 	var cannons := ["ice", "acid", "fire", "shock"]
 	var skins := ["steampunk", "arctic_frost", "magma"]
 	for col in 4:
@@ -25,13 +26,13 @@ func _ready() -> void:
 		add_child(title)
 	for row in 3:
 		for col in 4:
-			var tank := Tank.new({"x": (160 + col * 320)/5.0, "y": (135 + row * 220)/5.0, "team": "player", "name": "", "color_key": "p1", "class_id": "standard", "chassis": "standard", "max_hp": 100, "speed": 0, "fire_rate": 30, "cannon_id": cannons[col], "cosmetics": {"skin": skins[row]}})
+			var tank := Tank.new({"x": (160 + col * 320)/5.0, "y": (135 + row * 220)/5.0, "team": "player", "name": "", "color_key": "p1", "class_id": "mortar" if mortar else "standard", "chassis": "mortar" if mortar else "standard", "max_hp": 100, "speed": 0, "fire_rate": 30, "cannon_id": cannons[col], "cosmetics": {"skin": skins[row]}})
 			tank.spawn_protect = 0
 			tank.body_angle = -PI/2
 			tank.turret_angle = -1.85
 			gallery.samples.append(tank)
 	for i in 5: await get_tree().process_frame
 	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png("user://weapon_muzzles.png")
+	get_viewport().get_texture().get_image().save_png("user://weapon_muzzles_mortar.png" if mortar else "user://weapon_muzzles.png")
 	print("MUZZLE PREVIEW: steampunk, frost and magma; ice, acid, fire and shock")
 	get_tree().quit(0)

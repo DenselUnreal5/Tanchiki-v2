@@ -11,6 +11,11 @@ func _ready() -> void:
 		for cannon in ["ice", "acid", "fire", "shock"]:
 			tank.cannon_id = cannon
 			var part := TankSprites.turret_part(tank, hull)
+			if hull == "mortar":
+				check(part == TankSprites.part(hull, "turret"), "mortar keeps native tube without colored front rectangle")
+				check(not TankSprites.fitted_barrel(tank, hull), "mortar does not stretch elemental attachment")
+				check(TankSprites.weapon_modules(tank, hull) != null, "mortar retains side modules")
+				continue
 			var tex: Image = part.tex.get_image()
 			var paint: Image = part.paint.get_image()
 			var tip := int(part.barrel_tip)
