@@ -97,23 +97,3 @@ static func tracks(part: Dictionary, key: String, color: Color) -> Texture2D:
 	texture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_cache[cache_key] = texture
 	return texture
-
-static func weapon_details(part: Dictionary, key: String, cannon: String) -> Texture2D:
-	if not cannon in ["acid", "fire", "shock"]: return null
-	var cache_key := key + ":weapon:" + cannon
-	if _cache.has(cache_key): return _cache[cache_key]
-	var source: Image = part.paint.get_image()
-	if source.is_compressed(): source.decompress()
-	var image := Image.create(source.get_width(), source.get_height(), false, Image.FORMAT_RGBA8)
-	var color: Color = Cannons.get_cannon(cannon).color
-	for y in 25:
-		for x in source.get_width():
-			var pixel := source.get_pixel(x, y)
-			if pixel.a <= 0 or y % 5 >= 3: continue
-			var shade := clampf(pixel.r * 1.8, 0.5, 1.1)
-			image.set_pixel(x, y, Color(color.r * shade, color.g * shade, color.b * shade, pixel.a))
-	var texture := CanvasTexture.new()
-	texture.diffuse_texture = ImageTexture.create_from_image(image)
-	texture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_cache[cache_key] = texture
-	return texture

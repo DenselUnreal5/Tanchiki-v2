@@ -2351,7 +2351,8 @@ func _status_tints(tank: Tank, _anim_tick: float) -> Array:
 
 func _draw_tank_sprite(tank: Tank, hull_cls: String, palette: Dictionary, pos: Vector2, hw: float, hh: float, anim_tick: float) -> void:
 	var hull := TankSprites.part(hull_cls, "hull")
-	var turret := TankSprites.part(TankSprites.turret_class(tank, hull_cls), "turret")
+	var turret := TankSprites.turret_part(tank, hull_cls)
+	var turret_key := String(turret.get("cache_key", hull_cls + "_turret"))
 	if hull.is_empty() or turret.is_empty():
 		_draw_tank_shape(tank, palette, TankArt.chassis(tank.chassis_id), pos, hw, hh, anim_tick)
 		return
@@ -2403,31 +2404,20 @@ func _draw_tank_sprite(tank: Tank, hull_cls: String, palette: Dictionary, pos: V
 	draw_texture(turret["tex"], -TankSprites.PIVOT, detail_mod)
 	draw_texture(turret["paint"], -TankSprites.PIVOT, TankSprites.paint_modulate(turret_color * grime))
 	if not silhouette and turret_id in ["", "none"]:
-		var turret_skin := TankSkinArt.texture(turret, TankSprites.turret_class(tank, hull_cls) + "_turret", skin_id)
+		var turret_skin := TankSkinArt.texture(turret, turret_key, skin_id)
 		if turret_skin != null: draw_texture(turret_skin, -TankSprites.PIVOT, Color(grime, grime, grime))
 	for tint in tints:
 		draw_texture(turret["mask"], -TankSprites.PIVOT, tint)
 	if silhouette:
 		draw_set_transform(view_off + pos)
 		return
-	var tip_y := float((turret["rect"] as Rect2i).position.y) - TankSprites.PIVOT.y
-	var weapon_details := TankSkinArt.weapon_details(turret, TankSprites.turret_class(tank, hull_cls), tank.cannon_id)
-	if weapon_details != null: draw_texture(weapon_details, -TankSprites.PIVOT, Color(grime, grime, grime))
-	if tank.cannon_id == "ice":
-		# Ribbed cryogenic jacket; keep the underlying class turret and pivot.
-		draw_rect(Rect2(-4, tip_y + 3, 8, 13), Color("#34536b"))
-		draw_rect(Rect2(-3, tip_y + 4, 6, 11), Color("#93cbd9"))
-		for rib in 3:
-			draw_rect(Rect2(-4, tip_y + 5 + rib * 4, 8, 2), Color("#d5f0ed"))
-	if tank.cannon_id != "" and tank.cannon_id != "standard" and not TankSprites.BY_CANNON.has(tank.cannon_id):
-		var cn := Cannons.get_cannon(tank.cannon_id)
-		if cn.has("color"):
-			draw_rect(Rect2(-3.5, tip_y + 5.0, 7.0, 4.0), cn["color"])
+	var tip_y := float(turret.get("barrel_tip", (turret["rect"] as Rect2i).position.y)) - TankSprites.PIVOT.y
+	var bore := float(turret.get("barrel_width", 5.0))
 	if tank.heat > 0.25:
 		var heat_glow := Color(1.0, 0.35, 0.1, minf(0.85, (tank.heat - 0.25) * 1.1))
 		if tank.overheated:
 			heat_glow = Color(1.0, 0.75, 0.45, 0.75 + 0.2 * sin(anim_tick * 0.4))
-		draw_rect(Rect2(-3.5, tip_y, 7.0, 11.0), heat_glow)
+		draw_rect(Rect2(-bore * 0.5, tip_y, bore, 9.0), heat_glow)
 	draw_set_transform(view_off + pos)
 
 func _sprite_camo(hull_cls: String, hull: Dictionary, camo_id: String) -> Texture2D:

@@ -38,10 +38,83 @@ static func hull_class(tank) -> String:
 		return String(BY_COLOR[tank.color_key])
 	return String(BY_CHASSIS[tank.chassis_id])
 
-static func turret_class(tank, hull: String) -> String:
-	if tank.enemy_type.is_empty() and BY_CANNON.has(tank.cannon_id):
-		return String(BY_CANNON[tank.cannon_id])
+static func turret_class(_tank, hull: String) -> String:
 	return hull
+
+# Native-space mount, muzzle and bore width for each class. Weapons adapt to
+# the class turret, rather than replacing it with a different enemy's turret.
+const GUN_FIT := {
+	"universal": Vector3i(24, 7, 5), "private": Vector3i(24, 5, 5),
+	"scout": Vector3i(24, 10, 3), "bruiser": Vector3i(20, 8, 8),
+	"sniper": Vector3i(24, 1, 4), "mortar": Vector3i(20, 9, 9),
+}
+
+static func turret_part(tank, hull: String) -> Dictionary:
+	var original := part(hull, "turret")
+	if original.is_empty(): return original
+	var cannon: String = tank.cannon_id
+	if not tank.enemy_type.is_empty() or cannon in ["", "standard"] or not GUN_FIT.has(hull) or Cannons.get_cannon(cannon).is_empty(): return original
+	var key := hull + "_turret:" + cannon
+	if _cache.has(key): return _cache[key]
+	var tex: Image = original.tex.get_image()
+	var paint: Image = original.paint.get_image()
+	if tex.is_compressed(): tex.decompress()
+	if paint.is_compressed(): paint.decompress()
+	tex = tex.duplicate()
+	paint = paint.duplicate()
+	var fit: Vector3i = GUN_FIT[hull]
+	var root := fit.x
+	var tip := fit.y
+	var width := fit.z
+	# Remove only the old barrel. Hatches, optics, antenna and turret armour stay.
+	for y in root:
+		for x in range(22, 43):
+			tex.set_pixel(x, y, Color.TRANSPARENT)
+			paint.set_pixel(x, y, Color.TRANSPARENT)
+	var left := 32 - width / 2
+	for y in range(tip, root):
+		for x in range(left, left + width):
+			var edge := x == left or x == left + width - 1
+			_gun_pixel(tex, paint, x, y, Color("#303b43") if edge else Color("#839297"), not edge)
+	var color: Color = Cannons.get_cannon(cannon).get("color", Color.WHITE)
+	match cannon:
+		"ice":
+			for y in range(tip + 2, root - 2):
+				for x in range(left - 1, left + width + 1):
+					_gun_pixel(tex, paint, x, y, Color("#c2e0e5") if (y - tip) % 4 == 0 else Color("#527f96"), false)
+		"acid":
+			for y in range(tip + 3, root - 2):
+				for x in range(left, left + width):
+					if x == left or x == left + width - 1: _gun_pixel(tex, paint, x, y, color.darkened(0.25), false)
+			for x in range(left - 1, left + width + 1): _gun_pixel(tex, paint, x, tip + 1, Color("#344039"), false)
+		"fire":
+			for y in range(tip + 3, root - 2):
+				for x in range(left, left + width):
+					_gun_pixel(tex, paint, x, y, Color("#303137") if y % 4 < 2 else Color("#66523f"), false)
+			for y in range(tip, tip + 3):
+				for x in range(left - 1, left + width + 1):
+					_gun_pixel(tex, paint, x, y, color.darkened(0.15) if y == tip + 1 else Color("#3e3430"), false)
+		"shock":
+			for y in range(tip, root - 2):
+				for x in [left - 1, left + width]:
+					_gun_pixel(tex, paint, x, y, Color("#649bb7") if y % 4 < 2 else Color("#304758"), false)
+			for x in range(left - 1, left + width + 1):
+				_gun_pixel(tex, paint, x, tip, Color("#e6cf78"), false)
+	var mask := Image.create(tex.get_width(), tex.get_height(), false, Image.FORMAT_RGBA8)
+	for y in tex.get_height():
+		for x in tex.get_width():
+			mask.set_pixel(x, y, Color(1, 1, 1, tex.get_pixel(x, y).a))
+	var used := tex.get_used_rect()
+	var info := {"tex": ImageTexture.create_from_image(tex), "paint": ImageTexture.create_from_image(paint),
+		"mask": ImageTexture.create_from_image(mask), "rect": used,
+		"center": Vector2(used.position) + Vector2(used.size) * 0.5, "cache_key": key,
+		"barrel_tip": tip, "barrel_width": width, "barrel_root": root}
+	_cache[key] = info
+	return info
+
+static func _gun_pixel(tex: Image, paint: Image, x: int, y: int, color: Color, paintable: bool) -> void:
+	tex.set_pixel(x, y, color)
+	paint.set_pixel(x, y, Color(0.65, 0.65, 0.65, 1) if paintable else Color.TRANSPARENT)
 
 static func part(cls: String, kind: String) -> Dictionary:
 	var key := cls + "_" + kind

@@ -31,7 +31,7 @@ func _ready() -> void:
 	var gunner := _tank("standard", "p1")
 	for cn in TankSprites.BY_CANNON:
 		gunner.cannon_id = cn
-		_check(TankSprites.turret_class(gunner, "universal") == String(TankSprites.BY_CANNON[cn]), "пушка %s ставит свою башню" % cn)
+		_check(TankSprites.turret_class(gunner, "universal") == "universal", "пушка %s сохраняет башню класса" % cn)
 	gunner.cannon_id = "ice"
 	_check(TankSprites.turret_class(gunner, "universal") == "universal", "ледяная пушка оставляет башню класса")
 	print("=== ПРОВЕРКА СПРАЙТОВ ТАНКОВ ЗАВЕРШЕНА, проблем: %d ===" % failures)
