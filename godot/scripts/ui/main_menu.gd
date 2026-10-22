@@ -23,6 +23,7 @@ var _tip_idx := 0
 @onready var _chip_coins: Label = %ChipCoins
 @onready var _chip_perks: Label = %ChipPerks
 @onready var _mode_btn: Button = %ModeSummaryBtn
+@onready var _mode_detail: Label = %ModeSummaryDetail
 @onready var _start_btn: Button = %StartBtn
 @onready var _quick_btn: Button = %QuickPlayBtn
 @onready var _version_pill: PanelContainer = %VersionPill
@@ -123,7 +124,16 @@ func _build_hud_strip() -> void:
 
 func _build_mode_and_start() -> void:
 	_style_button(_mode_btn, UiKit.secondary("", 13))
-	_mode_btn.custom_minimum_size = Vector2(0, 38)
+	_mode_btn.custom_minimum_size = Vector2(0, 54)
+	# Leave room for the smaller second line while retaining native button text,
+	# hover/focus states and the full clickable area.
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var style := _mode_btn.get_theme_stylebox(state).duplicate() as StyleBox
+		style.content_margin_bottom = 23
+		_mode_btn.add_theme_stylebox_override(state, style)
+	_mode_detail.add_theme_font_override("font", Fonts.regular)
+	_mode_detail.add_theme_font_size_override("font_size", 10)
+	_mode_detail.add_theme_color_override("font_color", Cfg.UI_MUTED)
 	if not _mode_btn.pressed.is_connected(_on_mode_pressed):
 		_mode_btn.pressed.connect(_on_mode_pressed)
 
@@ -175,16 +185,17 @@ func _style_button(target: Button, donor: Button) -> void:
 
 func refresh_mode_summary() -> void:
 	var caret := "▴" if _settings_panel.visible else "▾"
+	_mode_btn.text = "%s  %s" % [_tr("menu.selectMode", "Выбрать режим"), caret]
 	if settings.get("game_type") == "tutorial" or settings.get("mode") == "tutorial":
-		_mode_btn.text = "%s · %s  %s" % [
+		_mode_detail.text = "%s · %s" % [
 			_option_label("game_type", "tutorial"),
-			_option_label("mode", "tutorial"),
-			caret
+			_option_label("mode", "tutorial")
 		]
 	else:
 		var mode_label := _option_label("mode", settings.get("mode", "ffa"))
 		var type_label := _option_label("game_type", settings.get("game_type", "single"))
-		_mode_btn.text = "%s · %s  %s" % [mode_label, type_label, caret]
+		_mode_detail.text = "%s · %s" % [mode_label, type_label]
+	_mode_btn.tooltip_text = _tr("menu.selectMode", "Выбрать режим") + "\n" + _mode_detail.text
 
 func _option_label(key: String, value) -> String:
 	var opts: Array = _settings_options().get(key, [])
