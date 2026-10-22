@@ -87,6 +87,7 @@ var match_rewards := {"kills": 0, "captures": 0, "wins": 0}
 var boss_alive := false
 
 var storm_summoned := false
+var build_environment := BuildEnvironment.new()
 
 var base = null
 var wave := 0
@@ -321,6 +322,9 @@ func check_tank_synergies(tank) -> void:
 	for build in Perks.BUILDS:
 		var b_id: String = String(build["id"])
 		if known.has(b_id):
+			# A perk can be equipped while dead; terrain begins after respawn.
+			if not build_environment.active.has(b_id) and Perks.is_build_complete(b_id, tank.perk_ids):
+				build_environment.activate(self, tank, b_id)
 			continue
 		if Perks.is_build_complete(b_id, tank.perk_ids):
 			known.append(b_id)
@@ -345,6 +349,7 @@ func check_player_synergies(player) -> void:
 						Color("#8899ff"))
 
 func _on_synergy_unlocked(tank, build: Dictionary) -> void:
+	build_environment.activate(self, tank, String(build["id"]))
 	var b_id: String = String(build["id"])
 	var b_name: String = I18n.dn(build, "name", "build")
 	var b_col: Color = build.get("color", Color("#f59e0b"))
@@ -1152,6 +1157,9 @@ func step() -> void:
 	_update_storm()
 	_update_shockwaves()
 	_update_lightning_lord()
+	for holder in tanks:
+		if holder.alive:
+			check_tank_synergies(holder)
 	_update_treefall()
 
 	tank_grid.rebuild(tanks)
@@ -1185,6 +1193,7 @@ func step() -> void:
 	mines = live_mines
 	_update_acid_pools()
 	_update_fire_patches()
+	build_environment.update(self)
 
 	for piece in debris:
 		piece.update()
@@ -2365,6 +2374,7 @@ func dispose() -> void:
 	tanks.clear()
 	bullets.clear()
 	mines.clear()
+	build_environment.clear()
 	acid_pools.clear()
 	fire_patches.clear()
 	wrecks.clear()

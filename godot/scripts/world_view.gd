@@ -99,6 +99,7 @@ func _draw() -> void:
 	_draw_ao()
 	_draw_acid_pools()
 	_draw_fire_patches()
+	BuildEnvironmentFx.draw(self, world, _view, Sets.fx_quality)
 	_draw_pickups()
 	_draw_weapon_pickups()
 	_draw_perk_drops()
@@ -336,6 +337,9 @@ func _draw_tile_range(r0: int, r1: int, c0: int, c1: int) -> void:
 			var tile := map.get_tile(r, c)
 			var x := float(c * Cfg.TILE)
 			var y := float(r * Cfg.TILE)
+			if tile == Cfg.T_WATER:
+				_draw_water_tile(x, y, r, c, water_phase)
+				continue
 			if CitadelArt.draw_tile(self, world, r, c):
 				if tile == Cfg.T_BRICK or tile == Cfg.T_ADOBE:
 					var damage := map.damage_ratio(r, c)
@@ -363,8 +367,6 @@ func _draw_tile_range(r0: int, r1: int, c0: int, c1: int) -> void:
 					_draw_roof_tile(x, y, r, c)
 				Cfg.T_ADOBE:
 					_draw_adobe_tile(x, y, r, c)
-				Cfg.T_WATER:
-					_draw_water_tile(x, y, r, c, water_phase)
 				Cfg.T_SAND:
 					_draw_sand_tile(x, y, r, c)
 				Cfg.T_ROAD:
@@ -1369,6 +1371,8 @@ func _is_wet(r: int, c: int) -> bool:
 	return t == Cfg.T_WATER or t == Cfg.T_BRIDGE
 
 func _draw_water_tile(x: float, y: float, r: int, c: int, phase: float) -> void:
+	if BuildEnvironmentFx.draw_water(self, world, Vector2(x, y), r, c):
+		return
 	if CitadelArt.draw_tile(self, world, r, c):
 		return
 	if not _loc_ready:
@@ -2130,6 +2134,8 @@ func _is_stealth_hidden(tank: Tank) -> bool:
 	if not world.are_hostile(player.tank, tank):
 		return false
 
+	if world.build_environment.obscured(world, player.tank, tank):
+		return true
 	var is_cloaked := tank.shadow_timer > 0
 	if not is_cloaked and TankBuildFx.has(tank, "stealth_hunter"):
 		if world != null and world.map != null:
