@@ -779,6 +779,7 @@ func _update_surface(world) -> void:
 	if world.weather != null and not ability_active("grip"):
 		surface_speed *= world.weather.traction
 
+	surface_speed *= world.build_environment.speed_multiplier(world, self)
 	var spd := sqrt(vx * vx + vy * vy)
 	if spd < 0.45:
 		return

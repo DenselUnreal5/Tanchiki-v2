@@ -723,6 +723,8 @@ func _track_stuck(tank: Tank) -> void:
 func _target_valid(tank: Tank, world, t) -> bool:
 	if t == null or not t.alive or not world.are_hostile(tank, t):
 		return false
+	if world.build_environment.obscured(world, tank, t):
+		return false
 	if t.shadow_timer > 0:
 		return false
 	var dx: float = t.x - tank.x
@@ -795,6 +797,8 @@ static func find_best_threat(tank: Tank, world, lobbed: bool = false):
 		if other == tank or not other.alive:
 			continue
 		if not world.are_hostile(tank, other):
+			continue
+		if world.build_environment.obscured(world, tank, other):
 			continue
 		if other.shadow_timer > 0:
 			continue

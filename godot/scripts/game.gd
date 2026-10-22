@@ -962,6 +962,7 @@ func _net_extra() -> Dictionary:
 	var out := {
 		"flags": flags, "pickups": picks, "weapons": weapons,
 		"score": world.team_score, "wave": world.wave, "build_fx": build_fx,
+		"build_environment": world.build_environment.snapshot(world.tick),
 	}
 	if world.base != null:
 		out["base"] = [world.base["hp"], world.base["max_hp"]]
@@ -1042,6 +1043,8 @@ func _apply_net_state() -> void:
 func _apply_net_extra(extra: Dictionary) -> void:
 	if extra.is_empty():
 		return
+	if extra.get("build_environment") is Dictionary:
+		world.build_environment.apply_snapshot(world, extra["build_environment"])
 	# Optional cosmetic data, compatible with snapshots from older hosts.
 	if extra.get("build_fx") is Dictionary:
 		var builds: Dictionary = extra["build_fx"]
