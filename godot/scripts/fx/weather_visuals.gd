@@ -98,22 +98,48 @@ static func draw_snow_cover(canvas: CanvasItem, pos: Vector2, amount: float, see
 		canvas.draw_rect(Rect2(pos + Vector2(x + 2, y - 1), Vector2(3, 1)), Color("#f1f1e4", amount * 0.75))
 
 static func bolt_points(top: Vector2, impact: Vector2, seed_value: int) -> PackedVector2Array:
+	# Irregular leaders, rather than a regular alternating sawtooth.
 	var points := PackedVector2Array()
-	for i in 10:
-		var t := i / 9.0
-		var p := top.lerp(impact, t)
-		var side := 1.0 if i % 2 == 0 else -1.0
-		p.x += side * (8.0 + Rng.hash01(seed_value + i * 977, 11) * 25.0) * sin(t * PI)
+	var delta := impact - top
+	var side := Vector2(-delta.y, delta.x).normalized()
+	var steps := clampi(int(delta.length() / 13.0), 12, 48)
+	for i in steps + 1:
+		var t := float(i) / steps
+		var cell := t * 5.0
+		var index := int(floorf(cell))
+		var coarse := lerpf(Rng.hash01(seed_value + index * 719, 31), Rng.hash01(seed_value + (index + 1) * 719, 31), fmod(cell, 1.0)) - 0.5
+		var fine := Rng.hash01(seed_value + i * 977, 11) - 0.5
+		var offset := (coarse * 68.0 + fine * 24.0) * sin(t * PI)
+		var p := top.lerp(impact, t) + side * offset
 		points.append((p / 2.0).round() * 2.0)
 	return points
 
-static func draw_bolt(canvas: CanvasItem, top: Vector2, impact: Vector2, seed_value: int, alpha: float, flash_scale: float) -> void:
+static func draw_bolt(canvas: CanvasItem, top: Vector2, impact: Vector2, seed_value: int, alpha: float, flash_scale: float, age: int = 0, detail: int = 2) -> void:
+	if alpha <= 0.0: return
 	var points := bolt_points(top, impact, seed_value)
+	# The same stepped blue halo / yellow-white core used on shocked hulls.
 	ElectricGlow.draw_path(canvas, points, alpha, flash_scale)
-	for index in [3, 5]:
+	var branches := 4 if detail > 0 else 2
+	for i in branches:
+		var index := clampi(int(points.size() * (0.22 + i * 0.16)), 1, points.size() - 2)
 		var origin := points[index]
-		var side := -1.0 if Rng.hash01(seed_value, index) < 0.5 else 1.0
-		var fork := PackedVector2Array([origin, origin + Vector2(side * 32, 18),
-			origin + Vector2(side * 24, 38), origin + Vector2(side * 55, 58)])
-		ElectricGlow.draw_path(canvas, fork, alpha * 0.7, flash_scale, true)
-	ElectricGlow.draw_spark(canvas, impact, 8.0, alpha * (0.4 + 0.4 * flash_scale), flash_scale)
+		var side := -1.0 if Rng.hash01(seed_value + i * 71, 19) < 0.5 else 1.0
+		var reach := 28.0 + Rng.hash01(seed_value + i, 23) * 42.0
+		var end := origin + Vector2(side * reach, reach * (0.65 + Rng.hash01(seed_value + i, 29)))
+		var fork := bolt_points(origin, end, seed_value + i * 113 + 83)
+		ElectricGlow.draw_path(canvas, fork, alpha * 0.55, flash_scale, true)
+		if detail > 1:
+			var split := fork[fork.size() / 2]
+			var tip := split + Vector2(-side * reach * 0.4, reach * 0.45)
+			ElectricGlow.draw_path(canvas, ElectricGlow.link_points(split, tip, seed_value + i * 331), alpha * 0.28, flash_scale, true)
+	# Ground discharge spreads out and fades; no extra full-screen flash.
+	var radius := 14.0 + clampf(float(age), 0, 14) * 1.2
+	var glow := Color(ElectricGlow.BLUE, alpha * flash_scale * 0.42)
+	canvas.draw_texture_rect(PixelFx.glow_texture(), Rect2(impact - Vector2.ONE * radius * 2, Vector2.ONE * radius * 4), false, glow)
+	var rays := 6 if detail > 0 else 3
+	for i in rays:
+		var angle := i * TAU / rays + Rng.hash01(seed_value + i, 53) * 0.55
+		var end := impact + Vector2(cos(angle), sin(angle) * 0.45) * radius
+		ElectricGlow.draw_path(canvas, ElectricGlow.link_points(impact, end, seed_value + i * 179), alpha * 0.65, flash_scale, true)
+		if detail > 0: ElectricGlow.draw_spark(canvas, end, 2.0, alpha * 0.5, flash_scale)
+	ElectricGlow.draw_spark(canvas, impact, 5.0, alpha, flash_scale)

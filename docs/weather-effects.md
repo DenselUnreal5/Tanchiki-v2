@@ -1,5 +1,12 @@
 # Weather artwork
 
+Version 0.9.68 improves sky strikes using the same blue/yellow electrical
+vocabulary as tank shock: irregular leaders, four primary forks with secondary
+offshoots, and an expanding ground discharge with pixel sparks. The trunk starts
+above the viewport. Low effects use two forks and three ground rays; reduced
+flashes attenuate the halo. Shape stays stable on pause, geometry is seed-based,
+and damage, strike frequency and the 14-tick lifetime are unchanged.
+
 The existing weather types and gameplay rules are preserved. The visual layer
 uses muted colors, pixel-aligned precipitation and branching two-pixel lightning.
 Rain has foreground/background drops and small ground splashes; snow has drifting
