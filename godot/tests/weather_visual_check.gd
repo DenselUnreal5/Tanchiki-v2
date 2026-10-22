@@ -24,11 +24,12 @@ func _ready() -> void:
 		push_error("weather_visual_check requires a graphics display, e.g. X11/Xvfb")
 		get_tree().quit(2)
 		return
-	var saved := [Sets.weather_effects, Sets.weather_intensity, Sets.day_night, Sets.reduce_flashes]
+	var saved := [Sets.weather_effects, Sets.weather_intensity, Sets.day_night, Sets.reduce_flashes, Sets.fx_quality]
 	Sets.weather_effects = true
 	Sets.weather_intensity = 1.0
 	Sets.day_night = false
 	Sets.reduce_flashes = false
+	Sets.fx_quality = 2
 	var level := LevelGen.generate(1, "ffa", 42, "city")
 	var map := GameMap.new(16, 10)
 	map.fill(Cfg.T_GRASS)
@@ -77,14 +78,35 @@ func _ready() -> void:
 	var full_bolt := await _capture("clear", 900)
 	_check(_has_electric_color(full_bolt, baseline, true), "storm bolt has a blue halo")
 	_check(_has_electric_color(full_bolt, baseline, false), "storm bolt has a yellow center")
+	full_bolt.save_png("user://lightning_reworked.png")
+	var repeated_bolt := await _capture("clear", 900)
+	_check(repeated_bolt.get_data() == full_bolt.get_data(), "paused discharge keeps its shape")
+	Sets.reduce_flashes = true
+	var dim_bolt := await _capture("clear", 900)
+	_check(_brightness(dim_bolt) < _brightness(full_bolt), "reduced flashes attenuate discharge halo")
+	Sets.reduce_flashes = false
+	world.bolts[0].life = 6
+	var fading_bolt := await _capture("clear", 900)
+	_check(fading_bolt.get_data() != full_bolt.get_data(), "discharge fades and ground corona expands with age")
+	world.bolts[0].life = 14
+	var quality := Sets.fx_quality
+	Sets.fx_quality = 0
+	var low_bolt := await _capture("clear", 900)
+	_check(low_bolt.get_data() != full_bolt.get_data(), "low effects simplify forks and impact sparks")
+	_check(_has_electric_color(low_bolt, baseline, false), "low effects retain visible strike core")
+	Sets.fx_quality = quality
 	_check(world.rng.state == rng_before, "drawing does not advance simulation RNG")
 	var points := WeatherVisuals.bolt_points(Vector2(40, 10), Vector2(200, 240), 77)
+	_check(points.size() > 10 and points.size() <= 49, "irregular lightning geometry is detailed and bounded")
+	_check(points == WeatherVisuals.bolt_points(Vector2(40, 10), Vector2(200, 240), 77), "lightning geometry is seed deterministic")
+	_check(points != WeatherVisuals.bolt_points(Vector2(40, 10), Vector2(200, 240), 78), "different strikes have distinct shapes")
 	for point in points:
 		_check(fmod(point.x, 2.0) == 0.0 and fmod(point.y, 2.0) == 0.0, "bolt follows the pixel grid")
 	Sets.weather_effects = saved[0]
 	Sets.weather_intensity = saved[1]
 	Sets.day_night = saved[2]
 	Sets.reduce_flashes = saved[3]
+	Sets.fx_quality = saved[4]
 	print("=== WEATHER VISUALS: failures: %d ===" % failures)
 	get_tree().quit(1 if failures else 0)
 

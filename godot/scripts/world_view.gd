@@ -748,8 +748,8 @@ func _draw_bolts() -> void:
 		var seed_v: int = int(b["seed"])
 
 		var top := Vector2(x + (Rng.hash01(seed_v, 3) - 0.5) * 120.0,
-			y - _view.size.y * 0.55)
-		WeatherVisuals.draw_bolt(self, top, Vector2(x, y), seed_v, a, Sets.flash_scale())
+			minf(y - 180.0, _view.position.y - 24.0))
+		WeatherVisuals.draw_bolt(self, top, Vector2(x, y), seed_v, a, Sets.flash_scale(), 14 - life, Sets.fx_quality)
 	draw_set_transform(Vector2.ZERO)
 
 func _lamp_at(r: int, c: int) -> bool:
