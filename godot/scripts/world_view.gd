@@ -2173,7 +2173,9 @@ func _draw_tank(tank: Tank) -> void:
 	TankBuildFx.draw_underlay(self, tank, int(anim_tick), Sets.flash_scale(), Sets.fx_quality)
 	TankStatusFx.draw_underlay(self, tank, int(anim_tick), Sets.fx_quality)
 	var sprite_hull := TankSprites.hull_class(tank)
-	if sprite_hull != "":
+	if BossSprites.has(tank):
+		_draw_boss_sprite(tank, pos, anim_tick)
+	elif sprite_hull != "":
 		_draw_tank_sprite(tank, sprite_hull, palette, pos, hw, hh, anim_tick)
 	else:
 		_draw_tank_shape(tank, palette, shape, pos, hw, hh, anim_tick)
@@ -2230,17 +2232,18 @@ func _draw_tank(tank: Tank) -> void:
 				_draw_tank_freeze_ice(tank, pos, hw, hh, anim_tick)
 
 		draw_set_transform(view_off)
+		var hud_y := tank.y - (maxf(6.0, tank.muzzle_len - 14.0) if BossSprites.has(tank) else 0.0)
 		var bar_w := 26.0
 		var ratio := maxf(0.0, tank.hp / tank.max_hp)
 		var is_local_player := is_viewer or tank.is_player_controlled
 		if ratio < 1.0 or not is_viewer or is_local_player:
-			_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w, 4, Color(0, 0, 0, 0.6))
+			_rect(tank.x - bar_w * 0.5, hud_y - 22, bar_w, 4, Color(0, 0, 0, 0.6))
 			var bar := Color("#44cc44") if ratio > 0.5 else (Color("#cccc44") if ratio > 0.25 else Color("#cc4444"))
-			_rect(tank.x - bar_w * 0.5, tank.y - 22, bar_w * ratio, 4, bar)
+			_rect(tank.x - bar_w * 0.5, hud_y - 22, bar_w * ratio, 4, bar)
 		if tank.shield_hp > 0.0:
-			_rect(tank.x - bar_w * 0.5, tank.y - 26, bar_w * minf(1.0, tank.shield_hp / 30.0), 2, Cfg.shield)
+			_rect(tank.x - bar_w * 0.5, hud_y - 26, bar_w * minf(1.0, tank.shield_hp / 30.0), 2, Cfg.shield)
 		if is_local_player:
-			var dash_y := tank.y - 17.0
+			var dash_y := hud_y - 17.0
 			var dash_cd_max := float(tank.dash_cooldown_max())
 			var dash_frac := 1.0 if tank.dash_cooldown <= 0 else clampf(1.0 - float(tank.dash_cooldown) / dash_cd_max, 0.0, 1.0)
 			var dash_ready := tank.dash_cooldown <= 0
@@ -2260,14 +2263,14 @@ func _draw_tank(tank: Tank) -> void:
 		if tank.freeze_ticks > 0:
 			var freeze_max: float = float(tank.freeze_max_ticks) if "freeze_max_ticks" in tank and tank.freeze_max_ticks > 0 else float(Cfg.ICE_FREEZE_TICKS)
 			var fratio := clampf(float(tank.freeze_ticks) / freeze_max, 0.0, 1.0)
-			var f_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
+			var f_y := hud_y - (30.0 if tank.shield_hp > 0.0 else 26.0)
 			_rect(tank.x - bar_w * 0.5, f_y, bar_w, 2.5, Color(0.04, 0.12, 0.20, 0.85))
 			_rect(tank.x - bar_w * 0.5, f_y, bar_w * fratio, 2.5, Color("#38bdf8"))
 			draw_rect(Rect2(tank.x - bar_w * 0.5, f_y, bar_w, 2.5), Color(0.8, 0.95, 1.0, 0.45), false, 0.8)
 			_text_center("❄", Vector2(tank.x - bar_w * 0.5 - 6.0, f_y + 1.0), 8, Color("#a5f3fc"))
 
 		if tank.acid_stacks > 0:
-			var a_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
+			var a_y := hud_y - (30.0 if tank.shield_hp > 0.0 else 26.0)
 			if tank.freeze_ticks > 0:
 				a_y -= 4.0
 			var aratio := clampf(float(tank.acid_stacks) / float(Cfg.ACID_STACK_MAX), 0.0, 1.0)
@@ -2277,7 +2280,7 @@ func _draw_tank(tank: Tank) -> void:
 			_text_center("🧪", Vector2(tank.x - bar_w * 0.5 - 6.0, a_y + 1.0), 8, Color("#bef264"))
 
 		if tank.burn_ticks > 0 or tank.stun_ticks > 0:
-			var s_y := tank.y - (30.0 if tank.shield_hp > 0.0 else 26.0)
+			var s_y := hud_y - (30.0 if tank.shield_hp > 0.0 else 26.0)
 			if tank.freeze_ticks > 0:
 				s_y -= 4.0
 			if tank.acid_stacks > 0:
@@ -2296,16 +2299,16 @@ func _draw_tank(tank: Tank) -> void:
 
 		if not is_viewer:
 			var name_color := Color("#88ccff") if is_ally else (Color("#ffee55") if tank.is_player_controlled else Color("#ffaaaa"))
-			_text_center(tank.name, Vector2(tank.x, tank.y - 32), 10, name_color)
+			_text_center(tank.name, Vector2(tank.x, hud_y - 32), 10, name_color)
 			if not tank.perk_ids.is_empty():
 				var n: int = tank.perk_ids.size()
 				var step := 16.0
 				for i in n:
 					_draw_perk_icon(String(tank.perk_ids[i]),
-						Vector2(tank.x + (i - (n - 1) * 0.5) * step, tank.y - 45), 14.0, Color("#ffcc66"))
+						Vector2(tank.x + (i - (n - 1) * 0.5) * step, hud_y - 45), 14.0, Color("#ffcc66"))
 
 		if tank.carrying_flag:
-			_text_center("⚑", Vector2(tank.x + 16, tank.y - 16), 14, Color("#ffee55"))
+			_text_center("⚑", Vector2(tank.x + 16, hud_y - 16), 14, Color("#ffee55"))
 
 		if tank.is_chimera_clone:
 			var holo_pulse := 0.65 + 0.35 * sin(float(world.tick) * 0.4)
@@ -2398,20 +2401,25 @@ func _draw_tank_sprite(tank: Tank, hull_cls: String, palette: Dictionary, pos: V
 		_draw_hull_pattern(tank, hw * 0.75, hh * 0.75)
 		_draw_build_accents(tank, hw, hh, anim_tick)
 
-	var mount := pos + ((TankSprites.PIVOT - center) * k).rotated(body_rot)
+	var fitted := TankSprites.fitted_barrel(tank, hull_cls)
+	var mount := pos if fitted else pos + ((TankSprites.PIVOT - center) * k).rotated(body_rot)
 	var turret_rot := tank.turret_angle + PI / 2.0
 	draw_set_transform(view_off + mount, turret_rot, Vector2(k, k))
-	draw_texture(turret["tex"], -TankSprites.PIVOT, detail_mod)
-	draw_texture(turret["paint"], -TankSprites.PIVOT, TankSprites.paint_modulate(turret_color * grime))
+	_draw_turret_layer(turret["tex"], turret, tank, hull_cls, detail_mod)
+	_draw_turret_layer(turret["paint"], turret, tank, hull_cls, TankSprites.paint_modulate(turret_color * grime))
 	if not silhouette and turret_id in ["", "none"]:
 		var turret_skin := TankSkinArt.texture(turret, turret_key, skin_id)
-		if turret_skin != null: draw_texture(turret_skin, -TankSprites.PIVOT, Color(grime, grime, grime))
+		if turret_skin != null: _draw_turret_layer(turret_skin, turret, tank, hull_cls, Color(grime, grime, grime))
+	if not silhouette:
+		var modules := TankSprites.weapon_modules(tank, hull_cls)
+		if modules != null: draw_texture(modules, -TankSprites.PIVOT, Color(grime, grime, grime))
 	for tint in tints:
-		draw_texture(turret["mask"], -TankSprites.PIVOT, tint)
+		_draw_turret_layer(turret["mask"], turret, tank, hull_cls, tint)
 	if silhouette:
 		draw_set_transform(view_off + pos)
 		return
 	var tip_y := float(turret.get("barrel_tip", (turret["rect"] as Rect2i).position.y)) - TankSprites.PIVOT.y
+	if fitted: tip_y = TankSprites.barrel_tip_y(tank, hull_cls)
 	var bore := float(turret.get("barrel_width", 5.0))
 	if tank.heat > 0.25:
 		var heat_glow := Color(1.0, 0.35, 0.1, minf(0.85, (tank.heat - 0.25) * 1.1))
@@ -2419,6 +2427,55 @@ func _draw_tank_sprite(tank: Tank, hull_cls: String, palette: Dictionary, pos: V
 			heat_glow = Color(1.0, 0.75, 0.45, 0.75 + 0.2 * sin(anim_tick * 0.4))
 		draw_rect(Rect2(-bore * 0.5, tip_y, bore, 9.0), heat_glow)
 	draw_set_transform(view_off + pos)
+
+# Render the native turret body unchanged, stretching only its barrel strip.
+# All texture layers use the same mapping: paint, skins, status and heat agree.
+func _draw_turret_layer(texture: Texture2D, turret: Dictionary, tank: Tank, hull: String, color: Color) -> void:
+	if not TankSprites.fitted_barrel(tank, hull):
+		draw_texture(texture, -TankSprites.PIVOT, color)
+		return
+	var root := float(turret.barrel_root)
+	for region in [Rect2(0, root, 64, 64 - root), Rect2(0, 0, 22, root), Rect2(43, 0, 21, root)]:
+		draw_texture_rect_region(texture, Rect2(region.position - TankSprites.PIVOT, region.size), region, color)
+	var tip := TankSprites.barrel_tip_y(tank, hull)
+	var source := Rect2(22, float(turret.barrel_tip), 21, root - float(turret.barrel_tip))
+	var destination := Rect2(-10, tip, 21, root - TankSprites.PIVOT.y - tip)
+	draw_texture_rect_region(texture, destination, source, color)
+
+func _draw_boss_sprite(tank: Tank, pos: Vector2, anim_tick: float) -> void:
+	var data := BossSprites.model(tank.chassis_id)
+	if data.is_empty(): return
+	var scale := BossSprites.scale_for(tank, data)
+	var locked := tank.color_key == "silhouette"
+	var wear := 1.0 - maxf(0.0, 1.0 - tank.hp / tank.max_hp - 0.35) * 0.6
+	var color := Color(0.025, 0.03, 0.04) if locked else Color(wear, wear, wear)
+	if tank.is_chimera_clone and not locked: color *= Color(0.45, 0.85, 1.0, 0.78)
+	var tints := [] if locked else _status_tints(tank, anim_tick)
+	draw_set_transform(view_off + pos, tank.body_angle + PI / 2.0, Vector2.ONE * scale)
+	draw_texture(data.hull, data.hull_offset, color)
+	for tint in tints: draw_texture(data.hull, data.hull_offset, tint)
+	var rotation := tank.body_angle if tank.is_rammer_boss or tank.chassis_id == "boss_rammer" else tank.turret_angle
+	var turret_scale := scale * float(data.turret_scale)
+	draw_set_transform(view_off + pos, rotation + PI / 2.0, Vector2.ONE * turret_scale)
+	_draw_boss_turret(data, tank, turret_scale, color)
+	for tint in tints: _draw_boss_turret(data, tank, turret_scale, tint)
+	draw_set_transform(view_off + pos)
+
+func _draw_boss_turret(data: Dictionary, tank: Tank, scale: float, color: Color) -> void:
+	var root := float(data.barrel_root)
+	if root <= 0.0:
+		draw_texture(data.turret, data.turret_offset, color)
+		return
+	var texture: Texture2D = data.turret
+	var offset: Vector2 = data.turret_offset
+	var size := Vector2(texture.get_width(), texture.get_height())
+	var body_region := Rect2(0, root, size.x, size.y - root)
+	draw_texture_rect_region(texture, Rect2(offset + body_region.position, body_region.size), body_region, color)
+	var top := float((data.turret_rect as Rect2i).position.y)
+	var tip := -tank.muzzle_len / scale
+	var source := Rect2(0, top, size.x, root - top)
+	var destination := Rect2(offset.x, tip, size.x, offset.y + root - tip)
+	draw_texture_rect_region(texture, destination, source, color)
 
 func _sprite_camo(hull_cls: String, hull: Dictionary, camo_id: String) -> Texture2D:
 	if camo_id == "" or camo_id == "none":

@@ -37,7 +37,7 @@ func setup(entry: Dictionary, unlocked: bool, small: bool = false) -> void:
 func _layout() -> void:
 	if view == null: return
 	var zoom := 1.0 if compact else 2.7
-	if view.display_tank.is_rammer_boss or view.display_tank.is_chimera_boss or view.display_tank.is_chimera_clone:
+	if compact and (BossSprites.has(view.display_tank)):
 		zoom *= 0.7
 	view.scale = Vector2.ONE * zoom
 	view.position = (size * 0.5).round()

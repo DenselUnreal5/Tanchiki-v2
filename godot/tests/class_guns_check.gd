@@ -29,6 +29,10 @@ func _ready() -> void:
 				check(image.get_region(body_rect).get_data() == original.get_region(body_rect).get_data(), "%s/%s: original turret body, hatch and mount preserved" % [cls.id, cannon.id])
 				check(part.barrel_width == TankSprites.GUN_FIT[hull].z and part.barrel_tip == TankSprites.GUN_FIT[hull].y, "%s/%s: class proportions" % [cls.id, cannon.id])
 				parts[hash(image.get_data())] = true
+				var k := tank.height / float((TankSprites.part(hull, "hull").rect as Rect2i).size.y)
+				check(is_equal_approx(-TankSprites.barrel_tip_y(tank, hull) * k, tank.muzzle_len), "%s/%s: visible muzzle reaches projectile origin" % [cls.id, cannon.id])
+				var modules := TankSprites.weapon_modules(tank, hull)
+				check(modules != null and modules == TankSprites.weapon_modules(tank, hull), "%s/%s: functional modules cached" % [cls.id, cannon.id])
 				for skin in TankSkinArt.PALETTES:
 					check(TankSkinArt.texture(part, part.cache_key, skin) != null, "%s/%s/%s: skin fits weapon assembly" % [cls.id, cannon.id, skin])
 			check(state == [tank.width, tank.height, tank.hit_r, tank.muzzle_len, tank.hp, tank.mods], "%s/%s: combat geometry and stats unchanged" % [cls.id, cannon.id])

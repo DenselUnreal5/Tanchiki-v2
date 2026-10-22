@@ -146,3 +146,47 @@ static func part(cls: String, kind: String) -> Dictionary:
 
 static func paint_modulate(color: Color, alpha: float = 1.0) -> Color:
 	return Color(color.r * PAINT_GAIN, color.g * PAINT_GAIN, color.b * PAINT_GAIN, alpha)
+
+# Separate, unpainted functional hardware stays legible under every cosmetic.
+# It does not alter the authored turret body or the cosmetic paint mask.
+static func weapon_modules(tank, hull: String) -> Texture2D:
+	if not tank.enemy_type.is_empty() or not GUN_FIT.has(hull) or not tank.cannon_id in ["ice", "acid", "fire", "shock"]: return null
+	var key := "modules:" + hull + ":" + String(tank.cannon_id)
+	if _cache.has(key): return _cache[key]
+	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	var narrow := hull in ["scout", "sniper"]
+	var spread := 7 if narrow else 9
+	var top := 28 if hull != "bruiser" and hull != "mortar" else 26
+	var color: Color = Cannons.get_cannon(tank.cannon_id).get("color", Color.WHITE)
+	for side in [-1, 1]:
+		var cx: int = 32 + int(side) * spread
+		for y in range(top, top + 10):
+			for x in range(cx - 2, cx + 3):
+				var edge: bool = x == cx - 2 or x == cx + 2 or y == top or y == top + 9
+				var fill := Color("#26333d") if edge else color.darkened(0.15)
+				match tank.cannon_id:
+					"ice":
+						if not edge: fill = Color("#c4f1fa") if y % 3 == 0 else Color("#3d9dbb")
+					"acid":
+						if not edge: fill = Color("#ddf98b") if x == cx - 1 else Color("#72bd30")
+					"fire":
+						if not edge: fill = Color("#cd5637") if y % 4 < 3 else Color("#4e3331")
+					"shock":
+						if not edge: fill = Color("#ffdb62") if y % 3 == 0 else Color("#3d8fc7")
+				image.set_pixel(x, y, fill)
+		# Hose/connector leads toward the breech without covering the hatch.
+		for x in range(mini(cx, 32 + side * 4), maxi(cx, 32 + side * 4) + 1):
+			image.set_pixel(x, top + 1, Color("#556774"))
+	var texture := CanvasTexture.new()
+	texture.diffuse_texture = ImageTexture.create_from_image(image)
+	texture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_cache[key] = texture
+	return texture
+
+static func fitted_barrel(tank, hull: String) -> bool:
+	return tank.enemy_type.is_empty() and GUN_FIT.has(hull) and tank.cannon_id in ["ice", "acid", "fire", "shock"]
+
+static func barrel_tip_y(tank, hull: String) -> float:
+	var body := part(hull, "hull")
+	var scale: float = tank.height / float((body.rect as Rect2i).size.y)
+	return -tank.muzzle_len / scale

@@ -27,7 +27,7 @@ func _ready() -> void:
 	for id in ["boss", "boss_rammer", "boss_chimera"]:
 		var t := _tank(String(EnemyTypes.get_type(id)["chassis"]), "boss")
 		t.enemy_type = EnemyTypes.get_type(id)
-		_check(TankSprites.hull_class(t) == "", "босс %s остаётся в прежней отрисовке" % id)
+		_check(BossSprites.has(t) and not BossSprites.model(id).is_empty(), "босс %s подключён к своему атласу" % id)
 	var gunner := _tank("standard", "p1")
 	for cn in TankSprites.BY_CANNON:
 		gunner.cannon_id = cn
