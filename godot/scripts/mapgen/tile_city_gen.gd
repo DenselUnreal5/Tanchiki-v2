@@ -5,7 +5,6 @@ const BLOCK_MIN := 4
 const BLOCK_MAX := 6
 const MERGE_SHARE := 0.2
 const STAIR_PRUNE := 1.0
-const RIVER_JOG := 0.15
 const OUTSKIRT_TREE := 0.07
 const OUTSKIRT_HOUSE := 0.024
 
@@ -52,15 +51,15 @@ static func build(map: GameMap, rng: Rng, cols: int, rows: int, arch: String, wa
 	_merge_random(lat, rng)
 
 	var links := _paint_roads(map, lat)
+	var river := {}
 	if want_river:
-		var used := {}
-		for k in int(_st("rivers_small", 1.0)) if small else int(_st("rivers", 1.0)):
-			_carve_river(map, lat, rng, used)
+		var density := int(_st("rivers_small", 1.0)) if small else int(_st("rivers", 1.0))
+		if density > 0: river = RiverWeb.carve(map, rng, lat.xs, lat.ys, lat.kind, density)
 	_plant_alleys(map, lat)
 	_fill_regions(map, lat, rng)
 	_fill_outskirts(map, lat, rng)
 
-	return {"v": [], "h": [], "blocks": [], "circles": [], "seeds": [], "links": links}
+	return {"v": [], "h": [], "blocks": [], "circles": [], "seeds": [], "links": links, "river": river}
 
 static func tidy(map: GameMap, skip: Rect2i = Rect2i()) -> void:
 	_join_diagonals(map)
@@ -364,75 +363,6 @@ static func _paint_roads(map: GameMap, lat: Lattice) -> Array:
 			map.set_tile(r, c, Cfg.T_ROAD)
 		links.append({"r0": r0, "r1": r1, "c0": c, "c1": c})
 	return links
-
-static func _band_ok(lat: Lattice, horizontal: bool, k: int) -> bool:
-	var crossings := 0
-	if horizontal:
-		for i in lat.xs.size() - 1:
-			if lat.kind.has(Vector2i(i, k)):
-				return false
-		for i in lat.xs.size():
-			if lat.v.get(Vector2i(i, k), false):
-				crossings += 1
-	else:
-		for j in lat.ys.size() - 1:
-			if lat.kind.has(Vector2i(k, j)):
-				return false
-		for j in lat.ys.size():
-			if lat.h.get(Vector2i(k, j), false):
-				crossings += 1
-	return crossings >= 2
-
-static func _carve_river(map: GameMap, lat: Lattice, rng: Rng, used: Dictionary) -> void:
-	var horizontal := rng.nextf() < (0.7 if map.cols >= map.rows else 0.3)
-	if used.has("horizontal"):
-		horizontal = bool(used["horizontal"])
-	var lines_across: Array = lat.ys if horizontal else lat.xs
-	var lines_along: Array = lat.xs if horizontal else lat.ys
-	var bands := []
-	for k in lines_across.size() - 1:
-		if _band_ok(lat, horizontal, k) and not used.has(k) and not used.has(k - 1) and not used.has(k + 1):
-			bands.append(k)
-	if bands.is_empty():
-		return
-	var band: int = rng.pick(bands)
-	used["horizontal"] = horizontal
-	used[band] = true
-	var lo: int = int(lines_across[band]) + 2
-	var hi: int = int(lines_across[band + 1]) - 2
-	if hi < lo:
-		return
-	var pos := rng.range_i(lo, hi + 1)
-	var length := map.cols if horizontal else map.rows
-	var last_jog := -10
-	for t in range(1, length - 1):
-		_wet(map, horizontal, pos, t)
-		if t < 4 or t >= length - 4 or t - last_jog < 3 or not _far_from(lines_along, t, 2):
-			continue
-		if not _far_from(lines_along, t + 1, 2) or rng.nextf() >= RIVER_JOG:
-			continue
-		var npos := pos + (1 if rng.nextf() < 0.5 else -1)
-		if npos < lo or npos > hi:
-			npos = pos - (npos - pos)
-		if npos < lo or npos > hi:
-			continue
-		_wet(map, horizontal, npos, t)
-		pos = npos
-		last_jog = t
-
-static func _far_from(lines: Array, t: int, dist: int) -> bool:
-	for p in lines:
-		if absi(int(p) - t) < dist:
-			return false
-	return true
-
-static func _wet(map: GameMap, horizontal: bool, pos: int, t: int) -> void:
-	var r := pos if horizontal else t
-	var c := t if horizontal else pos
-	if map.get_tile(r, c) == Cfg.T_ROAD:
-		map.set_tile(r, c, Cfg.T_BRIDGE)
-	elif map.get_tile(r, c) != Cfg.T_BRIDGE:
-		map.set_tile(r, c, Cfg.T_WATER)
 
 static func _plant_alleys(map: GameMap, lat: Lattice) -> void:
 	for item in lat.alley:

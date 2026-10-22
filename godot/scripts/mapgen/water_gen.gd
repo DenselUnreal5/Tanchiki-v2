@@ -1,7 +1,7 @@
 class_name WaterGen
 extends RefCounted
 
-const MAX_BRIDGES := 32
+const MAX_BRIDGES := 64
 const SINGLE_RIVER_MAX_BRIDGES := 4
 const MIN_CITY_BRIDGE_SPACING := 7
 
