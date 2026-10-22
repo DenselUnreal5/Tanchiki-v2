@@ -122,6 +122,8 @@ func _update_tank() -> void:
 		return
 	_display_tank.color_key = Prof.equipped_color1
 	_display_tank.cosmetics = Prof.equipped_cosmetics()
+	_display_tank.class_id = Prof.equipped_class
+	_display_tank.cannon_id = Prof.equipped_cannon
 	var class_chassis := String(TankClasses.get_entry(Prof.equipped_class)["chassis"])
 	if _display_tank.chassis_id != class_chassis:
 		_display_tank.set_chassis(class_chassis)

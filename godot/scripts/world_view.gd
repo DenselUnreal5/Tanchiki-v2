@@ -2378,13 +2378,17 @@ func _draw_tank_sprite(tank: Tank, hull_cls: String, palette: Dictionary, pos: V
 	draw_texture(hull["tex"], -center, detail_mod)
 	draw_texture(hull["paint"], -center, TankSprites.paint_modulate(body_color * grime))
 	if not silhouette:
+		var skin_texture := TankSkinArt.texture(hull, hull_cls + "_hull", skin_id)
+		if skin_texture != null:
+			draw_texture(skin_texture, -center, Color(grime, grime, grime))
+		var track_id := String(tank.cosmetics.get("track", "none"))
+		if track_id != "none" or TankSkinArt.PALETTES.has(skin_id):
+			var track_color: Color = TankSkinArt.PALETTES[skin_id][2].darkened(0.3) if TankSkinArt.PALETTES.has(skin_id) else Color("#7c858b")
+			track_color = Cosmetics.color_of("track", track_id, track_color)
+			draw_texture(TankSkinArt.tracks(hull, hull_cls, track_color), -center, Color(grime, grime, grime))
 		var camo := _sprite_camo(hull_cls, hull, String(tank.cosmetics.get("camo", "none")))
 		if camo != null:
 			draw_texture(camo, -center, Color(TankSprites.PAINT_GAIN * grime, TankSprites.PAINT_GAIN * grime, TankSprites.PAINT_GAIN * grime))
-		if SKIN_GLOW.has(skin_id):
-			var glow: Color = SKIN_GLOW[skin_id]
-			glow.a = 0.18 + 0.10 * sin(anim_tick * 0.12)
-			draw_texture(hull["mask"], -center, glow)
 	for tint in tints:
 		draw_texture(hull["mask"], -center, tint)
 
@@ -2398,12 +2402,23 @@ func _draw_tank_sprite(tank: Tank, hull_cls: String, palette: Dictionary, pos: V
 	draw_set_transform(view_off + mount, turret_rot, Vector2(k, k))
 	draw_texture(turret["tex"], -TankSprites.PIVOT, detail_mod)
 	draw_texture(turret["paint"], -TankSprites.PIVOT, TankSprites.paint_modulate(turret_color * grime))
+	if not silhouette and turret_id in ["", "none"]:
+		var turret_skin := TankSkinArt.texture(turret, TankSprites.turret_class(tank, hull_cls) + "_turret", skin_id)
+		if turret_skin != null: draw_texture(turret_skin, -TankSprites.PIVOT, Color(grime, grime, grime))
 	for tint in tints:
 		draw_texture(turret["mask"], -TankSprites.PIVOT, tint)
 	if silhouette:
 		draw_set_transform(view_off + pos)
 		return
 	var tip_y := float((turret["rect"] as Rect2i).position.y) - TankSprites.PIVOT.y
+	var weapon_details := TankSkinArt.weapon_details(turret, TankSprites.turret_class(tank, hull_cls), tank.cannon_id)
+	if weapon_details != null: draw_texture(weapon_details, -TankSprites.PIVOT, Color(grime, grime, grime))
+	if tank.cannon_id == "ice":
+		# Ribbed cryogenic jacket; keep the underlying class turret and pivot.
+		draw_rect(Rect2(-4, tip_y + 3, 8, 13), Color("#34536b"))
+		draw_rect(Rect2(-3, tip_y + 4, 6, 11), Color("#93cbd9"))
+		for rib in 3:
+			draw_rect(Rect2(-4, tip_y + 5 + rib * 4, 8, 2), Color("#d5f0ed"))
 	if tank.cannon_id != "" and tank.cannon_id != "standard" and not TankSprites.BY_CANNON.has(tank.cannon_id):
 		var cn := Cannons.get_cannon(tank.cannon_id)
 		if cn.has("color"):

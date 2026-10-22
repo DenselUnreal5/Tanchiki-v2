@@ -14,6 +14,10 @@ var custom_minimum_size := Vector2.ZERO:
 			size = v
 var size := Vector2.ZERO
 
+func _ready() -> void:
+	super._ready()
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
 func _process(_delta: float) -> void:
 	if auto_turret and display_tank != null:
 		display_tank.turret_angle = sin(Time.get_ticks_msec() * 0.0015) * 0.85
