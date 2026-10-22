@@ -93,13 +93,13 @@ func _ready() -> void:
 	# 6. Проверка бестиария
 	var b_entry: Dictionary = Bestiary.get_entry("boss_rammer")
 	_check(not b_entry.is_empty(), "Бестиарий содержит boss_rammer")
-	_check(b_entry.get("hp_val", "").begins_with("3400"), "В бестиарии указано 3400 HP")
+	_check(Bestiary.text(b_entry, "hp_val").begins_with("3400"), "В бестиарии указано 3400 HP")
 	var has_spin_ability := false
 	for ab in b_entry.get("abilities", []):
-		if ab.get("name", "") == "Вихревая раскрутка":
+		if ab.get("name", "") == "Разгон и вращение":
 			has_spin_ability = true
 			break
-	_check(has_spin_ability, "В бестиарии добавлена способность 'Вихревая раскрутка'")
+	_check(has_spin_ability, "В бестиарии добавлена способность 'Разгон и вращение'")
 
 	print("=== ПРОВЕРКА ДЖАГГЕРНАУТА-ТАРАНА ЗАВЕРШЕНА, ошибок: %d ===" % failures)
 	get_tree().quit(failures)

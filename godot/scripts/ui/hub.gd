@@ -28,6 +28,11 @@ var garage_submode: String = "upgrades"
 var _bestiary_selected_id := "player_standard"
 var _bestiary_cards: Dictionary = {}
 var _bestiary_detail_container: VBoxContainer = null
+var _bestiary_detail_scroll: ScrollContainer
+var _bestiary_query := ""
+var _bestiary_filter := 0
+var _bestiary_headers: Dictionary = {}
+var _bestiary_empty: Label
 
 var _cosmetic_preview_tank: Tank = null
 var _cosmetic_preview_view: MenuTankView = null
@@ -360,6 +365,7 @@ func switch_tab(key: String, focus_id: String = "") -> void:
 
 func _fill_tab(key: String) -> void:
 	_hide_tip()
+	_panel.custom_minimum_size.x = minf(1000.0, UiKit.virtual_screen(self).x - 32.0) if key == "bestiary" else 900.0
 	for c in _body.get_children():
 		_body.remove_child(c)
 		c.queue_free()
@@ -389,7 +395,10 @@ func _body_budget() -> float:
 	return maxf(minf(screen.y * 0.86, 900.0) - HUB_HEADER_H, 200.0)
 
 func _resize_scroll() -> void:
+	if not is_instance_valid(_scroll): return
 	_scroll.custom_minimum_size.y = _body_budget()
+	if active_tab == "bestiary" and is_instance_valid(_panel):
+		_panel.custom_minimum_size.x = minf(1000.0, UiKit.virtual_screen(self).x - 32.0)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
@@ -400,6 +409,31 @@ func _fill_bestiary_tab() -> void:
 	_fill_bestiary_view()
 
 func _fill_bestiary_view() -> void:
+	var toolbar := UiKit.hbox(8)
+	_body.add_child(toolbar)
+	var search := LineEdit.new()
+	search.name = "VehicleSearch"
+	search.placeholder_text = _tr("bestiary.search", "Поиск по названию и роли…")
+	search.text = _bestiary_query
+	search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	search.add_theme_font_override("font", Fonts.regular)
+	toolbar.add_child(search)
+	var filter := OptionButton.new()
+	filter.name = "VehicleFilter"
+	for choice in [
+		_tr("bestiary.filter.all", "Все образцы"),
+		_tr("bestiary.filter.unlocked", "Только изученные"),
+		_tr("bestiary.cat.player", "ОРУДИЯ ИГРОКА"),
+		_tr("bestiary.cat.enemy", "ПРОТИВНИКИ"),
+		_tr("bestiary.cat.boss", "БОССЫ И КЛОНЫ")]: filter.add_item(choice)
+	filter.selected = _bestiary_filter
+	toolbar.add_child(filter)
+	search.text_changed.connect(func(value: String):
+		_bestiary_query = value
+		_filter_bestiary())
+	filter.item_selected.connect(func(index: int):
+		_bestiary_filter = index
+		_filter_bestiary())
 	var all_entries: Array[Dictionary] = Bestiary.all()
 	var unlocked_count := 0
 	for entry in all_entries:
@@ -407,17 +441,18 @@ func _fill_bestiary_view() -> void:
 			unlocked_count += 1
 
 	_sub.text = "[center]" + _tr("bestiary.sub",
-		"База тактических данных техники · Рассекречено [b]%d[/b] из %d образцов" % [unlocked_count, all_entries.size()],
+		"Изучено %d из %d · выберите машину, чтобы узнать её особенности" % [unlocked_count, all_entries.size()],
 		{"unlocked": unlocked_count, "total": all_entries.size()}) + "[/center]"
 
 	_bestiary_cards.clear()
+	_bestiary_headers.clear()
 
 	var row := UiKit.hbox(16)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_body.add_child(row)
 
 	var list_scroll := ScrollContainer.new()
-	list_scroll.custom_minimum_size = Vector2(340, _body_budget())
+	list_scroll.custom_minimum_size = Vector2(260, maxf(200, _body_budget() - 92))
 	list_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	list_scroll.follow_focus = true
@@ -428,9 +463,9 @@ func _fill_bestiary_view() -> void:
 	list_scroll.add_child(list_vbox)
 
 	var categories: Array[Dictionary] = [
-		{"id": "player", "title": _tr("bestiary.cat.player", "ТАНКИ ИГРОКА"), "color": Cfg.UI_ACCENT},
-		{"id": "enemy", "title": _tr("bestiary.cat.enemy", "БОЕВАЯ ТЕХНИКА ПРОТИВНИКА"), "color": Color("#f59e0b")},
-		{"id": "boss", "title": _tr("bestiary.cat.boss", "БОССЫ И ЭЛИТНЫЕ УГРОЗЫ"), "color": Color("#ef4444")},
+		{"id": "player", "title": _tr("bestiary.cat.player", "ОРУДИЯ ИГРОКА"), "color": Cfg.UI_ACCENT},
+		{"id": "enemy", "title": _tr("bestiary.cat.enemy", "ПРОТИВНИКИ"), "color": Color("#f59e0b")},
+		{"id": "boss", "title": _tr("bestiary.cat.boss", "БОССЫ И КЛОНЫ"), "color": Color("#ef4444")},
 	]
 
 	var all_cards: Array = []
@@ -442,6 +477,7 @@ func _fill_bestiary_view() -> void:
 
 		var header := UiKit.section(String(cat["title"]), cat["color"])
 		list_vbox.add_child(header)
+		_bestiary_headers[String(cat["id"])] = header
 
 		for item in cat_items:
 			var item_id := String(item["id"])
@@ -452,10 +488,14 @@ func _fill_bestiary_view() -> void:
 			_bestiary_cards[item_id] = card_btn
 			all_cards.append(card_btn)
 
+	_bestiary_empty = UiKit.label(_tr("bestiary.empty", "Ничего не найдено. Измените поиск или фильтр."), 12, Cfg.UI_MUTED)
+	_bestiary_empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	list_vbox.add_child(_bestiary_empty)
 	var detail_scroll := ScrollContainer.new()
+	_bestiary_detail_scroll = detail_scroll
 	detail_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail_scroll.custom_minimum_size = Vector2(0, _body_budget())
+	detail_scroll.custom_minimum_size = Vector2(0, maxf(200, _body_budget() - 92))
 	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	detail_scroll.follow_focus = true
 	row.add_child(detail_scroll)
@@ -476,6 +516,7 @@ func _fill_bestiary_view() -> void:
 
 	_update_bestiary_detail(_bestiary_selected_id)
 	_highlight_bestiary_card(_bestiary_selected_id)
+	_filter_bestiary()
 
 	UiKit.chain_vertical(all_cards)
 	if not all_cards.is_empty():
@@ -494,7 +535,7 @@ func _fill_bestiary_view() -> void:
 func _build_bestiary_item_card(item: Dictionary, is_unlocked: bool, kills: int) -> Button:
 	var item_id := String(item["id"])
 	var card_btn := Button.new()
-	card_btn.custom_minimum_size = Vector2(0, 48)
+	card_btn.custom_minimum_size = Vector2(0, 72)
 	card_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card_btn.focus_mode = Control.FOCUS_ALL
 	card_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -505,7 +546,19 @@ func _build_bestiary_item_card(item: Dictionary, is_unlocked: bool, kills: int) 
 	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card_btn.add_child(hbox)
+	var padding := MarginContainer.new()
+	padding.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	padding.add_theme_constant_override("margin_left", 8)
+	padding.add_theme_constant_override("margin_right", 8)
+	padding.add_theme_constant_override("margin_top", 8)
+	padding.add_theme_constant_override("margin_bottom", 8)
+	padding.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card_btn.add_child(padding)
+	padding.add_child(hbox)
+	padding.minimum_size_changed.connect(func(): card_btn.custom_minimum_size.y = maxf(76.0, padding.get_combined_minimum_size().y))
+	var thumbnail := VehiclePreview.new()
+	thumbnail.setup(item, is_unlocked, true)
+	hbox.add_child(thumbnail)
 
 	var text_vbox := UiKit.vbox(1)
 	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -513,12 +566,18 @@ func _build_bestiary_item_card(item: Dictionary, is_unlocked: bool, kills: int) 
 	hbox.add_child(text_vbox)
 
 	var title_str: String = Bestiary.text(item, "name") if is_unlocked else "???"
+	if bool(item.get("is_player", false)):
+		title_str = I18n.dn(Cannons.get_cannon(String(item.get("cannon_id", "standard"))), "name", "cannon")
 	var title_lbl := UiKit.label(title_str, 12, Cfg.UI_TEXT if is_unlocked else Cfg.UI_MUTED, true)
 	text_vbox.add_child(title_lbl)
+	title_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var role_str: String = Bestiary.text(item, "role") if is_unlocked else _tr("bestiary.classified", "Засекреченный образец")
 	var role_lbl := UiKit.label(role_str, 10, Cfg.UI_MUTED)
 	text_vbox.add_child(role_lbl)
+	role_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	role_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var status_lbl := Label.new()
 	status_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -533,7 +592,8 @@ func _build_bestiary_item_card(item: Dictionary, is_unlocked: bool, kills: int) 
 	else:
 		status_lbl.text = _tr("bestiary.badge.locked", "ЗАКРЫТО")
 		status_lbl.add_theme_color_override("font_color", Color(Cfg.UI_MUTED, 0.6))
-	hbox.add_child(status_lbl)
+	text_vbox.add_child(status_lbl)
+	status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	card_btn.pressed.connect(func(): _select_bestiary_tank(item_id))
 	card_btn.focus_entered.connect(func(): _select_bestiary_tank(item_id))
@@ -566,6 +626,7 @@ func _select_bestiary_tank(tank_id: String) -> void:
 	_bestiary_selected_id = tank_id
 	_highlight_bestiary_card(tank_id)
 	_update_bestiary_detail(tank_id)
+	if is_instance_valid(_bestiary_detail_scroll): _bestiary_detail_scroll.scroll_vertical = 0
 
 func _update_bestiary_detail(tank_id: String) -> void:
 	if _bestiary_detail_container == null:
@@ -586,57 +647,35 @@ func _update_bestiary_detail(tank_id: String) -> void:
 	header_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_bestiary_detail_container.add_child(header_vbox)
 
-	var sub_tag := Bestiary.category_text(item).to_upper()
+	var sub_tag := Bestiary.category_text(item)
 	if is_unlocked:
-		sub_tag += "  ·  " + Bestiary.text(item, "role").to_upper()
+		sub_tag += "  ·  " + Bestiary.text(item, "role")
 	var tag_lbl := UiKit.label(sub_tag, 10, Cfg.UI_ACCENT, true)
+	tag_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	header_vbox.add_child(tag_lbl)
 
 	var title_text: String
 	if is_unlocked:
 		title_text = Bestiary.text(item, "name")
 	else:
-		title_text = _tr("bestiary.classified.title", "??? [ЗАСЕКРЕЧЕННЫЙ ОБРАЗЕЦ]")
+		title_text = _tr("bestiary.classified.title", "Неизвестная машина")
 	var title_lbl := UiKit.label(title_text, 18, Cfg.UI_TEXT if is_unlocked else Cfg.UI_MUTED, true)
+	title_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	header_vbox.add_child(title_lbl)
 
-	# 2. Big 2D Live Preview Box
-	var preview_wrap := PanelContainer.new()
-	preview_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	preview_wrap.add_theme_stylebox_override("panel",
-		UiKit.flat(Color(0.05, 0.06, 0.07, 0.95), Cfg.RADIUS_SM, 1, Color(Cfg.UI_BORDER, 0.5)))
-	_bestiary_detail_container.add_child(preview_wrap)
-
-	var center_box := CenterContainer.new()
-	center_box.custom_minimum_size = Vector2(0, 110)
-	preview_wrap.add_child(center_box)
-
-	var stub_player := PlayerState.new(0, "", String(item.get("color_key", "p1")), null)
-	var preview_tank := Tank.new({
-		"x": 0.0, "y": 0.0, "team": "player" if bool(item.get("is_player", false)) else "enemy",
-		"name": String(item.get("name", "")),
-		"owner": stub_player,
-		"color_key": String(item.get("color_key", "enemy")),
-		"chassis": String(item.get("chassis", "standard")),
-		"max_hp": 100.0, "speed": 100.0, "fire_rate": 30,
-	})
-	preview_tank.spawn_protect = 0
-	preview_tank.cannon_id = String(item.get("cannon_id", "standard"))
-	if tank_id == "chimera_clone":
-		preview_tank.is_chimera_clone = true
-	elif tank_id == "boss_chimera":
-		preview_tank.is_chimera_boss = true
-	elif tank_id == "boss_rammer":
-		preview_tank.is_rammer_boss = true
-
-	var tank_view := MenuTankView.new()
-	tank_view.player = stub_player
-	tank_view.display_tank = preview_tank
-	tank_view.center_in_rect = true
-	tank_view.auto_turret = true
-	tank_view.is_locked = not is_unlocked
-	tank_view.custom_minimum_size = Vector2(180, 100)
-	center_box.add_child(tank_view)
+	var preview := VehiclePreview.new()
+	preview.setup(item, is_unlocked)
+	var overview := UiKit.hbox(14)
+	overview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bestiary_detail_container.add_child(overview)
+	preview.custom_minimum_size.x = 180
+	overview.add_child(preview)
+	if is_unlocked:
+		var brief := UiKit.label(Bestiary.text(item, "desc"), 12, Cfg.UI_TEXT)
+		brief.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		brief.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		brief.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		overview.add_child(brief)
 
 	# 3. Status Pill / Combat Record
 	var status_box := PanelContainer.new()
@@ -644,20 +683,23 @@ func _update_bestiary_detail(tank_id: String) -> void:
 	if bool(item.get("is_player", false)):
 		status_box.add_theme_stylebox_override("panel",
 			UiKit.flat(Color(0.12, 0.18, 0.10, 0.85), Cfg.RADIUS_SM, 1, Color(Cfg.UI_ACCENT, 0.6)))
-		var st_lbl := UiKit.label(_tr("bestiary.player_tank", "Доступен для управления в Гараже (Танк Игрока)"), 11, Cfg.UI_ACCENT, true)
+		var st_lbl := UiKit.label(_tr("bestiary.player_tank", "Пример орудия на шасси «Универсал» · выбор орудия и класса — в гараже"), 11, Cfg.UI_ACCENT, true)
 		st_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		st_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		status_box.add_child(st_lbl)
 	elif is_unlocked:
 		status_box.add_theme_stylebox_override("panel",
 			UiKit.flat(Color(0.20, 0.18, 0.10, 0.85), Cfg.RADIUS_SM, 1, Color(Cfg.UI_GOLD, 0.6)))
-		var st_lbl := UiKit.label(_tr("bestiary.kills", "Уничтожено в боевых действиях: %d раз(а)" % kills, {"n": kills}), 11, Cfg.UI_GOLD, true)
+		var st_lbl := UiKit.label(_tr("bestiary.kills", "Уничтожено: %d" % kills, {"n": kills}), 11, Cfg.UI_GOLD, true)
 		st_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		st_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		status_box.add_child(st_lbl)
 	else:
 		status_box.add_theme_stylebox_override("panel",
 			UiKit.flat(Color(0.22, 0.10, 0.10, 0.85), Cfg.RADIUS_SM, 1, Color(Cfg.UI_DANGER, 0.6)))
-		var st_lbl := UiKit.label(_tr("bestiary.condition", "УСЛОВИЕ РАССЕКРЕЧИВАНИЯ: Уничтожьте этот танк хотя бы 1 раз в бою"), 11, Color("#ffaaaa"), true)
+		var st_lbl := UiKit.label(_tr("bestiary.condition", "Уничтожьте эту машину один раз, чтобы открыть её досье."), 11, Color("#ffaaaa"), true)
 		st_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		st_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		status_box.add_child(st_lbl)
 	_bestiary_detail_container.add_child(status_box)
 
@@ -675,103 +717,96 @@ func _update_bestiary_detail(tank_id: String) -> void:
 			pilot_text = _tr("bestiary.pilotable", "Можно пилотировать: уничтожено %d/%d" % [
 				Prof.get_bestiary_kills(tank_id), TankClasses.kills_needed(tank_id)], {
 				"n": Prof.get_bestiary_kills(tank_id), "need": TankClasses.kills_needed(tank_id)})
+		pilot_text += "\n" + _tr("bestiary.class_separate", "Игровой класс в гараже имеет отдельные характеристики.")
 		var pilot_lbl := UiKit.label(pilot_text, 10, pilot_color, true)
 		pilot_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pilot_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_bestiary_detail_container.add_child(pilot_lbl)
 
-	# 4. Tactical Characteristics (HP, Speed, Damage)
-	_bestiary_detail_container.add_child(UiKit.section(_tr("bestiary.stats", "ТАКТИКО-ТЕХНИЧЕСКИЕ ХАРАКТЕРИСТИКИ"), Cfg.UI_ACCENT))
-	var stats_box := PanelContainer.new()
-	stats_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stats_box.add_theme_stylebox_override("panel",
-		UiKit.flat(Color(0.08, 0.10, 0.08, 0.7), Cfg.RADIUS_SM, 1, Color(Cfg.UI_BORDER, 0.4)))
-	_bestiary_detail_container.add_child(stats_box)
-
-	var stats_vbox := UiKit.vbox(6)
-	stats_box.add_child(stats_vbox)
-
 	if is_unlocked:
-		stats_vbox.add_child(_stat_row(_tr("bestiary.stat.hp", "Корпус:"), int(item.get("hp_rating", 3)), Bestiary.text(item, "hp_val")))
-		stats_vbox.add_child(_stat_row(_tr("bestiary.stat.speed", "Ход:"), int(item.get("speed_rating", 3)), Bestiary.text(item, "speed_val")))
-		stats_vbox.add_child(_stat_row(_tr("bestiary.stat.dmg", "Мощь:"), int(item.get("dmg_rating", 3)), Bestiary.text(item, "dmg_val")))
-	else:
-		stats_vbox.add_child(_stat_row_masked(_tr("bestiary.stat.hp", "Корпус:")))
-		stats_vbox.add_child(_stat_row_masked(_tr("bestiary.stat.speed", "Ход:")))
-		stats_vbox.add_child(_stat_row_masked(_tr("bestiary.stat.dmg", "Мощь:")))
+		_bestiary_detail_container.add_child(UiKit.section(_tr("bestiary.stats", "ХАРАКТЕРИСТИКИ"), Cfg.UI_ACCENT))
+		var stats := GridContainer.new()
+		stats.name = "VehicleStats"
+		stats.columns = 2
+		stats.add_theme_constant_override("h_separation", 8)
+		stats.add_theme_constant_override("v_separation", 8)
+		_bestiary_detail_container.add_child(stats)
+		for field in ["hp", "speed", "dmg", "reload"]:
+			var tile := PanelContainer.new()
+			tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			tile.add_theme_stylebox_override("panel", UiKit.card_style(Color(Cfg.UI_BORDER, 0.5)))
+			stats.add_child(tile)
+			var values := UiKit.vbox(4)
+			tile.add_child(values)
+			var title := UiKit.label(_tr("bestiary.stat." + field,
+				{"hp": "Прочность", "speed": "Скорость", "dmg": "Прямой урон", "reload": "Интервал огня"}[field]), 11, Cfg.UI_MUTED)
+			title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			values.add_child(title)
+			var value := UiKit.label(Bestiary.text(item, field + "_val"), 17, Cfg.UI_TEXT, true)
+			value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			values.add_child(value)
+		var note := UiKit.label(_tr("bestiary.base.player" if bool(item.get("is_player", false)) else "bestiary.base.enemy",
+			"Универсал без улучшений, средняя сложность. Показан прямой урон за попадание; горение и коррозия считаются отдельно. Класс, улучшения и режим меняют итоговые числа." if bool(item.get("is_player", false)) else "Базовые значения на средней сложности, без усилений. Волна, режим, число игроков и адаптивная сложность меняют параметры в бою. Урон указан за один снаряд; эффекты считаются отдельно."), 10, Cfg.UI_MUTED)
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_bestiary_detail_container.add_child(note)
 
-	# 5. Tactical Profile / Lore
-	_bestiary_detail_container.add_child(UiKit.section(_tr("bestiary.tactics", "ТАКТИЧЕСКИЙ ПРОФИЛЬ И ПРИМЕНЕНИЕ"), Cfg.UI_ACCENT))
-	var desc_lbl: Label
-	if is_unlocked:
-		desc_lbl = UiKit.label(Bestiary.text(item, "desc"), 11, Cfg.UI_TEXT)
-	else:
-		desc_lbl = UiKit.label(_tr("bestiary.locked_desc", "Тактический профиль заблокирован. Технические спецификации, слабые места и алгоритмы боевого применения будут расшифрованы после первого уничтожения боевой единицы."), 11, Cfg.UI_MUTED)
-	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_bestiary_detail_container.add_child(desc_lbl)
+	if not is_unlocked: return
+
+	var tip_panel := PanelContainer.new()
+	tip_panel.add_theme_stylebox_override("panel", UiKit.card_style(Color(Cfg.UI_ACCENT, 0.5)))
+	_bestiary_detail_container.add_child(tip_panel)
+	var tip_box := UiKit.vbox(6)
+	tip_panel.add_child(tip_box)
+	tip_box.add_child(UiKit.label(_tr("bestiary.counter", "ТАКТИКА"), 12, Cfg.UI_ACCENT, true))
+	var tip := UiKit.label(Bestiary.text(item, "tip"), 12, Cfg.UI_TEXT)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip_box.add_child(tip)
 
 	# 6. Abilities & Combat Features
-	_bestiary_detail_container.add_child(UiKit.section(_tr("bestiary.abilities", "СПОСОБНОСТИ И БОЕВЫЕ МЕХАНИКИ"), Cfg.UI_ACCENT))
-	if is_unlocked:
-		var ab_list: Array = item.get("abilities", [])
-		for ab_index in ab_list.size():
-			var ab_panel := PanelContainer.new()
-			ab_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			ab_panel.add_theme_stylebox_override("panel",
-				UiKit.flat(Color(0.10, 0.12, 0.09, 0.75), Cfg.RADIUS_SM, 1, Color(Cfg.UI_BORDER, 0.3)))
-			_bestiary_detail_container.add_child(ab_panel)
+	_bestiary_detail_container.add_child(UiKit.section(_tr("bestiary.abilities", "КАК ЭТО РАБОТАЕТ"), Cfg.UI_ACCENT))
+	var ab_list: Array = item.get("abilities", [])
+	for ab_index in ab_list.size():
+		var ab_panel := PanelContainer.new()
+		ab_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ab_panel.add_theme_stylebox_override("panel",
+			UiKit.flat(Color(0.10, 0.12, 0.09, 0.75), Cfg.RADIUS_SM, 1, Color(Cfg.UI_BORDER, 0.3)))
+		_bestiary_detail_container.add_child(ab_panel)
 
-			var ab_vbox := UiKit.vbox(2)
-			ab_panel.add_child(ab_vbox)
+		var ab_vbox := UiKit.vbox(2)
+		ab_panel.add_child(ab_vbox)
 
-			var ab_title := UiKit.label(Bestiary.ability_text(item, ab_index, "name"), 11, Cfg.UI_GOLD, true)
-			ab_vbox.add_child(ab_title)
+		var ab_title := UiKit.label(Bestiary.ability_text(item, ab_index, "name"), 12, Cfg.UI_GOLD, true)
+		ab_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		ab_vbox.add_child(ab_title)
 
-			var ab_desc := UiKit.label(Bestiary.ability_text(item, ab_index, "desc"), 10, Color(Cfg.UI_TEXT, 0.9))
-			ab_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			ab_vbox.add_child(ab_desc)
-	else:
-		var masked_card := PanelContainer.new()
-		masked_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		masked_card.add_theme_stylebox_override("panel",
-			UiKit.flat(Color(0.08, 0.08, 0.08, 0.6), Cfg.RADIUS_SM, 1, Color(Cfg.UI_BORDER, 0.2)))
-		_bestiary_detail_container.add_child(masked_card)
-		var m_lbl := UiKit.label(_tr("bestiary.systems_locked", "[СИСТЕМЫ ВООРУЖЕНИЯ И СПОСОБНОСТИ ЗАСЕКРЕЧЕНЫ]"), 11, Cfg.UI_MUTED)
-		m_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		masked_card.add_child(m_lbl)
+		var ab_desc := UiKit.label(Bestiary.ability_text(item, ab_index, "desc"), 12, Color(Cfg.UI_TEXT, 0.9))
+		ab_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		ab_vbox.add_child(ab_desc)
 
-func _stat_row(title: String, stars: int, val_str: String) -> Control:
-	var stat_line := UiKit.hbox(8)
-	stat_line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var title_lbl := UiKit.label(title, 11, Cfg.UI_MUTED)
-	title_lbl.custom_minimum_size = Vector2(170, 0)
-	stat_line.add_child(title_lbl)
-
-	var stars_text := ""
-	for i in 5:
-		if i < stars:
-			stars_text += "[color=#ffd700]★[/color]"
-		else:
-			stars_text += "[color=#4b533a]☆[/color]"
-	var stars_rich := UiKit.rich(stars_text, 12)
-	stars_rich.custom_minimum_size = Vector2(70, 0)
-	stat_line.add_child(stars_rich)
-
-	var val_lbl := UiKit.label(val_str, 11, Cfg.UI_TEXT, true)
-	val_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stat_line.add_child(val_lbl)
-	return stat_line
-
-func _stat_row_masked(title: String) -> Control:
-	var stat_line := UiKit.hbox(8)
-	stat_line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var title_lbl := UiKit.label(title, 11, Cfg.UI_MUTED)
-	title_lbl.custom_minimum_size = Vector2(170, 0)
-	stat_line.add_child(title_lbl)
-
-	var masked_lbl := UiKit.label(_tr("bestiary.classified_data", "[ДАННЫЕ ЗАСЕКРЕЧЕНЫ]"), 11, Color(Cfg.UI_MUTED, 0.6))
-	masked_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stat_line.add_child(masked_lbl)
-	return stat_line
+func _filter_bestiary() -> void:
+	var query := _bestiary_query.strip_edges().to_lower()
+	var categories := {}
+	var visible_cards: Array = []
+	for id in _bestiary_cards:
+		var item := Bestiary.get_entry(String(id))
+		var unlocked := Prof.is_bestiary_unlocked(String(id))
+		var category := String(item.get("category", ""))
+		# Never reveal classified names or roles through search.
+		var haystack := (Bestiary.text(item, "name") + " " + Bestiary.text(item, "role")).to_lower() if unlocked else ""
+		var matches := query.is_empty() or (unlocked and haystack.contains(query))
+		if _bestiary_filter == 1: matches = matches and unlocked
+		elif _bestiary_filter >= 2: matches = matches and category == ["player", "enemy", "boss"][_bestiary_filter - 2]
+		var card: Button = _bestiary_cards[id]
+		card.visible = matches
+		if matches:
+			categories[category] = true
+			visible_cards.append(card)
+	for category in _bestiary_headers:
+		_bestiary_headers[category].visible = categories.has(category)
+	_bestiary_empty.visible = visible_cards.is_empty()
+	UiKit.chain_vertical(visible_cards)
+	if not visible_cards.is_empty() and not _bestiary_cards.get(_bestiary_selected_id, visible_cards[0]).visible:
+		_select_bestiary_tank(String(visible_cards[0].get_meta("tank_id")))
 
 func _fill_gallery_tab() -> void:
 	_sub.text = _tr("gallery.sub",

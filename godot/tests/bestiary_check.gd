@@ -6,6 +6,8 @@ var log_lines: Array[String] = []
 func _ready() -> void:
 	_log("--- НАЧАЛО ТЕСТА БЕСТИАРИЯ ---")
 	_test_bestiary_data()
+	_test_reference_stats()
+	_test_translations()
 	_test_profile_unlocks()
 	_test_preview_rendering()
 	_test_hub_bestiary_ui()
@@ -30,10 +32,10 @@ func _check(ok: bool, what: String) -> void:
 
 func _test_bestiary_data() -> void:
 	var all_tanks: Array[Dictionary] = Bestiary.all()
-	_check(all_tanks.size() == 14, "Всего 14 танков в бестиарии (получено %d)" % all_tanks.size())
+	_check(all_tanks.size() == 16, "Всего 16 танков в бестиарии (получено %d)" % all_tanks.size())
 
 	var player_tanks: Array[Dictionary] = Bestiary.category_list("player")
-	_check(player_tanks.size() == 3, "3 танка игрока (получено %d)" % player_tanks.size())
+	_check(player_tanks.size() == 5, "5 орудий игрока (получено %d)" % player_tanks.size())
 
 	var enemy_tanks: Array[Dictionary] = Bestiary.category_list("enemy")
 	_check(enemy_tanks.size() == 7, "7 обычных врагов (получено %d)" % enemy_tanks.size())
@@ -45,7 +47,7 @@ func _test_bestiary_data() -> void:
 		var tid: String = String(t["id"])
 		var entry: Dictionary = Bestiary.get_entry(tid)
 		_check(not entry.is_empty(), "Танк %s найден в базе" % tid)
-		_check(entry.has("name") and entry.has("hp_val") and entry.has("speed_val") and entry.has("dmg_val"),
+		_check(entry.has("name") and Bestiary.stat_values(entry).size() == 4,
 			"У танка %s есть все базовые характеристики" % tid)
 		_check(entry.has("abilities") and (entry["abilities"] as Array).size() > 0,
 			"У танка %s есть список способностей" % tid)
@@ -92,7 +94,7 @@ func _test_preview_rendering() -> void:
 		view.is_locked = true
 		_check(view.is_locked, "Силуэтное состояние танка %s задано" % tid)
 		view.free()
-	_check(true, "MenuTankView успешно сконфигурирован для всех 12 моделей танков")
+	_check(true, "MenuTankView успешно сконфигурирован для всех 16 моделей танков")
 
 func _test_hub_bestiary_ui() -> void:
 	var hub_scene := preload("res://scenes/ui/hub.tscn")
@@ -106,7 +108,7 @@ func _test_hub_bestiary_ui() -> void:
 	for t in Bestiary.all():
 		var tid: String = String(t["id"])
 		hub._select_bestiary_tank(tid)
-	_check(true, "Hub успешно переключает карточки всех 12 танков и обновляет панель описания")
+	_check(true, "Hub успешно переключает карточки всех 16 танков и обновляет панель описания")
 
 	_log("Тест открытия Гаража...")
 	hub.open_tab("garage")
@@ -116,3 +118,40 @@ func _test_hub_bestiary_ui() -> void:
 	hub.open_tab("achievements")
 	_check(hub.active_tab == "achievements", "Hub открывает вкладку 'achievements'")
 	hub.queue_free()
+
+func _test_reference_stats() -> void:
+	var standard := Bestiary.reference_stats(Bestiary.get_entry("player_standard"))
+	_check(standard.hp == Cfg.DIFFICULTY.medium.player_hp, "Прочность игрока берётся из средней сложности")
+	_check(standard.damage_min == Cfg.BULLET_DMG_MIN * Cfg.PLAYER_DMG_MULT, "Урон игрока учитывает множитель игрока")
+	for id in EnemyTypes.ORDER:
+		var type := EnemyTypes.get_type(id)
+		var stats := Bestiary.reference_stats(Bestiary.get_entry(id))
+		var hp := float(type.get("base_hp", Cfg.DIFFICULTY.medium.enemy_hp * type.hp_mult))
+		_check(is_equal_approx(stats.hp, hp), "Базовая прочность совпадает с формулой спавна: " + id)
+		_check(is_equal_approx(stats.speed, Cfg.DIFFICULTY.medium.enemy_speed * type.speed_mult), "Базовая скорость совпадает с формулой спавна: " + id)
+	_check(Bestiary.reference_stats(Bestiary.get_entry("chimera_clone")).hp == Cfg.CHIMERA_CLONE_HP, "Прочность клона — отдельная константа, не 50% босса")
+	_check(Bestiary.reference_stats(Bestiary.get_entry("tesla")).damage_min == Cfg.TESLA_SHOCK_DMG, "Вражеская Тесла использует собственный урон")
+	_check(Bestiary.reference_stats(Bestiary.get_entry("player_shock")).damage_min == Cfg.SHOCK_DMG, "Электропушка игрока использует собственный урон")
+	_check(Bestiary.reference_stats(Bestiary.get_entry("player_ice")).damage_max == 0, "Лёд не наносит прямого урона")
+	_check(Bestiary.reference_stats(Bestiary.get_entry("player_fire")).damage_min == Cfg.FIRE_IMPACT_DMG * Cfg.PLAYER_DMG_MULT, "Огнемёт игрока наносит прямой урон")
+
+func _test_translations() -> void:
+	var previous := I18n.lang
+	for language in ["ru", "en", "fr", "es"]:
+		I18n.lang = language
+		var missing: Array[String] = []
+		for item in Bestiary.all():
+			for field in ["name", "role", "desc", "tip"]:
+				var key := "bestiary.%s.%s" % [item.id, field]
+				if language == "en" and not I18n.EN.has(key): missing.append(key)
+				elif language in ["fr", "es"] and not I18n.packs[language]["strings"].has(key): missing.append(key)
+				if Bestiary.text(item, field).is_empty(): missing.append(key)
+			for i in item.abilities.size():
+				for field in ["name", "desc"]:
+					var key := "bestiary.%s.ab%d.%s" % [item.id, i, field]
+					if language == "en" and not I18n.EN.has(key): missing.append(key)
+					elif language in ["fr", "es"] and not I18n.packs[language]["strings"].has(key): missing.append(key)
+			for value in Bestiary.stat_values(item).values():
+				if String(value).contains("{n}"): missing.append("unexpanded unit")
+		_check(missing.is_empty(), "Полные описания и способности %s: %s" % [language, str(missing)])
+	I18n.lang = previous

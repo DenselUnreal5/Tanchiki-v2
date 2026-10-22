@@ -46,7 +46,7 @@ func _ready() -> void:
 		_need("stat." + String(key), String(Prof.STAT_LABELS[key]))
 	for e in Bestiary.LIST:
 		var id := String(e["id"])
-		for f in ["name", "role", "hp_val", "speed_val", "dmg_val", "desc"]:
+		for f in ["name", "role", "desc", "tip"]:
 			_need("bestiary.%s.%s" % [id, f], String(e.get(f, "")))
 		var abilities: Array = e.get("abilities", [])
 		for i in abilities.size():
