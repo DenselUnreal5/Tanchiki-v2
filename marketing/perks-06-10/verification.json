@@ -1,0 +1,67 @@
+{
+  "videos": [
+    {
+      "path": "en/06_evasion.en.mp4",
+      "bytes": 1065603,
+      "duration": 15.0
+    },
+    {
+      "path": "en/07_scavenger.en.mp4",
+      "bytes": 1125907,
+      "duration": 15.0
+    },
+    {
+      "path": "en/08_nitro.en.mp4",
+      "bytes": 1057374,
+      "duration": 15.0
+    },
+    {
+      "path": "en/09_shield.en.mp4",
+      "bytes": 1061618,
+      "duration": 15.0
+    },
+    {
+      "path": "en/10_double_shot.en.mp4",
+      "bytes": 1346856,
+      "duration": 15.0
+    }
+  ],
+  "simulation": {
+    "evasion": {
+      "final_hp": [
+        58.0,
+        61.0
+      ],
+      "chance": 0.15,
+      "dodges": 1
+    },
+    "scavenger": {
+      "healing_events": [
+        3.0,
+        3.0,
+        3.0
+      ],
+      "final_hp": [
+        50.0,
+        59.0
+      ]
+    },
+    "nitro": {
+      "distance_ratio_at_1_second": 1.500000000000007,
+      "duration_seconds": 2.5,
+      "cooldown_seconds": 7
+    },
+    "shield": {
+      "shield_capacity": 30,
+      "maximum_hull_health_saved": 30.0
+    },
+    "double_shot": {
+      "damage": [
+        712.5,
+        855.0
+      ],
+      "ratio": 1.2
+    }
+  },
+  "errors": []
+}

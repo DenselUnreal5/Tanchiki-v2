@@ -1,0 +1,61 @@
+[
+  {
+    "id": "evasion",
+    "level": 3,
+    "mods": {
+      "evasionChance": 0.15
+    },
+    "texts": {
+      "en": {
+        "description": "Quick reactive dodging provides a 15% chance to completely negate any enemy hit.",
+        "name": "Evasion"
+      }
+    }
+  },
+  {
+    "id": "scavenger",
+    "level": 3,
+    "mods": {
+      "scavengeHeal": 3.0
+    },
+    "texts": {
+      "en": {
+        "description": "Every structure destroyed by your fire scavenges materials to restore 3 HP.",
+        "name": "Scavenger"
+      }
+    }
+  },
+  {
+    "id": "nitro",
+    "level": 4,
+    "mods": {},
+    "texts": {
+      "en": {
+        "description": "Activation: Instant powerful speed acceleration for 2.5 seconds (press active key).",
+        "name": "Nitro"
+      }
+    }
+  },
+  {
+    "id": "shield",
+    "level": 4,
+    "mods": {},
+    "texts": {
+      "en": {
+        "description": "Absorbs up to 30 damage before hull armor is touched. Recharges every 30 seconds.",
+        "name": "Energy Shield"
+      }
+    }
+  },
+  {
+    "id": "double_shot",
+    "level": 5,
+    "mods": {},
+    "texts": {
+      "en": {
+        "description": "Fires a volley of two parallel shells at 60% damage each (x1.2 total). Easier to land hits in a straight line.",
+        "name": "Double Shot"
+      }
+    }
+  }
+]

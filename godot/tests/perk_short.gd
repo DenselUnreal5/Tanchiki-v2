@@ -3,6 +3,8 @@ extends Node
 # Deterministic training-room demonstrations, using the real Tank/World logic.
 # --perk=<id> --frames=450 --dump=<json> ; record with --write-movie <out.avi>
 const IDS := ["rapid_fire", "heavy_armor", "sprinter", "regen", "quick_vent"]
+const SECOND_IDS := ["evasion", "scavenger", "nitro", "shield", "double_shot"]
+var selected_ids: Array = IDS
 const WIDTH := 1080
 const HEIGHT := 1920
 var perk_id := "rapid_fire"
@@ -14,15 +16,32 @@ var dump_path := ""
 var telemetry_path := ""
 var telemetry: Array = []
 
+# Control projectile damage rolls in the second batch so differences come from
+# perks alone. Collisions, evasion, shield absorption and shot flags stay native.
+class ComparisonWorld extends World:
+	func deal_damage(target, amount: float, attacker, source: String) -> float:
+		if source == "bullet" and attacker != null:
+			amount = (Cfg.BULLET_DMG_MIN + Cfg.BULLET_DMG_MAX) * 0.5 * attacker.dmg_scale * float(attacker.mods["dmgMult"])
+			if attacker.flags.has("doubleShot"): amount *= 0.6
+		return super.deal_damage(target, amount, attacker, source)
+
+class ObservedTank extends Tank:
+	var dodges := 0
+	func take_damage(world, amount: float, attacker, source: String) -> Dictionary:
+		var result := super.take_damage(world, amount, attacker, source)
+		if result["evaded"]: dodges += 1
+		return result
+
 class Controls extends RefCounted:
 	var kind := ""
 	var tick := 0
 	func apply(tank: Tank, _player, world: World) -> void:
-		if kind in ["rapid_fire", "regen"]:
+		if kind in ["rapid_fire", "regen", "scavenger", "double_shot"]:
 			tank.aim_at(382, 80)
 			if tick % 300 < 240: tank.shoot(world)
-		elif kind == "sprinter":
+		elif kind in ["sprinter", "nitro"]:
 			tank.aim_at(420, 80)
+			if kind == "nitro" and tick % 420 == 0: tank.use_ability(world)
 			if tank.x < 374: tank.thrust(1, 0)
 		elif kind == "quick_vent":
 			tank.aim_at(382, 80)
@@ -41,7 +60,7 @@ class Lane extends WorldView:
 		draw_set_transform(Vector2.ZERO)
 		_draw_tiles()
 		_draw_scorches()
-		if (actor.owner.scheme as Controls).kind == "sprinter":
+		if (actor.owner.scheme as Controls).kind in ["sprinter", "nitro"]:
 			for y in range(32, 128, 8):
 				draw_rect(Rect2(374, y, 4, 8), Color("#d9dfd0") if y % 16 == 0 else Color("#1e2b32"))
 		_draw_wrecks()
@@ -68,10 +87,17 @@ class Chrome extends Node2D:
 			draw_style_box(UiKit.flat(Color("#172329"), 16, 2, Color(accent if i == 1 else Color("#708491"), 0.7)), Rect2(54, y, 972, 400))
 			var t: Tank = reel.lanes[i].actor
 			var metric := ""
-			if reel.perk_id in ["heavy_armor", "regen"]: metric = "%d / %d HP" % [maxi(0, int(t.hp)), int(t.max_hp)]
+			if reel.perk_id in ["heavy_armor", "regen", "evasion", "scavenger", "shield"]: metric = "%d / %d HP" % [maxi(0, int(t.hp)), int(t.max_hp)]
+			elif reel.perk_id == "double_shot": metric = "%d" % int(10000 - reel.lanes[i].world.tanks[1].hp)
+			elif reel.perk_id == "nitro": metric = "%d px" % int(t.x - 72)
 			elif reel.perk_id == "sprinter": metric = "%d%%" % int(round(t.speed / Cfg.PLAYER_SPEED * 100))
 			else: metric = "%d" % t.shots_fired
 			draw_string(Fonts.bold, Vector2(790, y + 44), metric, HORIZONTAL_ALIGNMENT_LEFT, -1, 27, Color("#eff4e7"))
+			if reel.perk_id == "evasion":
+				draw_string(Fonts.bold, Vector2(450, y + 44), "DODGES: %d" % t.dodges, HORIZONTAL_ALIGNMENT_LEFT, -1, 25, Color("#89d8e9"))
+			if reel.perk_id == "shield":
+				draw_rect(Rect2(90, y + 385, 900, 8), Color("#26333b"))
+				draw_rect(Rect2(90, y + 385, 900 * t.shield_hp / 30.0, 8), Cfg.shield)
 			if reel.perk_id in ["rapid_fire", "quick_vent"]:
 				draw_rect(Rect2(90, y + 385, 900, 8), Color("#26333b"))
 				draw_rect(Rect2(90, y + 385, 900 * t.heat, 8), Color("#f49561") if t.overheated else Color("#dfc77a"))
@@ -87,7 +113,8 @@ func _ready() -> void:
 		elif arg.begins_with("--frames="): total_frames = int(arg.substr(9))
 		elif arg.begins_with("--dump="): dump_path = arg.substr(7)
 		elif arg.begins_with("--telemetry="): telemetry_path = arg.substr(12)
-	assert(IDS.has(perk_id))
+	if SECOND_IDS.has(perk_id): selected_ids = SECOND_IDS
+	assert(selected_ids.has(perk_id))
 	I18n.lang = "en"
 	Sets.day_night = false
 	Sets.weather_effects = false
@@ -110,8 +137,9 @@ func _ready() -> void:
 		controls.kind = perk_id
 		var p := PlayerState.new(i, "", "p1" if i == 0 else "p2", controls)
 		if i == 1: p.perk_ids = [perk_id]
-		var world := World.new({"map": map, "level": {"seed": 2026, "location": "city", "areas": {"any": {"r0":1,"r1":3,"c0":1,"c1":12}}}, "mode": "tutorial", "players": [], "puppet": true, "rng_seed": 9})
-		var actor := Tank.new({"x": 72, "y": 80, "team": "player", "name": "", "owner": p,
+		var world_options := {"map": map, "level": {"seed": 2026, "location": "city", "areas": {"any": {"r0":1,"r1":3,"c0":1,"c1":12}}}, "mode": "tutorial", "players": [], "puppet": true, "rng_seed": 9}
+		var world: World = ComparisonWorld.new(world_options) if SECOND_IDS.has(perk_id) else World.new(world_options)
+		var actor := ObservedTank.new({"x": 72, "y": 80, "team": "player", "name": "", "owner": p,
 			"color_key": p.color_key, "class_id": "standard", "chassis": "standard", "max_hp": 100,
 			"speed": Cfg.PLAYER_SPEED, "fire_rate": Cfg.PLAYER_FIRE_RATE, "dmg_scale": Cfg.PLAYER_DMG_MULT})
 		p.tank = actor
@@ -123,7 +151,9 @@ func _ready() -> void:
 		target.spawn_protect = 0
 		target.turret_angle = PI
 		target.body_angle = PI
-		if perk_id == "sprinter": target.x = 9999
+		if perk_id in ["sprinter", "nitro", "scavenger"]: target.x = 9999
+		if perk_id == "evasion": target.dmg_scale = 0.12
+		if perk_id == "shield": target.dmg_scale = 0.4
 		world.tanks = [actor, target]
 		var lane := Lane.new()
 		lane.actor = actor
@@ -152,7 +182,14 @@ func _reset(lane: Lane) -> void:
 	t.regen_accum = 0
 	lane.world.bullets.clear()
 	lane.world.wrecks.clear()
-	if perk_id == "regen": t.hp = 50
+	if perk_id in ["regen", "scavenger"]: t.hp = 50
+	if perk_id == "nitro":
+		t.ability_cd = 0
+		t.ability_timer = 0
+		t.turbo_timer = 0
+	if perk_id == "shield":
+		t.shield_hp = 0
+		t.shield_cooldown = 0
 	if perk_id == "quick_vent":
 		t.heat = 1.0
 		t.overheated = true
@@ -163,10 +200,12 @@ func _process(_delta: float) -> void:
 		var tick := frame * 2 + step
 		for lane in lanes:
 			if perk_id in ["sprinter", "quick_vent"] and tick > 0 and tick % 300 == 0: _reset(lane)
-			if perk_id == "heavy_armor" and tick > 0 and tick % 420 == 0: _reset(lane)
+			if perk_id in ["heavy_armor", "shield", "nitro"] and tick > 0 and tick % 420 == 0: _reset(lane)
 			(lane.actor.owner.scheme as Controls).tick = tick
 			var target: Tank = lane.world.tanks[1]
-			if perk_id == "heavy_armor" and lane.actor.alive:
+			if perk_id == "scavenger" and tick % 180 == 0:
+				lane.world.map.set_tile(2, 7, Cfg.T_BRICK)
+			if perk_id in ["heavy_armor", "evasion", "shield"] and lane.actor.alive:
 				target.aim_at(lane.actor.x, lane.actor.y)
 				target.shoot(lane.world)
 			lane.world.step()
@@ -175,7 +214,7 @@ func _process(_delta: float) -> void:
 	var values := []
 	for lane in lanes:
 		var t: Tank = lane.actor
-		values.append({"hp": t.hp, "max_hp": t.max_hp, "heat": t.heat, "overheated": t.overheated, "shots": t.shots_fired, "x": t.x})
+		values.append({"hp": t.hp, "max_hp": t.max_hp, "heat": t.heat, "overheated": t.overheated, "shots": t.shots_fired, "x": t.x, "shield_hp": t.shield_hp, "ability_timer": t.ability_timer, "target_hp": lane.world.tanks[1].hp, "dodges": t.dodges})
 	telemetry.append({"frame": frame, "lanes": values})
 	frame += 1
 	if frame % 60 == 0: print("PERK MOVIE FRAME ", perk_id, " ", frame, "/", total_frames)
@@ -187,7 +226,7 @@ func _process(_delta: float) -> void:
 
 func _dump() -> void:
 	var data := []
-	for id in IDS:
+	for id in selected_ids:
 		var perk := Perks.get_perk(id)
 		var item := {"id": id, "level": Perks.unlock_level_of(id), "mods": perk.get("mods", {}), "texts": {}}
 		for language in ["ru", "en", "fr", "es"]:

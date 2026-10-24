@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:03,000
+Scavenger
+Unlocks at profile level 3
+
+2
+00:00:03,000 --> 00:00:08,000
+Destroy a building with your fire: +3 HP.
+
+3
+00:00:08,000 --> 00:00:12,000
+Healing stops at your maximum hull health.
+
+4
+00:00:12,000 --> 00:00:15,000
+Turn enemy cover into repairs.

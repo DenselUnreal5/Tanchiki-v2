@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:03,000
+Energy Shield
+Unlocks at profile level 4
+
+2
+00:00:03,000 --> 00:00:08,000
+A barrier absorbs the first 30 damage.
+
+3
+00:00:08,000 --> 00:00:12,000
+The shield recharges on a 30-second cycle.
+
+4
+00:00:12,000 --> 00:00:15,000
+Keep more hull health after the same hits.

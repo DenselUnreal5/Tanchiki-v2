@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:03,000
+Double Shot
+Unlocks at profile level 5
+
+2
+00:00:03,000 --> 00:00:08,000
+Fire two parallel shells in every volley.
+
+3
+00:00:08,000 --> 00:00:12,000
+Each shell deals 60% damage. Total: 120%.
+
+4
+00:00:12,000 --> 00:00:15,000
+Land both shells for the full damage bonus.

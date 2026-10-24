@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:03,000
+Nitro
+Unlocks at profile level 4
+
+2
+00:00:03,000 --> 00:00:08,000
+Activate a speed burst for 2.5 seconds.
+
+3
+00:00:08,000 --> 00:00:12,000
+50% faster movement. 7-second cooldown.
+
+4
+00:00:12,000 --> 00:00:15,000
+Close the gap or escape incoming fire.

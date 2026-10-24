@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the first five unlock-order perk shorts, plus RU/EN/FR/ES variants.
+"""Render staged unlock-order perk shorts in selected languages.
 Requires Godot 4.7, an X11 display, FFmpeg/libass, numpy and Pillow.
 Videos are staged training-room comparisons using real game simulation.
 """
@@ -10,7 +10,9 @@ from PIL import ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 IDS = ['rapid_fire','heavy_armor','sprinter','regen','quick_vent']
+SECOND_IDS = ['evasion','scavenger','nitro','shield','double_shot']
 LANGS = ['ru','en','fr','es']
+SERIES_TOTAL = 5
 ISO = {'ru':'rus','en':'eng','fr':'fra','es':'spa'}
 LABELS = {
  'ru': ['Открывается на {n} уровне профиля', 'БЕЗ ПЕРКА', 'С ПЕРКОМ', 'ВЫСТРЕЛЫ', 'HP', 'СКОРОСТЬ', 'СЕРИЯ ПЕРКОВ'],
@@ -51,6 +53,13 @@ CAPTIONS = {
   'es': ['Vuelve a disparar antes tras sobrecalentarte.', 'Reanuda al 55 % de calor en vez del 30 %.', 'Vuelve a la acción casi un tercio antes.'],
  },
 }
+CAPTIONS.update({
+ 'evasion': {'en': ['15% chance to dodge an enemy hit.', 'A successful dodge prevents all hit damage.', 'Chance-based defense. Every hit rolls again.']},
+ 'scavenger': {'en': ['Destroy a building with your fire: +3 HP.', 'Healing stops at your maximum hull health.', 'Turn enemy cover into repairs.']},
+ 'nitro': {'en': ['Activate a speed burst for 2.5 seconds.', '50% faster movement. 7-second cooldown.', 'Close the gap or escape incoming fire.']},
+ 'shield': {'en': ['A barrier absorbs the first 30 damage.', 'The shield recharges on a 30-second cycle.', 'Keep more hull health after the same hits.']},
+ 'double_shot': {'en': ['Fire two parallel shells in every volley.', 'Each shell deals 60% damage. Total: 120%.', 'Land both shells for the full damage bonus.']},
+})
 OVERRIDE = '''[display]\nwindow/size/viewport_width=1080\nwindow/size/viewport_height=1920\nwindow/size/window_width_override=1080\nwindow/size/window_height_override=1920\nwindow/vsync/vsync_mode=0\n[editor]\nmovie_writer/fps=30\nmovie_writer/mjpeg_quality=0.95\n'''
 
 
@@ -162,7 +171,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         def fmt(t): return f'0:{int(t)//60:02}:{t%60:05.2f}'
         lines.append(f'Dialogue: 0,{fmt(start)},{fmt(end)},{style},,0,0,0,,{{\\pos({x},{y})\\fad(140,100){extra}}}'+ass_escape(text))
     event('Brand','IRON STORM',64,76)
-    event('Small',f'{index:02} / 05',900,86)
+    event('Small',f'{index:02} / {SERIES_TOTAL:02}',900,86)
     event('Small',LABELS[lang][6],240,206)
     title_lines=wrap(name,66,740,True)
     assert len(title_lines)<=2,(name,title_lines)
@@ -170,13 +179,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     event('Level',level,540,416)
     for i in range(2):
         event('Label',LABELS[lang][1+i],90,546+i*424)
-        unit=LABELS[lang][4] if item['id'] in ['heavy_armor','regen'] else LABELS[lang][5] if item['id']=='sprinter' else LABELS[lang][3]
-        if item['id'] not in ['heavy_armor','regen']:
+        unit='DAMAGE' if item['id']=='double_shot' else 'DISTANCE' if item['id']=='nitro' else LABELS[lang][4] if item['id'] in ['heavy_armor','regen','evasion','scavenger','shield'] else LABELS[lang][5] if item['id']=='sprinter' else LABELS[lang][3]
+        if item['id'] not in ['heavy_armor','regen','evasion','scavenger','shield']:
             event('Small',unit,750,550+i*424,extra=r'\an9')
     for a,b,text in entries[1:]:
         wrapped=wrap(text,50,916,True)
         assert len(wrapped)<=3,(lang,text,wrapped)
         event('Caption','\n'.join(wrapped),540,1510,a,b)
+    if item['id'] in SECOND_IDS:
+        event('Small','STAGED TRAINING COMPARISON',64,1660)
     event('Small','IRON STORM',64,1780)
     event('Small',f'#{index:02}',950,1780)
     ass=out/'subtitles'/(stem+'.ass');ass.write_text(styles+'\n'.join(lines)+'\n',encoding='utf-8')
@@ -213,8 +224,17 @@ def make_master(out,item,index,bed):
 
 
 def main():
+    global IDS, LANGS, SERIES_TOTAL
     parser=argparse.ArgumentParser();parser.add_argument('--out',type=Path,required=True);parser.add_argument('--godot',default='godot');parser.add_argument('--display',default=':89');parser.add_argument('--capture',action='store_true');parser.add_argument('--jobs',type=int,default=2);parser.add_argument('--one',default='');parser.add_argument('--capture-ids',default=','.join(IDS))
+    parser.add_argument('--batch',choices=['first','second'],default='first');parser.add_argument('--languages',default='ru,en,fr,es')
     args=parser.parse_args();out=args.out.resolve()
+    if args.batch=='second':
+        IDS=SECOND_IDS
+        SERIES_TOTAL=10
+        if args.capture_ids=='rapid_fire,heavy_armor,sprinter,regen,quick_vent':args.capture_ids=','.join(IDS)
+    LANGS=args.languages.split(',')
+    if args.batch=='second' and LANGS!=['en']:parser.error('Second batch currently has English captions only; use --languages en')
+    start_index=6 if args.batch=='second' else 1
     os.environ.setdefault('XDG_CACHE_HOME','/workspace/.cache')
     for name in ['raw','ru','en','fr','es','subtitles','masters','posters','logs']:(out/name).mkdir(parents=True,exist_ok=True)
     if args.capture:
@@ -227,15 +247,20 @@ def main():
             else:override.write_bytes(original)
     items=json.loads((out/'perks.json').read_text())
     assert [x['id'] for x in items]==IDS
-    assert [x['level'] for x in items]==[1,1,1,2,2]
-    assert items[0]['mods']['fireRateMult']==.6 and items[0]['mods']['heatPerShotMult']==.7
-    assert items[1]['mods']['maxHPMult']==1.5 and items[2]['mods']['speedMult']==1.25
-    assert items[3]['mods']['regenPerMinute']==60 and items[4]['mods']['heatResumeAdd']==.25
+    if args.batch=='first':
+        assert [x['level'] for x in items]==[1,1,1,2,2]
+        assert items[0]['mods']['fireRateMult']==.6 and items[0]['mods']['heatPerShotMult']==.7
+        assert items[1]['mods']['maxHPMult']==1.5 and items[2]['mods']['speedMult']==1.25
+        assert items[3]['mods']['regenPerMinute']==60 and items[4]['mods']['heatResumeAdd']==.25
+    else:
+        assert [x['level'] for x in items]==[3,3,4,4,5]
+        assert abs(items[0]['mods']['evasionChance']-.15)<1e-9
+        assert items[1]['mods']['scavengeHeal']==3
     bed=out/'music-original.wav'
     if not bed.exists(): music(out)
-    selected=[(index,item,lang) for index,item in enumerate(items,1) for lang in LANGS if not args.one or item['id']==args.one]
+    selected=[(index,item,lang) for index,item in enumerate(items,start_index) for lang in LANGS if not args.one or item['id']==args.one]
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:list(pool.map(lambda row:encode_variant(out,*row,bed),selected))
-    if not args.one:
-        for index,item in enumerate(items,1):make_master(out,item,index,bed)
+    if not args.one and set(LANGS)=={'ru','en','fr','es'}:
+        for index,item in enumerate(items,start_index):make_master(out,item,index,bed)
     print('DONE',out,flush=True)
 if __name__=='__main__':main()
