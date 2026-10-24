@@ -1,0 +1,133 @@
+{
+  "videos": [
+    {
+      "path": "ru/01_rapid_fire.ru.mp4",
+      "bytes": 1287847,
+      "duration": 15.0
+    },
+    {
+      "path": "en/01_rapid_fire.en.mp4",
+      "bytes": 1259684,
+      "duration": 15.0
+    },
+    {
+      "path": "fr/01_rapid_fire.fr.mp4",
+      "bytes": 1275359,
+      "duration": 15.0
+    },
+    {
+      "path": "es/01_rapid_fire.es.mp4",
+      "bytes": 1287536,
+      "duration": 15.0
+    },
+    {
+      "path": "ru/02_heavy_armor.ru.mp4",
+      "bytes": 1068912,
+      "duration": 15.0
+    },
+    {
+      "path": "en/02_heavy_armor.en.mp4",
+      "bytes": 1052253,
+      "duration": 15.0
+    },
+    {
+      "path": "fr/02_heavy_armor.fr.mp4",
+      "bytes": 1068487,
+      "duration": 15.0
+    },
+    {
+      "path": "es/02_heavy_armor.es.mp4",
+      "bytes": 1070484,
+      "duration": 15.0
+    },
+    {
+      "path": "ru/03_sprinter.ru.mp4",
+      "bytes": 1017527,
+      "duration": 15.0
+    },
+    {
+      "path": "en/03_sprinter.en.mp4",
+      "bytes": 1010826,
+      "duration": 15.0
+    },
+    {
+      "path": "fr/03_sprinter.fr.mp4",
+      "bytes": 1015154,
+      "duration": 15.0
+    },
+    {
+      "path": "es/03_sprinter.es.mp4",
+      "bytes": 1022665,
+      "duration": 15.0
+    },
+    {
+      "path": "ru/04_regen.ru.mp4",
+      "bytes": 1154571,
+      "duration": 15.0
+    },
+    {
+      "path": "en/04_regen.en.mp4",
+      "bytes": 1151831,
+      "duration": 15.0
+    },
+    {
+      "path": "fr/04_regen.fr.mp4",
+      "bytes": 1156315,
+      "duration": 15.0
+    },
+    {
+      "path": "es/04_regen.es.mp4",
+      "bytes": 1162776,
+      "duration": 15.0
+    },
+    {
+      "path": "ru/05_quick_vent.ru.mp4",
+      "bytes": 842463,
+      "duration": 15.0
+    },
+    {
+      "path": "en/05_quick_vent.en.mp4",
+      "bytes": 827044,
+      "duration": 15.0
+    },
+    {
+      "path": "fr/05_quick_vent.fr.mp4",
+      "bytes": 837670,
+      "duration": 15.0
+    },
+    {
+      "path": "es/05_quick_vent.es.mp4",
+      "bytes": 846685,
+      "duration": 15.0
+    }
+  ],
+  "simulation": {
+    "rapid_fire": {
+      "baseline_shots": 19,
+      "perk_shots": 31
+    },
+    "heavy_armor": {
+      "max_hp": [
+        100,
+        150
+      ]
+    },
+    "sprinter": {
+      "distance_ratio_at_2_seconds": 1.2499999999999982
+    },
+    "regen": {
+      "initial_hp": 50,
+      "final_hp": [
+        50,
+        65
+      ]
+    },
+    "quick_vent": {
+      "first_ready_seconds": [
+        2.9,
+        1.8666666666666667
+      ]
+    }
+  },
+  "errors": []
+}

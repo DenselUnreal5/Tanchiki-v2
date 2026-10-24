@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:03,000
+Casco reforzado
+Se desbloquea en el nivel de perfil 1
+
+2
+00:00:03,000 --> 00:00:08,000
+Resistencia máxima: +50 %.
+
+3
+00:00:08,000 --> 00:00:12,000
+Tanque base: 100 PV → 150 PV.
+
+4
+00:00:12,000 --> 00:00:15,000
+Resiste más impactos.

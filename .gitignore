@@ -21,4 +21,6 @@ build/Tanchiki.exe
 # Ролики для соцсетей — десятки мегабайт, пересобираются tests/lightning_reel.tscn.
 build/*.mp4
 
-marketing/
+# Keep raw marketing captures local; track the finished first-five perk set.
+marketing/*
+!marketing/perks-01-05/

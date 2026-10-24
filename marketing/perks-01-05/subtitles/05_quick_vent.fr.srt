@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:03,000
+Purge rapide
+Débloqué au niveau de profil 2
+
+2
+00:00:03,000 --> 00:00:08,000
+Reprenez le tir plus tôt après surchauffe.
+
+3
+00:00:08,000 --> 00:00:12,000
+Reprise à 55 % de chaleur au lieu de 30 %.
+
+4
+00:00:12,000 --> 00:00:15,000
+De nouveau en action environ un tiers plus tôt.

@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:03,000
+Rapid Fire
+Unlocks at profile level 1
+
+2
+00:00:03,000 --> 00:00:08,000
+40% shorter reload time.
+
+3
+00:00:08,000 --> 00:00:12,000
+30% less heat per shot.
+
+4
+00:00:12,000 --> 00:00:15,000
+More shots in every burst.

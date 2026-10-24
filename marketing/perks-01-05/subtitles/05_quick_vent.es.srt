@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:03,000
+Purga rápida
+Se desbloquea en el nivel de perfil 2
+
+2
+00:00:03,000 --> 00:00:08,000
+Vuelve a disparar antes tras sobrecalentarte.
+
+3
+00:00:08,000 --> 00:00:12,000
+Reanuda al 55 % de calor en vez del 30 %.
+
+4
+00:00:12,000 --> 00:00:15,000
+Vuelve a la acción casi un tercio antes.

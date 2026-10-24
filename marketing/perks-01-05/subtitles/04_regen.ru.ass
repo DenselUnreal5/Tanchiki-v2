@@ -1,0 +1,28 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Brand,DejaVu Sans,40,&H00F4F4ED,&H000000FF,&H00101418,&H00000000,-1,0,0,0,100,100,3,0,1,0,0,7,0,0,0,1
+Style: Title,DejaVu Sans,66,&H00F4F4ED,&H000000FF,&H00101418,&H00000000,-1,0,0,0,100,100,0,0,1,1,0,7,0,0,0,1
+Style: Small,DejaVu Sans,28,&H00B1C4CF,&H000000FF,&H00101418,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Level,DejaVu Sans,32,&H0083DFC7,&H000000FF,&H00101418,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,8,0,0,0,1
+Style: Label,DejaVu Sans,30,&H00E7F4EF,&H000000FF,&H00101418,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Caption,DejaVu Sans,50,&H00F4F4ED,&H000000FF,&H00101418,&H00000000,-1,0,0,0,100,100,0,0,1,2,1,5,0,0,0,1
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:15.00,Brand,,0,0,0,,{\pos(64,76)\fad(140,100)}IRON STORM
+Dialogue: 0,0:00:00.00,0:00:15.00,Small,,0,0,0,,{\pos(900,86)\fad(140,100)}04 / 05
+Dialogue: 0,0:00:00.00,0:00:15.00,Small,,0,0,0,,{\pos(240,206)\fad(140,100)}СЕРИЯ ПЕРКОВ
+Dialogue: 0,0:00:00.00,0:00:15.00,Title,,0,0,0,,{\pos(240,250)\fad(140,100)}Регенерация
+Dialogue: 0,0:00:00.00,0:00:15.00,Level,,0,0,0,,{\pos(540,416)\fad(140,100)}Открывается на 2 уровне профиля
+Dialogue: 0,0:00:00.00,0:00:15.00,Label,,0,0,0,,{\pos(90,546)\fad(140,100)}БЕЗ ПЕРКА
+Dialogue: 0,0:00:00.00,0:00:15.00,Label,,0,0,0,,{\pos(90,970)\fad(140,100)}С ПЕРКОМ
+Dialogue: 0,0:00:03.00,0:00:08.00,Caption,,0,0,0,,{\pos(540,1510)\fad(140,100)}Восстанавливает 1 HP в\Nсекунду.
+Dialogue: 0,0:00:08.00,0:00:12.00,Caption,,0,0,0,,{\pos(540,1510)\fad(140,100)}Это 60 HP за минуту.
+Dialogue: 0,0:00:12.00,0:00:15.00,Caption,,0,0,0,,{\pos(540,1510)\fad(140,100)}Ремонт продолжается прямо в\Nбою.
+Dialogue: 0,0:00:00.00,0:00:15.00,Small,,0,0,0,,{\pos(64,1780)\fad(140,100)}IRON STORM
+Dialogue: 0,0:00:00.00,0:00:15.00,Small,,0,0,0,,{\pos(950,1780)\fad(140,100)}#04

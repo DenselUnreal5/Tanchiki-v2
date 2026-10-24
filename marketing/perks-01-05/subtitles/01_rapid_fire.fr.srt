@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:03,000
+Tir rapide
+Débloqué au niveau de profil 1
+
+2
+00:00:03,000 --> 00:00:08,000
+Temps de rechargement réduit de 40 %.
+
+3
+00:00:08,000 --> 00:00:12,000
+30 % de chauffe en moins par tir.
+
+4
+00:00:12,000 --> 00:00:15,000
+Plus de tirs dans chaque rafale.

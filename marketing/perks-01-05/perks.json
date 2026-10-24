@@ -1,0 +1,128 @@
+[
+  {
+    "id": "rapid_fire",
+    "level": 1,
+    "mods": {
+      "fireRateMult": 0.6,
+      "heatPerShotMult": 0.7
+    },
+    "texts": {
+      "en": {
+        "description": "Cuts reload time by 40% and reduces heat generation per shot by 30%.",
+        "name": "Rapid Fire"
+      },
+      "es": {
+        "description": "Reduce el tiempo de recarga un 40 % y el calentamiento por disparo un 30 %.",
+        "name": "Fuego rápido"
+      },
+      "fr": {
+        "description": "Réduit le temps de rechargement de 40 % et la chauffe par tir de 30 %.",
+        "name": "Tir rapide"
+      },
+      "ru": {
+        "description": "Ускоряет перезарядку на 40% и снижает нагрев орудия при стрельбе на 30%.",
+        "name": "Скорострельность"
+      }
+    }
+  },
+  {
+    "id": "heavy_armor",
+    "level": 1,
+    "mods": {
+      "maxHPMult": 1.5
+    },
+    "texts": {
+      "en": {
+        "description": "Armor plates make the hull 50% tougher (max HP +50%).",
+        "name": "Reinforced Hull"
+      },
+      "es": {
+        "description": "Placas de blindaje hacen el casco un 50 % más resistente (PV máx. +50 %).",
+        "name": "Casco reforzado"
+      },
+      "fr": {
+        "description": "Des plaques de blindage rendent la coque 50 % plus solide (PV max +50 %).",
+        "name": "Coque renforcée"
+      },
+      "ru": {
+        "description": "Бронеплиты делают корпус танка прочнее на 50% (максимум HP +50%).",
+        "name": "Усиленный корпус"
+      }
+    }
+  },
+  {
+    "id": "sprinter",
+    "level": 1,
+    "mods": {
+      "speedMult": 1.25
+    },
+    "texts": {
+      "en": {
+        "description": "Forced engine tuning increases maximum tank movement speed by 25%.",
+        "name": "Sprinter"
+      },
+      "es": {
+        "description": "Un motor potenciado aumenta un 25 % la velocidad máxima del tanque.",
+        "name": "Velocista"
+      },
+      "fr": {
+        "description": "Un moteur poussé augmente de 25 % la vitesse maximale du char.",
+        "name": "Sprinteur"
+      },
+      "ru": {
+        "description": "Форсированная трансмиссия увеличивает максимальную скорость движения танка на 25%.",
+        "name": "Спринтер"
+      }
+    }
+  },
+  {
+    "id": "regen",
+    "level": 2,
+    "mods": {
+      "regenPerMinute": 60.0
+    },
+    "texts": {
+      "en": {
+        "description": "Automated nano-repair systems restore 1 HP per second (60 HP per minute).",
+        "name": "Regeneration"
+      },
+      "es": {
+        "description": "Sistemas automáticos de nanorreparación restauran 1 PV por segundo (60 PV por minuto).",
+        "name": "Regeneración"
+      },
+      "fr": {
+        "description": "Des systèmes de nano-réparation automatiques restaurent 1 PV par seconde (60 PV par minute).",
+        "name": "Régénération"
+      },
+      "ru": {
+        "description": "Полевая ремонтная система восстанавливает броню прямо в бою (60 HP в минуту, по 1 HP в секунду).",
+        "name": "Регенерация"
+      }
+    }
+  },
+  {
+    "id": "quick_vent",
+    "level": 2,
+    "mods": {
+      "heatResumeAdd": 0.25
+    },
+    "texts": {
+      "en": {
+        "description": "Forced emergency venting lets the barrel fire again about a third sooner after an overheat.",
+        "name": "Quick Purge"
+      },
+      "es": {
+        "description": "Una purga de emergencia forzada permite al cañón disparar de nuevo aproximadamente un tercio antes tras un sobrecalentamiento.",
+        "name": "Purga rápida"
+      },
+      "fr": {
+        "description": "Une purge d'urgence forcée permet au canon de tirer de nouveau environ un tiers plus tôt après une surchauffe.",
+        "name": "Purge rapide"
+      },
+      "ru": {
+        "description": "Форсированная продувка: после перегрева танк готов стрелять снова примерно на треть быстрее обычного.",
+        "name": "Быстрый сброс"
+      }
+    }
+  }
+]

@@ -1,0 +1,16 @@
+1
+00:00:00,000 --> 00:00:03,000
+Fuego rápido
+Se desbloquea en el nivel de perfil 1
+
+2
+00:00:03,000 --> 00:00:08,000
+Tiempo de recarga un 40 % menor.
+
+3
+00:00:08,000 --> 00:00:12,000
+Un 30 % menos de calor por disparo.
+
+4
+00:00:12,000 --> 00:00:15,000
+Más disparos en cada ráfaga.
