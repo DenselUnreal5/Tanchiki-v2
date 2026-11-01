@@ -363,6 +363,23 @@ func find_free_spot(rng: Rng, area: Dictionary, w: float, h: float,
 			return Vector2(x, y)
 	return Vector2.INF
 
+## Последний запасной спавн: любая проезжаемая клетка, не вода и не стена.
+func find_fallback_spot(w: float, h: float) -> Vector2:
+	for pass_i in 2:
+		var require_reachable := pass_i == 0 and not reachable.is_empty()
+		for r in range(1, rows - 1):
+			for c in range(1, cols - 1):
+				if require_reachable and reachable[r * cols + c] == 0:
+					continue
+				var px := c * Cfg.TILE + Cfg.TILE * 0.5
+				var py := r * Cfg.TILE + Cfg.TILE * 0.5
+				if is_blocked_rect(px, py, w, h):
+					continue
+				if is_water_at(px, py):
+					continue
+				return Vector2(px, py)
+	return Vector2(width * 0.5, height * 0.5)
+
 func label_regions() -> Array:
 	var labels := PackedInt32Array()
 	labels.resize(cols * rows)
@@ -454,30 +471,39 @@ func ensure_connectivity() -> int:
 	return carved
 
 func _carve_corridor(r0: int, c0: int, r1: int, c1: int) -> int:
-	var carved := 0
+	var cells: Array[Vector2i] = []
 	var step_c := 1 if c1 > c0 else -1
 	var c := c0
 	while c != c1:
-		carved += _carve_put(r0, c)
+		cells.append(Vector2i(r0, c))
 		c += step_c
 	var step_r := 1 if r1 > r0 else -1
 	var r := r0
 	while r != r1:
-		carved += _carve_put(r, c1)
+		cells.append(Vector2i(r, c1))
 		r += step_r
-	carved += _carve_put(r1, c1)
+	cells.append(Vector2i(r1, c1))
+	var water := 0
+	for cell in cells:
+		if get_tile(cell.x, cell.y) == Cfg.T_WATER:
+			water += 1
+	# Узкий разрыв засыпаем проездом. Широкую реку не трогаем:
+	# переправы для неё уже ставит генератор воды, и новый мост
+	# попал бы в лимит переправ.
+	var bridge_water := water > 0 and water <= 3
+	var carved := 0
+	for cell in cells:
+		carved += _carve_put(cell.x, cell.y, bridge_water)
 	return carved
 
-func _carve_put(r: int, c: int) -> int:
+func _carve_put(r: int, c: int, bridge_water: bool = false) -> int:
 	if r <= 0 or r >= rows - 1 or c <= 0 or c >= cols - 1:
 		return 0
 	var i := r * cols + c
 	if is_drivable_tile(tiles[i]):
 		return 0
-	if tiles[i] == Cfg.T_WATER:
+	if tiles[i] == Cfg.T_WATER and not bridge_water:
 		return 0
-	tiles[i] = Cfg.T_EMPTY
-	passable[i] = 1 if is_drivable_tile(Cfg.T_EMPTY) else 0
-	version += 1
-	_note_change(i, true)
+	var tile := Cfg.T_ROAD if tiles[i] == Cfg.T_WATER else Cfg.T_EMPTY
+	set_tile(r, c, tile)
 	return 1

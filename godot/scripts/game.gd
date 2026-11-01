@@ -468,7 +468,7 @@ func start_match(net_opts: Dictionary = {}) -> void:
 		"puppet": is_client,
 		"weather": String(s.get("weather", "auto")),
 		"daytime": String(s.get("daytime", "auto")),
-		"rng_seed": seed_override,
+		"rng_seed": int(level["seed"]),
 		"mutator": "" if Net.is_online or String(s["mode"]) == "tutorial" or not Sets.weekly_mutator \
 			else Prof.active_mutator(),
 		"adaptive": Sets.adaptive_difficulty and not Net.is_online and String(s["mode"]) != "tutorial",
@@ -925,11 +925,13 @@ func _client_frame(delta: float) -> void:
 		steps += 1
 		var p = players[0]
 		if p.scheme.has_method("read_command"):
-			var cmd: Dictionary = p.scheme.read_command(p)
-			Net.send_command(cmd)
+			var raw: Dictionary = p.scheme.read_command(p)
+			var seq := Net.send_command(raw)
+			var cmd := NetProtocol.canonical_command(raw)
+			cmd["seq"] = seq
 			if p.tank != null:
 				p.tank.predict_move(world, cmd)
-				_predict_buf.append({"tick": world.tick, "cmd": cmd})
+				_predict_buf.append({"tick": world.tick, "seq": seq, "cmd": cmd})
 				if _predict_buf.size() > 480:
 					_predict_buf = _predict_buf.slice(_predict_buf.size() - 480)
 	if accumulator > Cfg.TICK_SEC * Cfg.MAX_STEPS_PER_FRAME:
@@ -991,10 +993,17 @@ func _net_extra() -> Dictionary:
 	for generator in world.power_generators:
 		generators.append([generator.x, generator.y, generator.hp, generator.alive,
 			generator.cooldown, generator.capture_progress, generator.capturing_team])
+	var acks := []
+	for peer_id in Net.lobby:
+		var cmd: Dictionary = Net.command_of(int(peer_id))
+		if cmd.is_empty():
+			continue
+		acks.append([int(peer_id), int(cmd.get("seq", 0))])
 	var out := {
 		"flags": flags, "pickups": picks, "weapons": weapons, "generators": generators,
 		"score": world.team_score, "wave": world.wave, "build_fx": build_fx,
 		"build_environment": world.build_environment.snapshot(world.tick),
+		"acks": acks,
 	}
 	if world.base != null:
 		out["base"] = [world.base["hp"], world.base["max_hp"]]
@@ -1014,21 +1023,41 @@ func _reconcile_local_tank() -> void:
 		return
 	_last_reconciled_tick = t
 
+	var ack := Net.snapshot_ack(multiplayer.get_unique_id())
+	var replay: Array = []
+	if ack >= 0:
+		for entry in _predict_buf:
+			var seq := int(entry.get("seq", -1))
+			if seq < 0:
+				continue
+			var ahead := (seq - ack) & 0xFFFF
+			if ahead > 0 and ahead < 32768:
+				replay.append(entry)
+	else:
+		for entry in _predict_buf:
+			if int(entry["tick"]) > t:
+				replay.append(entry)
+	if replay.size() > Cfg.RECONCILE_MAX_REPLAY:
+		replay = replay.slice(replay.size() - Cfg.RECONCILE_MAX_REPLAY)
+
 	var tank: Tank = p.tank
 	tank.x = float(auth["x"])
 	tank.y = float(auth["y"])
+	tank.vx = float(auth.get("vx", 0.0))
+	tank.vy = float(auth.get("vy", 0.0))
 	tank.body_angle = float(auth["body"])
 	tank.angle = tank.body_angle
 	tank.turret_angle = float(auth["turret"])
-	tank.vx = 0.0
-	tank.vy = 0.0
+	tank.dash_range = float(auth.get("dash", 0.0))
+	tank.dash_stall = 0
+	if tank.dash_range > 0.0:
+		var dash_angle := float(auth.get("dash_angle", tank.angle))
+		tank.dash_dir = Vector2(cos(dash_angle), sin(dash_angle))
+	else:
+		tank.dash_dir = Vector2.ZERO
+	var flags := int(auth.get("flags", 0))
+	tank.turbo_timer = replay.size() + 2 if (flags & 2) != 0 else 0
 
-	var replay: Array = []
-	for entry in _predict_buf:
-		if int(entry["tick"]) > t:
-			replay.append(entry)
-	if replay.size() > Cfg.RECONCILE_MAX_REPLAY:
-		replay = replay.slice(replay.size() - Cfg.RECONCILE_MAX_REPLAY)
 	for entry in replay:
 		tank.predict_move(world, entry["cmd"])
 	_predict_buf = replay

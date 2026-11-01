@@ -760,7 +760,29 @@ func predict_move(world, cmd: Dictionary) -> void:
 	_update_surface(world)
 	thrust(float(cmd.get("mx", 0.0)), float(cmd.get("my", 0.0)))
 	aim_at(float(cmd.get("ax", 0.0)), float(cmd.get("ay", 0.0)))
+	if dash_range > 0.0:
+		var boost := speed * Cfg.DASH_SPEED_MULT
+		var ddir: Vector2 = dash_dir if dash_dir != Vector2.ZERO else Vector2(cos(angle), sin(angle))
+		vx = ddir.x * boost
+		vy = ddir.y * boost
+	var before_x := x
+	var before_y := y
 	_move(world, false)
+	if dash_range > 0.0:
+		var moved := Vector2(x - before_x, y - before_y).length()
+		dash_range -= moved
+		if moved < maxf(0.15, speed * Cfg.DASH_SPEED_MULT * 0.4):
+			dash_stall += 1
+			if dash_stall >= 3:
+				dash_range = 0.0
+		else:
+			dash_stall = 0
+		if dash_range <= 0.0:
+			dash_range = 0.0
+			dash_stall = 0
+	if world.map.is_water_at(x, y):
+		vx *= Cfg.WATER_DRAG
+		vy *= Cfg.WATER_DRAG
 	vx *= Cfg.FRICTION
 	vy *= Cfg.FRICTION
 	body_angle = Rng.rotate_toward(body_angle, angle,
@@ -1090,6 +1112,8 @@ func _update_rammer_boss(world) -> void:
 				rammer_daze_ticks = Cfg.RAMMER_DAZE_TICKS
 				vx = 0.0
 				vy = 0.0
+				if world.map.is_blocked_rect(x, y, col_w, col_h):
+					_push_out_of_walls(world.map)
 				world.damage_number.emit(x, y - 34, I18n.t("fx.stunned", {}, "⚡ ОГЛУШЁН!"), Color("#ffee55"))
 				world.particles.burst(x, y, [Color("#ffee55"), Color("#888888")], 18, 2, 5, 14, 24, world.rng)
 
@@ -1350,8 +1374,8 @@ func _move(world, crush_trees: bool = true) -> void:
 		hit = true
 	if hit:
 		blocked_ticks += 1
-		if map.is_blocked_rect(x, y, col_w, col_h):
-			_push_out_of_walls(map)
+	if map.is_blocked_rect(x, y, col_w, col_h):
+		_push_out_of_walls(map)
 
 	if crush_trees:
 		_crush_trees(world)
@@ -1360,7 +1384,7 @@ func _move(world, crush_trees: bool = true) -> void:
 	y = clampf(y, col_h * 0.5 + 2.0, map.height - col_h * 0.5 - 2.0)
 
 func _push_out_of_walls(map: GameMap) -> bool:
-	for dist in range(1, 17):
+	for dist in range(1, 49):
 		for i in 8:
 			var a := TAU * float(i) / 8.0
 			var px := x + cos(a) * float(dist)

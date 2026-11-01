@@ -15,6 +15,13 @@ static func encode_snapshot(seq: int, tick: int, tanks: Array, bullets: Array,
 		buf.put_u16(int(t.net_id))
 		buf.put_float(t.x)
 		buf.put_float(t.y)
+		buf.put_16(clampi(int(round(t.vx * 64.0)), -32768, 32767))
+		buf.put_16(clampi(int(round(t.vy * 64.0)), -32768, 32767))
+		buf.put_u16(clampi(int(round(t.dash_range * 4.0)), 0, 65535))
+		var dash_angle := 0.0
+		if t.dash_dir.length_squared() > 0.0001:
+			dash_angle = atan2(t.dash_dir.y, t.dash_dir.x)
+		buf.put_u16(_angle_to_u16(dash_angle))
 		buf.put_u16(_angle_to_u16(t.body_angle))
 		buf.put_u16(_angle_to_u16(t.turret_angle))
 		buf.put_u16(clampi(int(round(t.hp)), 0, 65535))
@@ -58,6 +65,10 @@ static func decode_snapshot(data: PackedByteArray) -> Dictionary:
 			"id": buf.get_u16(),
 			"x": buf.get_float(),
 			"y": buf.get_float(),
+			"vx": float(buf.get_16()) / 64.0,
+			"vy": float(buf.get_16()) / 64.0,
+			"dash": float(buf.get_u16()) / 4.0,
+			"dash_angle": _u16_to_angle(buf.get_u16()),
 			"body": _u16_to_angle(buf.get_u16()),
 			"turret": _u16_to_angle(buf.get_u16()),
 			"hp": float(buf.get_u16()),
@@ -76,6 +87,12 @@ static func decode_snapshot(data: PackedByteArray) -> Dictionary:
 		})
 
 	out["extra"] = buf.get_var()
+	return out
+
+## Тот же ввод, который хост получит после упаковки: стик округляется до 0.01.
+static func canonical_command(cmd: Dictionary) -> Dictionary:
+	var out := decode_command(encode_command(cmd, 0))
+	out.erase("seq")
 	return out
 
 static func encode_command(cmd: Dictionary, seq: int) -> PackedByteArray:

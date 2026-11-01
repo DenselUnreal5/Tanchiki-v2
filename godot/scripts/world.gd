@@ -559,7 +559,7 @@ func _free_spot(team: String, w: float = TankArt.MAX_COLLIDE_W, h: float = TankA
 	spot = map.find_free_spot(rng, level["areas"]["any"], w, h)
 	if spot != Vector2.INF:
 		return spot
-	return Vector2(Cfg.TILE * 4, Cfg.TILE * 4)
+	return map.find_fallback_spot(w, h)
 
 func _spawn_combatants() -> void:
 	var is_ctf := mode == "ctf"

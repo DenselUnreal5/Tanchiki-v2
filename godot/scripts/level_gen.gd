@@ -157,6 +157,10 @@ static func generate(level_num: int, mode: String, seed_override: int = -1,
 						map.set_tile(r, c, ground)
 	if tiled and loc_id == "dust":
 		_paint_desert_hazards(map, seed_value, citadel_rect, homes)
+	# Цитадель, уборка улиц и опасные зоны ставятся после первой связки
+	# и могут снова разрезать проезд. Второй проход дотягивает коридоры.
+	map.ensure_connectivity()
+	RoadNet.repair(map)
 	map.mark_reachable()
 
 	var areas := {}

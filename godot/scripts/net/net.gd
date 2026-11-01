@@ -653,12 +653,13 @@ func next_tank_id() -> int:
 func reset_tank_ids() -> void:
 	_next_tank_id = 1
 
-func send_command(cmd: Dictionary) -> void:
+func send_command(cmd: Dictionary) -> int:
 	if role != "client":
-		return
+		return -1
 	_cmd_seq = (_cmd_seq + 1) & 0xFFFF
 	var data := NetProtocol.encode_command(cmd, _cmd_seq)
 	_send(func(): _rpc_command.rpc_id(1, data))
+	return _cmd_seq
 
 @rpc("any_peer", "unreliable")
 func _rpc_command(data: PackedByteArray) -> void:
@@ -778,9 +779,26 @@ func latest_snapshot_tank(net_id: int) -> Dictionary:
 			return {
 				"tick": int(snap["tick"]),
 				"x": float(t["x"]), "y": float(t["y"]),
+				"vx": float(t.get("vx", 0.0)), "vy": float(t.get("vy", 0.0)),
+				"dash": float(t.get("dash", 0.0)),
+				"dash_angle": float(t.get("dash_angle", 0.0)),
 				"body": float(t["body"]), "turret": float(t["turret"]),
+				"flags": int(t.get("flags", 0)),
 			}
 	return {}
+
+func snapshot_ack(peer_id: int) -> int:
+	if _snaps.is_empty():
+		return -1
+	var extra: Dictionary = _snaps[-1]["data"].get("extra", {})
+	for pair in extra.get("acks", []):
+		if typeof(pair) != TYPE_ARRAY and typeof(pair) != TYPE_PACKED_INT32_ARRAY:
+			continue
+		if pair.size() < 2:
+			continue
+		if int(pair[0]) == peer_id:
+			return int(pair[1])
+	return -1
 
 func host_map_delta(delta: Array) -> void:
 	if role != "host" or delta.is_empty() or lobby.size() <= 1:
@@ -794,7 +812,11 @@ func _rpc_map_delta(delta: Array) -> void:
 	var limit: int = _game.world.map.tiles.size()
 	var clean := []
 	for entry in delta:
-		if not (entry is Array) or entry.size() < 3:
+		var kind := typeof(entry)
+		if kind != TYPE_ARRAY and kind != TYPE_PACKED_INT32_ARRAY \
+				and kind != TYPE_PACKED_INT64_ARRAY and kind != TYPE_PACKED_BYTE_ARRAY:
+			continue
+		if entry.size() < 3:
 			continue
 		var i := int(entry[0])
 		if i < 0 or i >= limit:
