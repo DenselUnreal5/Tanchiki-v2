@@ -199,6 +199,24 @@ func build(players: Array, world: World) -> void:
 		freeze_bar_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		freeze_row.add_child(freeze_bar_wrap)
 
+		var dash_row := UiKit.hbox(4)
+		dash_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		left.add_child(dash_row)
+
+		var dash_icon := UiKit.label("⚡", 10)
+		dash_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		dash_row.add_child(dash_icon)
+
+		var dash_label := UiKit.label("", 10, Cfg.UI_GOLD, true)
+		dash_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		dash_row.add_child(dash_label)
+
+		var dash_bar := UiKit.rounded_bar(70, 5, Cfg.UI_GOLD)
+		var dash_bar_wrap: Control = dash_bar["wrap"]
+		var dash_bar_fill: ColorRect = dash_bar["fill"]
+		dash_bar_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		dash_row.add_child(dash_bar_wrap)
+
 		var right := UiKit.vbox(2)
 		right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		root.add_child(right)
@@ -251,6 +269,7 @@ func build(players: Array, world: World) -> void:
 			"heat_fill": heat_fill, "heat_wrap": heat_wrap,
 			"acid_row": acid_row, "acid_label": acid_label, "acid_fill": acid_bar_fill,
 			"freeze_row": freeze_row, "freeze_label": freeze_label, "freeze_fill": freeze_bar_fill,
+			"dash_icon": dash_icon, "dash_label": dash_label, "dash_fill": dash_bar_fill,
 			"net": net_label,
 			"score": score, "objective": objective, "weather": weather_label,
 			"xp_label": xp_label, "xp_fill": xp_fill, "perks": perks,
@@ -432,6 +451,33 @@ func _update_ability(panel: Dictionary, player) -> void:
 	label.text = label.text.strip_edges()
 	icon_view.modulate = label.modulate
 
+func _update_dash(panel: Dictionary, player) -> void:
+	var label: Label = panel["dash_label"]
+	var fill: ColorRect = panel["dash_fill"]
+	var icon: Label = panel["dash_icon"]
+	var tank = player.tank
+	if tank == null or not tank.alive:
+		label.text = ""
+		fill.size.x = 0.0
+		icon.modulate = Color(1, 1, 1, 0.3)
+		return
+	var key := "Shift" if player.index == 0 else "Num +"
+	if tank.dash_range > 0.0:
+		label.text = I18n.t("hud.dash.active", {}, "РЫВОК!")
+		label.modulate = Color.WHITE
+		fill.size.x = 70.0
+	elif tank.dash_cooldown <= 0:
+		label.text = I18n.t("hud.dash.ready", {"key": key}, "Рывок · [%s] готов" % key)
+		label.modulate = Color.WHITE
+		fill.size.x = 70.0
+	else:
+		var cd_max := float(tank.dash_cooldown_max())
+		var sec := float(tank.dash_cooldown) / float(Cfg.TICK_HZ)
+		label.text = I18n.t("hud.dash.cooldown", {"sec": "%.1f" % sec}, "Рывок · %.1f с" % sec)
+		label.modulate = Color(1, 1, 1, 0.55)
+		fill.size.x = 70.0 * clampf(1.0 - float(tank.dash_cooldown) / cd_max, 0.0, 1.0)
+	icon.modulate = label.modulate
+
 func update_hud(world: World) -> void:
 	if world.mode == "tutorial":
 		var tinfo: Dictionary = world.get_tutorial_task_info()
@@ -576,6 +622,8 @@ func update_hud(world: World) -> void:
 		_update_net(panel)
 
 		_update_ability(panel, player)
+
+		_update_dash(panel, player)
 
 		var key := ",".join(player.perk_ids)
 		if key != String(panel["last_perks"]):

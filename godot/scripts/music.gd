@@ -113,7 +113,11 @@ func _playlist(streams: Array) -> AudioStream:
 	return pl
 
 func _ensure_bus() -> void:
-	_add_bus("Music", "Master")
+	var music_bus := _add_bus("Music", "Master")
+	if AudioServer.get_bus_effect_count(music_bus) == 0:
+		var lp := AudioEffectLowPassFilter.new()
+		lp.cutoff_hz = LOW_HP_OPEN_CUTOFF
+		AudioServer.add_bus_effect(music_bus, lp, 0)
 	var hall := _add_bus("MusicHall", "Music")
 	if AudioServer.get_bus_effect_count(hall) == 0:
 		var rev := AudioEffectReverb.new()
@@ -181,6 +185,29 @@ func stop() -> void:
 
 const PERK_DUCK_DB := -3.1
 const MENU_DUCK_DB := -14.0
+
+const LOW_HP_CUTOFF := 800.0
+const LOW_HP_OPEN_CUTOFF := 22050.0
+
+var _low_hp := false
+var _low_hp_tween: Tween
+
+func set_low_hp(on: bool) -> void:
+	if _low_hp == on:
+		return
+	_low_hp = on
+	var idx := AudioServer.get_bus_index("Music")
+	if idx < 0:
+		return
+	for i in AudioServer.get_bus_effect_count(idx):
+		var fx := AudioServer.get_bus_effect(idx, i)
+		if fx is AudioEffectLowPassFilter:
+			if _low_hp_tween != null and _low_hp_tween.is_valid():
+				_low_hp_tween.kill()
+			_low_hp_tween = create_tween()
+			_low_hp_tween.tween_property(fx, "cutoff_hz",
+				LOW_HP_CUTOFF if on else LOW_HP_OPEN_CUTOFF, 0.4)
+			return
 
 func set_paused(on: bool) -> void:
 	if _paused == on:

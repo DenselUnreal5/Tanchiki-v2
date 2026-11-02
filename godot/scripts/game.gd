@@ -615,6 +615,8 @@ func _bind_world_events(w: World) -> void:
 			Net.host_event("feed", {"text": I18n.t("feed.buildActivated", {"name": build_name}, "⚡ " + build_name + " АКТИВИРОВАН!"), "color": col.to_html()}))
 
 	w.damage_number.connect(func(x: float, y: float, text: String, color: Color):
+		if _try_batch_damage(x, y, text, color):
+			return
 		if floaters.size() > 80:
 			floaters.pop_front()
 		floaters.append({"x": x, "y": y, "text": text, "color": color, "life": 45}))
@@ -858,6 +860,7 @@ func _update_touch_overlay() -> void:
 
 func _process(delta: float) -> void:
 	if state == S_MENU or world == null:
+		Mus.set_low_hp(false)
 		_update_touch_overlay()
 		return
 	_update_touch_overlay()
@@ -901,6 +904,7 @@ func _process(delta: float) -> void:
 
 	_update_listeners()
 	_update_engines()
+	_update_music_hp()
 	if state == S_PLAYING or state == S_PAUSED or state == S_PERK:
 		hud.update_hud(world)
 	_update_post_fx()
@@ -1250,6 +1254,18 @@ func _update_engines() -> void:
 			rigs.append([t.x, t.y, sqrt(t.vx * t.vx + t.vy * t.vy)])
 	Sfx.update_engines(rigs)
 
+func _update_music_hp() -> void:
+	if state != S_PLAYING and state != S_PAUSED and state != S_PERK:
+		Mus.set_low_hp(false)
+		return
+	var low := false
+	for p in players:
+		var t = p.tank
+		if t != null and t.alive and t.max_hp > 0.0 and t.hp / t.max_hp < 0.2:
+			low = true
+			break
+	Mus.set_low_hp(low)
+
 func _update_post_fx() -> void:
 	if Sets.fx_quality <= PostFx.OFF:
 		return
@@ -1267,3 +1283,30 @@ func _update_floaters() -> void:
 		if int(f["life"]) > 0:
 			kept.append(f)
 	floaters.assign(kept)
+
+# Батчинг цифр урона: потоковый урон (кислота, огонь, струя Химеры) сливается
+# в одну нарастающую цифру рядом с целью вместо спама мелкими числами.
+const DMG_BATCH_RADIUS := 40.0
+
+func _try_batch_damage(x: float, y: float, text: String, color: Color) -> bool:
+	if not text.begins_with("-"):
+		return false
+	var digits := text.substr(1)
+	if not digits.is_valid_int():
+		return false
+	var amount := int(digits)
+	for f in floaters:
+		if not bool(f.get("batched", false)):
+			continue
+		if f["color"] != color:
+			continue
+		if absf(float(f["x"]) - x) > DMG_BATCH_RADIUS or absf(float(f["y"]) - y) > DMG_BATCH_RADIUS:
+			continue
+		var sum := int(String(f["text"]).substr(1)) + amount
+		f["text"] = "-%d" % sum
+		f["life"] = 45
+		return true
+	if floaters.size() > 80:
+		floaters.pop_front()
+	floaters.append({"x": x, "y": y, "text": text, "color": color, "life": 45, "batched": true})
+	return true

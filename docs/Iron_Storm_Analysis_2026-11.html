@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Танчики: Iron Storm — Актуализация геймдев-анализа (v0.9.78, ноябрь 2026)</title>
+<style>
+  @page { size: A4; margin: 14mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    color: #1e293b; background: #ffffff; line-height: 1.5; font-size: 10.5pt;
+    margin: 0; padding: 24px; max-width: 1000px;
+  }
+  .header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #1e293b 100%);
+    color: #fff; padding: 24px 28px; border-radius: 10px; margin-bottom: 20px;
+    border-left: 6px solid #38bdf8;
+  }
+  .header h1 { margin: 0 0 6px 0; font-size: 22pt; font-weight: 800; letter-spacing: -0.5px; color: #fff; }
+  .header .subtitle { font-size: 12pt; color: #94a3b8; margin-bottom: 12px; }
+  .meta-pills { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill {
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    padding: 3px 10px; border-radius: 999px; font-size: 8.5pt; font-weight: 600; color: #e2e8f0;
+  }
+  .pill.accent { background: rgba(56,189,248,.2); border-color: #38bdf8; color: #38bdf8; }
+  h2 {
+    font-size: 13.5pt; font-weight: 700; color: #0f172a; border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 5px; margin-top: 24px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  h2 .num {
+    background: #0284c7; color: #fff; width: 22px; height: 22px; border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 9.5pt;
+  }
+  h3 { font-size: 11pt; font-weight: 600; color: #1e293b; margin-top: 14px; margin-bottom: 6px; }
+  p { margin: 0 0 8px 0; color: #334155; }
+  ul { margin: 0 0 10px 0; padding-left: 20px; }
+  li { margin-bottom: 5px; color: #334155; }
+  li strong { color: #0f172a; }
+  code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 9pt; }
+  .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 14px; }
+  .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; }
+  .card.highlight { border-color: #bae6fd; background: #f0f9ff; }
+  .card.warning { border-color: #fde68a; background: #fffbeb; }
+  .card.danger { border-color: #fecdd3; background: #fff1f2; }
+  .card.verdict { border-color: #86efac; background: #f0fdf4; }
+  .card-title { font-weight: 700; font-size: 10pt; color: #0f172a; margin-bottom: 4px; }
+  .table-box { width: 100%; margin-bottom: 14px; border-collapse: collapse; font-size: 9pt; }
+  .table-box th, .table-box td { border: 1px solid #cbd5e1; padding: 7px 10px; text-align: left; vertical-align: top; }
+  .table-box th { background: #0f172a; color: #fff; font-weight: 600; }
+  .table-box tr:nth-child(even) { background: #f8fafc; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 8pt; font-weight: 600; white-space: nowrap; }
+  .badge-success { background: #dcfce7; color: #15803d; }
+  .badge-warning { background: #fef3c7; color: #b45309; }
+  .badge-danger { background: #fee2e2; color: #b91c1c; }
+  .badge-info { background: #e0f2fe; color: #0369a1; }
+  .footer {
+    margin-top: 25px; padding-top: 10px; border-top: 1px solid #e2e8f0;
+    font-size: 8pt; color: #64748b; display: flex; justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>ТАНЧИКИ: IRON STORM</h1>
+    <div class="subtitle">Актуализация комплексного геймдев-анализа: контроль рекомендаций, техническое состояние, дорожная карта до 1.0</div>
+    <div class="meta-pills">
+      <span class="pill accent">Движок: Godot Engine 4.7</span>
+      <span class="pill">Версия проекта: 0.9.78</span>
+      <span class="pill">Предыдущий аудит: 0.9.27 (04.10.2026)</span>
+      <span class="pill">Жанр: Top-Down Arcade Tank Shooter / Roguelite</span>
+      <span class="pill">Дата: Ноябрь 2026</span>
+    </div>
+  </div>
+
+  <h2><span class="num">1</span> Резюме периода (04.10 → 02.11.2026)</h2>
+  <p>За четыре недели после предыдущего аудита проект прошёл <strong>51 релиз</strong> (0.9.27 → 0.9.78) и
+  <strong>80 коммитов</strong> с изменением 69 файлов (+5 811 / −580 строк). Работа велась по пяти направлениям:
+  визуальная идентичность (пиксель-арт танков 64×64, эффекты, погода, текстуры боссов), процедурная генерация карт
+  (тайловый генератор для всех биомов, извилистые реки с развилками), метапрогрессия (переработка перков на 4 слота
+  и билды, дашборд статистики), локализация (пакеты fr/es, смена языка на ходу) и маркетинг (ролики перков на четырёх
+  языках). Последний коммит (01.11) закрывает рассинхрон клиента в сетевой игре.</p>
+  <p>Из двенадцати проверенных рекомендаций октябрьского аудита <strong>десять реализованы полностью, одна — частично,
+  одна остаётся открытой</strong> (авто-скрытие миникарты). 02.11 добавлены: HUD-индикатор рывка, батчинг цифр
+  урона и low-pass музыки при HP &lt; 20%; звук форсажа оказался реализован ранее (синтез в audio.gd). Главный
+  технический риск — сетевая устойчивость; для неё 02.11 добавлен регрессионный тест net_dash_predict_check.</p>
+
+  <table class="table-box">
+    <thead>
+      <tr><th>Метрика</th><th>04.10.2026</th><th>02.11.2026</th><th>Дельта</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Версия</strong></td><td>0.9.27</td><td>0.9.78</td><td>+51 релиз</td></tr>
+      <tr><td><strong>Строк GDScript (игра)</strong></td><td>≈ 33 000</td><td>38 981</td><td>+5 811 / −580</td></tr>
+      <tr><td><strong>Headless-тестов</strong></td><td>—</td><td>104 сцены</td><td>расширен охват</td></tr>
+      <tr><td><strong>Локации</strong></td><td>9 (вкл. посёлок)</td><td>8</td><td>посёлок удалён</td></tr>
+      <tr><td><strong>Языки</strong></td><td>ru, en</td><td>ru, en, fr, es</td><td>+2 пакета</td></tr>
+      <tr><td><strong>Музыка</strong></td><td>синтез</td><td>файловые темы по локациям + синтез</td><td>новый контур</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="num">2</span> Ключевые изменения периода</h2>
+  <div class="card-grid">
+    <div class="card highlight">
+      <div class="card-title">🎨 Визуальная идентичность</div>
+      <ul>
+        <li>Танки перерисованы спрайтами 64×64 с перекраской под цвет команды.</li>
+        <li>Пиксельная стилистика: горение, кислота, шок, цепные молнии с ветвлением, погода, цитадели.</li>
+        <li>Текстуры боссов, восемь новых скинов, иллюстрированные иконки перков и достижений.</li>
+      </ul>
+    </div>
+    <div class="card highlight">
+      <div class="card-title">🗺️ Генерация карт</div>
+      <ul>
+        <li>Тайловый генератор охватил все биомы: Город, Джунгли, Пустошь, Равнина, Зимний город, Промзона, Побережье.</li>
+        <li>Сеть извилистых рек с развилками и петлями, мосты к островам.</li>
+        <li>Редактор карт использует те же таблицы тайлов, что и игра.</li>
+      </ul>
+    </div>
+    <div class="card highlight">
+      <div class="card-title">⚡ Метапрогрессия</div>
+      <ul>
+        <li>Перки: 4 слота, слияние филлеров, билды «Крепость», «Скорострел», «Владыка бури»; бонусы на спецпушках.</li>
+        <li>Влияние билдов на карту: кислотные зоны, лёд, огонь, зоны поддержки.</li>
+        <li>Статистика: графики, таблицы, история матчей. Огнемёт с тремя уровнями горения.</li>
+      </ul>
+    </div>
+    <div class="card highlight">
+      <div class="card-title">🌍 Локализация, аудио и маркетинг</div>
+      <ul>
+        <li>Языковые пакеты (fr, es), смена языка на ходу в редакторе карт и уведомлениях.</li>
+        <li>Файловые музыкальные темы по локациям поверх синтезатора-фолбэка; 02.11 добавлен трек «Jungle Tank Assault» (ожидает импорта в редакторе).</li>
+        <li>Десять роликов о перках на четырёх языках в marketing/.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="num">3</span> Контроль рекомендаций октябрьского аудита</h2>
+  <p>Каждая рекомендация проверена по коду текущей версии (чтением модулей, а не описаний коммитов).</p>
+  <table class="table-box">
+    <thead>
+      <tr><th>Рекомендация</th><th>Статус</th><th>Подтверждение / комментарий</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Всенаправленный рывок (по вектору WASD)</td><td><span class="badge badge-success">Сделано</span></td><td><code>tank.gd</code>: dash_dir = move_dir; при отсутствии ввода — по носу корпуса</td></tr>
+      <tr><td>I-frames при рывке (0,25 с)</td><td><span class="badge badge-success">Сделано</span></td><td><code>tank.gd</code>: dash_invuln_ticks; урон и эффекты блокируются</td></tr>
+      <tr><td>Визуальный «сок» рывка (вспышка, следы)</td><td><span class="badge badge-success">Сделано</span></td><td><code>world_view.gd</code>: пламя форсажа, остаточный образ, кольцо искажения</td></tr>
+      <tr><td>HUD-индикатор перезарядки рывка</td><td><span class="badge badge-success">Сделано</span></td><td>Добавлен 02.11: строка ⚡ с полосой готовности рядом с HP (<code>hud.gd</code>, _update_dash)</td></tr>
+      <tr><td>Звук форсажа рывка</td><td><span class="badge badge-success">Сделано</span></td><td><code>audio.gd</code>: синтезированные варианты _dash, проигрываются при рывке; в аудите пропущен</td></tr>
+      <tr><td>Интерактивное обучение (FTUE)</td><td><span class="badge badge-success">Сделано</span></td><td><code>tutorial.gd</code> (538 строк); первое задание укорочено втрое</td></tr>
+      <tr><td>Еженедельные испытания с мутациями</td><td><span class="badge badge-success">Сделано</span></td><td><code>weekly.gd</code> + <code>mutators.gd</code>; лидерборд weekly</td></tr>
+      <tr><td>Steam Leaderboards</td><td><span class="badge badge-success">Сделано</span></td><td><code>steam_stats.gd</code>: survival_waves, survival_score, weekly</td></tr>
+      <tr><td>Интерактив арены (бочки и пр.)</td><td><span class="badge badge-warning">Частично</span></td><td>Топливная бочка в пропсах джунглей; системного набора интерактива нет</td></tr>
+      <tr><td>Батчинг цифр урона</td><td><span class="badge badge-success">Сделано</span></td><td>Добавлен 02.11: <code>game.gd</code> _try_batch_damage сливает тики в нарастающую цифру (радиус 40 px)</td></tr>
+      <tr><td>Авто-скрытие миникарты на малых аренах</td><td><span class="badge badge-danger">Нет</span></td><td>Логика скрытия по размеру карты в <code>minimap.gd</code> отсутствует</td></tr>
+      <tr><td>Low-pass фильтр музыки при HP &lt; 20%</td><td><span class="badge badge-success">Сделано</span></td><td>Добавлен 02.11: фильтр на шине Music, <code>Mus.set_low_hp</code> из game.gd, спад за 0,4 с</td></tr>
+    </tbody>
+  </table>
+  <p><em>Итог: 10 выполнено, 1 частично, 1 открыто.</em></p>
+
+  <h2><span class="num">4</span> Техническое состояние</h2>
+  <p>Архитектура сохраняет сильную основу: детерминированная симуляция с фиксированным шагом 60 Гц
+  (<code>world.gd</code>) отделена от отрисовки (<code>world_view.gd</code>); генерация карт вынесена в <code>mapgen/</code>;
+  сетевой слой (ENet + Steam через GodotSteam) поддерживает выделенный headless-сервер. Тестовая инфраструктура —
+  <strong>104 headless-сцены</strong> (≈ 13 000 строк): баланс-симуляции, проверки карт, перков, боссов, доступности.</p>
+
+  <h3>Риски и технический долг</h3>
+  <table class="table-box">
+    <thead>
+      <tr><th>Риск</th><th>Оценка</th><th>Комментарий</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Сетевая устойчивость</strong></td><td><span class="badge badge-danger">Высокий</span></td><td>Рассинхрон закрыт 01.11; 02.11 добавлен регрессионный тест <code>net_dash_predict_check</code> (паритет predict/реплей с лагом 5 тиков, запасной спавн). До релиза — прогон под нагрузкой</td></tr>
+      <tr><td><strong>Монолитные модули</strong></td><td><span class="badge badge-warning">Средний</span></td><td>world_view.gd — 3 627 строк (176 функций _draw_*), world.gd — 2 439, ui_root.gd — 2 205; готов план разбиения по доменам: террейн / танки / эффекты / объекты / боссы</td></tr>
+      <tr><td><strong>Смешанная схема i18n</strong></td><td><span class="badge badge-warning">Средний</span></td><td>ru/en зашиты в i18n.gd, fr/es — в lang/*.json; унификация (EN в пакет) отложена до пятого языка: требует прогона в редакторе</td></tr>
+      <tr><td><strong>Вес addons/</strong></td><td><span class="badge badge-success">Закрыт</span></td><td>02.11: 7 TMP-файлов (29 МБ) исключены из git и удалены; в репозитории только win64+linux64 (~18 МБ), политика в .gitignore</td></tr>
+      <tr><td><strong>Незакрытый «боевой сок»</strong></td><td><span class="badge badge-success">Закрыт</span></td><td>02.11 закрыты все пункты: HUD рывка, батчинг урона, low-pass при HP &lt; 20%</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="num">5</span> Дорожная карта до релиза 1.0</h2>
+  <table class="table-box">
+    <thead>
+      <tr><th style="width:18%;">Фаза</th><th style="width:57%;">Задачи</th><th style="width:25%;">Приоритет</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Стабилизация сети</strong></td>
+        <td>Регрессионный тест net_dash_predict_check добавлен 02.11; остаются нагрузочные прогоны выделенного сервера и контроль версии сборки (version_check).</td>
+        <td><span class="badge badge-danger">P0, критический</span></td>
+      </tr>
+      <tr>
+        <td><strong>2. Закрытие game feel</strong></td>
+        <td>Закрыто 02.11: HUD-индикатор рывка, батчинг цифр урона, low-pass музыки при HP &lt; 20%.</td>
+        <td><span class="badge badge-warning">P1, высокий</span></td>
+      </tr>
+      <tr>
+        <td><strong>3. Полировка UI</strong></td>
+        <td>Авто-скрытие миникарты на малых аренах; системный интерактив арен (бочки, генераторы); горячие клавиши вкладок гаража.</td>
+        <td><span class="badge badge-warning">P2, средний</span></td>
+      </tr>
+      <tr>
+        <td><strong>4. Технический долг</strong></td>
+        <td>Разбиение world_view.gd по доменам отрисовки (террейн/танки/эффекты/объекты/боссы) и ui_root.gd; унификация i18n (EN в lang/en.json) — выполнять с прогоном в редакторе.</td>
+        <td><span class="badge badge-warning">P2, средний</span></td>
+      </tr>
+      <tr>
+        <td><strong>5. Релиз 1.0</strong></td>
+        <td>Финальная пересборка (включая новый трек джунглей), Steam-страница, публикация готовых роликов перков, мониторинг первых отзывов.</td>
+        <td><span class="badge badge-info">P3, релизный</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="card verdict">
+    <div class="card-title" style="color:#166534;">🌟 Итоговый вердикт</div>
+    <p style="color:#14532d; margin-bottom:0;">
+      Проект подтвердил способность к быстрой итерации: за месяц закрыта большая часть октябрьского бэклога,
+      игра обрела цельный пиксель-арт стиль, полный набор биомов и метапрогрессию. Версия 0.9.78 — состояние
+      «почти релиз»: контентный объём и инструментарий (тесты, маркетинг, документация) готовы, а фокус должен
+      сместиться на стабильность сетевого кода и последние штрихи боевой обратной связи. При закрытии фаз 1–2
+      проект готов к релизу 1.0.
+    </p>
+  </div>
+
+  <div class="footer">
+    <span>Танчики: Iron Storm — Актуализация геймдев-анализа · v0.9.78</span>
+    <span>2 ноября 2026 г.</span>
+  </div>
+
+</body>
+</html>
